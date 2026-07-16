@@ -1,0 +1,30 @@
+-- =====================================================
+-- Recommended symptom_name values
+-- =====================================================
+-- Vaginal Bleeding
+-- Abdominal Pain
+-- Pelvic Pain
+-- Severe Headache
+-- Blurred Vision
+-- Dizziness
+-- Fever
+-- Shortness of Breath
+-- Chest Pain
+-- Convulsions
+-- Severe Swelling
+-- Moderate Swelling
+-- Back Pain
+-- Nausea
+-- Vomiting
+-- Persistent Vomiting
+-- Fatigue
+-- Frequent Urination
+-- Heartburn
+-- Constipation
+-- Reduced Fetal Movement
+-- No Fetal Movement
+-- Leaking Vaginal Fluid
+-- Skin Rash
+-- Severe Itching
+-- Painful Urination
+-- =====================================================

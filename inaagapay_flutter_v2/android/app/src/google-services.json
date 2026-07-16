@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "914969157494",
+    "project_id": "inaagapay",
+    "storage_bucket": "inaagapay.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:914969157494:android:b6e327866a762e596e6457",
+        "android_client_info": {
+          "package_name": "com.example.inaagapay_flutter_v2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC8KfcoB5YaUT4AL4jsj4ejvdUYiv_W3yY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

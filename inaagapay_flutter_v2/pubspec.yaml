@@ -1,0 +1,53 @@
+name: inaagapay_flutter_v2
+description: "Inaagapay Maternal and Child Health Information System"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  supabase_flutter: ^2.5.6
+  flutter_dotenv: ^5.1.0
+  intl: ^0.19.0
+  provider: ^6.1.2
+  http: ^1.2.2
+  flutter_secure_storage: ^9.2.2
+  image_picker: ^1.1.2
+  image: ^4.2.0
+  file_picker: ^8.1.4
+  fl_chart: ^0.68.0
+  bcrypt: ^1.1.3
+  table_calendar: ^3.0.9
+  firebase_core: ^3.13.0
+  firebase_messaging: ^15.2.4
+  qr_flutter: ^4.1.0
+  url_launcher: ^6.2.5
+  flutter_tts: ^4.1.1
+  audioplayers: ^6.6.0
+  path_provider: ^2.1.5
+  record: ^6.2.1
+  pdf: ^3.11.1
+  printing: ^5.13.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+  - assets/images/
+  - .env
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/logo.png"

@@ -1,0 +1,1 @@
+This file is for reference of z scores for weight and height since midwives rely on zscores to determine if the child growth is normal rather than using an adult bmi basis. 

@@ -1,0 +1,89 @@
+# Implementation Plan - UI and Component Standardization
+
+Standardize the user interface across the `inaagapay_flutter_v2` project by aligning headers, input values, dropdown fields, modal CTA buttons, and search bars to achieve modern, pill-shaped, premium visual styles and functional consistency.
+
+## User Review Required
+
+> [!NOTE]
+> Review the styling tokens and proposed custom component interfaces to ensure they match expectations. We are maintaining context-aware dynamic light/dark values for maximum accessibility.
+
+> [!IMPORTANT]
+> - `SecondaryHeader` will directly implement `PreferredSizeWidget`. This makes `appBar: SecondaryHeader(...)` much cleaner, while leaving all existing manual `PreferredSize` wrapper calls backwards-compatible.
+> - Dropdowns will be converted from `DropdownButton` / `DropdownButtonFormField` to the search-supported Material 3 `DropdownMenu` to satisfy the "drop-below and searchable" typing design.
+
+## Proposed Changes
+
+---
+
+### [Component: Theme Colors]
+
+#### [MODIFY] [app_colors.dart](file:///c:/Users/User/Documents/InaAgapay-Capstone/inaagapay_flutter_v2/lib/theme/app_colors.dart)
+- Add a new central text styling token `textInput` (`Color(0xFF5A5A5A)`) representing a soft gray input value slightly darker than the standard placeholder (`textSecondary`).
+- Implement a context-aware helper `textInputOf(BuildContext context)` that resolves `Color(0xFFD4D4D4)` in dark mode and `textInput` in light mode.
+
+---
+
+### [Component: Input Fields]
+
+#### [MODIFY] [app_input_field.dart](file:///c:/Users/User/Documents/InaAgapay-Capstone/inaagapay_flutter_v2/lib/widgets/app_input_field.dart)
+- Update text styles within the `TextField` block (lines 102-107) to use `AppColors.textInputOf(context)` instead of `AppColors.textPrimary` for non-readonly fields. This changes input values from pure black to the requested soft gray.
+
+---
+
+### [Component: Navigation Headers]
+
+#### [MODIFY] [secondary_header.dart](file:///c:/Users/User/Documents/InaAgapay-Capstone/inaagapay_flutter_v2/lib/widgets/secondary_header.dart)
+- Modify the `SecondaryHeader` class declaration to implement `PreferredSizeWidget` directly and return `Size get preferredSize => const Size.fromHeight(56);`.
+- Add an optional `List<Widget>? actions` parameter to support trailing buttons.
+- Replace the trailing hardcoded `SizedBox(width: 48)` inside the row layout with dynamic actions row to keep alignment perfect.
+
+---
+
+### [Component: Search Bars]
+
+#### [NEW] [search_field.dart](file:///c:/Users/User/Documents/InaAgapay-Capstone/inaagapay_flutter_v2/lib/widgets/search_field.dart)
+- Create a dedicated search bar widget that mirrors the look and feel of `AppInputField` (stadium shape, white background with elevation shadow) but with built-in search and clear capabilities. It will automatically show a clear (X) icon to empty the controller, removing boilerplate logic across screens.
+
+---
+
+### [Component: Modal CTA Buttons]
+
+#### [NEW] [modal_button.dart](file:///c:/Users/User/Documents/InaAgapay-Capstone/inaagapay_flutter_v2/lib/widgets/modal_button.dart)
+- Create `ModalButton` modeled exactly after the elevated `MainButton` but with a smaller height (`44` vs `56`), padding, and text sizing, ensuring standardized button design inside all modal and dialog actions.
+
+---
+
+### [Component: Midwife / Forms Screens]
+
+#### [MODIFY] [midwife_add_mother_screen.dart](file:///c:/Users/User/Documents/InaAgapay-Capstone/inaagapay_flutter_v2/lib/screens/midwife/midwife_add_mother_screen.dart)
+- Replace standard `AppBar` with `SecondaryHeader` implementing the custom `OCR` text action on the right.
+- Refactor the wizard navigation CTA buttons (Back, Next, Save) at the bottom to be fully pill-like (stadium style) using `borderRadius: BorderRadius.circular(24)` instead of small rectangle radius.
+- Refactor `_styledDropdown` wrapper to utilize Material 3 `DropdownMenu<String>` with typing filters, dropping below the container, and soft-gray styling.
+- Convert all standard modal `DropdownButtonFormField` instances (Relationship, Status, Outcomes) to `DropdownMenu<String>`.
+
+#### [MODIFY] [add_prenatal_checkup_screen.dart](file:///c:/Users/User/Documents/InaAgapay-Capstone/inaagapay_flutter_v2/lib/screens/midwife/add_prenatal_checkup_screen.dart)
+- Replace standard `AppBar` with `SecondaryHeader`.
+- Style the step navigation CTA buttons at the bottom as pill-shaped using `borderRadius: BorderRadius.circular(28)` and `minimumSize: const Size.fromHeight(56)`.
+
+#### [MODIFY] [midwife_dashboard.dart](file:///c:/Users/User/Documents/InaAgapay-Capstone/inaagapay_flutter_v2/lib/screens/midwife/midwife_dashboard.dart)
+- Replace the raw manual `TextField` container search bar with the standardized `SearchField` widget.
+
+#### [MODIFY] [midwife_mothers_screen.dart](file:///c:/Users/User/Documents/InaAgapay-Capstone/inaagapay_flutter_v2/lib/screens/midwife/midwife_mothers_screen.dart)
+- Replace manual `AppInputField` search bar setup with `SearchField` widget.
+
+#### [MODIFY] [midwife_children_screen.dart](file:///c:/Users/User/Documents/InaAgapay-Capstone/inaagapay_flutter_v2/lib/screens/midwife/midwife_children_screen.dart)
+- Replace manual `AppInputField` search bar setup with `SearchField` widget.
+
+---
+
+## Verification Plan
+
+### Automated Verification
+- Propose running `flutter analyze` to ensure that our refactor doesn't introduce syntax errors or broken imports.
+
+### Manual Verification
+- Launch the application and physically check form entry pages.
+- Verify that input values appear in the soft gray color.
+- Confirm dropdown components correctly pop up below input containers, allow text filtering/searching, and match general aesthetics.
+- Inspect the customized navigation header back actions and OCR alignments.
+- Click "Clear" on search bars and confirm lists instantly reload.

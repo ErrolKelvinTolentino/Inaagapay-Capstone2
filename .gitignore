@@ -1,0 +1,72 @@
+d# Miscellaneous
+*.class
+*.lock
+*.log
+*.pyc
+*.swp
+.buildlog/
+.history/
+
+# Environment variables / secrets
+**/.env
+.env.*
+!.env.example
+
+# Flutter / Dart core
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+.pub-cache/
+.pub-preload-cache/
+build/
+pubspec.lock
+
+# Generated Flutter files
+**/generated_plugin_registrant.*
+**/GeneratedPluginRegistrant.*
+**/flutter/generated_plugins.*
+**/flutter/generated_plugins.cmake
+
+# Android
+**/android/local.properties
+.gradle/
+**/android/.gradle/
+**/android/app/*.jks
+**/android/key.properties
+*.jks
+
+# iOS / macOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/flutter_assets/
+**/ios/Runner/GeneratedPluginRegistrant.*
+**/macos/Pods/
+**/macos/Flutter/ephemeral/
+
+# Xcode
+**/ios/DerivedData/
+**/xcuserdata/
+
+# Windows
+**/windows/flutter/generated_plugin_registrant.*
+**/windows/flutter/generated_plugins.*
+**/windows/flutter/generated_plugins.cmake
+
+# Linux
+**/linux/flutter/generated_plugin_registrant.*
+**/linux/flutter/generated_plugins.*
+**/linux/flutter/generated_plugins.cmake
+
+# Coverage / reports
+coverage/
+
+# Keep safe example file
+!.env.example
+inaagapay-1728f4916cfb.json
+inaagapay_flutter_v2/supabase/functions/send-push/service-account.json

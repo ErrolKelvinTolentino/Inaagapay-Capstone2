@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Account Management — InaAgapay Admin</title>
+    <link rel="icon" type="image/png" href="../images/logo_icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link rel="stylesheet" href="../styles/main.css" />
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Header: only one logo (icon) -->
+        <header class="app-header">
+            <div class="header-brand">
+                <button class="header-sidebar-toggle" id="sidebar-toggle"><i class="fa-solid fa-bars"></i></button>
+                <img src="../images/logo_icon.png" alt="InaAgapay" class="header-logo" />
+            </div>
+            <div class="header-right">
+                <span class="header-badge">Admin Portal</span>
+                <div class="header-user">
+                    <div class="header-avatar" id="header-avatar">A</div>
+                    <span class="header-user-name" id="header-user-name">Admin</span>
+                </div>
+            </div>
+        </header>
+
+        <aside class="app-sidebar">
+            <span class="sidebar-section-label">Main Menu</span>
+            <ul class="sidebar-nav">
+                <li><a href="dashboard.html"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
+                <li><a href="accounts.html" class="active"><i class="fa-solid fa-users"></i> Account Management</a></li>
+                <li><a href="account-create.html"><i class="fa-solid fa-user-plus"></i> Account Creation</a></li>
+                <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
+            </ul>
+            <div class="sidebar-divider"></div>
+            <span class="sidebar-section-label">Patient Management</span>
+            <ul class="sidebar-nav">
+                <li><a href="patient-records.html"><i class="fa-solid fa-folder-open"></i> Patient Records</a></li>
+            </ul>
+            <div class="sidebar-divider"></div>
+            <span class="sidebar-section-label">System</span>
+            <ul class="sidebar-nav">
+                <li><a href="audit-trail.html"><i class="fa-solid fa-clipboard-list"></i> Audit Trail</a></li>
+                <li><a href="backup.html"><i class="fa-solid fa-database"></i> Backup &amp; Restore</a></li>
+            </ul>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-footer-nav">
+                <button class="sidebar-logout" id="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+            </div>
+        </aside>
+
+        <main class="app-main">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">Account Management</h1>
+                    <p class="page-subtitle">View, search, activate, deactivate, suspend, and manage all system accounts</p>
+                </div>
+                <div class="page-actions">
+                    <span id="total-badge" class="badge badge-admin">— accounts</span>
+                    <a href="account-create.html" class="btn btn-primary"><i class="fa-solid fa-user-plus"></i> Create Account</a>
+                </div>
+            </div>
+
+            <!-- Status Summary Cards -->
+            <div class="stats-grid">
+                <div class="stat-card" onclick="filterByStatus('active')" style="cursor:pointer;">
+                    <div class="stat-icon green"><i class="fa-solid fa-circle-check"></i></div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="active-count">—</div>
+                        <div class="stat-label">Active</div>
+                    </div>
+                </div>
+                <div class="stat-card" onclick="filterByStatus('inactive')" style="cursor:pointer;">
+                    <div class="stat-icon blue"><i class="fa-solid fa-circle-pause"></i></div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="inactive-count">—</div>
+                        <div class="stat-label">Inactive</div>
+                    </div>
+                </div>
+                <div class="stat-card" onclick="filterByStatus('suspended')" style="cursor:pointer;">
+                    <div class="stat-icon amber"><i class="fa-solid fa-ban"></i></div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="suspended-count">—</div>
+                        <div class="stat-label">Suspended</div>
+                    </div>
+                </div>
+                <div class="stat-card" onclick="filterByStatus('')" style="cursor:pointer;">
+                    <div class="stat-icon pink"><i class="fa-solid fa-users"></i></div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="total-count">—</div>
+                        <div class="stat-label">Total</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="toolbar">
+                    <div class="search-box">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input class="form-control" type="search" id="search-input" placeholder="Search by name or email…" />
+                    </div>
+                    <!-- Fixed filter group: side by side horizontally -->
+                    <div class="filter-group" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <select class="form-select" id="filter-type" style="width: auto; min-width: 140px;">
+                            <option value="">All Types</option>
+                            <option value="admin">Admin</option>
+                            <option value="midwife">Midwife</option>
+                            <option value="mother">Mother</option>
+                        </select>
+                        <select class="form-select" id="filter-status" style="width: auto; min-width: 140px;">
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="suspended">Suspended</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th style="text-align:center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="accounts-tbody">
+                            <tr>
+                                <td colspan="6" style="text-align:center;padding:48px;color:var(--text-secondary);">
+                                    <div class="spinner" style="margin: 0 auto 12px;"></div>
+                                    Loading accounts…
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer" style="display:flex;justify-content:space-between;align-items:center;">
+                    <span class="pagination-info" id="page-info">Showing 0 of 0</span>
+                    <div class="pagination" id="pagination"></div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="app-footer">
+            <span>&copy; 2026 InaAgapay &mdash; Maternal &amp; Child Health Information System</span>
+            <span style="color:var(--border-primary)">|</span>
+            <span>Admin Portal v2.0</span>
+        </footer>
+    </div>
+
+    <!-- Edit Account Modal -->
+    <div class="modal-overlay" id="edit-modal">
+        <div class="modal" style="max-width: 480px">
+            <div class="modal-header">
+                <h2 class="modal-title">Edit Account</h2>
+                <button class="modal-close" id="edit-modal-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-id" />
+                <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px;">
+                    <div id="edit-avatar" style="width:52px;height:52px;border-radius:50%;background:var(--brand-primary);display:flex;align-items:center;justify-content:center;color:white;font-size:20px;font-weight:700;"></div>
+                    <div>
+                        <div id="edit-name" style="font-weight:700;color:var(--text-primary);"></div>
+                        <div id="edit-email" style="font-size:13px;color:var(--text-secondary);"></div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Account Type</label>
+                        <select class="form-select" id="edit-type">
+                            <option value="admin">Admin</option>
+                            <option value="midwife">Midwife</option>
+                            <option value="mother">Mother</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" id="edit-status">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="suspended">Suspended</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" id="edit-cancel">Cancel</button>
+                <button class="btn btn-primary btn-sm" id="edit-save"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Change Modal (Activate/Deactivate/Suspend) -->
+    <div class="modal-overlay" id="status-modal">
+        <div class="modal" style="max-width: 420px">
+            <div class="modal-header">
+                <h2 class="modal-title" id="status-modal-title">Change Account Status</h2>
+                <button class="modal-close" id="status-modal-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div style="text-align:center;padding:12px 0 8px;">
+                    <i class="fa-solid" id="status-modal-icon" style="font-size:40px;margin-bottom:14px;"></i>
+                    <p style="font-size:14px;color:var(--text-primary);line-height:1.7;" id="status-modal-message"></p>
+                    <input type="hidden" id="status-account-id" />
+                    <input type="hidden" id="status-new-status" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" id="status-cancel">Cancel</button>
+                <button class="btn btn-sm" id="status-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirm Modal -->
+    <div class="modal-overlay" id="delete-modal">
+        <div class="modal" style="max-width: 420px">
+            <div class="modal-header">
+                <h2 class="modal-title" style="color:var(--error)">Delete Account</h2>
+                <button class="modal-close" id="delete-modal-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div style="text-align:center">
+                    <i class="fa-solid fa-triangle-exclamation" style="font-size:40px;color:var(--warning);margin-bottom:14px;"></i>
+                    <p style="color:var(--text-primary);">Are you sure you want to permanently delete <strong id="delete-name"></strong>? This action <strong>cannot be undone</strong>.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" id="delete-cancel">Cancel</button>
+                <button class="btn btn-danger btn-sm" id="delete-confirm"><i class="fa-solid fa-trash"></i> Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script>
+        (function() {
+            const SUPABASE_URL = "https://buvseyqcdacctlupznya.supabase.co";
+            const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1dnNleXFjZGFjY3RsdXB6bnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzE2NTUsImV4cCI6MjA4ODIwNzY1NX0.VPh8ZZFqdeFyb8YuMxllbJJa-nWl4VXNq74o6-Itjjw";
+            const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+            const SESSION_KEY = "inaagapay_admin_session";
+            const session = (() => { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } })();
+            if (!session || session.account_type !== "admin") { window.location.href = "../index.html"; return; }
+
+            document.getElementById("header-user-name").textContent = [session.first_name, session.last_name].filter(Boolean).join(" ") || "Admin";
+            document.getElementById("header-avatar").textContent = ((session.first_name?.[0] ?? "") + (session.last_name?.[0] ?? "")).toUpperCase() || "A";
+            document.getElementById("logout-btn").addEventListener("click", () => { if (confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); window.location.href = "../index.html"; } });
+            document.getElementById("sidebar-toggle").addEventListener("click", () => document.querySelector(".app-sidebar").classList.toggle("open"));
+
+            function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
+            function toUTC(ts) { if (!ts) return null; return new Date(/Z|[+-]\d{2}:?\d{2}$/.test(ts) ? ts : ts + "Z"); }
+            function fmtDate(ts) { if (!ts) return "—"; return toUTC(ts).toLocaleDateString("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "short", day: "numeric" }); }
+            
+            function showToast(msg, type) {
+                const icons = { success: "fa-circle-check", error: "fa-circle-xmark", warning: "fa-triangle-exclamation", info: "fa-circle-info" };
+                const c = document.getElementById("toast-container");
+                const t = document.createElement("div");
+                t.className = `toast ${type}`;
+                t.innerHTML = `<i class="fa-solid ${icons[type]}"></i><span class="toast-text">${esc(msg)}</span><button class="toast-close" onclick="this.closest('.toast').remove()"><i class="fa-solid fa-xmark"></i></button>`;
+                c.appendChild(t);
+                setTimeout(() => { t.style.animation = "fadeOut .3s ease forwards"; t.addEventListener("animationend", () => t.remove()); }, 4500);
+            }
+
+            let allAccounts = [], filtered = [], page = 1, PAGE_SIZE = 15, editTarget = null, deleteTarget = null;
+
+            async function loadAccounts() {
+                try {
+                    const { data, error } = await db.from("accounts").select("account_id, first_name, middle_name, last_name, extension_name, email_address, account_type, status, created_at").order("created_at", { ascending: false });
+                    if (error) throw error;
+                    allAccounts = data || [];
+                    updateStatusCounts();
+                    document.getElementById("total-badge").textContent = `${allAccounts.length} accounts`;
+                    applyFilters();
+                } catch (e) { showToast("Failed to load accounts: " + e.message, "error"); }
+            }
+
+            function updateStatusCounts() {
+                const active = allAccounts.filter(a => a.status === 'active').length;
+                const inactive = allAccounts.filter(a => a.status === 'inactive').length;
+                const suspended = allAccounts.filter(a => a.status === 'suspended').length;
+                document.getElementById("active-count").textContent = active;
+                document.getElementById("inactive-count").textContent = inactive;
+                document.getElementById("suspended-count").textContent = suspended;
+                document.getElementById("total-count").textContent = allAccounts.length;
+            }
+
+            window.filterByStatus = (status) => {
+                document.getElementById("filter-status").value = status;
+                applyFilters();
+            };
+
+            function applyFilters() {
+                const q = document.getElementById("search-input").value.trim().toLowerCase();
+                const type = document.getElementById("filter-type").value;
+                const status = document.getElementById("filter-status").value;
+                filtered = allAccounts.filter(a => {
+                    const name = [a.first_name, a.last_name, a.email_address].filter(Boolean).join(" ").toLowerCase();
+                    if (q && !name.includes(q)) return false;
+                    if (type && a.account_type !== type) return false;
+                    if (status && a.status !== status) return false;
+                    return true;
+                });
+                page = 1;
+                renderTable();
+            }
+
+            function renderTable() {
+                const start = (page - 1) * PAGE_SIZE;
+                const slice = filtered.slice(start, start + PAGE_SIZE);
+                const tbody = document.getElementById("accounts-tbody");
+                if (filtered.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-users-slash" style="font-size:32px;margin-bottom:12px;display:block;color:var(--brand-primary);"></i>No accounts found.</div></tr>`;
+                    document.getElementById("page-info").textContent = "Showing 0 of 0";
+                    document.getElementById("pagination").innerHTML = "";
+                    return;
+                }
+                tbody.innerHTML = slice.map(a => {
+                    const name = [a.first_name, a.middle_name, a.last_name].filter(Boolean).join(" ") + (a.extension_name ? " " + a.extension_name : "");
+                    const initials = ((a.first_name?.[0] ?? "") + (a.last_name?.[0] ?? "")).toUpperCase() || "?";
+                    const statusColors = { active: "badge-active", inactive: "badge-inactive", suspended: "badge-suspended" };
+                    return `<tr>
+                        <td>
+                            <div style="display:flex;align-items:center;gap:10px;">
+                                <div style="width:34px;height:34px;border-radius:50%;background:var(--brand-primary);display:flex;align-items:center;justify-content:center;color:white;font-size:13px;font-weight:700;">${esc(initials)}</div>
+                                <span style="font-weight:600;">${esc(name) || "—"}</span>
+                            </div>
+                        </td>
+                        <td style="color:var(--text-secondary);">${esc(a.email_address)}</div>
+                        <td><span class="badge badge-${a.account_type}">${a.account_type}</span></div>
+                        <td><span class="badge ${statusColors[a.status] || 'badge-inactive'}">${a.status}</span></div>
+                        <td style="color:var(--text-secondary);font-size:12.5px;">${fmtDate(a.created_at)}</div>
+                        <td style="text-align:center;">
+                            <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;align-items:center;">
+                                <button class="btn btn-sm btn-outline-pink btn-icon" onclick="openEdit(${a.account_id})" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                                ${a.status !== 'active' ? `<button class="btn btn-sm btn-icon" style="background:var(--success-10);color:var(--success);border:none;" onclick="changeStatus(${a.account_id}, 'active')" title="Activate"><i class="fa-solid fa-play"></i></button>` : ''}
+                                ${a.status === 'active' ? `<button class="btn btn-sm btn-icon" style="background:var(--warning-10);color:var(--warning);border:none;" onclick="changeStatus(${a.account_id}, 'inactive')" title="Deactivate"><i class="fa-solid fa-pause"></i></button>` : ''}
+                                ${a.status === 'active' ? `<button class="btn btn-sm btn-icon" style="background:var(--error-10);color:var(--error);border:none;" onclick="changeStatus(${a.account_id}, 'suspended')" title="Suspend"><i class="fa-solid fa-ban"></i></button>` : ''}
+                                ${a.status === 'suspended' ? `<button class="btn btn-sm btn-icon" style="background:var(--success-10);color:var(--success);border:none;" onclick="changeStatus(${a.account_id}, 'active')" title="Reactivate"><i class="fa-solid fa-undo"></i></button>` : ''}
+                                <button class="btn btn-sm btn-icon" style="background:var(--error-10);color:var(--error);border:none;" onclick="openDelete(${a.account_id})" title="Delete"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </tr>`;
+                }).join("");
+                document.getElementById("page-info").textContent = `Showing ${start + 1}–${Math.min(start + PAGE_SIZE, filtered.length)} of ${filtered.length}`;
+                renderPagination();
+            }
+
+            function renderPagination() {
+                const total = Math.ceil(filtered.length / PAGE_SIZE);
+                const pg = document.getElementById("pagination");
+                if (total <= 1) { pg.innerHTML = ""; return; }
+                let html = `<button class="page-btn" onclick="gotoPage(${page - 1})" ${page === 1 ? "disabled" : ""}><i class="fa-solid fa-chevron-left"></i></button>`;
+                for (let i = 1; i <= total; i++) {
+                    if (total > 7 && i > 2 && i < page - 1) { html += '<span>…</span>'; i = page - 1; continue; }
+                    if (total > 7 && i > page + 1 && i < total - 1) { html += '<span>…</span>'; i = total - 1; continue; }
+                    html += `<button class="page-btn${i === page ? " active" : ""}" onclick="gotoPage(${i})">${i}</button>`;
+                }
+                html += `<button class="page-btn" onclick="gotoPage(${page + 1})" ${page === total ? "disabled" : ""}><i class="fa-solid fa-chevron-right"></i></button>`;
+                pg.innerHTML = html;
+            }
+
+            window.gotoPage = (p) => { page = p; renderTable(); };
+
+            let searchTimer;
+            document.getElementById("search-input").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 280); });
+            document.getElementById("filter-type").addEventListener("change", applyFilters);
+            document.getElementById("filter-status").addEventListener("change", applyFilters);
+
+            // Change Status Function
+            window.changeStatus = (accountId, newStatus) => {
+                const account = allAccounts.find(a => a.account_id === accountId);
+                if (!account) return;
+                
+                const statusConfig = {
+                    active: { icon: "fa-solid fa-play", color: "var(--success)", title: "Activate Account", message: `Are you sure you want to activate ${account.first_name} ${account.last_name}'s account?`, btnClass: "btn-success", btnText: "Activate" },
+                    inactive: { icon: "fa-solid fa-pause", color: "var(--warning)", title: "Deactivate Account", message: `Are you sure you want to deactivate ${account.first_name} ${account.last_name}'s account? They will not be able to log in.`, btnClass: "btn-outline-pink", btnText: "Deactivate" },
+                    suspended: { icon: "fa-solid fa-ban", color: "var(--error)", title: "Suspend Account", message: `Are you sure you want to suspend ${account.first_name} ${account.last_name}'s account? This will block all access.`, btnClass: "btn-danger", btnText: "Suspend" }
+                };
+                
+                const config = statusConfig[newStatus];
+                if (!config) return;
+                
+                document.getElementById("status-modal-title").textContent = config.title;
+                document.getElementById("status-modal-icon").className = config.icon;
+                document.getElementById("status-modal-icon").style.color = config.color;
+                document.getElementById("status-modal-message").innerHTML = config.message;
+                document.getElementById("status-account-id").value = accountId;
+                document.getElementById("status-new-status").value = newStatus;
+                document.getElementById("status-confirm").className = `btn btn-sm ${config.btnClass}`;
+                document.getElementById("status-confirm").innerHTML = `<i class="fa-solid ${config.icon.split(' ')[1]}"></i> ${config.btnText}`;
+                document.getElementById("status-modal").classList.add("show");
+            };
+
+            document.getElementById("status-confirm").addEventListener("click", async () => {
+                const accountId = parseInt(document.getElementById("status-account-id").value);
+                const newStatus = document.getElementById("status-new-status").value;
+                const btn = document.getElementById("status-confirm");
+                btn.disabled = true;
+                btn.innerHTML = '<div class="btn-loader"></div>';
+                
+                try {
+                    const account = allAccounts.find(a => a.account_id === accountId);
+                    const oldStatus = account.status;
+                    
+                    const { error } = await db.from("accounts").update({ status: newStatus }).eq("account_id", accountId);
+                    if (error) throw error;
+                    
+                    const statusAction = { active: "activated", inactive: "deactivated", suspended: "suspended" };
+                    await db.from("audit_trail").insert({
+                        account_id: session.account_id,
+                        action: "update_account",
+                        table_name: "accounts",
+                        description: `${statusAction[newStatus]} account #${accountId} (${account.email_address}) from ${oldStatus} to ${newStatus}`,
+                        old_data: { status: oldStatus },
+                        new_data: { status: newStatus }
+                    });
+                    
+                    const idx = allAccounts.findIndex(a => a.account_id === accountId);
+                    if (idx !== -1) allAccounts[idx].status = newStatus;
+                    
+                    updateStatusCounts();
+                    applyFilters();
+                    document.getElementById("status-modal").classList.remove("show");
+                    showToast(`Account ${statusAction[newStatus]} successfully.`, "success");
+                } catch (e) {
+                    showToast("Status change failed: " + e.message, "error");
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="fa-solid ${document.getElementById("status-modal-icon").className.split(' ')[1]}"></i> Confirm`;
+                }
+            });
+
+            ["status-modal-close", "status-cancel"].forEach(id => {
+                document.getElementById(id).addEventListener("click", () => document.getElementById("status-modal").classList.remove("show"));
+            });
+            document.getElementById("status-modal").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("show"); });
+
+            // Edit Modal
+            window.openEdit = (id) => {
+                editTarget = allAccounts.find(a => a.account_id === id);
+                if (!editTarget) return;
+                const name = [editTarget.first_name, editTarget.last_name].filter(Boolean).join(" ") || "—";
+                const initials = ((editTarget.first_name?.[0] ?? "") + (editTarget.last_name?.[0] ?? "")).toUpperCase() || "?";
+                document.getElementById("edit-id").value = editTarget.account_id;
+                document.getElementById("edit-avatar").textContent = initials;
+                document.getElementById("edit-name").textContent = name;
+                document.getElementById("edit-email").textContent = editTarget.email_address;
+                document.getElementById("edit-type").value = editTarget.account_type;
+                document.getElementById("edit-status").value = editTarget.status;
+                document.getElementById("edit-modal").classList.add("show");
+            };
+
+            ["edit-modal-close", "edit-cancel"].forEach(id => {
+                document.getElementById(id).addEventListener("click", () => document.getElementById("edit-modal").classList.remove("show"));
+            });
+            document.getElementById("edit-modal").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("show"); });
+
+            document.getElementById("edit-save").addEventListener("click", async () => {
+                const id = parseInt(document.getElementById("edit-id").value);
+                const type = document.getElementById("edit-type").value;
+                const status = document.getElementById("edit-status").value;
+                const btn = document.getElementById("edit-save");
+                btn.disabled = true;
+                btn.innerHTML = '<div class="btn-loader"></div>';
+                try {
+                    const old = { ...editTarget };
+                    const { error } = await db.from("accounts").update({ account_type: type, status }).eq("account_id", id);
+                    if (error) throw error;
+                    await db.from("audit_trail").insert({
+                        account_id: session.account_id,
+                        action: "update_account",
+                        table_name: "accounts",
+                        description: `Updated account #${id} — type: ${type}, status: ${status}`,
+                        old_data: { account_type: old.account_type, status: old.status },
+                        new_data: { account_type: type, status }
+                    });
+                    const idx = allAccounts.findIndex(a => a.account_id === id);
+                    if (idx !== -1) {
+                        allAccounts[idx].account_type = type;
+                        allAccounts[idx].status = status;
+                    }
+                    updateStatusCounts();
+                    applyFilters();
+                    document.getElementById("edit-modal").classList.remove("show");
+                    showToast("Account updated successfully.", "success");
+                } catch (e) {
+                    showToast("Update failed: " + e.message, "error");
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes';
+                }
+            });
+
+            // Delete Modal
+            window.openDelete = (id) => {
+                deleteTarget = allAccounts.find(a => a.account_id === id);
+                if (!deleteTarget) return;
+                const name = [deleteTarget.first_name, deleteTarget.last_name].filter(Boolean).join(" ") || deleteTarget.email_address;
+                document.getElementById("delete-name").textContent = name;
+                document.getElementById("delete-modal").classList.add("show");
+            };
+
+            ["delete-modal-close", "delete-cancel"].forEach(id => {
+                document.getElementById(id).addEventListener("click", () => document.getElementById("delete-modal").classList.remove("show"));
+            });
+            document.getElementById("delete-modal").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("show"); });
+
+            document.getElementById("delete-confirm").addEventListener("click", async () => {
+                if (!deleteTarget) return;
+                const btn = document.getElementById("delete-confirm");
+                btn.disabled = true;
+                btn.innerHTML = '<div class="btn-loader"></div>';
+                try {
+                    const { error } = await db.from("accounts").delete().eq("account_id", deleteTarget.account_id);
+                    if (error) throw error;
+                    await db.from("audit_trail").insert({
+                        account_id: session.account_id,
+                        action: "delete_account",
+                        table_name: "accounts",
+                        description: `Deleted account #${deleteTarget.account_id} (${deleteTarget.email_address})`
+                    });
+                    allAccounts = allAccounts.filter(a => a.account_id !== deleteTarget.account_id);
+                    updateStatusCounts();
+                    document.getElementById("total-badge").textContent = `${allAccounts.length} accounts`;
+                    applyFilters();
+                    document.getElementById("delete-modal").classList.remove("show");
+                    showToast("Account deleted.", "success");
+                } catch (e) {
+                    showToast("Delete failed: " + e.message, "error");
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete';
+                }
+            });
+
+            loadAccounts();
+        })();
+    </script>
+</body>
+</html>

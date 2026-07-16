@@ -1,0 +1,40 @@
+              child: Container(
+                width: 220, // ← FIXED: Increased width slightly
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min, // ← FIXED: Use min size
+                  children: [
+                    _MenuItem(
+                      icon: Icons.photo_camera_outlined,
+                      label: LanguageService.translate('Change Photo', 'Palitan ang Larawan'),
+                      onTap: () {
+                        entry.remove();
+                        _showImageSourceDialog(context);
+                      },
+                    ),
+                    _MenuItem(
+                      icon: Icons.person_outline,
+                      label: LanguageService.translate('View Profile', 'Tingnan ang Profile'),
+                      onTap: () {
+                        entry.remove();
+                        if (_motherId != null && mounted) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  MotherProfilePage(motherId: _motherId!),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(

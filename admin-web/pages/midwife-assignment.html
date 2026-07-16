@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Midwife Assignment — InaAgapay Admin</title>
+    <link rel="icon" type="image/png" href="../images/logo_icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="../styles/main.css" />
+  </head>
+  <body>
+    <div class="app-layout">
+      <!-- ── Header (updated: only one logo) ── -->
+      <header class="app-header">
+        <div class="header-brand">
+          <button class="header-sidebar-toggle" id="sidebar-toggle">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <img
+            src="../images/logo_icon.png"
+            alt="InaAgapay"
+            class="header-logo"
+          />
+        </div>
+        <div class="header-right">
+          <span class="header-badge">Admin Portal</span>
+          <div class="header-user">
+            <div class="header-avatar" id="header-avatar">A</div>
+            <span class="header-user-name" id="header-user-name">Admin</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- ── Sidebar ── -->
+      <aside class="app-sidebar">
+        <span class="sidebar-section-label">Main Menu</span>
+        <ul class="sidebar-nav">
+          <li>
+            <a href="dashboard.html"
+              ><i class="fa-solid fa-gauge-high"></i> Dashboard</a
+            >
+          </li>
+          <li>
+            <a href="accounts.html"
+              ><i class="fa-solid fa-users"></i> Account Management</a
+            >
+          </li>
+          <li>
+            <a href="account-create.html"
+              ><i class="fa-solid fa-user-plus"></i> Account Creation</a
+            >
+          </li>
+          <li>
+            <a href="midwife-assignment.html" class="active"
+              ><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a
+            >
+          </li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">Patient Management</span>
+        <ul class="sidebar-nav">
+          <li>
+            <a href="patient-records.html"
+              ><i class="fa-solid fa-folder-open"></i> Patient Records</a
+            >
+          </li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">System</span>
+        <ul class="sidebar-nav">
+          <li>
+            <a href="audit-trail.html"
+              ><i class="fa-solid fa-clipboard-list"></i> Audit Trail</a
+            >
+          </li>
+          <li>
+            <a href="backup.html"
+              ><i class="fa-solid fa-database"></i> Backup &amp; Restore</a
+            >
+          </li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-footer-nav">
+          <button class="sidebar-logout" id="logout-btn">
+            <i class="fa-solid fa-right-from-bracket"></i> Logout
+          </button>
+        </div>
+      </aside>
+
+      <!-- ── Main ── -->
+      <main class="app-main">
+        <div class="page-header">
+          <div class="page-title-block">
+            <h1 class="page-title">Midwife Assignment</h1>
+            <p class="page-subtitle">
+              Assign midwives to Barangay Health Centers (One BHC per midwife)
+            </p>
+          </div>
+          <div class="page-actions">
+            <span
+              id="assigned-badge"
+              class="badge badge-active"
+              >— assigned</span
+            >
+            <span
+              id="unassigned-badge"
+              class="badge badge-medium"
+              >— unassigned</span
+            >
+          </div>
+        </div>
+
+        <!-- Info Banner -->
+        <div class="alert alert-info" style="margin-bottom: 24px">
+          <i class="fa-solid fa-info-circle"></i>
+          <div>
+            <strong>Important:</strong> Each midwife can only be assigned to <strong>ONE</strong> Barangay Health Center. 
+            Changing a midwife's assignment will replace their current BHC assignment.
+          </div>
+        </div>
+
+        <!-- BHC Summary Cards -->
+        <div
+          id="bhc-cards"
+          style="
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 14px;
+            margin-bottom: 28px;
+          "
+        ></div>
+
+        <!-- Midwife Table -->
+        <div class="card">
+          <div class="toolbar">
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input
+                class="form-control"
+                type="search"
+                id="search-input"
+                placeholder="Search midwife…"
+              />
+            </div>
+            <div class="filter-group">
+              <select class="form-select" id="filter-bhc" style="width: auto">
+                <option value="">All BHCs</option>
+              </select>
+              <select
+                class="form-select"
+                id="filter-assigned"
+                style="width: auto"
+              >
+                <option value="">All Midwives</option>
+                <option value="assigned">Assigned Only</option>
+                <option value="unassigned">Unassigned Only</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-wrap" style="border: none; border-radius: 0">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Midwife</th>
+                  <th>Email</th>
+                  <th>Current BHC</th>
+                  <th>Assign to BHC</th>
+                  <th style="text-align: center">Status</th>
+                  <th style="text-align: center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="midwife-tbody">
+                <tr>
+                  <td
+                    colspan="6"
+                    style="
+                      text-align: center;
+                      padding: 48px;
+                      color: var(--text-secondary);
+                    "
+                  >
+                    <div class="spinner" style="margin: 0 auto 12px"></div>
+                    Loading midwives…
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+
+      <footer class="app-footer">
+        <span
+          >&copy; 2026 InaAgapay &mdash; Maternal &amp; Child Health Information
+          System</span
+        >
+        <span style="color: var(--border-primary)">|</span>
+        <span>Admin Portal v2.0</span>
+      </footer>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal-overlay" id="confirm-modal">
+      <div class="modal" style="max-width: 420px">
+        <div class="modal-header">
+          <h2 class="modal-title" style="color: var(--warning)">
+            Confirm Assignment Change
+          </h2>
+          <button class="modal-close" id="confirm-modal-close">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div style="text-align: center; padding: 12px 0 8px">
+            <i
+              class="fa-solid fa-exchange-alt"
+              style="
+                font-size: 40px;
+                color: var(--warning);
+                margin-bottom: 14px;
+              "
+            ></i>
+            <p style="font-size: 14px; color: var(--text-primary); line-height: 1.7">
+              Are you sure you want to change <strong id="confirm-midwife-name"></strong>'s 
+              BHC assignment?
+            </p>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-top: 12px;">
+              Current: <strong id="confirm-old-bhc"></strong><br />
+              New: <strong id="confirm-new-bhc"></strong>
+            </p>
+            <p style="font-size: 12px; color: var(--error); margin-top: 12px;">
+              <i class="fa-solid fa-triangle-exclamation"></i> 
+              This will replace their current assignment (one BHC per midwife)
+            </p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="confirm-cancel">Cancel</button>
+          <button class="btn btn-primary" id="confirm-proceed">
+            <i class="fa-solid fa-check"></i> Confirm Assignment
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script>
+      (function () {
+        const SUPABASE_URL = "https://buvseyqcdacctlupznya.supabase.co";
+        const SUPABASE_ANON =
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1dnNleXFjZGFjY3RsdXB6bnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzE2NTUsImV4cCI6MjA4ODIwNzY1NX0.VPh8ZZFqdeFyb8YuMxllbJJa-nWl4VXNq74o6-Itjjw";
+        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        const SESSION_KEY = "inaagapay_admin_session";
+        const session = (() => {
+          try {
+            return JSON.parse(localStorage.getItem(SESSION_KEY));
+          } catch {
+            return null;
+          }
+        })();
+        if (!session || session.account_type !== "admin") {
+          window.location.href = "../index.html";
+          return;
+        }
+
+        document.getElementById("header-user-name").textContent =
+          [session.first_name, session.last_name].filter(Boolean).join(" ") ||
+          "Admin";
+        document.getElementById("header-avatar").textContent =
+          (
+            (session.first_name?.[0] ?? "") + (session.last_name?.[0] ?? "")
+          ).toUpperCase() || "A";
+        document.getElementById("logout-btn").addEventListener("click", () => {
+          if (confirm("Logout?")) {
+            localStorage.removeItem(SESSION_KEY);
+            window.location.href = "../index.html";
+          }
+        });
+        document
+          .getElementById("sidebar-toggle")
+          .addEventListener("click", () =>
+            document.querySelector(".app-sidebar").classList.toggle("open"),
+          );
+
+        /* ── Toast ── */
+        function showToast(msg, type = "success") {
+          const icons = {
+            success: "fa-circle-check",
+            error: "fa-circle-xmark",
+            warning: "fa-triangle-exclamation",
+            info: "fa-circle-info",
+          };
+          const c = document.getElementById("toast-container");
+          const t = document.createElement("div");
+          t.className = `toast ${type}`;
+          t.innerHTML = `<i class="fa-solid ${icons[type]}"></i><span class="toast-text">${esc(msg)}</span><button class="toast-close" onclick="this.closest('.toast').remove()"><i class="fa-solid fa-xmark"></i></button>`;
+          c.appendChild(t);
+          setTimeout(() => {
+            t.style.animation = "fadeOut .3s ease forwards";
+            t.addEventListener("animationend", () => t.remove());
+          }, 4500);
+        }
+        function esc(s) {
+          const d = document.createElement("div");
+          d.textContent = s ?? "";
+          return d.innerHTML;
+        }
+
+        /* ── Data ── */
+        let bhcs = [],
+          midwives = [],
+          filtered = [];
+        
+        // Store pending assignment for confirmation
+        let pendingAssignment = null;
+
+        async function loadData() {
+          const tbody = document.getElementById("midwife-tbody");
+          try {
+            const [bhcRes, acctRes, midRes] = await Promise.all([
+              db.from("bhc").select("bhc_id, bhc_name").order("bhc_name"),
+              db
+                .from("accounts")
+                .select(
+                  "account_id, first_name, middle_name, last_name, email_address"
+                )
+                .eq("account_type", "midwife")
+                .eq("status", "active")
+                .order("first_name"),
+              db
+                .from("midwives")
+                .select("midwife_id, account_id, assigned_bhc_id"),
+            ]);
+            if (bhcRes.error) throw bhcRes.error;
+            if (acctRes.error) throw acctRes.error;
+            if (midRes.error) throw midRes.error;
+            bhcs = bhcRes.data || [];
+            const accts = acctRes.data || [];
+            const mids = midRes.data || [];
+
+            // Merge
+            const midMap = {};
+            mids.forEach((m) => (midMap[m.account_id] = m));
+            midwives = accts.map((a) => ({
+              ...a,
+              midwife_id: midMap[a.account_id]?.midwife_id ?? null,
+              assigned_bhc_id: midMap[a.account_id]?.assigned_bhc_id ?? null,
+            }));
+
+            // BHC filter dropdown
+            const sel = document.getElementById("filter-bhc");
+            sel.innerHTML = '<option value="">All BHCs</option>';
+            bhcs.forEach((b) => {
+              const o = document.createElement("option");
+              o.value = b.bhc_id;
+              o.textContent = b.bhc_name;
+              sel.appendChild(o);
+            });
+
+            updateBadges();
+            renderBhcCards();
+            applyFilters();
+          } catch (err) {
+            showToast("Failed to load data: " + err.message, "error");
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--error);"><i class="fa-solid fa-triangle-exclamation" style="font-size:32px;margin-bottom:12px;display:block;"></i>Failed to load midwife data. Please refresh the page. </div><tr>`;
+          }
+        }
+
+        function updateBadges() {
+          const assigned = midwives.filter((m) => m.assigned_bhc_id).length;
+          const unassigned = midwives.length - assigned;
+          document.getElementById("assigned-badge").textContent =
+            `${assigned} assigned`;
+          document.getElementById("unassigned-badge").textContent =
+            `${unassigned} unassigned`;
+        }
+
+        function getBhcName(id) {
+          const b = bhcs.find((b) => b.bhc_id === id);
+          return b ? b.bhc_name : null;
+        }
+
+        /* ── BHC Summary Cards ── */
+        function renderBhcCards() {
+          const countMap = {};
+          midwives.forEach((m) => {
+            if (m.assigned_bhc_id)
+              countMap[m.assigned_bhc_id] =
+                (countMap[m.assigned_bhc_id] || 0) + 1;
+          });
+          const container = document.getElementById("bhc-cards");
+          container.innerHTML = bhcs
+            .map((b) => {
+              const cnt = countMap[b.bhc_id] || 0;
+              return `<div style="background:#FFFFFF;border:1px solid var(--border-primary);border-radius:var(--radius-card);padding:18px 20px;box-shadow:var(--shadow-card);cursor:pointer;transition:all .2s;"
+        onclick="filterByBhc(${b.bhc_id})"
+        onmouseenter="this.style.borderColor='var(--brand-primary-30)';this.style.background='var(--bg-secondary)'"
+        onmouseleave="this.style.borderColor='var(--border-primary)';this.style.background='#FFFFFF'">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <i class="fa-solid fa-hospital" style="color:var(--brand-primary);font-size:18px;"></i>
+          <span style="font-size:22px;font-weight:700;color:var(--brand-primary);">${cnt}</span>
+        </div>
+        <div style="font-size:12.5px;font-weight:600;color:var(--text-primary);line-height:1.4;">${esc(b.bhc_name)}</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${cnt === 1 ? "1 midwife" : cnt + " midwives"}</div>
+      </div>`;
+            })
+            .join("");
+        }
+
+        window.filterByBhc = (id) => {
+          document.getElementById("filter-bhc").value = id;
+          applyFilters();
+          document
+            .querySelector(".card .toolbar")
+            .scrollIntoView({ behavior: "smooth" });
+        };
+
+        /* ── Filters ── */
+        function applyFilters() {
+          const q = document
+            .getElementById("search-input")
+            .value.trim()
+            .toLowerCase();
+          const bhcId = document.getElementById("filter-bhc").value;
+          const assigned = document.getElementById("filter-assigned").value;
+          filtered = midwives.filter((m) => {
+            const name = [m.first_name, m.last_name, m.email_address]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase();
+            if (q && !name.includes(q)) return false;
+            if (bhcId && String(m.assigned_bhc_id) !== bhcId) return false;
+            if (assigned === "assigned" && !m.assigned_bhc_id) return false;
+            if (assigned === "unassigned" && m.assigned_bhc_id) return false;
+            return true;
+          });
+          renderTable();
+        }
+
+        let searchTimer;
+        document
+          .getElementById("search-input")
+          .addEventListener("input", () => {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(applyFilters, 250);
+          });
+        document
+          .getElementById("filter-bhc")
+          .addEventListener("change", applyFilters);
+        document
+          .getElementById("filter-assigned")
+          .addEventListener("change", applyFilters);
+
+        /* ── Render Table ── */
+        function renderTable() {
+          const tbody = document.getElementById("midwife-tbody");
+          if (filtered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-user-nurse" style="font-size:32px;margin-bottom:12px;display:block;opacity:.4;color:var(--brand-primary);"></i>No midwives found. </div></tr>`;
+            return;
+          }
+          tbody.innerHTML = filtered
+            .map((m) => {
+              const name = [m.first_name, m.middle_name, m.last_name]
+                .filter(Boolean)
+                .join(" ");
+              const initials =
+                (
+                  (m.first_name?.[0] ?? "") + (m.last_name?.[0] ?? "")
+                ).toUpperCase() || "?";
+              const curBhc = m.assigned_bhc_id
+                ? getBhcName(m.assigned_bhc_id)
+                : null;
+              const options = bhcs
+                .map(
+                  (b) =>
+                    `<option value="${b.bhc_id}"${m.assigned_bhc_id === b.bhc_id ? " selected" : ""}>${esc(b.bhc_name)}</option>`
+                )
+                .join("");
+              return `<tr id="row-${m.account_id}">
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:34px;height:34px;border-radius:50%;background:var(--info);display:flex;align-items:center;justify-content:center;color:white;font-size:13px;font-weight:700;flex-shrink:0;">${esc(initials)}</div>
+            <div>
+              <div style="font-weight:600;">${esc(name)}</div>
+              <div style="font-size:11.5px;color:var(--text-secondary);">Midwife</div>
+            </div>
+          </div>
+        </div>
+        <td style="color:var(--text-secondary);font-size:13px;">${esc(m.email_address)}</div>
+        <td>
+          ${
+            curBhc
+              ? `<div style="display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-location-dot" style="color:var(--brand-primary);font-size:12px;"></i>${esc(curBhc)}</div>`
+              : `<span style="color:var(--text-secondary);font-style:italic;font-size:13px;">Not assigned</span>`
+          }
+        </div>
+        <td style="min-width:220px;">
+          <select class="form-select" id="bhc-sel-${m.account_id}" style="font-size:13px;">
+            <option value="">— Select BHC —</option>
+            ${options}
+          </select>
+        </div>
+        <td style="text-align:center;">
+          ${
+            m.assigned_bhc_id
+              ? `<span class="badge badge-active"><i class="fa-solid fa-circle-check"></i> Assigned</span>`
+              : `<span class="badge badge-medium"><i class="fa-solid fa-circle-exclamation"></i> Unassigned</span>`
+          }
+        </div>
+        <td style="text-align:center;">
+          <button class="btn btn-sm btn-primary" onclick="prepareAssignment(${m.account_id})">
+            <i class="fa-solid fa-floppy-disk"></i> Save
+          </button>
+        </div>
+      </tr>`;
+            })
+            .join("");
+        }
+
+        /* ── Prepare Assignment with Confirmation ── */
+        window.prepareAssignment = (accountId) => {
+          const sel = document.getElementById(`bhc-sel-${accountId}`);
+          const newBhcId = sel ? parseInt(sel.value) : 0;
+          
+          if (!newBhcId) {
+            showToast("Please select a BHC.", "warning");
+            return;
+          }
+
+          const midwife = midwives.find((m) => m.account_id === accountId);
+          const oldBhcId = midwife.assigned_bhc_id;
+          
+          // If same BHC selected, no change needed
+          if (oldBhcId === newBhcId) {
+            showToast("Midwife is already assigned to this BHC.", "info");
+            return;
+          }
+
+          const oldBhcName = oldBhcId ? getBhcName(oldBhcId) : "Not assigned";
+          const newBhcName = getBhcName(newBhcId);
+          const midwifeName = [midwife.first_name, midwife.last_name].filter(Boolean).join(" ");
+
+          // Store pending assignment
+          pendingAssignment = {
+            accountId: accountId,
+            midwifeName: midwifeName,
+            oldBhcId: oldBhcId,
+            oldBhcName: oldBhcName,
+            newBhcId: newBhcId,
+            newBhcName: newBhcName
+          };
+
+          // Show confirmation modal
+          document.getElementById("confirm-midwife-name").textContent = midwifeName;
+          document.getElementById("confirm-old-bhc").textContent = oldBhcName;
+          document.getElementById("confirm-new-bhc").textContent = newBhcName;
+          document.getElementById("confirm-modal").classList.add("show");
+        };
+
+        /* ── Save Assignment after Confirmation ── */
+        async function saveAssignment(assignment) {
+          const { accountId, midwifeName, oldBhcId, newBhcId, newBhcName } = assignment;
+          const midwife = midwives.find((m) => m.account_id === accountId);
+          
+          const btn = document.querySelector(`#row-${accountId} .btn-primary`);
+          if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<div class="btn-loader"></div>';
+          }
+
+          try {
+            if (midwife.midwife_id) {
+              // Update existing assignment (ensures ONE BHC only)
+              const { error } = await db
+                .from("midwives")
+                .update({ assigned_bhc_id: newBhcId })
+                .eq("midwife_id", midwife.midwife_id);
+              if (error) throw error;
+            } else {
+              // Insert new assignment
+              const { data, error } = await db
+                .from("midwives")
+                .insert({ account_id: accountId, assigned_bhc_id: newBhcId })
+                .select()
+                .single();
+              if (error) throw error;
+              midwife.midwife_id = data.midwife_id;
+            }
+            
+            // Update local data
+            midwife.assigned_bhc_id = newBhcId;
+
+            // Audit log
+            await db.from("audit_trail").insert({
+              account_id: session.account_id,
+              action: "assign_midwife",
+              table_name: "midwives",
+              description: `Changed midwife "${midwifeName}" assignment from ${oldBhcId ? getBhcName(oldBhcId) : "unassigned"} to "${newBhcName}"`,
+              old_data: { bhc_id: oldBhcId },
+              new_data: { bhc_id: newBhcId },
+            });
+
+            showToast(`${midwifeName} assigned to ${newBhcName} successfully.`, "success");
+            updateBadges();
+            renderBhcCards();
+            applyFilters();
+          } catch (err) {
+            showToast("Error saving assignment: " + err.message, "error");
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save';
+            }
+          }
+        }
+
+        // Confirm modal handlers
+        document.getElementById("confirm-proceed").addEventListener("click", () => {
+          if (pendingAssignment) {
+            saveAssignment(pendingAssignment);
+            pendingAssignment = null;
+          }
+          document.getElementById("confirm-modal").classList.remove("show");
+        });
+
+        document.getElementById("confirm-cancel").addEventListener("click", () => {
+          pendingAssignment = null;
+          document.getElementById("confirm-modal").classList.remove("show");
+        });
+
+        document.getElementById("confirm-modal-close").addEventListener("click", () => {
+          pendingAssignment = null;
+          document.getElementById("confirm-modal").classList.remove("show");
+        });
+
+        document.getElementById("confirm-modal").addEventListener("click", (e) => {
+          if (e.target === e.currentTarget) {
+            pendingAssignment = null;
+            e.currentTarget.classList.remove("show");
+          }
+        });
+
+        loadData();
+      })();
+    </script>
+  </body>
+</html>

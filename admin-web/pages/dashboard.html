@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard — InaAgapay Admin</title>
+    <link rel="icon" type="image/png" href="../images/logo_icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="../styles/main.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
+    <style>
+      /* Additional audit table enhancements */
+      .badge {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-block;
+      }
+      .badge-admin { background: #e3f2fd; color: #1976d2; }
+      .badge-midwife { background: #f3e5f5; color: #7b1fa2; }
+      .badge-mother { background: #fce4ec; color: #c2185b; }
+      .badge-active { background: #e8f5e9; color: #388e3c; }
+      .badge-inactive { background: #f5f5f5; color: #666; }
+      .badge-suspended { background: #ffebee; color: #d32f2f; }
+      .badge-low { background: #fff3e0; color: #f57c00; }
+      .badge-medium { background: #fff8e1; color: #f9a825; }
+    </style>
+  </head>
+  <body>
+    <div class="app-layout">
+      <!-- ── Header ───────────────────────────────── -->
+      <header class="app-header">
+        <div class="header-brand">
+          <button class="header-sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <img src="../images/logo_icon.png" alt="InaAgapay" class="header-logo" />
+        </div>
+        <div class="header-right">
+          <span class="header-badge">Admin Portal</span>
+          <div class="header-user" id="header-user-btn">
+            <div class="header-avatar" id="header-avatar">A</div>
+            <span class="header-user-name" id="header-user-name">Admin</span>
+            <i class="fa-solid fa-chevron-down" style="font-size: 11px; color: var(--text-secondary)"></i>
+          </div>
+        </div>
+      </header>
+
+      <!-- ── Sidebar ──────────────────────────────── -->
+      <aside class="app-sidebar">
+        <span class="sidebar-section-label">Main Menu</span>
+        <ul class="sidebar-nav">
+          <li><a href="dashboard.html" class="active"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
+          <li><a href="accounts.html"><i class="fa-solid fa-users"></i> Account Management</a></li>
+          <li><a href="account-create.html"><i class="fa-solid fa-user-plus"></i> Account Creation</a></li>
+          <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">Patient Management</span>
+        <ul class="sidebar-nav">
+          <li><a href="patient-records.html"><i class="fa-solid fa-folder-open"></i> Patient Records</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">System</span>
+        <ul class="sidebar-nav">
+          <li><a href="audit-trail.html"><i class="fa-solid fa-clipboard-list"></i> Audit Trail</a></li>
+          <li><a href="backup.html"><i class="fa-solid fa-database"></i> Backup &amp; Restore</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-footer-nav">
+          <button class="sidebar-logout" id="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+        </div>
+      </aside>
+
+      <!-- ── Main ─────────────────────────────────── -->
+      <main class="app-main">
+        <!-- Welcome Banner -->
+        <div class="banner" id="welcome-banner" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
+          <div class="banner-content">
+            <div class="banner-title" id="banner-title">Good morning, Admin 👋</div>
+            <div class="banner-subtitle">Here's what's happening with InaAgapay today — <span id="banner-date"></span></div>
+          </div>
+          <div>
+            <button class="btn btn-primary btn-sm" id="export-pdf-btn" style="background: white; color: var(--brand-primary); border: 1.5px solid transparent; box-shadow: var(--shadow-btn-primary);">
+              <i class="fa-solid fa-file-pdf"></i> Download PDF Report
+            </button>
+          </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-icon pink"><i class="fa-solid fa-person-pregnant"></i></div><div class="stat-info"><div class="stat-value" id="stat-mothers">—</div><div class="stat-label">Active Mothers</div></div></div>
+          <div class="stat-card"><div class="stat-icon blue"><i class="fa-solid fa-user-nurse"></i></div><div class="stat-info"><div class="stat-value" id="stat-midwives">—</div><div class="stat-label">Active Midwives</div></div></div>
+          <div class="stat-card"><div class="stat-icon green"><i class="fa-solid fa-baby"></i></div><div class="stat-info"><div class="stat-value" id="stat-children">—</div><div class="stat-label">Registered Children</div></div></div>
+          <div class="stat-card"><div class="stat-icon amber"><i class="fa-solid fa-heart-pulse"></i></div><div class="stat-info"><div class="stat-value" id="stat-pregnancies">—</div><div class="stat-label">Ongoing Pregnancies</div></div></div>
+          <div class="stat-card"><div class="stat-icon purple"><i class="fa-solid fa-hospital"></i></div><div class="stat-info"><div class="stat-value" id="stat-bhc">—</div><div class="stat-label">Barangay Health Centers</div></div></div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="charts-grid" style="grid-template-columns: 1fr 1fr 1fr">
+          <div class="chart-card"><div class="chart-title"><i class="fa-solid fa-chart-pie"></i> Pregnancy Risk Levels</div><div style="position: relative; height: 220px"><canvas id="risk-chart"></canvas></div></div>
+          <div class="chart-card"><div class="chart-title"><i class="fa-solid fa-chart-bar"></i> Midwives per BHC</div><div style="position: relative; height: 220px"><canvas id="bhc-chart"></canvas></div></div>
+          <div class="chart-card"><div class="chart-title"><i class="fa-solid fa-chart-line"></i> Pregnancies (6 months)</div><div style="position: relative; height: 220px"><canvas id="monthly-chart"></canvas></div></div>
+        </div>
+
+        <!-- AI Insights Panel -->
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="card-header">
+            <div><div class="card-title"><i class="fa-solid fa-microchip"></i> AI Insights</div><div class="card-subtitle">Intelligent system analysis and recommendations</div></div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-primary btn-sm" id="generate-insights-btn"><i class="fa-solid fa-chart-line"></i> Generate Insights</button>
+              <button class="btn btn-outline-pink btn-sm" id="check-risks-btn"><i class="fa-solid fa-shield-virus"></i> Check Risks</button>
+            </div>
+          </div>
+          <div class="card-body" id="ai-insights-body" style="min-height: 120px; color: var(--text-secondary);">
+            <div class="empty-state" style="padding: 20px;"><i class="fa-solid fa-robot"></i><p>Click "Generate Insights" to receive AI‑powered system analysis.</p></div>
+          </div>
+        </div>
+
+        <!-- Enhanced Recent Activity (Full Audit Table) -->
+        <div class="card">
+          <div class="card-header" style="padding-bottom: 16px">
+            <div><div class="card-title">Recent Activity</div><div class="card-subtitle">Latest audit trail entries</div></div>
+            <a href="audit-trail.html" class="btn btn-sm btn-outline-pink">View All</a>
+          </div>
+          <div class="table-wrap" style="border: none; border-radius: 0">
+            <table class="data-table">
+              <thead>
+                <tr><th>Date & Time</th><th>User</th><th>What Happened</th><th>Type</th><th>Description</th><th style="text-align: center">Details</th></tr>
+              </thead>
+              <tbody id="recent-audit-body"><tr><td colspan="6" style="text-align: center; padding: 48px"><div class="spinner" style="margin: 0 auto 12px"></div>Loading activities...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+
+      <footer class="app-footer">
+        <span>&copy; 2026 InaAgapay — Maternal & Child Health Information System</span>
+        <span style="color: var(--border-primary)">|</span>
+        <span>Admin Portal v2.0</span>
+      </footer>
+    </div>
+
+    <!-- Detail Modal (identical to audit-trail style) -->
+    <div class="modal-overlay" id="detail-modal">
+      <div class="modal" style="max-width: 680px;">
+        <div class="modal-header">
+          <h2 class="modal-title"><i class="fa-solid fa-clipboard-list" style="color: var(--brand-primary); margin-right: 8px;"></i>Activity Details</h2>
+          <button class="modal-close" id="detail-modal-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" id="detail-body"></div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="detail-close-btn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="ai-groq.js"></script>
+    <script>
+      (function () {
+        const SUPABASE_URL = "https://buvseyqcdacctlupznya.supabase.co";
+        const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1dnNleXFjZGFjY3RsdXB6bnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzE2NTUsImV4cCI6MjA4ODIwNzY1NX0.VPh8ZZFqdeFyb8YuMxllbJJa-nWl4VXNq74o6-Itjjw";
+        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        const SESSION_KEY = "inaagapay_admin_session";
+        const session = (() => { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } })();
+        if (!session || session.account_type !== "admin") { window.location.href = "../index.html"; return; }
+
+        let cachedAuditLogs = [];
+
+        // Helper functions
+        function escapeHtml(str) { const div = document.createElement("div"); div.textContent = str ?? ""; return div.innerHTML; }
+        function formatKey(key) {
+          return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+        function formatValue(value) {
+          if (value === null || value === undefined || value === '') return '<span style="color:var(--text-secondary);">—</span>';
+          if (typeof value === 'object') return '<pre style="margin:0;font-size:12px;">' + escapeHtml(JSON.stringify(value, null, 2)) + '</pre>';
+          return escapeHtml(String(value));
+        }
+        function showToast(msg, type = "info") {
+          const icons = { success: "fa-circle-check", error: "fa-circle-xmark", warning: "fa-triangle-exclamation", info: "fa-circle-info" };
+          const c = document.getElementById("toast-container");
+          const t = document.createElement("div");
+          t.className = `toast ${type}`;
+          t.innerHTML = `<i class="fa-solid ${icons[type]}"></i><span class="toast-text">${escapeHtml(msg)}</span><button class="toast-close" onclick="this.closest('.toast').remove()"><i class="fa-solid fa-xmark"></i></button>`;
+          c.appendChild(t);
+          setTimeout(() => { t.style.animation = "fadeOut .3s ease forwards"; t.addEventListener("animationend", () => t.remove()); }, 4000);
+        }
+
+        // Header
+        document.getElementById("header-user-name").textContent = [session.first_name, session.last_name].filter(Boolean).join(" ") || session.email_address;
+        document.getElementById("header-avatar").textContent = ((session.first_name?.[0] ?? "") + (session.last_name?.[0] ?? "")).toUpperCase() || "A";
+        document.getElementById("logout-btn").addEventListener("click", () => { if (confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); window.location.href = "../index.html"; } });
+        document.getElementById("sidebar-toggle").addEventListener("click", () => document.querySelector(".app-sidebar").classList.toggle("open"));
+
+        // Banner
+        const now = new Date();
+        const hr = now.getHours();
+        const greet = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
+        document.getElementById("banner-title").textContent = `${greet}, ${session.first_name || "Admin"} 👋`;
+        document.getElementById("banner-date").textContent = now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+        // Stats
+        async function loadStats() {
+          try {
+            const [mothers, midwives, children, pregnancies, bhcRes] = await Promise.all([
+              db.from("accounts").select("account_id", { count: "exact", head: true }).eq("account_type", "mother").eq("status", "active"),
+              db.from("accounts").select("account_id", { count: "exact", head: true }).eq("account_type", "midwife").eq("status", "active"),
+              db.from("children").select("child_id", { count: "exact", head: true }),
+              db.from("pregnancies").select("pregnancy_id", { count: "exact", head: true }).eq("status", "ongoing"),
+              db.from("bhc").select("bhc_id", { count: "exact", head: true })
+            ]);
+            document.getElementById("stat-mothers").textContent = (mothers.count ?? 0).toLocaleString();
+            document.getElementById("stat-midwives").textContent = (midwives.count ?? 0).toLocaleString();
+            document.getElementById("stat-children").textContent = (children.count ?? 0).toLocaleString();
+            document.getElementById("stat-pregnancies").textContent = (pregnancies.count ?? 0).toLocaleString();
+            document.getElementById("stat-bhc").textContent = (bhcRes.count ?? 0).toLocaleString();
+          } catch (e) { showToast("Failed to load statistics.", "error"); }
+        }
+
+        // Charts (simplified)
+        async function loadRiskChart() {
+          try {
+            const { data } = await db.from("pregnancies").select("pregnancy_risk_level").eq("status", "ongoing");
+            const counts = { low: 0, medium: 0, high: 0, unknown: 0 };
+            (data || []).forEach(r => { const lvl = r.pregnancy_risk_level || "unknown"; counts[lvl] = (counts[lvl] || 0) + 1; });
+            new Chart(document.getElementById("risk-chart"), {
+              type: "doughnut",
+              data: { labels: ["Low", "Medium", "High", "Unknown"], datasets: [{ data: [counts.low, counts.medium, counts.high, counts.unknown], backgroundColor: ["#68CBB8", "#FFB562", "#E57373", "#C7C7C7"], borderWidth: 2, borderColor: "#fff" }] },
+              options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom", labels: { font: { size: 11 }, boxWidth: 12, padding: 12 } } }, cutout: "65%" }
+            });
+          } catch (_) {}
+        }
+        async function loadBhcChart() {
+          try {
+            const { data: bhcs } = await db.from("bhc").select("bhc_id, bhc_name").order("bhc_name");
+            const { data: mids } = await db.from("midwives").select("assigned_bhc_id");
+            const countMap = {}; (mids || []).forEach(m => { countMap[m.assigned_bhc_id] = (countMap[m.assigned_bhc_id] || 0) + 1; });
+            const labels = (bhcs || []).map(b => b.bhc_name.length > 12 ? b.bhc_name.slice(0,12)+"…" : b.bhc_name);
+            const values = (bhcs || []).map(b => countMap[b.bhc_id] || 0);
+            new Chart(document.getElementById("bhc-chart"), {
+              type: "bar", data: { labels, datasets: [{ label: "Midwives", data: values, backgroundColor: "rgba(255, 104, 165, 0.75)", borderRadius: 6 }] },
+              options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: "#F0F0F0" } }, x: { ticks: { font: { size: 10 } }, grid: { display: false } } } }
+            });
+          } catch (_) {}
+        }
+        async function loadMonthlyChart() {
+          try {
+            const sixMonths = new Date(); sixMonths.setMonth(sixMonths.getMonth() - 5); sixMonths.setDate(1);
+            const { data } = await db.from("pregnancies").select("created_at").gte("created_at", sixMonths.toISOString());
+            const map = {}; (data || []).forEach(r => { const d = new Date(r.created_at); const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; map[key] = (map[key]||0)+1; });
+            const labels = [], values = [];
+            for (let i = 5; i >= 0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); d.setDate(1); const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; labels.push(d.toLocaleString("en-PH",{month:"short",year:"2-digit"})); values.push(map[key]||0); }
+            new Chart(document.getElementById("monthly-chart"), {
+              type: "line", data: { labels, datasets: [{ label: "New Pregnancies", data: values, borderColor: "#FF68A5", backgroundColor: "rgba(255,104,165,0.1)", tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: "#FF68A5" }] },
+              options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: "#F0F0F0" } }, x: { ticks: { font: { size: 11 } }, grid: { display: false } } } }
+            });
+          } catch (_) {}
+        }
+
+        // ---------- AUDIT TRAIL ----------
+        const ACTION_BADGES = {
+          login: ['badge-admin','Signed In'], logout: ['badge-inactive','Signed Out'],
+          create_account: ['badge-low','Account Added'], update_account: ['badge-active','Account Modified'],
+          delete_account: ['badge-suspended','Account Removed'], assign_midwife: ['badge-admin','Midwife Reassigned'],
+          create_mother: ['badge-low','Mother Registered'], update_mother: ['badge-active','Mother Updated'],
+          create_pregnancy: ['badge-low','Pregnancy Added'], update_pregnancy: ['badge-active','Pregnancy Updated'],
+          create_checkup: ['badge-low','Checkup Added'], update_checkup: ['badge-active','Checkup Updated'],
+          create_ultrasound: ['badge-low','Ultrasound Added'], create_labtest: ['badge-low','Lab Test Added'],
+          create_child: ['badge-low','Child Added'], ai_insight_generated: ['badge-midwife','AI Analysis Generated'],
+          ai_insight_edited: ['badge-active','AI Analysis Edited'], ai_insight_approved: ['badge-active','AI Analysis Approved'],
+          database_backup: ['badge-low','Backup Created'], database_restore: ['badge-suspended','System Restored']
+        };
+        function getHumanReadableActionName(action) {
+          const map = { login:'Signed In', logout:'Signed Out', create_account:'Account Added', update_account:'Account Modified', delete_account:'Account Removed', assign_midwife:'Midwife Reassigned', create_mother:'Mother Registered', update_mother:'Mother Updated', create_pregnancy:'Pregnancy Added', update_pregnancy:'Pregnancy Updated', create_checkup:'Checkup Added', update_checkup:'Checkup Updated', create_ultrasound:'Ultrasound Added', create_labtest:'Lab Test Added', create_child:'Child Added', ai_insight_generated:'AI Analysis Generated', ai_insight_edited:'AI Analysis Edited', ai_insight_approved:'AI Analysis Approved', database_backup:'Backup Created', database_restore:'System Restored' };
+          return map[action] || action?.replace(/_/g,' ')?.replace(/\b\w/g,l=>l.toUpperCase());
+        }
+        function getActionCategory(action) {
+          const cat = { login:'Auth', logout:'Auth', create_account:'Accounts', update_account:'Accounts', delete_account:'Accounts', assign_midwife:'Staff', create_mother:'Patient', update_mother:'Patient', create_pregnancy:'Pregnancy', update_pregnancy:'Pregnancy', create_checkup:'Medical', update_checkup:'Medical', create_ultrasound:'Medical', create_labtest:'Medical', create_child:'Child', ai_insight_generated:'AI', ai_insight_edited:'AI', ai_insight_approved:'AI', database_backup:'System', database_restore:'System' };
+          return cat[action] || 'Activity';
+        }
+        function formatTimestamp(ts) {
+          if (!ts) return '—';
+          const d = new Date(/Z|[+-]\d{2}:?\d{2}$/.test(ts) ? ts : ts + 'Z');
+          return d.toLocaleString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        const accountNameCache = new Map();
+        async function getAccountName(accountId) {
+          if (!accountId) return null;
+          if (accountNameCache.has(accountId)) return accountNameCache.get(accountId);
+          try {
+            const { data } = await db.from('accounts').select('first_name, last_name').eq('account_id', accountId).single();
+            if (data) {
+              const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
+              if (name) { accountNameCache.set(accountId, name); return name; }
+            }
+          } catch(e) {}
+          return null;
+        }
+
+        async function loadAuditTrail() {
+          try {
+            const { data, error } = await db
+              .from("audit_trail")
+              .select("audit_id, account_id, action, description, action_timestamp, old_data, new_data, table_name")
+              .order("action_timestamp", { ascending: false })
+              .limit(15);
+            if (error) throw error;
+            cachedAuditLogs = data || [];
+            const tbody = document.getElementById("recent-audit-body");
+            if (!data || data.length === 0) {
+              tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-regular fa-clock"></i> No activity recorded yet.</td></tr>`;
+              return;
+            }
+            const accountIds = [...new Set(data.map(log => log.account_id).filter(id => id))];
+            await Promise.all(accountIds.map(id => getAccountName(id)));
+            tbody.innerHTML = data.map(log => {
+              const who = log.account_id ? (accountNameCache.get(log.account_id) || 'Unknown') : 'System';
+              const [badgeCls, actionLabel] = ACTION_BADGES[log.action] || ['badge-inactive', getHumanReadableActionName(log.action)];
+              const category = getActionCategory(log.action);
+              const hasDetails = !!(log.old_data || log.new_data);
+              return `
+                <tr>
+                  <td style="white-space:nowrap; font-size:12px; color:var(--text-secondary);">${formatTimestamp(log.action_timestamp)}</td>
+                  <td><span style="font-weight:600;">${escapeHtml(who)}</span><div style="font-size:11px;color:var(--text-secondary);">${log.account_id ? 'User' : 'System'}</div></td>
+                  <td><span class="badge ${badgeCls}">${actionLabel}</span></td>
+                  <td><span class="badge badge-midwife" style="background:var(--brand-secondary);color:var(--text-title);">${category}</span></td>
+                  <td style="max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(log.description || '—')}</td>
+                  <td style="text-align:center;">${hasDetails ? `<button class="btn btn-icon btn-secondary btn-sm" onclick="showAuditDetail(${log.audit_id})" style="width:32px;height:32px;border-radius:50%;"><i class="fa-solid fa-eye"></i></button>` : '—'}</td>
+                </tr>
+              `;
+            }).join('');
+          } catch (err) {
+            console.error(err);
+            document.getElementById("recent-audit-body").innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--error);">Failed to load activity log: ${escapeHtml(err.message)}</td></tr>`;
+          }
+        }
+
+        // Detail modal identical to audit-trail
+        window.showAuditDetail = async (auditId) => {
+          const { data, error } = await db.from("audit_trail").select("*").eq("audit_id", auditId).single();
+          if (error || !data) { showToast("Could not load details.", "error"); return; }
+          
+          const performer = data.account_id ? (await getAccountName(data.account_id)) || 'Unknown' : 'System';
+          const actionReadable = getHumanReadableActionName(data.action);
+          
+          // Format old_data
+          let oldHtml = '';
+          if (data.old_data && typeof data.old_data === 'object' && Object.keys(data.old_data).length > 0) {
+            oldHtml = `<div style="background:var(--error-10);padding:14px;border-radius:12px;border-left:4px solid var(--error);margin-top:16px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--error);margin-bottom:12px;">Previous Values</div>`;
+            for (const [key, val] of Object.entries(data.old_data)) {
+              oldHtml += `<div style="margin-bottom:10px;"><strong>${formatKey(key)}:</strong> ${formatValue(val)}</div>`;
+            }
+            oldHtml += `</div>`;
+          }
+          
+          // Format new_data
+          let newHtml = '';
+          if (data.new_data && typeof data.new_data === 'object' && Object.keys(data.new_data).length > 0) {
+            newHtml = `<div style="background:var(--success-10);padding:14px;border-radius:12px;border-left:4px solid var(--success);margin-top:16px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--success);margin-bottom:12px;">New Values</div>`;
+            for (const [key, val] of Object.entries(data.new_data)) {
+              newHtml += `<div style="margin-bottom:10px;"><strong>${formatKey(key)}:</strong> ${formatValue(val)}</div>`;
+            }
+            newHtml += `</div>`;
+          }
+          
+          const detailBody = `
+            <div style="background:var(--bg-primary);padding:14px;border-radius:12px;border:1px solid var(--border-primary);">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);margin-bottom:12px;">Activity Details</div>
+              <div style="margin-bottom:8px;"><strong>What Happened:</strong> ${actionReadable}</div>
+              <div style="margin-bottom:8px;"><strong>Description:</strong> ${escapeHtml(data.description || '—')}</div>
+              <div style="margin-bottom:8px;"><strong>Date & Time:</strong> ${formatTimestamp(data.action_timestamp)}</div>
+              <div style="margin-bottom:8px;"><strong>Performed By:</strong> ${escapeHtml(performer)}</div>
+            </div>
+            ${oldHtml}
+            ${newHtml}
+          `;
+          
+          document.getElementById("detail-body").innerHTML = detailBody;
+          document.getElementById("detail-modal").classList.add("show");
+        };
+
+        // Modal close handlers
+        document.getElementById("detail-modal-close").addEventListener("click", () => document.getElementById("detail-modal").classList.remove("show"));
+        document.getElementById("detail-close-btn").addEventListener("click", () => document.getElementById("detail-modal").classList.remove("show"));
+        document.getElementById("detail-modal").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("show"); });
+
+        // AI Integration (unchanged)
+        document.getElementById("generate-insights-btn").addEventListener("click", async () => {
+          const btn = document.getElementById("generate-insights-btn");
+          const original = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<div class="btn-loader"></div> Generating...';
+          try {
+            const stats = { activeMothers: parseInt(document.getElementById('stat-mothers').textContent)||0, activeMidwives: parseInt(document.getElementById('stat-midwives').textContent)||0, registeredChildren: parseInt(document.getElementById('stat-children').textContent)||0, ongoingPregnancies: parseInt(document.getElementById('stat-pregnancies').textContent)||0, bhcCount: parseInt(document.getElementById('stat-bhc').textContent)||0, timestamp: new Date().toISOString() };
+            const { data: recentAudit } = await db.from('audit_trail').select('action, action_timestamp').order('action_timestamp',{ascending:false}).limit(30);
+            if (recentAudit) stats.recentActions = recentAudit.slice(0,20);
+            const analysis = await window.analyzeSystem(stats);
+            window.showAIAnalysis('System Insights', analysis);
+          } catch (err) { showToast('Insights failed: ' + err.message, 'error'); }
+          finally { btn.disabled = false; btn.innerHTML = original; }
+        });
+        document.getElementById("check-risks-btn").addEventListener("click", async () => {
+          const btn = document.getElementById("check-risks-btn");
+          const original = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<div class="btn-loader"></div> Scanning...';
+          try {
+            const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            const { data: logs } = await db.from('audit_trail').select('*, accounts(first_name, last_name, email_address)').gte('action_timestamp', sevenDaysAgo.toISOString()).limit(200);
+            const riskData = { audit_logs: logs || [], system_date: new Date().toISOString() };
+            const analysis = await window.analyzeRisk(riskData);
+            window.showAIAnalysis('Risk Assessment', analysis);
+          } catch (err) { showToast('Risk scan failed: ' + err.message, 'error'); }
+          finally { btn.disabled = false; btn.innerHTML = original; }
+        });
+
+        // ---------- PDF Export Handler ----------
+        document.getElementById('export-pdf-btn')?.addEventListener('click', () => {
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF('l', 'mm', 'a4'); // Landscape A4: 297mm x 210mm
+          
+          // Print report subtitle and initial page layout details
+          doc.setTextColor(50, 50, 50);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(12);
+          doc.text('1. System Statistics Summary', 14, 28);
+          
+          // Draw stats table
+          const statsHeaders = ["Metric", "Count"];
+          const statsRows = [
+            ["Active Mothers", document.getElementById("stat-mothers").textContent || "0"],
+            ["Active Midwives", document.getElementById("stat-midwives").textContent || "0"],
+            ["Registered Children", document.getElementById("stat-children").textContent || "0"],
+            ["Ongoing Pregnancies", document.getElementById("stat-pregnancies").textContent || "0"],
+            ["Barangay Health Centers", document.getElementById("stat-bhc").textContent || "0"]
+          ];
+          
+          doc.autoTable({
+            head: [statsHeaders],
+            body: statsRows,
+            startY: 32,
+            margin: { left: 14, right: 14 },
+            theme: 'grid',
+            headStyles: { fillColor: [240, 240, 240], textColor: [50, 50, 50], fontStyle: 'bold' },
+            styles: { fontSize: 8.5, cellPadding: 2.5, font: 'helvetica' },
+            columnStyles: {
+              0: { cellWidth: 80, fontStyle: 'bold' },
+              1: { cellWidth: 40 }
+            }
+          });
+          
+          let lastY = doc.previousAutoTable.finalY + 10;
+          
+          // AI Insights
+          const insightsBody = document.getElementById("ai-insights-body");
+          const hasInsights = insightsBody && !insightsBody.querySelector(".empty-state");
+          
+          if (hasInsights) {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.text('2. AI System Insights & Recommendations', 14, lastY);
+            
+            let text = insightsBody.innerText || insightsBody.textContent;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8.5);
+            
+            const splitText = doc.splitTextToSize(text.trim(), doc.internal.pageSize.width - 28);
+            doc.text(splitText, 14, lastY + 5);
+            
+            lastY = lastY + 5 + (splitText.length * 4) + 10;
+          }
+          
+          if (lastY > 165) {
+            doc.addPage();
+            lastY = 26;
+          }
+          
+          // Recent Activities
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(12);
+          doc.text('3. Recent Activities (Latest Audit Logs)', 14, lastY);
+          
+          const activityHeaders = ["Date & Time", "User", "Action", "Category", "Description"];
+          const activityRows = cachedAuditLogs.map(l => [
+            formatTimestamp(l.action_timestamp),
+            l.account_id ? (accountNameCache.get(l.account_id) || 'Unknown') : 'System',
+            getHumanReadableActionName(l.action),
+            getActionCategory(l.action),
+            l.description || '—'
+          ]);
+          
+          doc.autoTable({
+            head: [activityHeaders],
+            body: activityRows,
+            startY: lastY + 4,
+            margin: { left: 14, right: 14, bottom: 15 },
+            theme: 'striped',
+            headStyles: { fillColor: [255, 104, 165], textColor: [255, 255, 255], fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 2.5, font: 'helvetica' },
+            columnStyles: {
+              0: { cellWidth: 42 }, // Date & Time
+              1: { cellWidth: 35 }, // User
+              2: { cellWidth: 35 }, // Action
+              3: { cellWidth: 22 }, // Category
+              4: { cellWidth: 'auto' } // Description
+            }
+          });
+          
+          // Header / Footer Overlay
+          const totalPages = doc.internal.getNumberOfPages();
+          for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+            
+            // Header bar
+            doc.setFillColor(255, 104, 165);
+            doc.rect(0, 0, doc.internal.pageSize.width, 18, 'F');
+            
+            // Header Text
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.text('INAAGAPAY: MATERNAL & CHILD HEALTH SYSTEM', 14, 12);
+            
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.text('SYSTEM STATUS REPORT', doc.internal.pageSize.width - 14, 12, { align: 'right' });
+            
+            // Footer
+            doc.setFontSize(8);
+            doc.setTextColor(128, 128, 128);
+            doc.text(`Generated by Admin: ${session.first_name} ${session.last_name} | Date: ${new Date().toLocaleString('en-PH')}`, 14, doc.internal.pageSize.height - 8);
+            doc.text(`Page ${i} of ${totalPages}`, doc.internal.pageSize.width - 14, doc.internal.pageSize.height - 8, { align: 'right' });
+          }
+          
+          doc.save(`system_dashboard_report_${new Date().toISOString().slice(0,10)}.pdf`);
+        });
+
+        // Initialize
+        loadStats();
+        loadRiskChart();
+        loadBhcChart();
+        loadMonthlyChart();
+        loadAuditTrail();
+      })();
+    </script>
+  </body>
+</html>
