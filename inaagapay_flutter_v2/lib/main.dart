@@ -73,7 +73,7 @@ void main() async {
   try {
     await Supabase.initialize(
       url: supabaseUrl,
-      anonKey: supabaseAnonKey,
+      publishableKey: supabaseAnonKey,
     );
     if (kDebugMode) print('✅ Supabase initialized successfully');
   } catch (e) {

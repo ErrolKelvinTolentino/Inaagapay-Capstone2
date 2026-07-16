@@ -259,7 +259,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   List<_RiskFactorItem> _editableRiskFactors = [];
   List<String> _editableSuggestedActions = [];
 
-
   static const List<String> _fetalTones = [
     'Normal',
     'Tachycardia',
@@ -501,8 +500,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
 
       final pastPregnancies = await client
           .from('pregnancies')
-          .select(
-              'pregnancy_id, fetal_count, status, created_at')
+          .select('pregnancy_id, fetal_count, status, created_at')
           .eq('mother_id', widget.motherId)
           .neq('pregnancy_id', widget.pregnancyId)
           .order('created_at', ascending: false);
@@ -557,7 +555,8 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           'past_pregnancy_outcomes': pastPregnancyOutcomes,
           'previous_checkups': previousCheckups,
         };
-        final pregLevel = pregnancy?['pregnancy_risk_level']?.toString().toLowerCase();
+        final pregLevel =
+            pregnancy?['pregnancy_risk_level']?.toString().toLowerCase();
         if (pregLevel != null) {
           _pregnancyRiskLevel = pregLevel;
         }
@@ -719,22 +718,28 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     if (snapshot.level == 'low' && highFactors.isEmpty) {
       buf.write('Based on your checkup today, everything is looking good. ');
       if (currentBp != null) {
-        buf.write('Your blood pressure reading of $currentBp is within a healthy range, which is a wonderful sign for you and your baby. ');
+        buf.write(
+            'Your blood pressure reading of $currentBp is within a healthy range, which is a wonderful sign for you and your baby. ');
       }
-      buf.write('Keep taking good care of yourself — eating nutritious food, resting well, and staying hydrated will help you and your little one stay healthy. ');
+      buf.write(
+          'Keep taking good care of yourself — eating nutritious food, resting well, and staying hydrated will help you and your little one stay healthy. ');
     } else {
-      buf.write('Some of the recent pregnancy monitoring information may need closer healthcare attention. ');
+      buf.write(
+          'Some of the recent pregnancy monitoring information may need closer healthcare attention. ');
       if (highFactors.isNotEmpty) {
         final symptomsText = highFactors.join(', ');
-        buf.write('The current pregnancy monitoring record includes $symptomsText, which may require consultation with healthcare personnel. ');
+        buf.write(
+            'The current pregnancy monitoring record includes $symptomsText, which may require consultation with healthcare personnel. ');
       }
       if (currentBp != null) {
-        buf.write('Your blood pressure was recorded at $currentBp during this visit. ');
+        buf.write(
+            'Your blood pressure was recorded at $currentBp during this visit. ');
       }
       buf.write('$keyAction ');
     }
 
-    buf.write('Continued prenatal checkups are recommended to help support your health during pregnancy.');
+    buf.write(
+        'Continued prenatal checkups are recommended to help support your health during pregnancy.');
 
     return buf.toString();
   }
@@ -752,13 +757,17 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     final buf = StringBuffer();
 
     if (snapshot.level == 'low' && highFactors.isEmpty) {
-      buf.write('Kamusta, mommy! Sa checkup natin ngayon, maayos at normal naman ang lahat. ');
+      buf.write(
+          'Kamusta, mommy! Sa checkup natin ngayon, maayos at normal naman ang lahat. ');
       if (currentBp != null) {
-        buf.write('Ang iyong blood pressure na $currentBp ay nasa magandang antas, na isang napakagandang balita para sa inyo ni baby. ');
+        buf.write(
+            'Ang iyong blood pressure na $currentBp ay nasa magandang antas, na isang napakagandang balita para sa inyo ni baby. ');
       }
-      buf.write('Patuloy ka sanang mag-alaga sa iyong sarili — kumain ng masusustansyang pagkain, matulog nang sapat, at uminom ng maraming tubig para manatiling malakas kayo ng iyong munting anghel. ');
+      buf.write(
+          'Patuloy ka sanang mag-alaga sa iyong sarili — kumain ng masusustansyang pagkain, matulog nang sapat, at uminom ng maraming tubig para manatiling malakas kayo ng iyong munting anghel. ');
     } else {
-      buf.write('May ilang detalye sa iyong checkup ngayon na kailangan nating bigyan ng kaunting pansin at subaybayan. ');
+      buf.write(
+          'May ilang detalye sa iyong checkup ngayon na kailangan nating bigyan ng kaunting pansin at subaybayan. ');
       if (highFactors.isNotEmpty) {
         final symptomsText = highFactors.map((f) {
           var translated = f;
@@ -767,15 +776,19 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           }
           return translated;
         }).join(', ');
-        buf.write('Kasama sa ating talaan ngayon ang $symptomsText, na mas mabuting masubaybayan natin kasama ng mga doktor o healthcare personnel. ');
+        buf.write(
+            'Kasama sa ating talaan ngayon ang $symptomsText, na mas mabuting masubaybayan natin kasama ng mga doktor o healthcare personnel. ');
       }
       if (currentBp != null) {
-        buf.write('Ang iyong blood pressure ay naitala sa $currentBp sa bisitang ito. ');
+        buf.write(
+            'Ang iyong blood pressure ay naitala sa $currentBp sa bisitang ito. ');
       }
-      buf.write('Huwag mag-alala, mommy, babantayan natin ito nang mabuti at sundin ang mga payo sa pangangalaga. ');
+      buf.write(
+          'Huwag mag-alala, mommy, babantayan natin ito nang mabuti at sundin ang mga payo sa pangangalaga. ');
     }
 
-    buf.write('Ang patuloy na prenatal checkup ay inirerekomenda upang suportahan ang iyong kalusugan sa buong pagbubuntis.');
+    buf.write(
+        'Ang patuloy na prenatal checkup ay inirerekomenda upang suportahan ang iyong kalusugan sa buong pagbubuntis.');
 
     return buf.toString();
   }
@@ -789,14 +802,21 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
 
     if (filipinoIndex != -1 && englishIndex != -1) {
       if (filipinoIndex < englishIndex) {
-        filipino = text.substring(filipinoIndex + '=== FILIPINO ==='.length, englishIndex).trim();
-        english = text.substring(englishIndex + '=== ENGLISH ==='.length).trim();
+        filipino = text
+            .substring(filipinoIndex + '=== FILIPINO ==='.length, englishIndex)
+            .trim();
+        english =
+            text.substring(englishIndex + '=== ENGLISH ==='.length).trim();
       } else {
-        english = text.substring(englishIndex + '=== ENGLISH ==='.length, filipinoIndex).trim();
-        filipino = text.substring(filipinoIndex + '=== FILIPINO ==='.length).trim();
+        english = text
+            .substring(englishIndex + '=== ENGLISH ==='.length, filipinoIndex)
+            .trim();
+        filipino =
+            text.substring(filipinoIndex + '=== FILIPINO ==='.length).trim();
       }
     } else if (filipinoIndex != -1) {
-      filipino = text.substring(filipinoIndex + '=== FILIPINO ==='.length).trim();
+      filipino =
+          text.substring(filipinoIndex + '=== FILIPINO ==='.length).trim();
       english = filipino;
     } else if (englishIndex != -1) {
       english = text.substring(englishIndex + '=== ENGLISH ==='.length).trim();
@@ -811,25 +831,33 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   }
 
   String _translateRuleTextToFilipino(String text) {
-    final isLow = text.contains('everything is looking good') || text.contains('maayos');
+    final isLow =
+        text.contains('everything is looking good') || text.contains('maayos');
     final currentBpMatch = RegExp(r'(\d+/\d+)').firstMatch(text);
     final currentBp = currentBpMatch != null ? currentBpMatch.group(1) : null;
 
     final buf = StringBuffer();
     if (isLow) {
-      buf.write('Kamusta, mommy! Sa checkup natin ngayon, maayos at normal naman ang lahat. ');
+      buf.write(
+          'Kamusta, mommy! Sa checkup natin ngayon, maayos at normal naman ang lahat. ');
       if (currentBp != null) {
-        buf.write('Ang iyong blood pressure na $currentBp ay nasa magandang antas, na isang napakagandang balita para sa inyo ni baby. ');
+        buf.write(
+            'Ang iyong blood pressure na $currentBp ay nasa magandang antas, na isang napakagandang balita para sa inyo ni baby. ');
       }
-      buf.write('Patuloy ka sanang mag-alaga sa iyong sarili — kumain ng masusustansyang pagkain, matulog nang sapat, at uminom ng maraming tubig para manatiling malakas kayo ng iyong munting anghel. ');
+      buf.write(
+          'Patuloy ka sanang mag-alaga sa iyong sarili — kumain ng masusustansyang pagkain, matulog nang sapat, at uminom ng maraming tubig para manatiling malakas kayo ng iyong munting anghel. ');
     } else {
-      buf.write('May ilang detalye sa iyong checkup ngayon na kailangan nating bigyan ng kaunting pansin at subaybayan. ');
+      buf.write(
+          'May ilang detalye sa iyong checkup ngayon na kailangan nating bigyan ng kaunting pansin at subaybayan. ');
       if (currentBp != null) {
-        buf.write('Ang iyong blood pressure ay naitala sa $currentBp sa bisitang ito. ');
+        buf.write(
+            'Ang iyong blood pressure ay naitala sa $currentBp sa bisitang ito. ');
       }
-      buf.write('Huwag mag-alala, mommy, babantayan natin ito nang mabuti at sundin ang mga payo sa pangangalaga. ');
+      buf.write(
+          'Huwag mag-alala, mommy, babantayan natin ito nang mabuti at sundin ang mga payo sa pangangalaga. ');
     }
-    buf.write('Ang patuloy na prenatal checkup ay inirerekomenda upang suportahan ang iyong kalusugan sa buong pagbubuntis.');
+    buf.write(
+        'Ang patuloy na prenatal checkup ay inirerekomenda upang suportahan ang iyong kalusugan sa buong pagbubuntis.');
     return buf.toString();
   }
 
@@ -929,8 +957,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           influence: 'high',
         ));
       }
-      actions.add(
-          'Prioritize immediate care protocol and referral if needed.');
+      actions.add('Prioritize immediate care protocol and referral if needed.');
     }
 
     // 5. Medical History & Pregnancy Context (Watch Items)
@@ -994,7 +1021,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
       aiModel: null,
     );
   }
-
 
   String _buildAiPrompt(_RiskSnapshot draft) {
     final mother = _motherRiskContext?['mother'] as Map<String, dynamic>?;
@@ -1085,21 +1111,30 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     try {
       final currentWeight = double.tryParse(_weightCtrl.text.trim());
       if (currentWeight != null && _aogWeeks != null && _aogWeeks! > 0) {
-        final heightCm = mother?['height'] != null ? double.tryParse(mother!['height'].toString()) : null;
-        final prePregnancyWeight = pregnancy?['pre_pregnancy_weight'] != null ? double.tryParse(pregnancy!['pre_pregnancy_weight'].toString()) : null;
-        final motherWeight = mother?['weight'] != null ? double.tryParse(mother!['weight'].toString()) : null;
+        final heightCm = mother?['height'] != null
+            ? double.tryParse(mother!['height'].toString())
+            : null;
+        final prePregnancyWeight = pregnancy?['pre_pregnancy_weight'] != null
+            ? double.tryParse(pregnancy!['pre_pregnancy_weight'].toString())
+            : null;
+        final motherWeight = mother?['weight'] != null
+            ? double.tryParse(mother!['weight'].toString())
+            : null;
         final baselineWeight = prePregnancyWeight ?? motherWeight;
-        
-        final checkupList = previousCheckups.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        
+
+        final checkupList = previousCheckups
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+
         // Ensure the current checkup is part of the longitudinal history so the engine can calculate trends properly.
         checkupList.add({
-           'checkup_datetime': _checkupDateTime.toIso8601String(),
-           'age_of_gestation': _aogWeeks,
-           'checkup_weight': currentWeight,
+          'checkup_datetime': _checkupDateTime.toIso8601String(),
+          'age_of_gestation': _aogWeeks,
+          'checkup_weight': currentWeight,
         });
-        checkupList.sort((a, b) => DateTime.parse(a['checkup_datetime']).compareTo(DateTime.parse(b['checkup_datetime'])));
-        
+        checkupList.sort((a, b) => DateTime.parse(a['checkup_datetime'])
+            .compareTo(DateTime.parse(b['checkup_datetime'])));
+
         wgResult = WeightGainEngine.evaluate(
           currentWeight: currentWeight,
           aogWeeks: _aogWeeks!,
@@ -1133,13 +1168,16 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
       for (int i = 1; i < previousCheckups.length; i++) {
         final prev = previousCheckups[i - 1];
         final curr = previousCheckups[i];
-        final prevW = double.tryParse((prev['checkup_weight'] ?? '').toString());
-        final currW = double.tryParse((curr['checkup_weight'] ?? '').toString());
+        final prevW =
+            double.tryParse((prev['checkup_weight'] ?? '').toString());
+        final currW =
+            double.tryParse((curr['checkup_weight'] ?? '').toString());
         if (prevW != null && currW != null) {
           final diff = currW - prevW;
           final prevDate = (prev['checkup_datetime'] ?? '').toString();
           final currDate = (curr['checkup_datetime'] ?? '').toString();
-          weightTrendLines.add('- $prevDate to $currDate: ${diff >= 0 ? '+' : ''}${diff.toStringAsFixed(1)} kg');
+          weightTrendLines.add(
+              '- $prevDate to $currDate: ${diff >= 0 ? '+' : ''}${diff.toStringAsFixed(1)} kg');
         }
       }
     }
@@ -1537,7 +1575,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   const Icon(Icons.edit_outlined,
                       size: 16, color: AppColors.brandPrimary)
                 ])),
-            Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.borderPrimary),
+            Divider(
+                height: 1,
+                indent: 16,
+                endIndent: 16,
+                color: AppColors.borderPrimary),
             Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(children: rows)),
@@ -1759,8 +1801,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         return Dialog(
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -1799,12 +1843,15 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                 ),
                 const SizedBox(height: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _riskColor(symptomType.riskCategory).withValues(alpha: 0.12),
+                    color: _riskColor(symptomType.riskCategory)
+                        .withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: _riskColor(symptomType.riskCategory).withValues(alpha: 0.35),
+                      color: _riskColor(symptomType.riskCategory)
+                          .withValues(alpha: 0.35),
                     ),
                   ),
                   child: Text(
@@ -1822,7 +1869,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.borderPrimary, width: 1.5),
+                    border:
+                        Border.all(color: AppColors.borderPrimary, width: 1.5),
                   ),
                   child: TextField(
                     controller: notesCtrl,
@@ -1831,7 +1879,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                     decoration: const InputDecoration(
                       border: InputBorder.none,
                       hintText: 'Notes (optional)',
-                      hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                      hintStyle: TextStyle(
+                          color: AppColors.textSecondary, fontSize: 14),
                       counterText: '',
                     ),
                   ),
@@ -1843,10 +1892,12 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   child: FilledButton(
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.brandPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24)),
                     ),
                     onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Add Symptom', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text('Add Symptom',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -1882,8 +1933,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         return Dialog(
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -1926,7 +1979,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.borderPrimary, width: 1.5),
+                    border:
+                        Border.all(color: AppColors.borderPrimary, width: 1.5),
                   ),
                   child: TextField(
                     controller: notesCtrl,
@@ -1935,7 +1989,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                     decoration: const InputDecoration(
                       border: InputBorder.none,
                       hintText: 'Notes (optional)',
-                      hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                      hintStyle: TextStyle(
+                          color: AppColors.textSecondary, fontSize: 14),
                       counterText: '',
                     ),
                   ),
@@ -1947,10 +2002,12 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   child: FilledButton(
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.brandPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24)),
                     ),
                     onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text('Save Changes',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -2053,7 +2110,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                 ),
                 backgroundColor: selected ? color : Colors.white,
                 side: BorderSide(color: color),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
                 onPressed: () {
                   if (!selected) {
                     _openSymptomNotesDialog(symptomType);
@@ -2117,10 +2175,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       helpText: 'Must be after ${_prettyDate(_checkupDateTime)}',
       selectableDayPredicate: (date) {
         // Block weekends — BHCs are typically closed on Sat/Sun
-        if (date.weekday == DateTime.saturday || date.weekday == DateTime.sunday) return false;
+        if (date.weekday == DateTime.saturday ||
+            date.weekday == DateTime.sunday) return false;
         // Block Philippine regular holidays
         if (isHoliday(date)) return false;
-        
+
         return true;
       },
       builder: (context, child) {
@@ -2176,7 +2235,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     setState(() => _nextSchedule = picked);
   }
 
-
   Future<void> _insertSupplementRecords() async {
     final client = Supabase.instance.client;
     final checkupDate = _normalizedDate(_checkupDateTime);
@@ -2230,7 +2288,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         (_aiOriginalAssessment ?? snapshot.aiAssessment).trim();
     final filipinoText = _aiFilipinoCtrl.text.trim();
     final englishText = _aiEnglishCtrl.text.trim();
-    final finalAiText = '=== FILIPINO ===\n$filipinoText\n\n=== ENGLISH ===\n$englishText';
+    final finalAiText =
+        '=== FILIPINO ===\n$filipinoText\n\n=== ENGLISH ===\n$englishText';
     final wasEdited = finalAiText.trim() != originalText;
     final aiStatus =
         _aiResponseApproved ? 'approved' : (wasEdited ? 'edited' : 'generated');
@@ -2398,7 +2457,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       final heightCm = _wgeToDouble(motherData?['height']);
       final prePregnancyWeight =
           _wgeToDouble(pregnancyData?['pre_pregnancy_weight']);
-      final fetalCount = int.tryParse(pregnancyData?['fetal_count']?.toString() ?? '') ?? 1;
+      final fetalCount =
+          int.tryParse(pregnancyData?['fetal_count']?.toString() ?? '') ?? 1;
 
       // Fetch all checkups for this pregnancy (ascending order)
       final rawCheckups = await client
@@ -2475,7 +2535,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     }
 
     if (!_aiResponseApproved && !_aiAnalysisSkipped) {
-      _showMessage('Approve the AI response or skip AI analysis before saving.');
+      _showMessage(
+          'Approve the AI response or skip AI analysis before saving.');
       return;
     }
 
@@ -2545,7 +2606,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         try {
           final motherDetails = await Supabase.instance.client
               .from('mothers')
-              .select('mother_id, account:account_id (first_name, last_name, phone_number), assigned_bhc_id, bhc:assigned_bhc_id (bhc_name)')
+              .select(
+                  'mother_id, account:account_id (first_name, last_name, phone_number), assigned_bhc_id, bhc:assigned_bhc_id (bhc_name)')
               .eq('mother_id', widget.motherId)
               .maybeSingle();
 
@@ -2555,10 +2617,12 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             final firstName = account?['first_name']?.toString() ?? 'Mother';
             final bhc = motherDetails['bhc'] as Map<String, dynamic>?;
             final bhcName = bhc?['bhc_name']?.toString() ?? 'Health Center';
-            final nextDateStr = DateFormat('MMMM d, yyyy').format(_nextSchedule!);
+            final nextDateStr =
+                DateFormat('MMMM d, yyyy').format(_nextSchedule!);
 
             if (phone != null && phone.isNotEmpty) {
-              final smsMessage = 'InaAgapay: Hello $firstName! Ang inyong susunod na prenatal check-up ay nakatakda sa $nextDateStr sa $bhcName. Mangyaring i-save ang petsang ito at mag-ingat po kayo. Salamat!';
+              final smsMessage =
+                  'InaAgapay: Hello $firstName! Ang inyong susunod na prenatal check-up ay nakatakda sa $nextDateStr sa $bhcName. Mangyaring i-save ang petsang ito at mag-ingat po kayo. Salamat!';
               await SmsService.sendSmsMessage(phone, smsMessage);
             }
           }
@@ -2761,7 +2825,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           title: 'Height',
           child: AppInputField(
             hintText: 'Height (cm)',
-            controller: TextEditingController(text: motherHeight ?? 'Not recorded'),
+            controller:
+                TextEditingController(text: motherHeight ?? 'Not recorded'),
             readOnly: true,
           ),
         ),
@@ -2774,7 +2839,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               AppInputField(
                 hintText: 'Weight (kg)',
                 controller: _weightCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(
                       RegExp(r'^\d{0,3}(\.\d{0,2})?$')),
@@ -2784,9 +2850,12 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               ),
               if (_weightError == null)
                 _buildWeightGainInsight(
-                  motherHeight != null ? double.tryParse(motherHeight) : null,
-                  pregnancy,
-                ) ?? const SizedBox.shrink(),
+                      motherHeight != null
+                          ? double.tryParse(motherHeight)
+                          : null,
+                      pregnancy,
+                    ) ??
+                    const SizedBox.shrink(),
             ],
           ),
         ),
@@ -2833,35 +2902,46 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     );
   }
 
-  Widget? _buildWeightGainInsight(double? heightCmVal, Map<String, dynamic>? pregnancyData) {
-    if (_aogWeeks == null || _aogWeeks! < 13.0) return null; // Only 2nd Trimester (week 13) and up
+  Widget? _buildWeightGainInsight(
+      double? heightCmVal, Map<String, dynamic>? pregnancyData) {
+    if (_aogWeeks == null || _aogWeeks! < 13.0)
+      return null; // Only 2nd Trimester (week 13) and up
 
     final t = _weightCtrl.text.trim();
     if (t.isEmpty) return null;
     final currentWeight = double.tryParse(t);
-    if (currentWeight == null || currentWeight < 30 || currentWeight > 200) return null;
+    if (currentWeight == null || currentWeight < 30 || currentWeight > 200)
+      return null;
 
     final mother = _motherRiskContext?['mother'] as Map<String, dynamic>?;
-    final previousCheckups = (_motherRiskContext?['previous_checkups'] as List? ?? const []).cast<dynamic>();
+    final previousCheckups =
+        (_motherRiskContext?['previous_checkups'] as List? ?? const [])
+            .cast<dynamic>();
 
     final rawPrePreg = pregnancyData?['pre_pregnancy_weight'];
-    final prePregnancyWeight = rawPrePreg != null ? double.tryParse(rawPrePreg.toString()) : null;
+    final prePregnancyWeight =
+        rawPrePreg != null ? double.tryParse(rawPrePreg.toString()) : null;
 
     final rawMotherW = mother?['weight'];
-    final motherWeight = rawMotherW != null ? double.tryParse(rawMotherW.toString()) : null;
+    final motherWeight =
+        rawMotherW != null ? double.tryParse(rawMotherW.toString()) : null;
 
     final baselineWeight = prePregnancyWeight ?? motherWeight;
 
     final rawMotherH = mother?['height'];
-    final heightCm = heightCmVal ?? (rawMotherH != null ? double.tryParse(rawMotherH.toString()) : null);
+    final heightCm = heightCmVal ??
+        (rawMotherH != null ? double.tryParse(rawMotherH.toString()) : null);
 
-    final checkupList = previousCheckups.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final checkupList = previousCheckups
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
     checkupList.add({
-       'checkup_datetime': _checkupDateTime.toIso8601String(),
-       'age_of_gestation': _aogWeeks,
-       'checkup_weight': currentWeight,
+      'checkup_datetime': _checkupDateTime.toIso8601String(),
+      'age_of_gestation': _aogWeeks,
+      'checkup_weight': currentWeight,
     });
-    checkupList.sort((a, b) => DateTime.parse(a['checkup_datetime']).compareTo(DateTime.parse(b['checkup_datetime'])));
+    checkupList.sort((a, b) => DateTime.parse(a['checkup_datetime'])
+        .compareTo(DateTime.parse(b['checkup_datetime'])));
 
     try {
       final result = WeightGainEngine.evaluate(
@@ -2906,12 +2986,15 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       String detailsText = '';
       if (prePregnancyWeight == null) {
         detailsText = result.message;
-      } else if (result.mode == WeightGainMode.full && result.expectedGain != null && result.baselineWeight != null) {
-        final activeGuidelines = (_fetalCount ?? 1) >= 2 
-            ? WeightGainEngine.iomTwinGuidelines 
+      } else if (result.mode == WeightGainMode.full &&
+          result.expectedGain != null &&
+          result.baselineWeight != null) {
+        final activeGuidelines = (_fetalCount ?? 1) >= 2
+            ? WeightGainEngine.iomTwinGuidelines
             : WeightGainEngine.iomGuidelines;
-        final guidelines = activeGuidelines[result.bmiCategory] ?? activeGuidelines['Normal']!;
-        
+        final guidelines =
+            activeGuidelines[result.bmiCategory] ?? activeGuidelines['Normal']!;
+
         final firstTrimesterGain = guidelines['first_trimester']!;
         final weeklyRate = guidelines['weekly_rate']!;
         final totalMin = guidelines['total_min']!;
@@ -2931,8 +3014,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
           if (_aogWeeks! <= 40) {
             final progressFraction = (_aogWeeks! - 13) / 27.0;
-            expectedGainMin = firstTrimesterMin + (totalMin - firstTrimesterMin) * progressFraction;
-            expectedGainMax = firstTrimesterMax + (totalMax - firstTrimesterMax) * progressFraction;
+            expectedGainMin = firstTrimesterMin +
+                (totalMin - firstTrimesterMin) * progressFraction;
+            expectedGainMax = firstTrimesterMax +
+                (totalMax - firstTrimesterMax) * progressFraction;
           } else {
             final weeksAfterForty = _aogWeeks! - 40;
             final weeklyMin = guidelines['weekly_min'] ?? (weeklyRate * 0.8);
@@ -2946,38 +3031,46 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         final expectedWeightMax = result.baselineWeight! + expectedGainMax;
 
         final actualGain = result.actualGain ?? 0.0;
-        final actualStr = "${actualGain >= 0 ? '+' : ''}${actualGain.toStringAsFixed(1)} kg";
-        final gainRangeStr = "${expectedGainMin.toStringAsFixed(1)} - ${expectedGainMax.toStringAsFixed(1)} kg";
-        final weightRangeStr = "${expectedWeightMin.toStringAsFixed(1)} - ${expectedWeightMax.toStringAsFixed(1)} kg";
+        final actualStr =
+            "${actualGain >= 0 ? '+' : ''}${actualGain.toStringAsFixed(1)} kg";
+        final gainRangeStr =
+            "${expectedGainMin.toStringAsFixed(1)} - ${expectedGainMax.toStringAsFixed(1)} kg";
+        final weightRangeStr =
+            "${expectedWeightMin.toStringAsFixed(1)} - ${expectedWeightMax.toStringAsFixed(1)} kg";
 
         if (isLow) {
-          detailsText = "Weight gain is slightly lower than the expected range (current gain is $actualStr, recommended gain is $gainRangeStr).\n"
+          detailsText =
+              "Weight gain is slightly lower than the expected range (current gain is $actualStr, recommended gain is $gainRangeStr).\n"
               "Based on your pre-pregnancy weight of ${result.baselineWeight!.toStringAsFixed(1)} kg (${result.bmiCategory}), "
               "the recommended weight range for Week ${_aogWeeks!.toInt()} is $weightRangeStr kg.";
         } else if (isHigh) {
-          detailsText = "Weight gain exceeds the expected range (current gain is $actualStr, recommended gain is $gainRangeStr).\n"
+          detailsText =
+              "Weight gain exceeds the expected range (current gain is $actualStr, recommended gain is $gainRangeStr).\n"
               "Based on your pre-pregnancy weight of ${result.baselineWeight!.toStringAsFixed(1)} kg (${result.bmiCategory}), "
               "the recommended weight range for Week ${_aogWeeks!.toInt()} is $weightRangeStr kg.";
         } else {
-          detailsText = "Weight gain is within the commonly expected range (current gain is $actualStr, recommended gain is $gainRangeStr).\n"
+          detailsText =
+              "Weight gain is within the commonly expected range (current gain is $actualStr, recommended gain is $gainRangeStr).\n"
               "Based on your pre-pregnancy weight of ${result.baselineWeight!.toStringAsFixed(1)} kg (${result.bmiCategory}), "
               "the recommended weight range for Week ${_aogWeeks!.toInt()} is $weightRangeStr kg.";
         }
       } else if (result.weeklyGain != null) {
-        final activeGuidelines = (_fetalCount ?? 1) >= 2 
-            ? WeightGainEngine.iomTwinGuidelines 
+        final activeGuidelines = (_fetalCount ?? 1) >= 2
+            ? WeightGainEngine.iomTwinGuidelines
             : WeightGainEngine.iomGuidelines;
-        final guidelines = activeGuidelines[result.bmiCategory] ?? activeGuidelines['Normal']!;
+        final guidelines =
+            activeGuidelines[result.bmiCategory] ?? activeGuidelines['Normal']!;
         final weeklyMin = guidelines['weekly_min']!;
         final weeklyMax = guidelines['weekly_max']!;
 
-        final weeklyStr = "${result.weeklyGain! >= 0 ? '+' : ''}${result.weeklyGain!.toStringAsFixed(2)} kg/wk";
-        final rangeStr = "${weeklyMin.toStringAsFixed(2)} - ${weeklyMax.toStringAsFixed(2)} kg/wk";
+        final weeklyStr =
+            "${result.weeklyGain! >= 0 ? '+' : ''}${result.weeklyGain!.toStringAsFixed(2)} kg/wk";
+        final rangeStr =
+            "${weeklyMin.toStringAsFixed(2)} - ${weeklyMax.toStringAsFixed(2)} kg/wk";
 
         // Try to get previous checkup weight and week to compute expectation since last entry
         final sortedPrev = List<Map<String, dynamic>>.from(
-          previousCheckups.map((e) => Map<String, dynamic>.from(e as Map))
-        );
+            previousCheckups.map((e) => Map<String, dynamic>.from(e as Map)));
         sortedPrev.sort((a, b) {
           final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '');
           final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '');
@@ -2988,8 +3081,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         double? prevWeight;
         double? prevWeek;
         if (sortedPrev.isNotEmpty) {
-          prevWeight = double.tryParse(sortedPrev.last['checkup_weight']?.toString() ?? '');
-          prevWeek = double.tryParse(sortedPrev.last['age_of_gestation']?.toString() ?? '');
+          prevWeight = double.tryParse(
+              sortedPrev.last['checkup_weight']?.toString() ?? '');
+          prevWeek = double.tryParse(
+              sortedPrev.last['age_of_gestation']?.toString() ?? '');
         }
 
         if (prevWeight != null && prevWeek != null) {
@@ -3000,11 +3095,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             final expectedWeightMin = prevWeight + expectedGainMin;
             final expectedWeightMax = prevWeight + expectedGainMax;
 
-            final weightRangeStr = "${expectedWeightMin.toStringAsFixed(1)} - ${expectedWeightMax.toStringAsFixed(1)} kg";
-            final gainRangeStr = "${expectedGainMin.toStringAsFixed(1)} - ${expectedGainMax.toStringAsFixed(1)} kg";
+            final weightRangeStr =
+                "${expectedWeightMin.toStringAsFixed(1)} - ${expectedWeightMax.toStringAsFixed(1)} kg";
+            final gainRangeStr =
+                "${expectedGainMin.toStringAsFixed(1)} - ${expectedGainMax.toStringAsFixed(1)} kg";
 
             if (isLow) {
-              detailsText = "Weight gain is slightly lower than the expected range.\n"
+              detailsText =
+                  "Weight gain is slightly lower than the expected range.\n"
                   "From your last entry at Week ${prevWeek.toStringAsFixed(1)} (${prevWeight.toStringAsFixed(1)} kg), "
                   "the recommended weight gain from your last entry is $gainRangeStr (expected weight range: $weightRangeStr).";
             } else if (isHigh) {
@@ -3012,7 +3110,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   "From your last entry at Week ${prevWeek.toStringAsFixed(1)} (${prevWeight.toStringAsFixed(1)} kg), "
                   "the recommended weight gain from your last entry is $gainRangeStr (expected weight range: $weightRangeStr).";
             } else {
-              detailsText = "Weight gain is within the commonly expected range.\n"
+              detailsText =
+                  "Weight gain is within the commonly expected range.\n"
                   "From your last entry at Week ${prevWeek.toStringAsFixed(1)} (${prevWeight.toStringAsFixed(1)} kg), "
                   "the recommended weight gain from your last entry is $gainRangeStr (expected weight range: $weightRangeStr).";
             }
@@ -3021,11 +3120,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
         if (detailsText.isEmpty) {
           if (isLow) {
-            detailsText = "Weekly rate of $weeklyStr is lower than the expected rate of $rangeStr.";
+            detailsText =
+                "Weekly rate of $weeklyStr is lower than the expected rate of $rangeStr.";
           } else if (isHigh) {
-            detailsText = "Weekly rate of $weeklyStr exceeds the expected rate of $rangeStr.";
+            detailsText =
+                "Weekly rate of $weeklyStr exceeds the expected rate of $rangeStr.";
           } else {
-            detailsText = "Weekly rate of $weeklyStr is within the expected rate of $rangeStr.";
+            detailsText =
+                "Weekly rate of $weeklyStr is within the expected rate of $rangeStr.";
           }
         }
       } else {
@@ -3303,10 +3405,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                                 selectedColor: AppColors.brandPrimary,
                                 checkmarkColor: Colors.white,
                                 labelStyle: TextStyle(
-                                  color: _symptomRiskFilter == 'all' ? Colors.white : AppColors.brandPrimary,
+                                  color: _symptomRiskFilter == 'all'
+                                      ? Colors.white
+                                      : AppColors.brandPrimary,
                                 ),
-                                side: const BorderSide(color: AppColors.brandPrimary),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                side: const BorderSide(
+                                    color: AppColors.brandPrimary),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20)),
                                 onSelected: (_) {
                                   setState(() => _symptomRiskFilter = 'all');
                                 },
@@ -3319,10 +3425,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                                 selectedColor: AppColors.success,
                                 checkmarkColor: Colors.white,
                                 labelStyle: TextStyle(
-                                  color: _symptomRiskFilter == 'normal' ? Colors.white : AppColors.success,
+                                  color: _symptomRiskFilter == 'normal'
+                                      ? Colors.white
+                                      : AppColors.success,
                                 ),
-                                side: const BorderSide(color: AppColors.success),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                side:
+                                    const BorderSide(color: AppColors.success),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20)),
                                 onSelected: (_) {
                                   setState(() => _symptomRiskFilter = 'normal');
                                 },
@@ -3335,12 +3445,17 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                                 selectedColor: AppColors.warning,
                                 checkmarkColor: Colors.white,
                                 labelStyle: TextStyle(
-                                  color: _symptomRiskFilter == 'warning' ? Colors.white : AppColors.warning,
+                                  color: _symptomRiskFilter == 'warning'
+                                      ? Colors.white
+                                      : AppColors.warning,
                                 ),
-                                side: const BorderSide(color: AppColors.warning),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                side:
+                                    const BorderSide(color: AppColors.warning),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20)),
                                 onSelected: (_) {
-                                  setState(() => _symptomRiskFilter = 'warning');
+                                  setState(
+                                      () => _symptomRiskFilter = 'warning');
                                 },
                               ),
                               const SizedBox(width: 8),
@@ -3351,10 +3466,13 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                                 selectedColor: AppColors.error,
                                 checkmarkColor: Colors.white,
                                 labelStyle: TextStyle(
-                                  color: _symptomRiskFilter == 'danger' ? Colors.white : AppColors.error,
+                                  color: _symptomRiskFilter == 'danger'
+                                      ? Colors.white
+                                      : AppColors.error,
                                 ),
                                 side: const BorderSide(color: AppColors.error),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20)),
                                 onSelected: (_) {
                                   setState(() => _symptomRiskFilter = 'danger');
                                 },
@@ -3447,9 +3565,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   final item = entry.value;
                   final riskColor = _riskColor(item.riskCategory);
                   return _itemCard(
-                    leading: _iconAvatar(Icons.healing_outlined, color: riskColor),
+                    leading:
+                        _iconAvatar(Icons.healing_outlined, color: riskColor),
                     title: item.name,
-                    subtitle: '${_riskLabel(item.riskCategory)}${(item.notes?.isNotEmpty == true) ? ' - ${item.notes}' : ''}',
+                    subtitle:
+                        '${_riskLabel(item.riskCategory)}${(item.notes?.isNotEmpty == true) ? ' - ${item.notes}' : ''}',
                     onEdit: () => _editSymptomNotesDialog(index),
                     onDelete: () => setState(() => _symptoms.removeAt(index)),
                   );
@@ -3639,8 +3759,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                 '${_aogWeeks!.toInt()} weeks',
                 valueColor: AppColors.brandPrimary,
               ),
-            _summaryRow('Weight',
-                _weightCtrl.text.trim().isEmpty ? 'Not recorded' : '${_weightCtrl.text.trim()} kg'),
+            _summaryRow(
+                'Weight',
+                _weightCtrl.text.trim().isEmpty
+                    ? 'Not recorded'
+                    : '${_weightCtrl.text.trim()} kg'),
             _summaryRow('Blood Pressure', bpText),
             if (_bpStatus != _BpStatus.unknown) _bpBadge(),
           ],
@@ -3669,9 +3792,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         _buildClickableSummarySection(
           'SYMPTOMS & EDEMA',
           [
-            _summaryRow('Edema Level', _edema == 'none'
-                ? 'None'
-                : '${_edema[0].toUpperCase()}${_edema.substring(1)}'),
+            _summaryRow(
+                'Edema Level',
+                _edema == 'none'
+                    ? 'None'
+                    : '${_edema[0].toUpperCase()}${_edema.substring(1)}'),
             const SizedBox(height: 4),
             if (_symptoms.isEmpty)
               _summaryRow('Symptoms', 'None recorded')
@@ -3685,31 +3810,31 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               ),
               const SizedBox(height: 6),
               ..._symptoms.map((s) => Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 4),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        color: _riskColor(s.riskCategory),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        '${s.name} -- ${_riskLabel(s.riskCategory)}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: _riskColor(s.riskCategory),
-                          fontWeight: FontWeight.w500,
+                    padding: const EdgeInsets.only(left: 4, bottom: 4),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            color: _riskColor(s.riskCategory),
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      ),
+                        Expanded(
+                          child: Text(
+                            '${s.name} -- ${_riskLabel(s.riskCategory)}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: _riskColor(s.riskCategory),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              )),
+                  )),
             ],
             if (_severeSymptomCount > 0) ...[
               const SizedBox(height: 6),
@@ -3740,9 +3865,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             _summaryRow(
               'TD Vaccine Dose',
               _tdDose ??
-                  (_availableTdDoses.isEmpty ? 'Complete (all doses given)' : 'None given today'),
-              valueColor:
-                  _availableTdDoses.isEmpty ? AppColors.success : null,
+                  (_availableTdDoses.isEmpty
+                      ? 'Complete (all doses given)'
+                      : 'None given today'),
+              valueColor: _availableTdDoses.isEmpty ? AppColors.success : null,
             ),
           ],
           onTap: () => _jumpToStep(3),
@@ -3755,8 +3881,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               _nextSchedule == null
                   ? 'Not set'
                   : DateFormat('MMMM d, yyyy').format(_nextSchedule!),
-              valueColor:
-                  _nextSchedule != null ? AppColors.brandPrimary : null,
+              valueColor: _nextSchedule != null ? AppColors.brandPrimary : null,
             ),
             _summaryRow(
               'Remarks',
@@ -3900,14 +4025,17 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               // Header
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   color: AppColors.brandPrimary.withValues(alpha: 0.08),
-                  border: const Border(bottom: BorderSide(color: AppColors.borderPrimary)),
+                  border: const Border(
+                      bottom: BorderSide(color: AppColors.borderPrimary)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.auto_awesome, color: AppColors.brandPrimary, size: 20),
+                    const Icon(Icons.auto_awesome,
+                        color: AppColors.brandPrimary, size: 20),
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
@@ -3923,10 +4051,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                       const SizedBox(
                         width: 14,
                         height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brandPrimary),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppColors.brandPrimary),
                       )
                     else ...[
-                      if (_activeRiskTab == 'insight' && !_isEditingAiAssessment && !_aiResponseApproved && !_aiAnalysisSkipped) ...[
+                      if (_activeRiskTab == 'insight' &&
+                          !_isEditingAiAssessment &&
+                          !_aiResponseApproved &&
+                          !_aiAnalysisSkipped) ...[
                         TextButton.icon(
                           onPressed: () {
                             setState(() {
@@ -3937,7 +4069,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                               _aiAnalysisSkipped = false;
                             });
                           },
-                          icon: const Icon(Icons.edit_outlined, size: 14, color: AppColors.brandPrimary),
+                          icon: const Icon(Icons.edit_outlined,
+                              size: 14, color: AppColors.brandPrimary),
                           label: const Text(
                             'Edit',
                             style: TextStyle(
@@ -3947,7 +4080,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                             ),
                           ),
                           style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
@@ -3956,7 +4090,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                       ],
                       GestureDetector(
                         onTap: () => _refreshRiskPreview(force: true),
-                        child: const Icon(Icons.refresh_rounded, size: 18, color: AppColors.brandPrimary),
+                        child: const Icon(Icons.refresh_rounded,
+                            size: 18, color: AppColors.brandPrimary),
                       ),
                     ],
                   ],
@@ -3980,7 +4115,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                         ),
                         child: Text(
                           _riskPreviewError!,
-                          style: const TextStyle(fontSize: 12, color: AppColors.error),
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.error),
                         ),
                       ),
 
@@ -4078,7 +4214,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                             child: AppDropdownField<String>(
                               value: _pregnancyRiskLevel,
                               options: const ['low', 'high'],
-                              displayStringForOption: (val) => val == 'low' ? 'Low Risk' : 'High Risk',
+                              displayStringForOption: (val) =>
+                                  val == 'low' ? 'Low Risk' : 'High Risk',
                               onSelected: (val) {
                                 setState(() {
                                   _pregnancyRiskLevel = val;
@@ -4175,7 +4312,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                                 decoration: BoxDecoration(
                                   color: _editableRiskLevel == 'high'
                                       ? AppColors.error.withValues(alpha: 0.1)
-                                      : AppColors.success.withValues(alpha: 0.1),
+                                      : AppColors.success
+                                          .withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text(
@@ -4233,9 +4371,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                                     'Filipino (Conversational)',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      fontWeight: _selectedLanguage == 'filipino'
-                                          ? FontWeight.w600
-                                          : FontWeight.w500,
+                                      fontWeight:
+                                          _selectedLanguage == 'filipino'
+                                              ? FontWeight.w600
+                                              : FontWeight.w500,
                                       color: _selectedLanguage == 'filipino'
                                           ? Colors.white
                                           : AppColors.textSecondary,
@@ -4398,8 +4537,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               decoration: BoxDecoration(
                 color: AppColors.success.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(16),
-                border:
-                    Border.all(color: AppColors.success.withValues(alpha: 0.35)),
+                border: Border.all(
+                    color: AppColors.success.withValues(alpha: 0.35)),
               ),
               child: Row(
                 children: [
@@ -4495,8 +4634,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                             _showMessage(
                                 'Insight approved! You can now save the checkup.');
                           },
-                    icon:
-                        const Icon(Icons.check_circle_outline_rounded, size: 18),
+                    icon: const Icon(Icons.check_circle_outline_rounded,
+                        size: 18),
                     label: const Text('Approve Care Insight'),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.brandPrimary,
@@ -4541,8 +4680,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     );
   }
 
-
-
   bool get _hasEnteredData =>
       _weightCtrl.text.trim().isNotEmpty ||
       _sysCtrl.text.trim().isNotEmpty ||
@@ -4558,8 +4695,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       context: context,
       builder: (_) => ConfirmationDialogBox(
         title: 'Skip Initial Checkup?',
-        subtitle:
-            'The initial prenatal checkup is required to complete the '
+        subtitle: 'The initial prenatal checkup is required to complete the '
             'mother\'s registration. Skipping will leave her record '
             'incomplete.\n\nAre you sure you want to skip?',
         cancelText: 'Continue Checkup',
