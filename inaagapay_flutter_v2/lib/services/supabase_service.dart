@@ -1215,64 +1215,108 @@ class SupabaseService {
     List<String> riskFactors = const [],
   }) async {
     try {
-      final emailFree = await isEmailAvailable(email);
-      if (!emailFree) {
-        return {'success': false, 'message': 'This email is already in use.'};
-      }
+      int accountId;
+      String? generatedPassword;
+      bool isExistingAccount = false;
 
-      final generatedPassword = _generateSecurePassword();
-      final hashedPassword = _hashPassword(generatedPassword);
-
-      final accountRow = await client
+      final existingAccount = await client
           .from('accounts')
-          .insert({
-            'email_address': email,
-            'password_hash': hashedPassword,
-            'account_type': 'mother',
-            'first_name': firstName,
-            'middle_name': middleName,
-            'last_name': lastName,
-            'extension_name': extensionName,
-            'phone_number': phone,
-            'is_verified': true,
-            'status': 'active',
-            'is_temporary_password': true,
-            'created_by': 'midwife',
-            'created_at': DateTime.now().toIso8601String(),
-          })
-          .select('account_id')
+          .select('account_id, account_type')
+          .eq('email_address', email)
           .maybeSingle();
 
-      if (accountRow == null) {
-        throw Exception('Failed to create account');
+      if (existingAccount != null) {
+        if (existingAccount['account_type'] != 'mother') {
+          return {'success': false, 'message': 'This email is already in use by a midwife or admin.'};
+        }
+        accountId = existingAccount['account_id'] as int;
+        isExistingAccount = true;
+
+        // Update existing account details
+        await client.from('accounts').update({
+          'first_name': firstName,
+          'middle_name': middleName,
+          'last_name': lastName,
+          'extension_name': extensionName,
+          'phone_number': phone,
+        }).eq('account_id', accountId);
+      } else {
+        generatedPassword = _generateSecurePassword();
+        final hashedPassword = _hashPassword(generatedPassword);
+
+        final accountRow = await client
+            .from('accounts')
+            .insert({
+              'email_address': email,
+              'password_hash': hashedPassword,
+              'account_type': 'mother',
+              'first_name': firstName,
+              'middle_name': middleName,
+              'last_name': lastName,
+              'extension_name': extensionName,
+              'phone_number': phone,
+              'is_verified': true,
+              'status': 'active',
+              'is_temporary_password': true,
+              'created_by': 'midwife',
+              'created_at': DateTime.now().toIso8601String(),
+            })
+            .select('account_id')
+            .maybeSingle();
+
+        if (accountRow == null) {
+          throw Exception('Failed to create account');
+        }
+        accountId = accountRow['account_id'] as int;
       }
 
-      final accountId = accountRow['account_id'] as int;
-
-      final motherRow = await client
+      final existingMother = await client
           .from('mothers')
-          .insert({
-            'account_id': accountId,
-            'assigned_bhc_id': assignedBhcId,
-            'birthdate': birthdate?.toIso8601String().split('T')[0],
-            'house_number': houseNumber,
-            'street': street,
-            'barangay': barangay,
-            'city_municipality': city,
-            'province': province,
-            'height': heightCm,
-            'weight': weightKg,
-            'blood_type': bloodType,
-            'status': 'active',
-          })
           .select('mother_id')
+          .eq('account_id', accountId)
           .maybeSingle();
 
-      if (motherRow == null) {
-        throw Exception('Failed to create mother record');
-      }
+      int motherId;
+      if (existingMother != null) {
+        motherId = existingMother['mother_id'] as int;
+        await client.from('mothers').update({
+          'assigned_bhc_id': assignedBhcId,
+          'birthdate': birthdate?.toIso8601String().split('T')[0],
+          'house_number': houseNumber,
+          'street': street,
+          'barangay': barangay,
+          'city_municipality': city,
+          'province': province,
+          'height': heightCm,
+          'weight': weightKg,
+          'blood_type': bloodType,
+          'status': 'active',
+        }).eq('mother_id', motherId);
+      } else {
+        final motherRow = await client
+            .from('mothers')
+            .insert({
+              'account_id': accountId,
+              'assigned_bhc_id': assignedBhcId,
+              'birthdate': birthdate?.toIso8601String().split('T')[0],
+              'house_number': houseNumber,
+              'street': street,
+              'barangay': barangay,
+              'city_municipality': city,
+              'province': province,
+              'height': heightCm,
+              'weight': weightKg,
+              'blood_type': bloodType,
+              'status': 'active',
+            })
+            .select('mother_id')
+            .maybeSingle();
 
-      final motherId = motherRow['mother_id'] as int;
+        if (motherRow == null) {
+          throw Exception('Failed to create mother record');
+        }
+        motherId = motherRow['mother_id'] as int;
+      }
 
       if (emergencyContacts.isNotEmpty) {
         await client.from('emergency_contacts').insert(
@@ -1390,8 +1434,22 @@ class SupabaseService {
       bool credentialsSent = false;
       String sentMethod = '';
 
+      if (isExistingAccount) {
+        return {
+          'success': true,
+          'mother_id': motherId,
+          'pregnancy_id': pregnancyId,
+          'account_id': accountId,
+          'generated_password': null,
+          'email_sent': false,
+          'sms_sent': false,
+          'credentials_delivery_method': '',
+          'message': 'Mother profile successfully linked and updated under email $email.',
+        };
+      }
+
       // Try sending via email first if not internal
-      if (!isInternalEmail) {
+      if (!isInternalEmail && generatedPassword != null) {
         credentialsSent = await EmailService.sendAccountCredentials(
           email: email,
           password: generatedPassword,
@@ -1402,7 +1460,7 @@ class SupabaseService {
       }
 
       // If email not sent and phone is available, try SMS
-      if (!credentialsSent && phone.isNotEmpty) {
+      if (!credentialsSent && phone.isNotEmpty && generatedPassword != null) {
         credentialsSent = await EmailService.sendAccountCredentialsViaSms(
           phoneNumber: phone,
           password: generatedPassword,
