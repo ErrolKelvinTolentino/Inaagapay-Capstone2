@@ -446,29 +446,33 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
         final sevenDaysAgoDate = sevenDaysAgo.toIso8601String().split('T')[0];
 
-        // Fetch recent checkups
-        final recentCheckups = await SupabaseService.client
-            .from('prenatal_checkups')
-            .select(
-                'prenatal_checkup_id, checkup_datetime, remarks, age_of_gestation, td_vaccine_dose, pregnancy_id, blood_pressure_systolic, blood_pressure_diastolic, checkup_weight, fetal_position, fetal_heart_tone, fetal_heart_beat, next_schedule')
-            .inFilter('pregnancy_id', allPregnancyIds)
-            .gte('checkup_datetime', sevenDaysAgo.toIso8601String());
+        // Fetch recent checkups, ultrasounds, and lab tests safely
+        final List<dynamic> recentCheckups = allPregnancyIds.isNotEmpty
+            ? await SupabaseService.client
+                .from('prenatal_checkups')
+                .select(
+                    'prenatal_checkup_id, checkup_datetime, remarks, age_of_gestation, td_vaccine_dose, pregnancy_id, blood_pressure_systolic, blood_pressure_diastolic, checkup_weight, fetal_position, fetal_heart_tone, fetal_heart_beat, next_schedule')
+                .inFilter('pregnancy_id', allPregnancyIds)
+                .gte('checkup_datetime', sevenDaysAgo.toIso8601String())
+            : [];
 
-        // Fetch recent ultrasounds
-        final recentUltrasounds = await SupabaseService.client
-            .from('ultrasounds')
-            .select(
-                'ultrasound_id, ultrasound_date, remarks, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
-            .inFilter('pregnancy_id', allPregnancyIds)
-            .gte('ultrasound_date', sevenDaysAgoDate);
+        final List<dynamic> recentUltrasounds = allPregnancyIds.isNotEmpty
+            ? await SupabaseService.client
+                .from('ultrasounds')
+                .select(
+                    'ultrasound_id, ultrasound_date, remarks, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
+                .inFilter('pregnancy_id', allPregnancyIds)
+                .gte('ultrasound_date', sevenDaysAgoDate)
+            : [];
 
-        // Fetch recent lab tests
-        final recentLabTests = await SupabaseService.client
-            .from('lab_tests')
-            .select(
-                'lab_test_id, lab_test_type, lab_test_date, remarks, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession')
-            .inFilter('pregnancy_id', allPregnancyIds)
-            .gte('lab_test_date', sevenDaysAgoDate);
+        final List<dynamic> recentLabTests = allPregnancyIds.isNotEmpty
+            ? await SupabaseService.client
+                .from('lab_tests')
+                .select(
+                    'lab_test_id, lab_test_type, lab_test_date, remarks, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession')
+                .inFilter('pregnancy_id', allPregnancyIds)
+                .gte('lab_test_date', sevenDaysAgoDate)
+            : [];
 
         final List<Map<String, dynamic>> combinedVisits = [];
 
