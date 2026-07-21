@@ -2,6 +2,7 @@
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:inaagapay_flutter_v2/services/supabase_service.dart';
 
 class AuthStorage {
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
@@ -54,11 +55,30 @@ class AuthStorage {
 
   static Future<int?> getMotherId() async {
     final value = await _storage.read(key: 'mother_id');
+    int? motherId = value != null ? int.tryParse(value) : null;
+    if (motherId == null) {
+      final userId = await getUserId();
+      if (userId != null) {
+        try {
+          final res = await SupabaseService.client
+              .from('mothers')
+              .select('mother_id')
+              .eq('account_id', userId)
+              .maybeSingle();
+          if (res != null && res['mother_id'] != null) {
+            motherId = res['mother_id'] as int;
+            await saveMotherId(motherId);
+          }
+        } catch (e) {
+          if (kDebugMode) debugPrint('Error self-healing motherId: $e');
+        }
+      }
+    }
     if (kDebugMode) {
       debugPrint('=== GETTING MOTHER ID ===');
-      debugPrint('Retrieved value: $value');
+      debugPrint('Retrieved value: $motherId');
     }
-    return value != null ? int.tryParse(value) : null;
+    return motherId;
   }
 
   static Future<void> clearMotherId() async {
