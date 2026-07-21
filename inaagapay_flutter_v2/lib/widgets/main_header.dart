@@ -12,6 +12,12 @@ class MainHeader extends StatelessWidget {
   final VoidCallback? onSettings;
   final VoidCallback? onHelp;
   final VoidCallback? onLogout;
+  final String viewProfileLabel;
+  final String settingsLabel;
+  final String helpLabel;
+  final String logoutLabel;
+  final String logoutQuestion;
+  final String cancelLabel;
 
   const MainHeader({
     super.key,
@@ -22,6 +28,12 @@ class MainHeader extends StatelessWidget {
     this.onSettings,
     this.onHelp,
     this.onLogout,
+    this.viewProfileLabel = 'View Profile',
+    this.settingsLabel = 'Settings',
+    this.helpLabel = 'Help',
+    this.logoutLabel = 'Log out',
+    this.logoutQuestion = 'Are you sure you want to log out of your account?',
+    this.cancelLabel = 'Cancel',
   });
 
   void _showProfileMenu(BuildContext context) {
@@ -48,6 +60,10 @@ class MainHeader extends StatelessWidget {
               onViewProfile: onViewProfile,
               onSettings: onSettings,
               onHelp: onHelp,
+              viewProfileLabel: viewProfileLabel,
+              settingsLabel: settingsLabel,
+              helpLabel: helpLabel,
+              logoutLabel: logoutLabel,
               onLogout: () {
                 entry.remove();
                 _confirmLogout(context);
@@ -66,10 +82,10 @@ class MainHeader extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (_) => ConfirmationDialogBox(
-        title: 'Log out',
-        subtitle: 'Are you sure you want to log out of your account?',
-        confirmText: 'Log out',
-        cancelText: 'Cancel',
+        title: logoutLabel,
+        subtitle: logoutQuestion,
+        confirmText: logoutLabel,
+        cancelText: cancelLabel,
         accentColor: AppColors.error,
         onCancel: () => Navigator.pop(context),
         onConfirm: () {
@@ -103,8 +119,10 @@ class MainHeader extends StatelessWidget {
             Image.asset(
               'assets/images/logo.png',
               height: 40,
-              errorBuilder: (context, error, stackTrace) => 
-                const Icon(Icons.favorite, color: AppColors.brandPrimary, size: 30),
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.favorite,
+                  color: AppColors.brandPrimary,
+                  size: 30),
             ),
 
             const SizedBox(width: 12),
@@ -178,6 +196,10 @@ class _ProfileMenu extends StatelessWidget {
   final VoidCallback? onSettings;
   final VoidCallback? onHelp;
   final VoidCallback? onLogout;
+  final String viewProfileLabel;
+  final String settingsLabel;
+  final String helpLabel;
+  final String logoutLabel;
 
   const _ProfileMenu({
     required this.onClose,
@@ -185,6 +207,10 @@ class _ProfileMenu extends StatelessWidget {
     this.onSettings,
     this.onHelp,
     this.onLogout,
+    required this.viewProfileLabel,
+    required this.settingsLabel,
+    required this.helpLabel,
+    required this.logoutLabel,
   });
 
   @override
@@ -209,7 +235,7 @@ class _ProfileMenu extends StatelessWidget {
           children: [
             _MenuItem(
               icon: Icons.person_outline,
-              label: 'View Profile',
+              label: viewProfileLabel,
               onTap: () {
                 onClose();
                 onViewProfile?.call();
@@ -217,7 +243,7 @@ class _ProfileMenu extends StatelessWidget {
             ),
             _MenuItem(
               icon: Icons.settings_outlined,
-              label: 'Settings',
+              label: settingsLabel,
               onTap: () {
                 onClose();
                 onSettings?.call();
@@ -225,7 +251,7 @@ class _ProfileMenu extends StatelessWidget {
             ),
             _MenuItem(
               icon: Icons.help_outline,
-              label: 'Help',
+              label: helpLabel,
               onTap: () {
                 onClose();
                 onHelp?.call();
@@ -234,7 +260,7 @@ class _ProfileMenu extends StatelessWidget {
             const Divider(height: 8, color: AppColors.borderPrimary),
             _MenuItem(
               icon: Icons.logout_rounded,
-              label: 'Log out',
+              label: logoutLabel,
               isDanger: true,
               onTap: () {
                 onLogout?.call();
@@ -272,12 +298,16 @@ class _MenuItem extends StatelessWidget {
           children: [
             Icon(icon, size: 20, color: color),
             const SizedBox(width: 12),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: color,
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                ),
               ),
             ),
           ],

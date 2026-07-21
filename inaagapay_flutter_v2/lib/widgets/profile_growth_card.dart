@@ -147,13 +147,11 @@ class ProfileGrowthCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: bmiStatusColor.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(12),
-                border:
-                    Border.all(color: bmiStatusColor.withValues(alpha: 0.15)),
+                border: Border.all(color: bmiStatusColor.withValues(alpha: 0.15)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.calculate_outlined,
-                      size: 16, color: bmiStatusColor),
+                  Icon(Icons.calculate_outlined, size: 16, color: bmiStatusColor),
                   const SizedBox(width: 8),
                   RichText(
                     text: TextSpan(
@@ -173,8 +171,7 @@ class ProfileGrowthCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: bmiStatusColor,
                       borderRadius: BorderRadius.circular(20),
@@ -202,8 +199,7 @@ class ProfileGrowthCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.calculate_outlined,
-                      size: 16, color: AppColors.textSecondary),
+                  const Icon(Icons.calculate_outlined, size: 16, color: AppColors.textSecondary),
                   const SizedBox(width: 8),
                   Text(
                     'BMI: Not computed',

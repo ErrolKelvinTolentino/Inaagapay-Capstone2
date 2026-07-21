@@ -6,12 +6,20 @@ import '../theme/app_colors.dart';
 class MainBottomNavigation extends StatelessWidget {
   final int currentIndex;
   final Function(int)? onTap;
+  final List<String>? labels;
+  final List<IconData>? icons;
+  final List<IconData>? activeIcons;
 
   const MainBottomNavigation({
     super.key,
     required this.currentIndex,
     this.onTap,
-  });
+    this.labels,
+    this.icons,
+    this.activeIcons,
+  })  : assert(labels == null || labels.length == 4),
+        assert(icons == null || icons.length == 4),
+        assert(activeIcons == null || activeIcons.length == 4);
 
   @override
   Widget build(BuildContext context) {
@@ -35,30 +43,30 @@ class MainBottomNavigation extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _NavItem(
-            icon: Icons.home_outlined,
-            activeIcon: Icons.home,
-            label: 'Home',
+            icon: icons?[0] ?? Icons.home_outlined,
+            activeIcon: activeIcons?[0] ?? Icons.home,
+            label: labels?[0] ?? 'Home',
             isActive: currentIndex == 0,
             onTap: () => onTap?.call(0),
           ),
           _NavItem(
-            icon: Icons.menu_book_outlined,
-            activeIcon: Icons.menu_book,
-            label: 'Journal',
+            icon: icons?[1] ?? Icons.menu_book_outlined,
+            activeIcon: activeIcons?[1] ?? Icons.menu_book,
+            label: labels?[1] ?? 'Journal',
             isActive: currentIndex == 1,
             onTap: () => onTap?.call(1),
           ),
           _NavItem(
-            icon: Icons.child_care_outlined,
-            activeIcon: Icons.child_care,
-            label: 'Children',
+            icon: icons?[2] ?? Icons.child_care_outlined,
+            activeIcon: activeIcons?[2] ?? Icons.child_care,
+            label: labels?[2] ?? 'Children',
             isActive: currentIndex == 2,
             onTap: () => onTap?.call(2),
           ),
           _NavItem(
-            icon: Icons.folder_outlined,
-            activeIcon: Icons.folder,
-            label: 'Records',
+            icon: icons?[3] ?? Icons.folder_outlined,
+            activeIcon: activeIcons?[3] ?? Icons.folder,
+            label: labels?[3] ?? 'Records',
             isActive: currentIndex == 3,
             onTap: () => onTap?.call(3),
           ),
@@ -85,7 +93,8 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color = isActive ? AppColors.brandPrimary : AppColors.textSecondary;
+    final Color color =
+        isActive ? AppColors.brandPrimary : AppColors.textSecondary;
 
     return GestureDetector(
       onTap: onTap,

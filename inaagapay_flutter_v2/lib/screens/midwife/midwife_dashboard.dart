@@ -109,8 +109,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
       return;
     }
 
-    final queryTerms =
-        query.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    final queryTerms = query.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
     if (queryTerms.isEmpty) {
       setState(() {
         _showSearchResults = false;
@@ -178,14 +177,12 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     for (var checkup in _allCheckups) {
       final pregId = checkup['pregnancy_id'] as int?;
       final mother = pregId != null ? _pregnancyToMotherMap[pregId] : null;
-      final motherName = mother != null
-          ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'.trim()
-          : 'Unknown Mother';
+      final motherName = mother != null ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'.trim() : 'Unknown Mother';
       final remarks = (checkup['remarks'] ?? '').toLowerCase();
       final aog = (checkup['age_of_gestation'] ?? '').toString();
       final date = _formatDateTime(checkup['checkup_datetime']);
       final matchText = '$motherName checkup prenatal $remarks $aog $date';
-
+ 
       if (matchesAllTerms(matchText)) {
         results.add({
           'type': 'checkup',
@@ -199,19 +196,17 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         });
       }
     }
-
+ 
     // Search through cached ultrasounds
     for (var us in _allUltrasounds) {
       final pregId = us['pregnancy_id'] as int?;
       final mother = pregId != null ? _pregnancyToMotherMap[pregId] : null;
-      final motherName = mother != null
-          ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'.trim()
-          : 'Unknown Mother';
+      final motherName = mother != null ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'.trim() : 'Unknown Mother';
       final remarks = (us['remarks'] ?? '').toLowerCase();
       final loc = (us['ultrasound_location'] ?? '').toLowerCase();
       final date = _formatDate(us['ultrasound_date']);
       final matchText = '$motherName ultrasound remarks $remarks $loc $date';
-
+ 
       if (matchesAllTerms(matchText)) {
         results.add({
           'type': 'ultrasound',
@@ -225,19 +220,17 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         });
       }
     }
-
+ 
     // Search through cached lab tests
     for (var lt in _allLabTests) {
       final pregId = lt['pregnancy_id'] as int?;
       final mother = pregId != null ? _pregnancyToMotherMap[pregId] : null;
-      final motherName = mother != null
-          ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'.trim()
-          : 'Unknown Mother';
+      final motherName = mother != null ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'.trim() : 'Unknown Mother';
       final remarks = (lt['remarks'] ?? '').toLowerCase();
       final type = (lt['lab_test_type'] ?? '').toLowerCase();
       final date = _formatDate(lt['lab_test_date']);
       final matchText = '$motherName lab test $type remarks $remarks $date';
-
+ 
       if (matchesAllTerms(matchText)) {
         results.add({
           'type': 'labtest',
@@ -439,7 +432,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
               .not('td_vaccine_dose', 'is', null);
           _tdDosesGiven = tdResponse.length;
         } else {
-          _tdDosesGiven = 0;
+        _tdDosesGiven = 0;
         }
 
         // Get recent visits (last 7 days)
@@ -449,32 +442,28 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         // Fetch recent checkups
         final recentCheckups = await SupabaseService.client
             .from('prenatal_checkups')
-            .select(
-                'prenatal_checkup_id, checkup_datetime, remarks, age_of_gestation, td_vaccine_dose, pregnancy_id, blood_pressure_systolic, blood_pressure_diastolic, checkup_weight, fetal_position, fetal_heart_tone, fetal_heart_beat, next_schedule')
+            .select('prenatal_checkup_id, checkup_datetime, remarks, age_of_gestation, td_vaccine_dose, pregnancy_id, blood_pressure_systolic, blood_pressure_diastolic, checkup_weight, fetal_position, fetal_heart_tone, fetal_heart_beat, next_schedule')
             .inFilter('pregnancy_id', allPregnancyIds)
             .gte('checkup_datetime', sevenDaysAgo.toIso8601String());
 
         // Fetch recent ultrasounds
         final recentUltrasounds = await SupabaseService.client
             .from('ultrasounds')
-            .select(
-                'ultrasound_id, ultrasound_date, remarks, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
+            .select('ultrasound_id, ultrasound_date, remarks, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
             .inFilter('pregnancy_id', allPregnancyIds)
             .gte('ultrasound_date', sevenDaysAgoDate);
 
         // Fetch recent lab tests
         final recentLabTests = await SupabaseService.client
             .from('lab_tests')
-            .select(
-                'lab_test_id, lab_test_type, lab_test_date, remarks, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession')
+            .select('lab_test_id, lab_test_type, lab_test_date, remarks, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession')
             .inFilter('pregnancy_id', allPregnancyIds)
             .gte('lab_test_date', sevenDaysAgoDate);
 
         final List<Map<String, dynamic>> combinedVisits = [];
 
         for (var checkup in recentCheckups) {
-          final dt =
-              DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
+          final dt = DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
           if (dt != null) {
             combinedVisits.add({
               'type': 'checkup',
@@ -513,24 +502,19 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         }
 
         // Sort by date descending
-        combinedVisits.sort(
-            (a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+        combinedVisits.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
 
         _recentVisits = [];
 
         for (var item in combinedVisits.take(3)) {
           final pregId = item['pregId'] as int?;
           final mother = pregId != null ? _pregnancyToMotherMap[pregId] : null;
-          final fullName = mother != null
-              ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'
-                  .trim()
-              : 'Unknown Mother';
+          final fullName = mother != null ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'.trim() : 'Unknown Mother';
           final motherId = mother != null ? mother['mother_id'] as int? : null;
 
           final dt = item['date'] as DateTime;
           final nowTime = DateTime.now();
-          final diffDays =
-              nowTime.difference(DateTime(dt.year, dt.month, dt.day)).inDays;
+          final diffDays = nowTime.difference(DateTime(dt.year, dt.month, dt.day)).inDays;
 
           String timeLabel;
           if (diffDays == 0) {
@@ -599,6 +583,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           _bhcVisitValues = [0, 0, 0, 0, 0, 0, 0];
         }
 
+
         // Fetch prenatal checkups, ultrasounds, and lab tests for search
         _allCheckups = [];
         _allUltrasounds = [];
@@ -607,22 +592,19 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         if (allPregnancyIds.isNotEmpty) {
           final checkupsData = await SupabaseService.client
               .from('prenatal_checkups')
-              .select(
-                  'prenatal_checkup_id, checkup_datetime, remarks, age_of_gestation, td_vaccine_dose, pregnancy_id, blood_pressure_systolic, blood_pressure_diastolic, checkup_weight, fetal_position, fetal_heart_tone, fetal_heart_beat, next_schedule')
+              .select('prenatal_checkup_id, checkup_datetime, remarks, age_of_gestation, td_vaccine_dose, pregnancy_id, blood_pressure_systolic, blood_pressure_diastolic, checkup_weight, fetal_position, fetal_heart_tone, fetal_heart_beat, next_schedule')
               .inFilter('pregnancy_id', allPregnancyIds);
           _allCheckups = List<Map<String, dynamic>>.from(checkupsData);
 
           final ultrasoundsData = await SupabaseService.client
               .from('ultrasounds')
-              .select(
-                  'ultrasound_id, ultrasound_date, remarks, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
+              .select('ultrasound_id, ultrasound_date, remarks, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
               .inFilter('pregnancy_id', allPregnancyIds);
           _allUltrasounds = List<Map<String, dynamic>>.from(ultrasoundsData);
 
           final labTestsData = await SupabaseService.client
               .from('lab_tests')
-              .select(
-                  'lab_test_id, lab_test_type, lab_test_date, remarks, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession')
+              .select('lab_test_id, lab_test_type, lab_test_date, remarks, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession')
               .inFilter('pregnancy_id', allPregnancyIds);
           _allLabTests = List<Map<String, dynamic>>.from(labTestsData);
         }
@@ -799,25 +781,18 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
       _showLoadingOverlay();
 
       try {
-        final checkupDetails = await _fetchCheckupDetailsForSearch(
-            checkupId, record['checkup_datetime'], motherId);
+        final checkupDetails = await _fetchCheckupDetailsForSearch(checkupId, record['checkup_datetime'], motherId);
         String? aiAnalysis = checkupDetails?['aiResponse'] as String?;
         String? riskLevel = checkupDetails?['riskLevel'] as String?;
         String riskFactors = checkupDetails?['riskFactors'] ?? '';
-        String medicationPlansSummary =
-            checkupDetails?['medicationPlans'] ?? 'None';
-        String givenMedicationsSummary =
-            checkupDetails?['givenMedications'] ?? 'None';
-        String ferrousSummary =
-            checkupDetails?['ferrousQuantity'] ?? 'Not given';
-        String calciumSummary =
-            checkupDetails?['calciumQuantity'] ?? 'Not given';
-        String symptomSummary =
-            checkupDetails?['symptomSummary'] ?? 'None recorded';
+        String medicationPlansSummary = checkupDetails?['medicationPlans'] ?? 'None';
+        String givenMedicationsSummary = checkupDetails?['givenMedications'] ?? 'None';
+        String ferrousSummary = checkupDetails?['ferrousQuantity'] ?? 'Not given';
+        String calciumSummary = checkupDetails?['calciumQuantity'] ?? 'Not given';
+        String symptomSummary = checkupDetails?['symptomSummary'] ?? 'None recorded';
 
         if (aiAnalysis == null || aiAnalysis.trim().isEmpty) {
-          aiAnalysis =
-              await MotherProfileService.getCheckupAIAnalysis(checkupId);
+          aiAnalysis = await MotherProfileService.getCheckupAIAnalysis(checkupId);
         }
 
         if (aiAnalysis == null || aiAnalysis.trim().isEmpty) {
@@ -844,8 +819,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           }
         } catch (_) {}
 
-        final heightText =
-            height == null ? 'Not recorded' : '${height.toStringAsFixed(1)} cm';
+        final heightText = height == null ? 'Not recorded' : '${height.toStringAsFixed(1)} cm';
         String bmiText = '—';
         String bmiStatus = '—';
         try {
@@ -874,8 +848,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
               .eq('pregnancy_id', record['pregnancy_id'])
               .maybeSingle();
           if (response != null) {
-            fetalCount =
-                int.tryParse(response['fetal_count']?.toString() ?? '1') ?? 1;
+            fetalCount = int.tryParse(response['fetal_count']?.toString() ?? '1') ?? 1;
           }
         } catch (_) {}
 
@@ -896,10 +869,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
             MapEntry('BMI Status', bmiStatus),
             MapEntry('Blood Pressure', '$bpSys/$bpDia'),
             MapEntry('Fetal Position', _formatValue(record['fetal_position'])),
-            MapEntry(
-                'Fetal Heart Tone', _formatValue(record['fetal_heart_tone'])),
-            MapEntry(
-                'Fetal Heart Beat', _formatValue(record['fetal_heart_beat'])),
+            MapEntry('Fetal Heart Tone', _formatValue(record['fetal_heart_tone'])),
+            MapEntry('Fetal Heart Beat', _formatValue(record['fetal_heart_beat'])),
             MapEntry('Symptoms', symptomSummary),
             MapEntry('Medication Plans', medicationPlansSummary),
             MapEntry('Given Medications', givenMedicationsSummary),
@@ -916,8 +887,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         );
       } catch (e) {
         _closeLoadingOverlay();
-        _showMessage('Failed to load checkup details',
-            type: AppSnackType.error);
+        _showMessage('Failed to load checkup details', type: AppSnackType.error);
       }
     } else if (result['type'] == 'ultrasound') {
       final record = result['record'] as Map<String, dynamic>;
@@ -937,8 +907,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         }
 
         final split = _splitRemarksAndAi(record['remarks']?.toString());
-        String? aiAnalysis =
-            await MotherProfileService.getUltrasoundAIAnalysis(ultrasoundId);
+        String? aiAnalysis = await MotherProfileService.getUltrasoundAIAnalysis(ultrasoundId);
 
         String finalRemarks = split.cleanRemarks;
         if (aiAnalysis != null && aiAnalysis.trim() == finalRemarks.trim()) {
@@ -964,21 +933,17 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
             MapEntry('Ultrasound Date', _formatDate(record['ultrasound_date'])),
             MapEntry('Location', _formatValue(record['ultrasound_location'])),
             MapEntry('Full Name', _formatValue(record['health_worker_name'])),
-            MapEntry('Institution',
-                _formatValue(record['health_worker_institution'])),
-            MapEntry(
-                'Profession', _formatValue(record['health_worker_profession'])),
+            MapEntry('Institution', _formatValue(record['health_worker_institution'])),
+            MapEntry('Profession', _formatValue(record['health_worker_profession'])),
             MapEntry('Remarks', _formatValue(finalRemarks)),
           ],
           aiAnalysis: aiAnalysis,
           useStructuredAiInsights: aiAnalysis.isNotEmpty,
-          ultrasoundClassification:
-              record['monitoring_classification']?.toString(),
+          ultrasoundClassification: record['monitoring_classification']?.toString(),
         );
       } catch (e) {
         _closeLoadingOverlay();
-        _showMessage('Failed to load ultrasound details',
-            type: AppSnackType.error);
+        _showMessage('Failed to load ultrasound details', type: AppSnackType.error);
       }
     } else if (result['type'] == 'labtest') {
       final record = result['record'] as Map<String, dynamic>;
@@ -998,8 +963,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         }
 
         final split = _splitRemarksAndAi(record['remarks']?.toString());
-        String? aiAnalysis =
-            await MotherProfileService.getLabTestAIAnalysis(labTestId);
+        String? aiAnalysis = await MotherProfileService.getLabTestAIAnalysis(labTestId);
 
         aiAnalysis = (aiAnalysis != null && aiAnalysis.trim().isNotEmpty)
             ? aiAnalysis.trim()
@@ -1021,10 +985,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
             MapEntry('Lab Test Type', type),
             MapEntry('Lab Test Date', _formatDate(record['lab_test_date'])),
             MapEntry('Full Name', _formatValue(record['health_worker_name'])),
-            MapEntry('Institution',
-                _formatValue(record['health_worker_institution'])),
-            MapEntry(
-                'Profession', _formatValue(record['health_worker_profession'])),
+            MapEntry('Institution', _formatValue(record['health_worker_institution'])),
+            MapEntry('Profession', _formatValue(record['health_worker_profession'])),
             MapEntry('Notes', _formatValue(split.cleanRemarks)),
           ],
           aiAnalysis: aiAnalysis,
@@ -1032,8 +994,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         );
       } catch (e) {
         _closeLoadingOverlay();
-        _showMessage('Failed to load lab test details',
-            type: AppSnackType.error);
+        _showMessage('Failed to load lab test details', type: AppSnackType.error);
       }
     }
   }
@@ -1056,8 +1017,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     Navigator.of(context, rootNavigator: true).pop();
   }
 
-  void _showMessage(String message,
-      {AppSnackType type = AppSnackType.warning}) {
+  void _showMessage(String message, {AppSnackType type = AppSnackType.warning}) {
     AppSnackbar.show(context, message, type: type);
   }
 
@@ -1087,8 +1047,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     return s.isEmpty ? '—' : s;
   }
 
-  ({String cleanRemarks, String? extractedAi}) _splitRemarksAndAi(
-      String? rawRemarks) {
+  ({String cleanRemarks, String? extractedAi}) _splitRemarksAndAi(String? rawRemarks) {
     final source = rawRemarks?.trim() ?? '';
     if (source.isEmpty) {
       return (cleanRemarks: '', extractedAi: null);
@@ -1115,17 +1074,13 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     buffer.write('Ultrasound AI Insights:\n\n');
 
     if (remarks.contains('normal') || remarks.contains('healthy')) {
-      buffer.write(
-          'Normal Findings: Ultrasound appears normal with healthy fetal development.\n\n');
+      buffer.write('Normal Findings: Ultrasound appears normal with healthy fetal development.\n\n');
     } else if (remarks.contains('follow') || remarks.contains('monitor')) {
-      buffer.write(
-          'Follow-up Recommended: Some findings require additional observation.\n\n');
+      buffer.write('Follow-up Recommended: Some findings require additional observation.\n\n');
     } else if (remarks.contains('concern') || remarks.contains('abnormal')) {
-      buffer.write(
-          'Further Evaluation Needed: Discuss findings with healthcare provider.\n\n');
+      buffer.write('Further Evaluation Needed: Discuss findings with healthcare provider.\n\n');
     } else {
-      buffer.write(
-          'Diagnostic Information: The ultrasound provides important diagnostic information.\n\n');
+      buffer.write('Diagnostic Information: The ultrasound provides important diagnostic information.\n\n');
     }
 
     buffer.write('Key Recommendations:\n');
@@ -1142,16 +1097,11 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     buffer.write('Prenatal AI Insights:\n\n');
 
     if (remarks.contains('normal') || remarks.contains('healthy')) {
-      buffer.write(
-          'Prenatal Status: Check-up metrics appear normal and within expected clinical limits.\n\n');
-    } else if (remarks.contains('high') ||
-        remarks.contains('risk') ||
-        remarks.contains('warning')) {
-      buffer.write(
-          'Risk Assessment: Borderline metrics or physical symptoms require careful clinical correlation.\n\n');
+      buffer.write('Prenatal Status: Check-up metrics appear normal and within expected clinical limits.\n\n');
+    } else if (remarks.contains('high') || remarks.contains('risk') || remarks.contains('warning')) {
+      buffer.write('Risk Assessment: Borderline metrics or physical symptoms require careful clinical correlation.\n\n');
     } else {
-      buffer.write(
-          'Diagnostic Context: Check-up results provide important standard tracking data.\n\n');
+      buffer.write('Diagnostic Context: Check-up results provide important standard tracking data.\n\n');
     }
 
     buffer.write('Clinical Notes:\n');
@@ -1186,9 +1136,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           imageUrls: imageUrls,
           aiAnalysis: aiAnalysis,
           useStructuredAiInsights: useStructuredAiInsights,
-          riskLevel: (riskLevel != null && riskLevel.trim().isNotEmpty)
-              ? riskLevel
-              : null,
+          riskLevel: (riskLevel != null && riskLevel.trim().isNotEmpty) ? riskLevel : null,
           riskFactors: (riskFactors != null && riskFactors.trim().isNotEmpty)
               ? riskFactors.split(';').map((s) => s.trim()).toList()
               : null,
@@ -1241,13 +1189,11 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 .order('risk_factor_id', ascending: true);
 
             final factorList = <String>[];
-            for (final factor
-                in (factorRows as List).cast<Map<String, dynamic>>()) {
+            for (final factor in (factorRows as List).cast<Map<String, dynamic>>()) {
               final factorText = factor['factor']?.toString() ?? '';
               final influence = factor['risk_influence']?.toString() ?? '';
               if (factorText.isNotEmpty) {
-                factorList.add(
-                    '$factorText${influence.isNotEmpty ? ' ($influence)' : ''}');
+                factorList.add('$factorText${influence.isNotEmpty ? ' ($influence)' : ''}');
               }
             }
             riskFactors = factorList.join('; ');
@@ -1257,8 +1203,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
       if (checkupDateTime != null) {
         final date = DateTime.tryParse(checkupDateTime.toString());
-        final checkupDateString =
-            date != null ? date.toIso8601String().split('T')[0] : null;
+        final checkupDateString = date != null ? date.toIso8601String().split('T')[0] : null;
         if (checkupDateString != null) {
           final givenRows = await SupabaseService.client
               .from('given_medications')
@@ -1268,8 +1213,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
           final medicationRows = await SupabaseService.client
               .from('mother_medications')
-              .select(
-                  'mother_medication_name, quantity, frequency, start_date, end_date')
+              .select('mother_medication_name, quantity, frequency, start_date, end_date')
               .eq('mother_id', motherId)
               .eq('start_date', checkupDateString);
 
@@ -1288,8 +1232,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           if (givenItems.isNotEmpty) givenMedications = givenItems.join('; ');
 
           final planItems = <String>[];
-          for (final row
-              in (medicationRows as List).cast<Map<String, dynamic>>()) {
+          for (final row in (medicationRows as List).cast<Map<String, dynamic>>()) {
             final name = row['mother_medication_name']?.toString() ?? 'Unknown';
             final qty = row['quantity']?.toString() ?? '1';
             final freq = row['frequency']?.toString();
@@ -1311,21 +1254,17 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
       try {
         final symRows = await SupabaseService.client
             .from('pregnancy_symptoms')
-            .select(
-                'symptom_type_id, notes, symptom_type:symptom_types(symptom_name, risk_category)')
+            .select('symptom_type_id, notes, symptom_type:symptom_types(symptom_name, risk_category)')
             .eq('prenatal_checkup_id', prenatalCheckupId);
 
         if ((symRows as List).isNotEmpty) {
           final items = <String>[];
           for (final row in symRows.cast<Map<String, dynamic>>()) {
             final symptomType = row['symptom_type'] as Map<String, dynamic>?;
-            final symName =
-                symptomType?['symptom_name']?.toString() ?? 'Unknown symptom';
+            final symName = symptomType?['symptom_name']?.toString() ?? 'Unknown symptom';
             final risk = symptomType?['risk_category']?.toString() ?? 'unknown';
             final note = (row['notes'] as String?)?.trim();
-            items.add(note != null && note.isNotEmpty
-                ? '$symName ($risk): $note'
-                : '$symName ($risk)');
+            items.add(note != null && note.isNotEmpty ? '$symName ($risk): $note' : '$symName ($risk)');
           }
           symptomSummaryStr = items.join('; ');
         }
@@ -1556,13 +1495,9 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                 // Global Search Bar
                                 AppInputField(
                                   controller: _searchController,
-                                  hintText:
-                                      'Search mothers, children, check-ups, records...',
+                                  hintText: 'Search mothers, children, check-ups, records...',
                                   leadingIcon: Icons.search,
-                                  trailingIcon:
-                                      _searchController.text.isNotEmpty
-                                          ? Icons.clear
-                                          : null,
+                                  trailingIcon: _searchController.text.isNotEmpty ? Icons.clear : null,
                                   onTrailingTap: _clearSearch,
                                 ),
                               ],
@@ -1591,9 +1526,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                       ),
                                     ),
                                   ),
-                                  const Divider(
-                                      height: 1,
-                                      color: AppColors.borderPrimary),
+                                  const Divider(height: 1, color: AppColors.borderPrimary),
                                   ..._searchResults.map((result) => ListTile(
                                         leading: CircleAvatar(
                                           backgroundColor: AppColors
@@ -1636,8 +1569,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                   children: [
                                     Icon(Icons.search_off,
                                         size: 48,
-                                        color:
-                                            AppColors.textSecondaryOf(context)),
+                                        color: AppColors.textSecondaryOf(context)),
                                     SizedBox(height: 12),
                                     Text(
                                       'No results found',
@@ -1756,8 +1688,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                               decoration: BoxDecoration(
                                 color: AppColors.cardColorOf(context),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                    color: AppColors.borderOf(context)),
+                                border:
+                                    Border.all(color: AppColors.borderOf(context)),
                               ),
                               child: Column(
                                 children: [
@@ -1812,8 +1744,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                               decoration: BoxDecoration(
                                 color: AppColors.cardColorOf(context),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                    color: AppColors.borderOf(context)),
+                                border:
+                                    Border.all(color: AppColors.borderOf(context)),
                               ),
                               child: Column(
                                 children: [
@@ -1931,7 +1863,8 @@ class _PriorityTaskTile extends StatelessWidget {
                   color: urgencyColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(_getTaskIcon(), color: urgencyColor, size: 20),
+                child:
+                    Icon(_getTaskIcon(), color: urgencyColor, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1960,7 +1893,8 @@ class _PriorityTaskTile extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: urgencyColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),

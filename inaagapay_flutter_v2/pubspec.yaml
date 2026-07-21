@@ -33,6 +33,7 @@ dependencies:
   record: ^6.2.1
   pdf: ^3.11.1
   printing: ^5.13.2
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:
@@ -45,7 +46,7 @@ flutter:
 
   assets:
   - assets/images/
-  - .env
+  - assets/pdf/
 
 flutter_launcher_icons:
   android: true
