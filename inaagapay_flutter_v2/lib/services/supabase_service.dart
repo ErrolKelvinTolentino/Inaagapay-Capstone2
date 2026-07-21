@@ -1398,7 +1398,7 @@ class SupabaseService {
       if (email.isNotEmpty && !email.endsWith('@inaagapay.internal')) {
         existingAccount = await client
             .from('accounts')
-            .select('account_id, account_type')
+            .select('account_id, account_type, is_temporary_password, created_by')
             .eq('email_address', email)
             .maybeSingle();
       }
@@ -1406,7 +1406,7 @@ class SupabaseService {
         final formatted = SmsService.formatPhilippineNumber(phone);
         existingAccount = await client
             .from('accounts')
-            .select('account_id, account_type')
+            .select('account_id, account_type, is_temporary_password, created_by')
             .eq('phone_number', formatted)
             .maybeSingle();
       }
@@ -1416,16 +1416,33 @@ class SupabaseService {
           return {'success': false, 'message': 'This email is already in use by a midwife or admin.'};
         }
         accountId = existingAccount['account_id'] as int;
-        isExistingAccount = true;
 
-        // Update existing account details
-        await client.from('accounts').update({
-          'first_name': firstName,
-          'middle_name': middleName,
-          'last_name': lastName,
-          'extension_name': extensionName,
-          'phone_number': phone,
-        }).eq('account_id', accountId);
+        final isTempPass = existingAccount['is_temporary_password'] == true;
+        final createdByMidwife = existingAccount['created_by'] == 'midwife';
+
+        if (createdByMidwife && isTempPass) {
+          // Re-generate temporary password and send credentials
+          generatedPassword = _generateSecurePassword();
+          final hashedPassword = _hashPassword(generatedPassword);
+          await client.from('accounts').update({
+            'password_hash': hashedPassword,
+            'first_name': firstName,
+            'middle_name': middleName,
+            'last_name': lastName,
+            'extension_name': extensionName,
+            'phone_number': phone,
+          }).eq('account_id', accountId);
+          isExistingAccount = false;
+        } else {
+          isExistingAccount = true;
+          await client.from('accounts').update({
+            'first_name': firstName,
+            'middle_name': middleName,
+            'last_name': lastName,
+            'extension_name': extensionName,
+            'phone_number': phone,
+          }).eq('account_id', accountId);
+        }
       } else {
         generatedPassword = _generateSecurePassword();
         final hashedPassword = _hashPassword(generatedPassword);
