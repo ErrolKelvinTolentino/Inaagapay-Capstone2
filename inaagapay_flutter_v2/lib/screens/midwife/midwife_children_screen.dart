@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_input_field.dart';
 import '../../services/auth_storage.dart';
+import '../../services/supabase_service.dart';
 import 'child_profile_page.dart';
 import 'add_child_choice.dart';
 
@@ -44,13 +45,12 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
       final accountId = await AuthStorage.getUserId();
       if (accountId == null) throw Exception('Not authenticated');
       
-      final result = await Supabase.instance.client
-          .from('midwives')
-          .select('midwife_id, assigned_bhc_id')
-          .eq('account_id', accountId)
-          .single();
+      final ctx = await SupabaseService.getMidwifeContext(accountId);
+      if (ctx['success'] != true) {
+        throw Exception('Failed to load midwife context');
+      }
 
-      _assignedBhcId = result['assigned_bhc_id'] as int;
+      _assignedBhcId = ctx['assigned_bhc_id'] as int?;
       
       await _fetchChildren();
     } catch (e) {

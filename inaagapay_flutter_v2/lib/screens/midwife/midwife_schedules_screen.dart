@@ -7,6 +7,7 @@ import 'package:table_calendar/table_calendar.dart';
 
 import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
+import '../../services/supabase_service.dart';
 import 'midwife_sms_reminders_screen.dart';
 
 class MidwifeSchedulesScreen extends StatefulWidget {
@@ -38,15 +39,10 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
     try {
       final accountId = await AuthStorage.getUserId();
       if (accountId != null) {
-        final response = await Supabase.instance.client
-            .from('midwives')
-            .select('midwife_id, assigned_bhc_id')
-            .eq('account_id', accountId)
-            .maybeSingle();
-
-        if (response != null && response['midwife_id'] != null) {
-          _midwifeId = response['midwife_id'] as int;
-          _assignedBhcId = response['assigned_bhc_id'] as int?;
+        final ctx = await SupabaseService.getMidwifeContext(accountId);
+        if (ctx['success'] == true) {
+          _midwifeId = ctx['midwife_id'] as int?;
+          _assignedBhcId = ctx['assigned_bhc_id'] as int?;
           setState(() {
             _isLoading = false;
           });

@@ -214,13 +214,8 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
       final accountId = await AuthStorage.getUserId();
       if (accountId == null) throw Exception('Not authenticated');
       
-      final result = await SupabaseService.client
-          .from('midwives')
-          .select('assigned_bhc_id')
-          .eq('account_id', accountId)
-          .maybeSingle();
-      
-      _assignedBhcId = result?['assigned_bhc_id'] as int?;
+      final ctx = await SupabaseService.getMidwifeContext(accountId);
+      _assignedBhcId = ctx['assigned_bhc_id'] as int?;
     }
 
     if (_assignedBhcId == null) {
@@ -334,13 +329,8 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         final accountId = await AuthStorage.getUserId();
         if (accountId == null) return;
         
-        final result = await SupabaseService.client
-            .from('midwives')
-            .select('assigned_bhc_id')
-            .eq('account_id', accountId)
-            .maybeSingle();
-        
-        _assignedBhcId = result?['assigned_bhc_id'] as int?;
+        final ctx = await SupabaseService.getMidwifeContext(accountId);
+        _assignedBhcId = ctx['assigned_bhc_id'] as int?;
       }
 
       if (_assignedBhcId == null) return;

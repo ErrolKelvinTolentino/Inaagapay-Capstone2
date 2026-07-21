@@ -187,6 +187,12 @@ class SupabaseService {
       final expires =
           DateTime.now().add(const Duration(minutes: 10)).toIso8601String();
 
+      if (kDebugMode) {
+        debugPrint('====================================');
+        debugPrint('🔐 VERIFICATION OTP CODE FOR $contact: $code');
+        debugPrint('====================================');
+      }
+
       if (existing != null) {
         if (existing['is_verified']) {
           return {

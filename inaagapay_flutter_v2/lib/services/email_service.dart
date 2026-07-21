@@ -1,10 +1,30 @@
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'sms_service.dart';
 
 class EmailService {
+  static final SupabaseClient _client = Supabase.instance.client;
+
+  // Queue email in the database for secure server-side sending via Resend
+  static Future<bool> _queueEmail({
+    required String email,
+    required String subject,
+    required String htmlContent,
+  }) async {
+    try {
+      await _client.from('email_queue').insert({
+        'recipient': email,
+        'subject': subject,
+        'html_content': htmlContent,
+      });
+      if (kDebugMode) print('Email successfully queued for: $email');
+      return true;
+    } catch (e) {
+      if (kDebugMode) print('Error queueing email: $e');
+      return false;
+    }
+  }
+
   // Send verification code via preferred channel (email or SMS)
   static Future<bool> sendVerificationCode({
     required String contact,
@@ -20,14 +40,6 @@ class EmailService {
 
   // Send verification code email
   static Future<bool> sendVerificationEmail(String email, String code) async {
-    final supabaseUrl = dotenv.env['SUPABASE_URL'];
-    final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
-    
-    if (supabaseUrl == null || supabaseAnonKey == null) {
-      if (kDebugMode) print('Missing Supabase credentials');
-      return false;
-    }
-    
     final html = '''
       <!DOCTYPE html>
       <html>
@@ -53,33 +65,12 @@ class EmailService {
       </body>
       </html>
     ''';
-    
-    try {
-      final response = await http.post(
-        Uri.parse('$supabaseUrl/functions/v1/send-email'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $supabaseAnonKey',
-        },
-        body: jsonEncode({
-          'email': email,
-          'code': code,
-          'subject': '🔐 Verify Your Email - INAAGAPAY',
-          'htmlContent': html,
-        }),
-      ).timeout(const Duration(seconds: 30));
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (kDebugMode) print('Email sent: ${data['success']}');
-        return data['success'] == true;
-      }
-      if (kDebugMode) print('Email failed: ${response.statusCode} - ${response.body}');
-      return false;
-    } catch (e) {
-      if (kDebugMode) print('Email error: $e');
-      return false;
-    }
+
+    return _queueEmail(
+      email: email,
+      subject: '🔐 Verify Your Email - INAAGAPAY',
+      htmlContent: html,
+    );
   }
 
   // Send password reset code
@@ -96,11 +87,6 @@ class EmailService {
   }
 
   static Future<bool> sendPasswordResetEmail(String email, String code) async {
-    final supabaseUrl = dotenv.env['SUPABASE_URL'];
-    final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
-    
-    if (supabaseUrl == null || supabaseAnonKey == null) return false;
-    
     final html = '''
       <!DOCTYPE html>
       <html>
@@ -128,30 +114,12 @@ class EmailService {
       </body>
       </html>
     ''';
-    
-    try {
-      final response = await http.post(
-        Uri.parse('$supabaseUrl/functions/v1/send-email'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $supabaseAnonKey',
-        },
-        body: jsonEncode({
-          'email': email,
-          'code': code,
-          'subject': '🔑 Password Reset Code - INAAGAPAY',
-          'htmlContent': html,
-        }),
-      ).timeout(const Duration(seconds: 30));
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['success'] == true;
-      }
-      return false;
-    } catch (e) {
-      return false;
-    }
+
+    return _queueEmail(
+      email: email,
+      subject: '🔑 Password Reset Code - INAAGAPAY',
+      htmlContent: html,
+    );
   }
 
   // Send account credentials email (for midwife-created accounts)
@@ -161,14 +129,6 @@ class EmailService {
     required String firstName,
     required String lastName,
   }) async {
-    final supabaseUrl = dotenv.env['SUPABASE_URL'];
-    final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
-    
-    if (supabaseUrl == null || supabaseAnonKey == null) {
-      if (kDebugMode) print('Missing Supabase credentials');
-      return false;
-    }
-    
     final html = '''
       <!DOCTYPE html>
       <html>
@@ -230,32 +190,12 @@ class EmailService {
       </body>
       </html>
     ''';
-    
-    try {
-      final response = await http.post(
-        Uri.parse('$supabaseUrl/functions/v1/send-email'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $supabaseAnonKey',
-        },
-        body: jsonEncode({
-          'email': email,
-          'subject': '🎉 Welcome to INAAGAPAY - Your Account Credentials',
-          'htmlContent': html,
-        }),
-      ).timeout(const Duration(seconds: 30));
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (kDebugMode) print('Email sent: ${data['success']}');
-        return data['success'] == true;
-      }
-      if (kDebugMode) print('Email failed: ${response.statusCode} - ${response.body}');
-      return false;
-    } catch (e) {
-      if (kDebugMode) print('Email error: $e');
-      return false;
-    }
+
+    return _queueEmail(
+      email: email,
+      subject: '🎉 Welcome to INAAGAPAY - Your Account Credentials',
+      htmlContent: html,
+    );
   }
 
   // Send account credentials via SMS (for mothers with phone numbers but no email)
@@ -277,7 +217,6 @@ Log in with your phone number as username.
 
 Questions? Contact your barangay health center.''';
 
-      // Use the general SMS sending method
       return SmsService.sendSmsMessage(phoneNumber, message);
     } catch (e) {
       if (kDebugMode) print('SMS credential error: $e');
