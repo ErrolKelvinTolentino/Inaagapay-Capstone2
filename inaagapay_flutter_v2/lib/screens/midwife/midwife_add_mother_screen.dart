@@ -265,6 +265,8 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
   int? _calculatedAge;
 
   String? _phoneError;
+  bool _phoneChecking = false;
+  Timer? _phoneTimer;
   String? _emailError;
   bool _emailChecking = false;
   Timer? _emailTimer;
@@ -379,6 +381,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
   void dispose() {
     _pageController.dispose();
     _emailTimer?.cancel();
+    _phoneTimer?.cancel();
     for (final c in [
       _firstNameCtrl,
       _middleNameCtrl,
@@ -413,6 +416,13 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     setState(() => _phoneError = _phoneCtrl.text.trim().isEmpty
         ? null
         : (valid ? null : 'Enter a valid PH number'));
+
+    _phoneTimer?.cancel();
+    if (valid && _existingAccountId == null) {
+      _phoneTimer = Timer(const Duration(milliseconds: 600), () {
+        _checkExistingAccountByPhone(normalized);
+      });
+    }
   }
 
   void _validateHeightWeight() {
@@ -1018,6 +1028,103 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     }
   }
 
+  String _buildLinkingDialogSubtitle(Map<String, dynamic> existingData, Map<String, dynamic>? pregnancyData) {
+    final name = '${existingData['first_name'] ?? ''} ${existingData['last_name'] ?? ''}'.trim();
+    final email = existingData['email_address'] ?? 'N/A';
+    final phone = existingData['phone_number'] ?? 'N/A';
+
+    final buffer = StringBuffer();
+    buffer.writeln('Account: $name');
+    buffer.writeln('Email: $email');
+    buffer.writeln('Phone: $phone');
+
+    if (pregnancyData != null) {
+      buffer.writeln();
+      buffer.writeln('Pregnancy: Week ${pregnancyData['week']} (${pregnancyData['trimester']})');
+      buffer.writeln('LMP: ${pregnancyData['lmp']}');
+      buffer.writeln('EDD: ${pregnancyData['edd']}');
+    }
+
+    buffer.writeln();
+    buffer.write('Would you like to link this account?');
+    return buffer.toString();
+  }
+
+  Future<void> _checkExistingAccountByPhone(String phone) async {
+    if (phone.isEmpty) return;
+    if (_existingAccountId != null) return;
+
+    setState(() => _phoneChecking = true);
+
+    try {
+      final result = await SupabaseService.getExistingMotherAccount(phone: phone);
+
+      if (result['exists']) {
+        if (!result['has_bhc']) {
+          _existingAccountId = result['account_id'];
+          _existingMotherId = result['mother_id'];
+          _isExistingSelfRegistered = true;
+          final existingData = result['data'];
+          final pregnancyData = result['pregnancy'];
+
+          if (!mounted) return;
+          final shouldLoad = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => ConfirmationDialogBox(
+              title: 'Existing Account Found',
+              subtitle: _buildLinkingDialogSubtitle(existingData, pregnancyData),
+              confirmText: 'Yes, Link Account',
+              cancelText: 'Cancel',
+              onConfirm: () => Navigator.pop(ctx, true),
+              onCancel: () => Navigator.pop(ctx, false),
+            ),
+          );
+
+          if (shouldLoad == true) {
+            _loadExistingData(existingData);
+            _isUpdatingExisting = true;
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text(
+                    'Existing data loaded. Please complete missing information.'),
+                backgroundColor: AppColors.success,
+              ));
+            }
+          } else {
+            _existingAccountId = null;
+            _existingMotherId = null;
+            _isExistingSelfRegistered = false;
+          }
+        } else {
+          if (!mounted) return;
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => DialogBox(
+              title: 'Phone Already Registered',
+              content:
+                  'This mother is already registered to a Barangay Health Center (BHC).',
+              buttonText: 'OK',
+              type: DialogType.warning,
+              onPressed: () => Navigator.pop(context),
+            ),
+          );
+          setState(() {
+            _phoneError = 'This mother is already registered to a BHC';
+          });
+        }
+      }
+    } catch (e) {
+      _existingAccountId = null;
+      _existingMotherId = null;
+      _isUpdatingExisting = false;
+      _isExistingSelfRegistered = false;
+    } finally {
+      if (mounted) setState(() => _phoneChecking = false);
+    }
+  }
+
   Future<void> _checkExistingAccount() async {
     final email = _emailCtrl.text.trim();
     if (email.isEmpty) return;
@@ -1026,7 +1133,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     setState(() => _checkingAccount = true);
 
     try {
-      final result = await SupabaseService.getExistingMotherAccount(email);
+      final result = await SupabaseService.getExistingMotherAccount(email: email);
 
       if (result['exists']) {
         if (!result['has_bhc']) {
@@ -1034,6 +1141,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
           _existingMotherId = result['mother_id'];
           _isExistingSelfRegistered = true;
           final existingData = result['data'];
+          final pregnancyData = result['pregnancy'];
 
           if (!mounted) return;
           final shouldLoad = await showDialog<bool>(
@@ -1041,9 +1149,8 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
             barrierDismissible: false,
             builder: (ctx) => ConfirmationDialogBox(
               title: 'Existing Account Found',
-              subtitle:
-                  'An account already exists for ${existingData['email_address']}.\n\nWould you like to load the existing data?',
-              confirmText: 'Load & Continue',
+              subtitle: _buildLinkingDialogSubtitle(existingData, pregnancyData),
+              confirmText: 'Yes, Link Account',
               cancelText: 'Cancel',
               onConfirm: () => Navigator.pop(ctx, true),
               onCancel: () => Navigator.pop(ctx, false),
@@ -1562,7 +1669,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         
         String successMessage;
         if (_isUpdatingExisting) {
-          successMessage = 'Mother account updated successfully!';
+          successMessage = 'Mother profile successfully linked to your health center!\n\nNo temporary password was sent — the mother already has her own login credentials.';
         } else if (emailSent) {
           successMessage = 'Mother account created successfully!\n\nA temporary password has been sent to ${_emailCtrl.text.trim()}.';
         } else if (smsSent) {

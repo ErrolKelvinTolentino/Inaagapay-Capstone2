@@ -849,16 +849,25 @@ class SupabaseService {
             last_name,
             extension_name
           ''').eq('account_id', accountId).maybeSingle();
-
       if (role == 'mother') {
-        final motherResponse = await client.from('mothers').select('''
-              assigned_bhc_id,
-              bhc!inner (
-                bhc_name
-              )
-            ''').eq('account_id', accountId).maybeSingle();
+        final motherResponse = await client
+            .from('mothers')
+            .select('assigned_bhc_id')
+            .eq('account_id', accountId)
+            .maybeSingle();
 
-        final bhc = motherResponse?['bhc'] as Map?;
+        String bhcName = 'No Barangay Assigned';
+        final bhcId = motherResponse?['assigned_bhc_id'] as int?;
+        if (bhcId != null) {
+          final facility = await client
+              .from('health_facilities')
+              .select('name')
+              .eq('facility_id', bhcId)
+              .maybeSingle();
+          if (facility != null && facility['name'] != null) {
+            bhcName = facility['name'].toString();
+          }
+        }
 
         return {
           'success': true,
@@ -866,19 +875,29 @@ class SupabaseService {
           'middle_name': accountResponse?['middle_name'],
           'last_name': accountResponse?['last_name'],
           'extension_name': accountResponse?['extension_name'],
-          'bhc_name': bhc?['bhc_name'] ?? 'No Barangay Assigned',
+          'bhc_name': bhcName,
         };
       }
 
       if (role == 'midwife') {
-        final midwifeResponse = await client.from('midwives').select('''
-              assigned_bhc_id,
-              bhc!inner (
-                bhc_name
-              )
-            ''').eq('account_id', accountId).maybeSingle();
+        final midwifeResponse = await client
+            .from('midwives')
+            .select('assigned_bhc_id')
+            .eq('account_id', accountId)
+            .maybeSingle();
 
-        final bhc = midwifeResponse?['bhc'] as Map?;
+        String bhcName = 'No Barangay Assigned';
+        final bhcId = midwifeResponse?['assigned_bhc_id'] as int?;
+        if (bhcId != null) {
+          final facility = await client
+              .from('health_facilities')
+              .select('name')
+              .eq('facility_id', bhcId)
+              .maybeSingle();
+          if (facility != null && facility['name'] != null) {
+            bhcName = facility['name'].toString();
+          }
+        }
 
         return {
           'success': true,
@@ -886,21 +905,13 @@ class SupabaseService {
           'middle_name': accountResponse?['middle_name'],
           'last_name': accountResponse?['last_name'],
           'extension_name': accountResponse?['extension_name'],
-          'bhc_name': bhc?['bhc_name'],
+          'bhc_name': bhcName,
         };
       }
 
-      return {
-        'success': true,
-        'first_name': accountResponse?['first_name'],
-        'middle_name': accountResponse?['middle_name'],
-        'last_name': accountResponse?['last_name'],
-        'extension_name': accountResponse?['extension_name'],
-        'bhc_name': null,
-      };
+      return {'success': false, 'message': 'Unknown role'};
     } catch (e) {
-      if (kDebugMode) debugPrint('Greeting error: $e');
-      return {'success': false, 'message': 'Failed to fetch greeting'};
+      return {'success': false, 'message': e.toString()};
     }
   }
 
@@ -914,31 +925,93 @@ class SupabaseService {
 
       final result = await client
           .from('midwives')
-          .select('midwife_id, assigned_bhc_id, bhc!inner(bhc_name)')
+          .select('midwife_id, assigned_bhc_id')
           .eq('account_id', accountId)
           .maybeSingle();
 
       if (result == null) {
+        // Check if account is a midwife and auto-create midwife record
+        final acct = await client
+            .from('accounts')
+            .select('account_id, email_address, account_type')
+            .eq('account_id', accountId)
+            .maybeSingle();
+
+        if (acct != null && acct['account_type'] == 'midwife') {
+          final email = (acct['email_address'] ?? '').toString().toLowerCase();
+          int bhcId = 1;
+          if (email.contains('tarcan')) {
+            bhcId = 2;
+          } else if (email.contains('pinagbarilan')) {
+            bhcId = 3;
+          } else if (email.contains('makinabang')) {
+            bhcId = 4;
+          } else if (email.contains('stabarbara')) {
+            bhcId = 5;
+          }
+
+          final inserted = await client
+              .from('midwives')
+              .insert({
+                'account_id': accountId,
+                'assigned_bhc_id': bhcId,
+              })
+              .select('midwife_id, assigned_bhc_id')
+              .maybeSingle();
+
+          if (inserted != null) {
+            final facility = await client
+                .from('health_facilities')
+                .select('name')
+                .eq('facility_id', bhcId)
+                .maybeSingle();
+
+            return {
+              'success': true,
+              'midwife_id': inserted['midwife_id'] as int,
+              'assigned_bhc_id': bhcId,
+              'bhc_name':
+                  facility?['name']?.toString() ?? 'Barangay Health Center',
+            };
+          }
+        }
         return {'success': false, 'message': 'Midwife not found'};
       }
 
-      final bhc = result['bhc'] as Map?;
+      final assignedBhcId = result['assigned_bhc_id'] as int?;
+      String bhcName = 'Unknown BHC';
+
+      if (assignedBhcId != null) {
+        final facility = await client
+            .from('health_facilities')
+            .select('name')
+            .eq('facility_id', assignedBhcId)
+            .maybeSingle();
+        if (facility != null && facility['name'] != null) {
+          bhcName = facility['name'].toString();
+        }
+      }
+
       return {
         'success': true,
         'midwife_id': result['midwife_id'] as int,
-        'assigned_bhc_id': result['assigned_bhc_id'] as int,
-        'bhc_name': (bhc?['bhc_name'] as String?) ?? '',
+        'assigned_bhc_id': assignedBhcId,
+        'bhc_name': bhcName,
       };
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }
   }
 
-  // Check if account exists and get existing data
-  static Future<Map<String, dynamic>> getExistingMotherAccount(
-      String email) async {
+  // Check if account exists and get existing data (supports email or phone lookup)
+  static Future<Map<String, dynamic>> getExistingMotherAccount({
+    String? email,
+    String? phone,
+  }) async {
     try {
-      final accountData = await client
+      if (email == null && phone == null) return {'exists': false};
+
+      final query = client
           .from('accounts')
           .select('''
             account_id,
@@ -964,22 +1037,95 @@ class SupabaseService {
               status
             )
           ''')
-          .eq('email_address', email)
-          .eq('account_type', 'mother')
-          .maybeSingle();
+          .eq('account_type', 'mother');
+
+      Map<String, dynamic>? accountData;
+      if (email != null && email.isNotEmpty) {
+        accountData = await query.eq('email_address', email).maybeSingle();
+      }
+      if (accountData == null && phone != null && phone.isNotEmpty) {
+        final formatted = SmsService.formatPhilippineNumber(phone);
+        accountData = await client
+            .from('accounts')
+            .select('''
+              account_id,
+              email_address,
+              first_name,
+              middle_name,
+              last_name,
+              extension_name,
+              phone_number,
+              created_by,
+              mothers!inner (
+                mother_id,
+                birthdate,
+                assigned_bhc_id,
+                house_number,
+                street,
+                barangay,
+                city_municipality,
+                province,
+                height,
+                weight,
+                blood_type,
+                status
+              )
+            ''')
+            .eq('account_type', 'mother')
+            .eq('phone_number', formatted)
+            .maybeSingle();
+      }
 
       if (accountData == null) {
         return {'exists': false};
       }
 
       final motherData = accountData['mothers'] as Map<String, dynamic>?;
+      final motherId = motherData?['mother_id'];
+
+      // Fetch ongoing pregnancy data if mother exists
+      Map<String, dynamic>? pregnancyData;
+      if (motherId != null) {
+        pregnancyData = await client
+            .from('pregnancies')
+            .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, pre_pregnancy_weight, status')
+            .eq('mother_id', motherId)
+            .eq('status', 'ongoing')
+            .maybeSingle();
+      }
+
+      // Calculate pregnancy week and trimester
+      int? pregnancyWeek;
+      String? trimester;
+      if (pregnancyData != null && pregnancyData['last_menstrual_period'] != null) {
+        final lmpDate = DateTime.tryParse(pregnancyData['last_menstrual_period']);
+        if (lmpDate != null) {
+          final daysSinceLmp = DateTime.now().difference(lmpDate).inDays;
+          pregnancyWeek = (daysSinceLmp / 7).floor();
+          if (pregnancyWeek <= 13) {
+            trimester = '1st Trimester';
+          } else if (pregnancyWeek <= 27) {
+            trimester = '2nd Trimester';
+          } else {
+            trimester = '3rd Trimester';
+          }
+        }
+      }
 
       return {
         'exists': true,
         'account_id': accountData['account_id'],
-        'mother_id': motherData?['mother_id'],
+        'mother_id': motherId,
         'has_bhc': motherData?['assigned_bhc_id'] != null,
         'created_by': accountData['created_by'] ?? 'self',
+        'pregnancy': pregnancyData != null ? {
+          'pregnancy_id': pregnancyData['pregnancy_id'],
+          'lmp': pregnancyData['last_menstrual_period'],
+          'edd': pregnancyData['expected_date_of_delivery'],
+          'pre_pregnancy_weight': pregnancyData['pre_pregnancy_weight'],
+          'week': pregnancyWeek,
+          'trimester': trimester,
+        } : null,
         'data': {
           'first_name': accountData['first_name'],
           'middle_name': accountData['middle_name'],
@@ -1219,11 +1365,23 @@ class SupabaseService {
       String? generatedPassword;
       bool isExistingAccount = false;
 
-      final existingAccount = await client
-          .from('accounts')
-          .select('account_id, account_type')
-          .eq('email_address', email)
-          .maybeSingle();
+      // Try finding existing account by email first, then by phone
+      Map<String, dynamic>? existingAccount;
+      if (email.isNotEmpty && !email.endsWith('@inaagapay.internal')) {
+        existingAccount = await client
+            .from('accounts')
+            .select('account_id, account_type')
+            .eq('email_address', email)
+            .maybeSingle();
+      }
+      if (existingAccount == null && phone.isNotEmpty) {
+        final formatted = SmsService.formatPhilippineNumber(phone);
+        existingAccount = await client
+            .from('accounts')
+            .select('account_id, account_type')
+            .eq('phone_number', formatted)
+            .maybeSingle();
+      }
 
       if (existingAccount != null) {
         if (existingAccount['account_type'] != 'mother') {
@@ -1342,44 +1500,98 @@ class SupabaseService {
 
       int? pregnancyId;
       if (lmp != null && edd != null) {
-        final pregRow = await client
-            .from('pregnancies')
-            .insert({
-              'mother_id': motherId,
+        bool shouldInsertPregnancy = true;
+
+        if (isExistingAccount) {
+          final existingPregnancy = await client
+              .from('pregnancies')
+              .select('pregnancy_id')
+              .eq('mother_id', motherId)
+              .eq('status', 'ongoing')
+              .maybeSingle();
+              
+          if (existingPregnancy != null) {
+            shouldInsertPregnancy = false;
+            pregnancyId = existingPregnancy['pregnancy_id'] as int;
+            
+            // Update existing pregnancy
+            await client.from('pregnancies').update({
               'fetal_count': fetalCount,
               'last_menstrual_period': lmp.toIso8601String().split('T')[0],
               'expected_date_of_delivery': edd.toIso8601String().split('T')[0],
               'pre_pregnancy_weight': prePregnancyWeight,
-              'status': 'ongoing',
               'pregnancy_risk_level': riskFactors.isNotEmpty ? 'high' : 'low',
-            })
-            .select('pregnancy_id')
-            .maybeSingle();
+            }).eq('pregnancy_id', pregnancyId);
+            
+            if (riskFactors.isNotEmpty) {
+              // Delete old risk factors and assessment if any, then re-insert
+              await client.from('pregnancy_risk_assessments').delete().eq('pregnancy_id', pregnancyId);
+              
+              final assessmentRow = await client
+                  .from('pregnancy_risk_assessments')
+                  .insert({
+                    'pregnancy_id': pregnancyId,
+                    'risk_level': 'high',
+                    'assessed_by_ai': false,
+                  })
+                  .select('pregnancy_risk_id')
+                  .maybeSingle();
 
-        if (pregRow != null) {
-          pregnancyId = pregRow['pregnancy_id'] as int;
+              if (assessmentRow != null) {
+                final riskId = assessmentRow['pregnancy_risk_id'] as int;
+                await client.from('pregnancy_risk_factors').insert(
+                      riskFactors
+                          .map((f) => {
+                                'pregnancy_risk_id': riskId,
+                                'factor': f,
+                              })
+                          .toList(),
+                    );
+              }
+            }
+          }
+        }
 
-          if (riskFactors.isNotEmpty) {
-            final assessmentRow = await client
-                .from('pregnancy_risk_assessments')
-                .insert({
-                  'pregnancy_id': pregnancyId,
-                  'risk_level': 'high',
-                  'assessed_by_ai': false,
-                })
-                .select('pregnancy_risk_id')
-                .maybeSingle();
+        if (shouldInsertPregnancy) {
+          final pregRow = await client
+              .from('pregnancies')
+              .insert({
+                'mother_id': motherId,
+                'fetal_count': fetalCount,
+                'last_menstrual_period': lmp.toIso8601String().split('T')[0],
+                'expected_date_of_delivery': edd.toIso8601String().split('T')[0],
+                'pre_pregnancy_weight': prePregnancyWeight,
+                'status': 'ongoing',
+                'pregnancy_risk_level': riskFactors.isNotEmpty ? 'high' : 'low',
+              })
+              .select('pregnancy_id')
+              .maybeSingle();
 
-            if (assessmentRow != null) {
-              final riskId = assessmentRow['pregnancy_risk_id'] as int;
-              await client.from('pregnancy_risk_factors').insert(
-                    riskFactors
-                        .map((f) => {
-                              'pregnancy_risk_id': riskId,
-                              'factor': f,
-                            })
-                        .toList(),
-                  );
+          if (pregRow != null) {
+            pregnancyId = pregRow['pregnancy_id'] as int;
+
+            if (riskFactors.isNotEmpty) {
+              final assessmentRow = await client
+                  .from('pregnancy_risk_assessments')
+                  .insert({
+                    'pregnancy_id': pregnancyId,
+                    'risk_level': 'high',
+                    'assessed_by_ai': false,
+                  })
+                  .select('pregnancy_risk_id')
+                  .maybeSingle();
+
+              if (assessmentRow != null) {
+                final riskId = assessmentRow['pregnancy_risk_id'] as int;
+                await client.from('pregnancy_risk_factors').insert(
+                      riskFactors
+                          .map((f) => {
+                                'pregnancy_risk_id': riskId,
+                                'factor': f,
+                              })
+                          .toList(),
+                    );
+              }
             }
           }
         }

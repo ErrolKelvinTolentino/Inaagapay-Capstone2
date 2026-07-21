@@ -218,9 +218,9 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
           .from('midwives')
           .select('assigned_bhc_id')
           .eq('account_id', accountId)
-          .single();
+          .maybeSingle();
       
-      _assignedBhcId = result['assigned_bhc_id'] as int?;
+      _assignedBhcId = result?['assigned_bhc_id'] as int?;
     }
 
     if (_assignedBhcId == null) {
@@ -338,9 +338,9 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
             .from('midwives')
             .select('assigned_bhc_id')
             .eq('account_id', accountId)
-            .single();
+            .maybeSingle();
         
-        _assignedBhcId = result['assigned_bhc_id'] as int?;
+        _assignedBhcId = result?['assigned_bhc_id'] as int?;
       }
 
       if (_assignedBhcId == null) return;

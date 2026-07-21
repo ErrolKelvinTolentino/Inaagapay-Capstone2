@@ -1500,6 +1500,51 @@ class _MotherDashboardState extends State<MotherDashboard> {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.brandPrimary.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _t('Features you\'ll unlock:', 'Mga feature na maa-access mo:'),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _buildFeatureItem(Icons.medical_services_outlined, _t('Prenatal checkup records', 'Mga tala ng prenatal checkup')),
+                _buildFeatureItem(Icons.science_outlined, _t('Lab test results', 'Mga resulta ng lab test')),
+                _buildFeatureItem(Icons.image_outlined, _t('Ultrasound records', 'Mga tala ng ultrasound')),
+                _buildFeatureItem(Icons.monitor_weight_outlined, _t('Weight gain tracking', 'Pagsubaybay sa timbang')),
+                _buildFeatureItem(Icons.smart_toy_outlined, _t('AI health insights', 'AI health insights')),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureItem(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: AppColors.brandPrimary),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ),
         ],
       ),
     );
@@ -2415,15 +2460,16 @@ class _MotherDashboardState extends State<MotherDashboard> {
                               _buildVitalsIncompleteBanner(),
                             ],
 
-                            if (_nextScheduleDate != null) ...[
+                            if (!_isUnlinked && _nextScheduleDate != null) ...[
                               const SizedBox(height: 16),
                               _buildNextScheduleCard(),
                             ],
 
-                            const SizedBox(height: 16),
-                            GestureDetector(
-                              onTap: () => Navigator.pushNamed(context, '/immunization-poster'),
-                              child: Container(
+                            if (!_isUnlinked) ...[
+                              const SizedBox(height: 16),
+                              GestureDetector(
+                                onTap: () => Navigator.pushNamed(context, '/immunization-poster'),
+                                child: Container(
                                 margin: const EdgeInsets.symmetric(horizontal: 4),
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
@@ -2492,6 +2538,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
                                 ),
                               ),
                             ),
+                            ],
 
                             const SizedBox(height: 20),
 
@@ -2524,13 +2571,13 @@ class _MotherDashboardState extends State<MotherDashboard> {
                             ],
 
                             // My Vitals Card
-                            if (_hasPregnancy) ...[
+                            if (!_isUnlinked && _hasPregnancy) ...[
                               const SizedBox(height: 16),
                               _buildVitalsCard(),
                             ],
 
                             // Weight Gain Analysis Card
-                            if (_hasPregnancy && _weightGainResult != null) ...[
+                            if (!_isUnlinked && _hasPregnancy && _weightGainResult != null) ...[
                               const SizedBox(height: 16),
                               _buildWeightGainAnalysisCard(),
                             ],
