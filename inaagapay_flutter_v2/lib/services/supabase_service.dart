@@ -435,13 +435,9 @@ class SupabaseService {
               'Cannot connect to server. Please check your internet connection.'
         };
       }
-
-      final isPhone = isValidPhilippineNumber(identifier);
-      final field = isPhone ? 'phone_number' : 'email_address';
-      final formattedIdentifier =
-          isPhone ? SmsService.formatPhilippineNumber(identifier) : identifier;
-
-      final accountResponse = await client.from('accounts').select('''
+      final digits = identifier.trim().replaceAll(RegExp(r'[^0-9]'), '');
+      
+      final query = client.from('accounts').select('''
             account_id,
             email_address,
             phone_number,
@@ -456,7 +452,35 @@ class SupabaseService {
             created_at,
             is_temporary_password,
             created_by
-          ''').eq(field, formattedIdentifier).maybeSingle();
+          ''');
+
+      Map<String, dynamic>? accountResponse;
+
+      if (identifier.contains('@')) {
+        accountResponse = await query.eq('email_address', identifier.trim()).maybeSingle();
+      } else if (digits.isNotEmpty) {
+        String format1 = digits;
+        String format2 = digits;
+        String format3 = digits;
+        
+        if (digits.startsWith('0') && digits.length == 11) {
+          format1 = '0${digits.substring(1)}';
+          format2 = '+63${digits.substring(1)}';
+          format3 = '63${digits.substring(1)}';
+        } else if (digits.startsWith('63') && digits.length == 12) {
+          format1 = '0${digits.substring(2)}';
+          format2 = '+$digits';
+          format3 = digits;
+        } else if (digits.length == 10) {
+          format1 = '0$digits';
+          format2 = '+63$digits';
+          format3 = '63$digits';
+        }
+        
+        accountResponse = await query
+            .or('phone_number.eq.$format1,phone_number.eq.$format2,phone_number.eq.$format3')
+            .maybeSingle();
+      }
 
       if (kDebugMode) {
         debugPrint('Account query response: $accountResponse');
@@ -1760,7 +1784,7 @@ class SupabaseService {
         };
       }
 
-      // Try sending via email first if not internal
+      // Send credentials: email if provided, SMS if phone only (internal email)
       if (!isInternalEmail && generatedPassword != null) {
         credentialsSent = await EmailService.sendAccountCredentials(
           email: email,
@@ -1769,10 +1793,7 @@ class SupabaseService {
           lastName: lastName,
         );
         if (credentialsSent) sentMethod = 'email';
-      }
-
-      // If email not sent and phone is available, try SMS
-      if (!credentialsSent && phone.isNotEmpty && generatedPassword != null) {
+      } else if (isInternalEmail && phone.isNotEmpty && generatedPassword != null) {
         credentialsSent = await EmailService.sendAccountCredentialsViaSms(
           phoneNumber: phone,
           password: generatedPassword,

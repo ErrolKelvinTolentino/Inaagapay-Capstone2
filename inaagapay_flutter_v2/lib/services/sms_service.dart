@@ -21,6 +21,16 @@ class SmsService {
       // Format to international format
       final formattedNumber = formatPhilippineNumber(phoneNumber);
       
+      if (apiKey.isEmpty || apiKey == 'your_semaphore_api_key_here') {
+        if (kDebugMode) {
+          print('\n--- [MOCK SMS SENDER] ---');
+          print('Recipient: $formattedNumber');
+          print('Content: $message');
+          print('-------------------------\n');
+        }
+        return true;
+      }
+
       final response = await http.post(
         Uri.parse('$baseUrl/messages'),
         headers: {
@@ -71,8 +81,18 @@ class SmsService {
 
       // Format to international format
       final formattedNumber = formatPhilippineNumber(phoneNumber);
-      
       final message = 'Your INAAGAPAY verification code is: $code\n\nThis code expires in 10 minutes.';
+
+      if (apiKey.isEmpty || apiKey == 'your_semaphore_api_key_here') {
+        if (kDebugMode) {
+          print('\n--- [MOCK OTP SENDER] ---');
+          print('Recipient: $formattedNumber');
+          print('OTP Code: $code');
+          print('Content: $message');
+          print('-------------------------\n');
+        }
+        return true;
+      }
       
       final response = await http.post(
         Uri.parse('$baseUrl/messages'),
@@ -121,6 +141,18 @@ class SmsService {
       }
 
       final formattedNumber = formatPhilippineNumber(phoneNumber);
+      final message = 'Your INAAGAPAY verification code is: $code. This code expires in 10 minutes.';
+
+      if (apiKey.isEmpty || apiKey == 'your_semaphore_api_key_here') {
+        if (kDebugMode) {
+          print('\n--- [MOCK OTP PRIORITY SENDER] ---');
+          print('Recipient: $formattedNumber');
+          print('OTP Code: $code');
+          print('Content: $message');
+          print('-------------------------\n');
+        }
+        return true;
+      }
       
       final response = await http.post(
         Uri.parse('$baseUrl/otp'),
