@@ -92,13 +92,34 @@ class SupabaseService {
   // Check if phone number is available
   static Future<bool> isPhoneNumberAvailable(String phoneNumber) async {
     try {
-      final formatted = SmsService.formatPhilippineNumber(phoneNumber);
-      final result = await client
+      final digits = phoneNumber.replaceAll(RegExp(r'[^0-9]'), '');
+      if (digits.isEmpty) return true;
+      
+      String format1 = digits;
+      String format2 = digits;
+      String format3 = digits;
+      
+      if (digits.startsWith('0') && digits.length == 11) {
+        format1 = '0${digits.substring(1)}';
+        format2 = '+63${digits.substring(1)}';
+        format3 = '63${digits.substring(1)}';
+      } else if (digits.startsWith('63') && digits.length == 12) {
+        format1 = '0${digits.substring(2)}';
+        format2 = '+$digits';
+        format3 = digits;
+      } else if (digits.length == 10) {
+        format1 = '0$digits';
+        format2 = '+63$digits';
+        format3 = '63$digits';
+      }
+      
+      final list = await client
           .from('accounts')
           .select('account_id')
-          .eq('phone_number', formatted)
-          .maybeSingle();
-      return result == null;
+          .or('phone_number.eq.$format1,phone_number.eq.$format2,phone_number.eq.$format3')
+          .limit(1);
+          
+      return list.isEmpty;
     } catch (_) {
       return true;
     }
@@ -1072,36 +1093,56 @@ class SupabaseService {
         accountData = await query.eq('email_address', email).maybeSingle();
       }
       if (accountData == null && phone != null && phone.isNotEmpty) {
-        final formatted = SmsService.formatPhilippineNumber(phone);
-        accountData = await client
-            .from('accounts')
-            .select('''
-              account_id,
-              email_address,
-              first_name,
-              middle_name,
-              last_name,
-              extension_name,
-              phone_number,
-              created_by,
-              mothers!inner (
-                mother_id,
-                birthdate,
-                assigned_bhc_id,
-                house_number,
-                street,
-                barangay,
-                city_municipality,
-                province,
-                height,
-                weight,
-                blood_type,
-                status
-              )
-            ''')
-            .eq('account_type', 'mother')
-            .eq('phone_number', formatted)
-            .maybeSingle();
+        final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+        if (digits.isNotEmpty) {
+          String format1 = digits;
+          String format2 = digits;
+          String format3 = digits;
+          
+          if (digits.startsWith('0') && digits.length == 11) {
+            format1 = '0${digits.substring(1)}';
+            format2 = '+63${digits.substring(1)}';
+            format3 = '63${digits.substring(1)}';
+          } else if (digits.startsWith('63') && digits.length == 12) {
+            format1 = '0${digits.substring(2)}';
+            format2 = '+$digits';
+            format3 = digits;
+          } else if (digits.length == 10) {
+            format1 = '0$digits';
+            format2 = '+63$digits';
+            format3 = '63$digits';
+          }
+
+          accountData = await client
+              .from('accounts')
+              .select('''
+                account_id,
+                email_address,
+                first_name,
+                middle_name,
+                last_name,
+                extension_name,
+                phone_number,
+                created_by,
+                mothers!inner (
+                  mother_id,
+                  birthdate,
+                  assigned_bhc_id,
+                  house_number,
+                  street,
+                  barangay,
+                  city_municipality,
+                  province,
+                  height,
+                  weight,
+                  blood_type,
+                  status
+                )
+              ''')
+              .eq('account_type', 'mother')
+              .or('phone_number.eq.$format1,phone_number.eq.$format2,phone_number.eq.$format3')
+              .maybeSingle();
+        }
       }
 
       if (accountData == null) {
@@ -1387,6 +1428,7 @@ class SupabaseService {
     int fetalCount = 1,
     double? prePregnancyWeight,
     List<String> riskFactors = const [],
+    bool isUnderageNoLogin = false,
   }) async {
     try {
       int accountId;
@@ -1422,10 +1464,17 @@ class SupabaseService {
 
         if (createdByMidwife && isTempPass) {
           // Re-generate temporary password and send credentials
-          generatedPassword = _generateSecurePassword();
-          final hashedPassword = _hashPassword(generatedPassword);
+          String hashedPassword;
+          if (isUnderageNoLogin) {
+            generatedPassword = null;
+            hashedPassword = 'NO_LOGIN_UNDERAGE';
+          } else {
+            generatedPassword = _generateSecurePassword();
+            hashedPassword = _hashPassword(generatedPassword!);
+          }
           await client.from('accounts').update({
             'password_hash': hashedPassword,
+            'is_temporary_password': !isUnderageNoLogin,
             'first_name': firstName,
             'middle_name': middleName,
             'last_name': lastName,
@@ -1444,8 +1493,14 @@ class SupabaseService {
           }).eq('account_id', accountId);
         }
       } else {
-        generatedPassword = _generateSecurePassword();
-        final hashedPassword = _hashPassword(generatedPassword);
+        String hashedPassword;
+        if (isUnderageNoLogin) {
+          generatedPassword = null;
+          hashedPassword = 'NO_LOGIN_UNDERAGE';
+        } else {
+          generatedPassword = _generateSecurePassword();
+          hashedPassword = _hashPassword(generatedPassword!);
+        }
 
         final accountRow = await client
             .from('accounts')
@@ -1460,7 +1515,7 @@ class SupabaseService {
               'phone_number': phone,
               'is_verified': true,
               'status': 'active',
-              'is_temporary_password': true,
+              'is_temporary_password': !isUnderageNoLogin,
               'created_by': 'midwife',
               'created_at': DateTime.now().toIso8601String(),
             })
@@ -1736,9 +1791,11 @@ class SupabaseService {
         'email_sent': credentialsSent && sentMethod == 'email',
         'sms_sent': credentialsSent && sentMethod == 'sms',
         'credentials_delivery_method': sentMethod,
-        'message': credentialsSent
-            ? 'Mother account created. Credentials sent via ${sentMethod.toUpperCase()}.'
-            : 'Mother account created but failed to send credentials. Please provide the password manually.',
+        'message': isUnderageNoLogin
+            ? 'Mother profile created. No login credentials generated for underage mother.'
+            : (credentialsSent
+                ? 'Mother account created. Credentials sent via ${sentMethod.toUpperCase()}.'
+                : 'Mother account created but failed to send credentials. Please provide the password manually.'),
       };
     } catch (e) {
       if (kDebugMode) {

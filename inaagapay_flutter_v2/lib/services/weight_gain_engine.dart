@@ -504,6 +504,120 @@ class WeightGainEngine {
     return 'BMI Unavailable';
   }
 
+  /// Estimates pre-pregnancy BMI using backtracking when the mother
+  /// doesn't know her pre-pregnancy weight.
+  ///
+  /// Returns a map with: estimatedWeight, bmi, category, confidence,
+  /// method, isEstimated, latePregnancyCaveat
+  static Map<String, dynamic> estimatePrePregnancyBMI({
+    required double currentWeightKg,
+    required double heightCm,
+    required int aogWeeks,
+    double? knownPrePregnancyWeight,
+    int fetalCount = 1,
+  }) {
+    final heightM = heightCm / 100.0;
+    if (heightM <= 0) {
+      return {
+        'estimatedWeight': null,
+        'bmi': null,
+        'category': null,
+        'confidence': 'low',
+        'method': 'insufficient_data',
+        'isEstimated': true,
+        'latePregnancyCaveat': false,
+      };
+    }
+
+    // CASE 1: Mother knows her pre-pregnancy weight
+    if (knownPrePregnancyWeight != null && knownPrePregnancyWeight > 0) {
+      final bmi = knownPrePregnancyWeight / (heightM * heightM);
+      return {
+        'estimatedWeight': knownPrePregnancyWeight,
+        'bmi': double.parse(bmi.toStringAsFixed(1)),
+        'category': _bmiToCategory(bmi),
+        'confidence': 'high',
+        'method': 'user_provided',
+        'isEstimated': false,
+        'latePregnancyCaveat': false,
+      };
+    }
+
+    // CASE 2: AOG <= 13 weeks — current weight ≈ pre-pregnancy weight
+    if (aogWeeks <= 13) {
+      final bmi = currentWeightKg / (heightM * heightM);
+      return {
+        'estimatedWeight': currentWeightKg,
+        'bmi': double.parse(bmi.toStringAsFixed(1)),
+        'category': _bmiToCategory(bmi),
+        'confidence': 'high',
+        'method': 'early_pregnancy_proxy',
+        'isEstimated': true,
+        'latePregnancyCaveat': false,
+      };
+    }
+
+    // CASE 3: AOG > 13 weeks — Backtracking algorithm
+    final guidelines = fetalCount >= 2 ? iomTwinGuidelines : iomGuidelines;
+    final weeksPast13 = aogWeeks - 13;
+    final bool latePregnancy = aogWeeks > 28;
+
+    // Try categories in order: Normal (most common), Overweight, Underweight, Obese
+    final categoriesToTry = ['Normal', 'Overweight', 'Underweight', 'Obese'];
+
+    for (final candidateCategory in categoriesToTry) {
+      final g = guidelines[candidateCategory];
+      if (g == null) continue;
+
+      final firstTrimesterGain = (g['first_trimester'] as num).toDouble();
+      final weeklyRate = (g['weekly_rate'] as num).toDouble();
+
+      // Expected gain from conception to current AOG
+      final expectedGain = firstTrimesterGain + (weeksPast13 * weeklyRate);
+
+      // Candidate pre-pregnancy weight
+      final candidatePreWeight = currentWeightKg - expectedGain;
+      if (candidatePreWeight <= 0) continue; // nonsensical, skip
+
+      // Candidate BMI
+      final candidateBMI = candidatePreWeight / (heightM * heightM);
+      final resultCategory = _bmiToCategory(candidateBMI);
+
+      // Check self-consistency: does the BMI land in the category we guessed?
+      if (resultCategory == candidateCategory) {
+        return {
+          'estimatedWeight': double.parse(candidatePreWeight.toStringAsFixed(1)),
+          'bmi': double.parse(candidateBMI.toStringAsFixed(1)),
+          'category': resultCategory,
+          'confidence': latePregnancy ? 'low' : 'medium',
+          'method': 'backtracked',
+          'isEstimated': true,
+          'latePregnancyCaveat': latePregnancy,
+        };
+      }
+    }
+
+    // Fallback: If no category is self-consistent (very rare),
+    // use the Normal category's estimate as best guess
+    final fallbackG = guidelines['Normal']!;
+    final fallbackGain = (fallbackG['first_trimester'] as num).toDouble() +
+        (weeksPast13 * (fallbackG['weekly_rate'] as num).toDouble());
+    final fallbackWeight = currentWeightKg - fallbackGain;
+    final fallbackBMI = fallbackWeight > 0
+        ? fallbackWeight / (heightM * heightM)
+        : currentWeightKg / (heightM * heightM);
+
+    return {
+      'estimatedWeight': double.parse((fallbackWeight > 0 ? fallbackWeight : currentWeightKg).toStringAsFixed(1)),
+      'bmi': double.parse(fallbackBMI.toStringAsFixed(1)),
+      'category': _bmiToCategory(fallbackBMI),
+      'confidence': 'low',
+      'method': 'backtracked_fallback',
+      'isEstimated': true,
+      'latePregnancyCaveat': latePregnancy,
+    };
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // FLAG DETECTION
   // ═══════════════════════════════════════════════════════════════════════════

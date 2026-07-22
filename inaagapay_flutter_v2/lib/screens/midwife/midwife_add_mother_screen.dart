@@ -17,6 +17,8 @@ import '../../widgets/dialog_box.dart';
 import '../../widgets/secondary_header.dart';
 import '../../widgets/main_button.dart';
 import 'add_prenatal_checkup_screen.dart';
+import '../../services/weight_gain_engine.dart';
+import '../../services/sms_service.dart';
 
 enum _GestationMethod { lmp, edd, aog }
 
@@ -30,17 +32,6 @@ const List<String> _extensionOptions = [
   'III',
   'IV',
   'V'
-];
-const List<String> _bloodTypeOptions = [
-  'A+',
-  'A-',
-  'B+',
-  'B-',
-  'AB+',
-  'AB-',
-  'O+',
-  'O-',
-  'Unknown'
 ];
 const List<String> _relationshipOptions = [
   'Spouse/Partner',
@@ -321,10 +312,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
   final TextEditingController _heightCtrl = TextEditingController();
   final TextEditingController _weightCtrl = TextEditingController();
   final TextEditingController _prePregnancyWeightCtrl = TextEditingController();
-  bool _knowsPrePregnancyWeight = true;
-  String? _bloodType;
-  final TextEditingController _bloodTypeCtrl = TextEditingController();
-  bool _showBloodTypeDropdown = false;
+  bool _knowsPrePregnancyWeight = false;
   bool _showExtensionDropdown = false;
   String? _heightError;
   String? _weightError;
@@ -335,6 +323,11 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
   double? _calculatedBMI;
   String? _bmiClassification;
   String? _bmiWarning;
+
+  // BMI Estimation state
+  Map<String, dynamic>? _bmiEstimation;
+  bool _isBmiEstimated = false;
+  String? _bmiEstimationMethod;
 
   // Step 4: Medical Conditions
   final List<_MedicalCondition> _medicalConditions = [];
@@ -407,6 +400,17 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     }
     _streetSuggestionController.dispose();
     super.dispose();
+  }
+
+  String _normalizePhone(String phone) {
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.startsWith('63') && digits.length == 12) {
+      return '+63${digits.substring(2)}';
+    }
+    if (digits.startsWith('0') && digits.length == 11) {
+      return '+63${digits.substring(1)}';
+    }
+    return phone;
   }
 
   void _onPhoneChanged() {
@@ -515,64 +519,177 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
   }
 
   void _calculateBMI() {
-    if (!_knowsPrePregnancyWeight) {
+    final height = double.tryParse(_heightCtrl.text.trim());
+    final currentWeight = double.tryParse(_weightCtrl.text.trim());
+    final aogWeeks = int.tryParse(_aogWeeksCtrl.text.trim()) ?? 0;
+    final fetalCount = int.tryParse(_fetalCountCtrl.text.trim()) ?? 1;
+
+    if (height == null || height <= 0) {
       _calculatedBMI = null;
       _bmiClassification = null;
       _bmiWarning = null;
+      _bmiEstimation = null;
+      _isBmiEstimated = false;
+      _bmiEstimationMethod = null;
       _prePregnancyWeightWarning = null;
       setState(() {});
       return;
     }
 
-    final height = double.tryParse(_heightCtrl.text.trim());
-    final ppw = double.tryParse(_prePregnancyWeightCtrl.text.trim());
+    if (_knowsPrePregnancyWeight) {
+      // CASE 1: Mother knows her pre-pregnancy weight
+      final ppw = double.tryParse(_prePregnancyWeightCtrl.text.trim());
+      if (ppw != null && ppw > 0) {
+        final result = WeightGainEngine.estimatePrePregnancyBMI(
+          currentWeightKg: currentWeight ?? ppw,
+          heightCm: height,
+          aogWeeks: aogWeeks,
+          knownPrePregnancyWeight: ppw,
+          fetalCount: fetalCount,
+        );
+        _calculatedBMI = (result['bmi'] as num?)?.toDouble();
+        _bmiClassification = result['category'] as String?;
+        _isBmiEstimated = false;
+        _bmiEstimationMethod = 'user_provided';
+        _bmiEstimation = result;
 
-    if (height != null && ppw != null && height > 0) {
-      final heightM = height / 100;
-      final bmi = ppw / (heightM * heightM);
-      _calculatedBMI = bmi;
-
-      if (bmi < 18.5) {
-        _bmiClassification = 'Underweight';
-      } else if (bmi < 25) {
-        _bmiClassification = 'Normal';
-      } else if (bmi < 30) {
-        _bmiClassification = 'Overweight';
-      } else {
-        _bmiClassification = 'Obese';
-      }
-
-      final weeks = int.tryParse(_aogWeeksCtrl.text.trim()) ?? 0;
-      if (weeks <= 12) {
-        _bmiWarning =
-            'Recommended total weight gain for this week (Week $weeks) is 0.5 - 2.0 kg.';
-      } else {
-        final double minRate;
-        final double maxRate;
-        if (bmi < 18.5) {
-          minRate = 0.44; // Underweight min
-          maxRate = 0.58; // Underweight max
-        } else if (bmi < 25) {
-          minRate = 0.35; // Normal min
-          maxRate = 0.50; // Normal max
-        } else if (bmi < 30) {
-          minRate = 0.23; // Overweight min
-          maxRate = 0.33; // Overweight max
+        // Generate weight gain guidance message
+        if (_calculatedBMI != null && aogWeeks > 0) {
+          _bmiWarning = _buildWeightGainGuidance(
+            _bmiClassification!, aogWeeks, _calculatedBMI!);
         } else {
-          minRate = 0.17; // Obese min
-          maxRate = 0.27; // Obese max
+          _bmiWarning = null;
         }
-        final minGain = 0.5 + (weeks - 12) * minRate;
-        final maxGain = 2.0 + (weeks - 12) * maxRate;
-        _bmiWarning =
-            'Recommended total weight gain for this week (Week $weeks) is ${minGain.toStringAsFixed(1)} - ${maxGain.toStringAsFixed(1)} kg.';
+      } else {
+        _calculatedBMI = null;
+        _bmiClassification = null;
+        _bmiWarning = null;
+        _bmiEstimation = null;
+        _isBmiEstimated = false;
+        _bmiEstimationMethod = null;
       }
     } else {
-      _calculatedBMI = null;
-      _bmiClassification = null;
-      _bmiWarning = null;
+      // CASE 2 & 3: Mother does NOT know her pre-pregnancy weight
+      if (currentWeight != null && currentWeight > 0) {
+        final result = WeightGainEngine.estimatePrePregnancyBMI(
+          currentWeightKg: currentWeight,
+          heightCm: height,
+          aogWeeks: aogWeeks,
+          fetalCount: fetalCount,
+        );
+        _calculatedBMI = (result['bmi'] as num?)?.toDouble();
+        _bmiClassification = result['category'] as String?;
+        _isBmiEstimated = result['isEstimated'] == true;
+        _bmiEstimationMethod = result['method'] as String?;
+        _bmiEstimation = result;
+
+        if (_calculatedBMI != null && aogWeeks > 0) {
+          _bmiWarning = _buildWeightGainGuidance(
+            _bmiClassification!, aogWeeks, _calculatedBMI!);
+        } else {
+          _bmiWarning = null;
+        }
+      } else {
+        _calculatedBMI = null;
+        _bmiClassification = null;
+        _bmiWarning = null;
+        _bmiEstimation = null;
+        _isBmiEstimated = false;
+        _bmiEstimationMethod = null;
+      }
     }
     setState(() {});
+  }
+
+  String _buildWeightGainGuidance(String category, int weeks, double bmi) {
+    if (weeks <= 12) {
+      return 'Based on her Pre-Pregnancy BMI category ($category), the recommended total weight gain for Week $weeks is 0.5 - 2.0 kg.';
+    }
+    final double minRate;
+    final double maxRate;
+    if (bmi < 18.5) {
+      minRate = 0.44;
+      maxRate = 0.58;
+    } else if (bmi < 25) {
+      minRate = 0.35;
+      maxRate = 0.50;
+    } else if (bmi < 30) {
+      minRate = 0.23;
+      maxRate = 0.33;
+    } else {
+      minRate = 0.17;
+      maxRate = 0.27;
+    }
+    final minGain = 0.5 + (weeks - 12) * minRate;
+    final maxGain = 2.0 + (weeks - 12) * maxRate;
+    return 'Based on her Pre-Pregnancy BMI category ($category), the recommended total weight gain for Week $weeks is ${minGain.toStringAsFixed(1)} - ${maxGain.toStringAsFixed(1)} kg.';
+  }
+
+  void _showBmiDisclaimerDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.info_outline, size: 40, color: AppColors.info),
+              const SizedBox(height: 16),
+              const Text(
+                'BMI Estimation Reference',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.brandText,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'This estimation uses the Institute of Medicine (IOM) 2009 '
+                'Gestational Weight Gain Guidelines to work backwards from the '
+                'mother\'s current weight and gestational age.\n\n'
+                'How it works:\n'
+                '• For early pregnancy (≤13 weeks): Current weight is used directly '
+                'as a close approximation since minimal weight gain occurs before week 13.\n\n'
+                '• For later pregnancy (>13 weeks): The system tests each BMI category '
+                '(Underweight, Normal, Overweight, Obese) by subtracting the expected '
+                'weight gain for that category, then checking if the resulting BMI is '
+                'self-consistent with the tested category.\n\n'
+                'Important: This is an estimation tool. If the mother later recalls '
+                'or finds her actual pre-pregnancy weight (e.g., from old records, ID '
+                'applications), it can be updated for more accurate tracking.\n\n'
+                'Reference: IOM (Institute of Medicine) and NRC (National Research '
+                'Council). 2009. Weight Gain During Pregnancy: Reexamining the Guidelines.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brandPrimary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('Got it'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _validateBirthdate() {
@@ -1052,74 +1169,26 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
 
   Future<void> _checkExistingAccountByPhone(String phone) async {
     if (phone.isEmpty) return;
-    if (_existingAccountId != null) return;
 
     setState(() => _phoneChecking = true);
 
     try {
-      final result = await SupabaseService.getExistingMotherAccount(phone: phone);
+      final formatted = SmsService.formatPhilippineNumber(phone);
+      final available = await SupabaseService.isPhoneNumberAvailable(formatted);
 
-      if (result['exists']) {
-        if (!result['has_bhc']) {
-          _existingAccountId = result['account_id'];
-          _existingMotherId = result['mother_id'];
-          _isExistingSelfRegistered = true;
-          final existingData = result['data'];
-          final pregnancyData = result['pregnancy'];
+      if (!mounted) return;
 
-          if (!mounted) return;
-          final shouldLoad = await showDialog<bool>(
-            context: context,
-            barrierDismissible: false,
-            builder: (ctx) => ConfirmationDialogBox(
-              title: 'Existing Account Found',
-              subtitle: _buildLinkingDialogSubtitle(existingData, pregnancyData),
-              confirmText: 'Yes, Link Account',
-              cancelText: 'Cancel',
-              onConfirm: () => Navigator.pop(ctx, true),
-              onCancel: () => Navigator.pop(ctx, false),
-            ),
-          );
-
-          if (shouldLoad == true) {
-            _loadExistingData(existingData);
-            _isUpdatingExisting = true;
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text(
-                    'Existing data loaded. Please complete missing information.'),
-                backgroundColor: AppColors.success,
-              ));
-            }
-          } else {
-            _existingAccountId = null;
-            _existingMotherId = null;
-            _isExistingSelfRegistered = false;
-          }
-        } else {
-          if (!mounted) return;
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (_) => DialogBox(
-              title: 'Phone Already Registered',
-              content:
-                  'This mother is already registered to a Barangay Health Center (BHC).',
-              buttonText: 'OK',
-              type: DialogType.warning,
-              onPressed: () => Navigator.pop(context),
-            ),
-          );
-          setState(() {
-            _phoneError = 'This mother is already registered to a BHC';
-          });
-        }
+      if (!available) {
+        setState(() {
+          _phoneError = 'Phone number already in use';
+        });
+      } else {
+        setState(() {
+          _phoneError = null;
+        });
       }
     } catch (e) {
-      _existingAccountId = null;
-      _existingMotherId = null;
-      _isUpdatingExisting = false;
-      _isExistingSelfRegistered = false;
+      // ignore
     } finally {
       if (mounted) setState(() => _phoneChecking = false);
     }
@@ -1173,19 +1242,6 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
             _isExistingSelfRegistered = false;
           }
         } else {
-          if (!mounted) return;
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (_) => DialogBox(
-              title: 'Email Already Registered',
-              content:
-                  'This mother is already registered to a Barangay Health Center (BHC).',
-              buttonText: 'OK',
-              type: DialogType.warning,
-              onPressed: () => Navigator.pop(context),
-            ),
-          );
           setState(() {
             _emailError = 'This mother is already registered to a BHC';
           });
@@ -1221,10 +1277,6 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     }
     if (existingData['weight'] != null) {
       _weightCtrl.text = existingData['weight'].toString();
-    }
-    if (existingData['blood_type'] != null) {
-      _bloodType = existingData['blood_type'];
-      _bloodTypeCtrl.text = _bloodType ?? '';
     }
 
     if (existingData['house_number'] != null &&
@@ -1609,7 +1661,6 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
               : _provinceCtrl.text.trim(),
           heightCm: double.tryParse(_heightCtrl.text.trim()),
           weightKg: double.tryParse(_weightCtrl.text.trim()),
-          bloodType: _bloodType,
           lmp: _lmp,
           edd: _edd,
           emergencyContacts: _emergencyContacts.map((e) => e.toMap()).toList(),
@@ -1617,8 +1668,11 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
           allergies: _allergies.map((a) => a.toMap()).toList(),
           pastPregnancies: _pastPregnancies.map((p) => p.toMap()).toList(),
           fetalCount: int.tryParse(_fetalCountCtrl.text.trim()) ?? 1,
-          prePregnancyWeight:
-              double.tryParse(_prePregnancyWeightCtrl.text.trim()),
+          prePregnancyWeight: _knowsPrePregnancyWeight
+              ? double.tryParse(_prePregnancyWeightCtrl.text.trim())
+              : (_bmiEstimation != null
+                  ? (_bmiEstimation!['estimatedWeight'] as num?)?.toDouble()
+                  : null),
           riskFactors: _evaluatePregnancyRisk(),
         );
       } else {
@@ -1643,7 +1697,6 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
           birthdate: _birthdate,
           heightCm: double.tryParse(_heightCtrl.text.trim()),
           weightKg: double.tryParse(_weightCtrl.text.trim()),
-          bloodType: _bloodType,
           lmp: _lmp,
           edd: _edd,
           emergencyContacts: _emergencyContacts.map((e) => e.toMap()).toList(),
@@ -1651,9 +1704,13 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
           allergies: _allergies.map((a) => a.toMap()).toList(),
           pastPregnancies: _pastPregnancies.map((p) => p.toMap()).toList(),
           fetalCount: int.tryParse(_fetalCountCtrl.text.trim()) ?? 1,
-          prePregnancyWeight:
-              double.tryParse(_prePregnancyWeightCtrl.text.trim()),
+          prePregnancyWeight: _knowsPrePregnancyWeight
+              ? double.tryParse(_prePregnancyWeightCtrl.text.trim())
+              : (_bmiEstimation != null
+                  ? (_bmiEstimation!['estimatedWeight'] as num?)?.toDouble()
+                  : null),
           riskFactors: _evaluatePregnancyRisk(),
+          isUnderageNoLogin: _calculatedAge != null && _calculatedAge! < 13,
         );
       }
 
@@ -1663,13 +1720,15 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         final motherId = result['mother_id'] as int?;
         final pregnancyId = result['pregnancy_id'] as int?;
 
-        final hasRealEmail = _emailCtrl.text.trim().isNotEmpty;
         final emailSent = result['email_sent'] == true;
         final smsSent = result['sms_sent'] == true;
+        final isUnderage = _calculatedAge != null && _calculatedAge! < 13;
         
         String successMessage;
         if (_isUpdatingExisting) {
           successMessage = 'Mother profile successfully linked to your health center!\n\nNo temporary password was sent — the mother already has her own login credentials.';
+        } else if (isUnderage) {
+          successMessage = 'Mother registered successfully for health monitoring!\n\nSince the mother is under 13, no login credentials were created.';
         } else if (emailSent) {
           successMessage = 'Mother account created successfully!\n\nA temporary password has been sent to ${_emailCtrl.text.trim()}.';
         } else if (smsSent) {
@@ -1779,17 +1838,59 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             child: StatefulBuilder(
               builder: (dialogCtx, setDialogState) {
-                // Real-time phone validation
+                String? phoneWarning;
+                bool phoneCheckingDup = false;
+                Timer? ecPhoneTimer;
+
                 void validatePhone(String val) {
-                  final normalized =
-                      val.trim().replaceAll(RegExp(r'[^0-9+]'), '');
-                  final isValid =
-                      RegExp(r'^(\+?63|0)9\d{9}$').hasMatch(normalized);
+                  final normalized = val.trim().replaceAll(RegExp(r'[^0-9+]'), '');
+                  final isValid = RegExp(r'^(\+?63|0)9\d{9}$').hasMatch(normalized);
                   setDialogState(() {
                     phoneError = val.isEmpty
                         ? null
                         : (isValid ? null : 'Enter a valid PH mobile number');
                   });
+                  
+                  // Check for duplicates if format is valid
+                  if (isValid) {
+                    // Check against mother's own phone number
+                    final motherPhone = _phoneCtrl.text.trim().replaceAll(RegExp(r'[^0-9+]'), '');
+                    if (_normalizePhone(normalized) == _normalizePhone(motherPhone)) {
+                      setDialogState(() {
+                        phoneWarning = 'Same as the mother\'s contact number';
+                      });
+                      return;
+                    }
+                    
+                    // Debounced check against database
+                    ecPhoneTimer?.cancel();
+                    setDialogState(() {
+                      phoneCheckingDup = true;
+                      phoneWarning = null;
+                    });
+                    ecPhoneTimer = Timer(const Duration(milliseconds: 600), () async {
+                      try {
+                        final available = await SupabaseService.isPhoneNumberAvailable(normalized);
+                        if (ctx.mounted) {
+                          setDialogState(() {
+                            phoneCheckingDup = false;
+                            phoneWarning = available
+                                ? null
+                                : 'This number is registered to an existing account';
+                          });
+                        }
+                      } catch (_) {
+                        if (ctx.mounted) {
+                          setDialogState(() => phoneCheckingDup = false);
+                        }
+                      }
+                    });
+                  } else {
+                    setDialogState(() {
+                      phoneWarning = null;
+                      phoneCheckingDup = false;
+                    });
+                  }
                 }
 
                 final isPhoneValid =
@@ -1865,6 +1966,37 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                               },
                             ),
                             const SizedBox(height: 16),
+                            if (phoneCheckingDup) ...[
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(children: const [
+                                  SizedBox(
+                                      width: 13,
+                                      height: 13,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 1.8, color: AppColors.brandAccent)),
+                                  SizedBox(width: 8),
+                                  Text('Checking number...',
+                                      style: TextStyle(
+                                          fontSize: 11, color: AppColors.textSecondary))
+                                ])),
+                            ],
+                            if (phoneWarning != null) ...[
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(children: [
+                                  const Icon(Icons.info_outline,
+                                      size: 14, color: AppColors.warning),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(phoneWarning!,
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.warning,
+                                            fontWeight: FontWeight.w500)),
+                                  ),
+                                ])),
+                            ],
                             // Relationship Dropdown Field
                             _buildPremiumTextField(
                               controller: relationshipCtrl,
@@ -3504,7 +3636,6 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     field('Birthdate', r.birthdate);
     field('Height', r.heightCm != null ? '${r.heightCm} cm' : null);
     field('Weight', r.weightKg != null ? '${r.weightKg} kg' : null);
-    field('Blood Type', r.bloodType);
 
     section('Gestational Info');
     field('LMP', r.lmpDate);
@@ -3641,10 +3772,6 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       }
       if (r.heightCm != null) _heightCtrl.text = r.heightCm!.toStringAsFixed(1);
       if (r.weightKg != null) _weightCtrl.text = r.weightKg!.toStringAsFixed(1);
-      if (r.bloodType != null) {
-        _bloodType = r.bloodType;
-        _bloodTypeCtrl.text = _bloodType ?? '';
-      }
 
       for (final m in r.medicalConditions) {
         if (m.conditionName.isEmpty) continue;
@@ -3906,115 +4033,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     );
   }
 
-  bool _isConditionAdded(String name) {
-    return _medicalConditions.any((e) => e.conditionName.toLowerCase() == name.toLowerCase());
-  }
 
-  bool _isAllergyAdded(String name) {
-    return _allergies.any((e) => e.allergen.toLowerCase() == name.toLowerCase());
-  }
-
-  int _getConditionIndex(String name) {
-    return _medicalConditions.indexWhere((e) => e.conditionName.toLowerCase() == name.toLowerCase());
-  }
-
-  int _getAllergyIndex(String name) {
-    return _allergies.indexWhere((e) => e.allergen.toLowerCase() == name.toLowerCase());
-  }
-
-  Widget _buildPillOption({
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.brandPrimary : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? AppColors.brandPrimary : AppColors.borderPrimary,
-            width: 1.5,
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppColors.brandPrimary.withValues(alpha: 0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? Colors.white : AppColors.inputText,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWeightToggleCard({
-    required String title,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.brandPrimary.withValues(alpha: 0.1) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? AppColors.brandPrimary : Colors.black.withValues(alpha: 0.1),
-            width: isSelected ? 2.0 : 1.0,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Icon(
-              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: isSelected ? AppColors.brandPrimary : AppColors.textSecondary,
-              size: 20,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: isSelected ? AppColors.brandPrimary : AppColors.inputText,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _emptyState(IconData icon, String message) => Center(
         child: Padding(
@@ -4215,9 +4234,53 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
   }
 
   Widget _stepPersonal() {
+    final bool isUnderage = _calculatedAge != null && _calculatedAge! < 13;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _sectionLabel('Email Address'),
+        AppInputField(
+            hintText: 'Email Address (optional)',
+            controller: _emailCtrl,
+            leadingIcon: Icons.email_outlined,
+            keyboardType: TextInputType.emailAddress,
+            onChanged: _onEmailChanged,
+            errorText: _emailError,
+            readOnly: _isEmailReadOnly),
+        if (_emailChecking) ...[
+          const SizedBox(height: 6),
+          Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: Row(children: const [
+                SizedBox(
+                    width: 13,
+                    height: 13,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 1.8, color: AppColors.brandAccent)),
+                SizedBox(width: 8),
+                Text('Checking availability...',
+                    style: TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary))
+              ])),
+        ],
+        if (_checkingAccount) ...[
+          const SizedBox(height: 6),
+          Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: Row(children: const [
+                SizedBox(
+                    width: 13,
+                    height: 13,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 1.8, color: AppColors.brandAccent)),
+                SizedBox(width: 8),
+                Text('Checking for existing account...',
+                    style: TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary))
+              ])),
+        ],
+        const SizedBox(height: 24),
         _sectionLabel('Full Name'),
         Row(
           children: [
@@ -4328,48 +4391,28 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
             onChanged: (_) => _validateStepInline(0)),
         const SizedBox(height: 24),
         _sectionLabel('Account Credentials'),
-        if (_calculatedAge == null || _calculatedAge! >= 13) ...[
-          AppInputField(
-              hintText: 'Email Address (optional)',
-              controller: _emailCtrl,
-              leadingIcon: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress,
-              onChanged: _onEmailChanged,
-              errorText: _emailError,
-              readOnly: _isEmailReadOnly),
-          if (_emailChecking) ...[
-            const SizedBox(height: 6),
-            Padding(
-                padding: const EdgeInsets.only(left: 16),
-                child: Row(children: const [
-                  SizedBox(
-                      width: 13,
-                      height: 13,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 1.8, color: AppColors.brandAccent)),
-                  SizedBox(width: 8),
-                  Text('Checking availability...',
-                      style: TextStyle(
-                          fontSize: 11, color: AppColors.textSecondary))
-                ])),
-          ],
-          if (_checkingAccount) ...[
-            const SizedBox(height: 6),
-            Padding(
-                padding: const EdgeInsets.only(left: 16),
-                child: Row(children: const [
-                  SizedBox(
-                      width: 13,
-                      height: 13,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 1.8, color: AppColors.brandAccent)),
-                  SizedBox(width: 8),
-                  Text('Checking for existing account...',
-                      style: TextStyle(
-                          fontSize: 11, color: AppColors.textSecondary))
-                ])),
-          ],
-          const SizedBox(height: 16),
+        if (isUnderage) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border:
+                    Border.all(color: AppColors.warning.withValues(alpha: 0.25))),
+            child: Row(
+              children: const [
+                Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 20),
+                SizedBox(width: 12),
+                Expanded(
+                    child: Text(
+                        'Mothers under 13 will be registered for health monitoring only. No login credentials will be generated or sent, and she will not be able to log in.',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary))),
+              ],
+            ),
+          ),
+        ] else ...[
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -4396,28 +4439,6 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                           style: TextStyle(
                               fontSize: 11, color: AppColors.textSecondary))
                     ])),
-              ],
-            ),
-          ),
-        ] else ...[
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-                color: AppColors.info.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-                border:
-                    Border.all(color: AppColors.info.withValues(alpha: 0.25))),
-            child: Row(
-              children: const [
-                Icon(Icons.info_outline, color: AppColors.info, size: 20),
-                SizedBox(width: 12),
-                Expanded(
-                    child: Text(
-                        'Mothers under 13 are not asked for email. A password will be generated and shown after registration.',
-                        style: TextStyle(
-                            fontSize: 12, color: AppColors.textSecondary))),
               ],
             ),
           ),
@@ -4960,131 +4981,50 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
             ),
           ),
         ],
-        const SizedBox(height: 24),
-        _sectionLabel('Pre-Pregnancy Weight'),
-        IntrinsicHeight(
-            child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _knowsPrePregnancyWeight = true;
-                    _calculateBMI();
-                  });
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: _knowsPrePregnancyWeight
-                        ? AppColors.brandPrimary.withValues(alpha: 0.08)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: _knowsPrePregnancyWeight
-                          ? AppColors.brandPrimary
-                          : AppColors.borderPrimary,
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.02),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      )
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _knowsPrePregnancyWeight
-                            ? Icons.check_circle
-                            : Icons.circle_outlined,
-                        color: _knowsPrePregnancyWeight
-                            ? AppColors.brandPrimary
-                            : Colors.grey,
-                        size: 20,
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Mother knows pre-pregnancy weight',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.brandText,
-                        ),
-                      ),
-                    ],
-                  ),
+        const SizedBox(height: 16),
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _knowsPrePregnancyWeight = !_knowsPrePregnancyWeight;
+              if (!_knowsPrePregnancyWeight) {
+                _prePregnancyWeightCtrl.clear();
+                _prePregnancyWeightError = null;
+              }
+              _calculateBMI();
+            });
+          },
+          child: Row(
+            children: [
+              SizedBox(
+                height: 24,
+                width: 24,
+                child: Checkbox(
+                  value: _knowsPrePregnancyWeight,
+                  activeColor: AppColors.brandPrimary,
+                  onChanged: (val) {
+                    setState(() {
+                      _knowsPrePregnancyWeight = val ?? false;
+                      if (!_knowsPrePregnancyWeight) {
+                        _prePregnancyWeightCtrl.clear();
+                        _prePregnancyWeightError = null;
+                      }
+                      _calculateBMI();
+                    });
+                  },
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _knowsPrePregnancyWeight = false;
-                    _prePregnancyWeightCtrl.clear();
-                    _prePregnancyWeightError = null;
-                    _calculateBMI();
-                  });
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: !_knowsPrePregnancyWeight
-                        ? AppColors.brandPrimary.withValues(alpha: 0.08)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: !_knowsPrePregnancyWeight
-                          ? AppColors.brandPrimary
-                          : AppColors.borderPrimary,
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.02),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      )
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        !_knowsPrePregnancyWeight
-                            ? Icons.check_circle
-                            : Icons.circle_outlined,
-                        color: !_knowsPrePregnancyWeight
-                            ? AppColors.brandPrimary
-                            : Colors.grey,
-                        size: 20,
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Mother does not know pre-pregnancy weight',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.brandText,
-                        ),
-                      ),
-                    ],
-                  ),
+              const SizedBox(width: 8),
+              const Text(
+                'Mother knows pre-pregnancy weight',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.brandText,
                 ),
               ),
-            ),
-          ],
-        )),
+            ],
+          ),
+        ),
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -5174,88 +5114,113 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                       ),
                       const SizedBox(width: 8),
                       _bmiTag(_calculatedBMI!),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => _showBmiDisclaimerDialog(),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: AppColors.info.withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.help_outline, size: 16, color: AppColors.info),
+                        ),
+                      ),
                     ],
                   ),
-                  if (_bmiWarning != null) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          size: 16,
-                          color:
-                              (_calculatedBMI! >= 25 || _calculatedBMI! < 18.5)
-                                  ? AppColors.warning
-                                  : AppColors.brandPrimary,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            _bmiWarning!,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: (_calculatedBMI! >= 25 ||
-                                      _calculatedBMI! < 18.5)
-                                  ? AppColors.warning
-                                  : AppColors.brandPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ],
               ),
             ),
           ],
         ],
-        const SizedBox(height: 24),
-        _sectionLabel('Blood Type'),
-        AppInputField(
-          hintText: 'Select Blood Type',
-          controller: _bloodTypeCtrl,
-          isRequired: false,
-          leadingIcon: Icons.bloodtype_outlined,
-          trailingIcon: Icons.keyboard_arrow_down_rounded,
-          readOnly: true,
-          onTap: () {
-            setState(() {
-              _showBloodTypeDropdown = !_showBloodTypeDropdown;
-            });
-          },
-        ),
-        if (_showBloodTypeDropdown) ...[
-          const SizedBox(height: 4),
-          Card(
-            elevation: 4,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            color: Colors.white,
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: 200),
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: _bloodTypeOptions.length,
-                itemBuilder: (context, idx) {
-                  final bt = _bloodTypeOptions[idx];
-                  return ListTile(
-                    title: Text(bt, style: const TextStyle(fontSize: 14)),
-                    dense: true,
-                    onTap: () {
-                      setState(() {
-                        _bloodType = bt;
-                        _bloodTypeCtrl.text = bt;
-                        _showBloodTypeDropdown = false;
-                      });
-                    },
-                  );
-                },
-              ),
+        if (!_knowsPrePregnancyWeight && _calculatedBMI != null) ...[
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.info.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.info.withValues(alpha: 0.25)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.auto_fix_high, size: 18, color: AppColors.info),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _bmiEstimationMethod == 'early_pregnancy_proxy'
+                            ? 'Estimated BMI (Early Pregnancy)'
+                            : 'Estimated BMI (Backtracked)',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.info,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => _showBmiDisclaimerDialog(),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppColors.info.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.help_outline, size: 16, color: AppColors.info),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Text(
+                      'Pre-Pregnancy BMI: ',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    Text(
+                      _calculatedBMI!.toStringAsFixed(1),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.brandText,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _bmiTag(_calculatedBMI!),
+                  ],
+                ),
+                if (_bmiEstimation != null && _bmiEstimation!['estimatedWeight'] != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Estimated pre-pregnancy weight: ${(_bmiEstimation!['estimatedWeight'] as num).toStringAsFixed(1)} kg',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  _bmiEstimationMethod == 'early_pregnancy_proxy'
+                      ? 'Since the mother is ≤13 weeks pregnant, current weight was used as a close approximation of pre-pregnancy weight.'
+                      : 'Pre-pregnancy weight was estimated by working backwards from current weight using IOM 2009 weight gain guidelines for the estimated BMI category.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                    fontStyle: FontStyle.italic,
+                    height: 1.3,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
+
       ],
     );
   }
@@ -5285,30 +5250,6 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Quick Add - Common Allergens'),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _commonAllergens.map((allergen) {
-            final isAdded = _isAllergyAdded(allergen);
-            return _buildPillOption(
-              label: allergen,
-              isSelected: isAdded,
-              onTap: () {
-                if (isAdded) {
-                  final idx = _getAllergyIndex(allergen);
-                  if (idx != -1) {
-                    _confirmDeleteAllergy(idx);
-                  }
-                } else {
-                  _showAddAllergy(prefill: allergen == 'Other' ? null : allergen);
-                }
-              },
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 24),
         _sectionLabel('Allergies List'),
         const SizedBox(height: 16),
         if (_allergies.isEmpty)
@@ -5802,7 +5743,33 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                         ? '${_calculatedBMI!.toStringAsFixed(1)} ($_bmiClassification)'
                         : '-'),
               ],
-              _summaryRow('Blood Type', _bloodType ?? '-')
+              if (!_knowsPrePregnancyWeight && _calculatedBMI != null) ...[
+                _summaryRow(
+                    'Estimated Pre-Pregnancy BMI',
+                    '${_calculatedBMI!.toStringAsFixed(1)} ($_bmiClassification) — ${_isBmiEstimated ? "System estimated" : "Provided"}'),
+              ],
+              if (_bmiWarning != null) ...[
+                const SizedBox(height: 8),
+                Divider(color: Colors.grey.shade200, height: 1),
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline, size: 16, color: AppColors.brandPrimary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _bmiWarning!,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.brandPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
             onTap: () => _jumpToStep(4)),
         const SizedBox(height: 12),
@@ -6138,7 +6105,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     'Current place of residence',
     'Who to contact in an emergency',
     'Current pregnancy dating',
-    'Height, weight and blood type',
+    'Height, weight and pre-pregnancy BMI',
     'Known diagnoses and health conditions',
     'Known allergens and reactions',
     'Previous pregnancy outcomes',

@@ -14,6 +14,18 @@ enum WeightGainConfidence { high, medium, low }
 /// BMI category per IOM 2009 guidelines.
 enum BmiCategory { underweight, normal, overweight, obese }
 
+/// Indicates how the pre-pregnancy baseline was determined
+enum BaselineSource {
+  /// Mother provided her actual pre-pregnancy weight
+  userProvided,
+  /// Early pregnancy (≤13 weeks) — current weight used as proxy
+  earlyPregnancyProxy,
+  /// Backtracked from current weight using IOM rates (>13 weeks)
+  backtracked,
+  /// Mother later corrected the estimated weight with actual value
+  userCorrected,
+}
+
 /// Result object returned by the weight gain engine.
 class WeightGainResult {
   final WeightGainMode mode;
@@ -31,6 +43,7 @@ class WeightGainResult {
   final WeightGainConfidence confidence;
   final String message;
   final List<String> flags; // e.g. 'weight_loss', 'plateau', 'abnormal_spike'
+  final String? baselineSource;
 
   const WeightGainResult({
     required this.mode,
@@ -48,6 +61,7 @@ class WeightGainResult {
     required this.confidence,
     required this.message,
     this.flags = const [],
+    this.baselineSource,
   });
 
   String get modeLabel {
@@ -117,6 +131,7 @@ class WeightGainResult {
         'confidence': confidenceLabel,
         'message': message,
         'flags': flags,
+        'baseline_source': baselineSource,
       };
 
   factory WeightGainResult.fromJson(Map<String, dynamic> json) {
@@ -136,6 +151,7 @@ class WeightGainResult {
       confidence: _parseConfidence(json['confidence']),
       message: json['message'] ?? '',
       flags: List<String>.from(json['flags'] ?? []),
+      baselineSource: json['baseline_source'] as String?,
     );
   }
 
