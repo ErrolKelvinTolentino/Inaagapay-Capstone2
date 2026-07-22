@@ -45,8 +45,9 @@ flutter:
   uses-material-design: true
 
   assets:
-  - assets/images/
-  - assets/pdf/
+    - assets/images/
+    - assets/images/fetal_growth/
+    - assets/pdf/
 
 flutter_launcher_icons:
   android: true

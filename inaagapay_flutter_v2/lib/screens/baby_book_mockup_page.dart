@@ -4,16 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../data/baby_growth_milestone_data.dart';
+import '../data/pregnancy_growth_data.dart';
+import '../data/pregnancy_health_sample_data.dart';
 import '../models/baby_memory.dart';
 import '../services/asset_pdf_download_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/baby_memory_photo.dart';
+import '../widgets/baby_book/baby_growth_milestones_section.dart';
+import '../widgets/baby_book/baby_book_section_components.dart';
+import '../widgets/baby_book/pregnancy_health_records_section.dart';
 import '../widgets/main_header.dart';
+import '../widgets/pregnancy_growth_journey.dart';
 import 'baby_book_memory_gallery_page.dart';
 
 String _t(String english, String _) => english;
-
-typedef _MockAction = void Function(String english, String filipino);
 
 class BabyBookMockupPage extends StatefulWidget {
   const BabyBookMockupPage({super.key});
@@ -31,32 +36,27 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
   );
 
   final GlobalKey _todayKey = GlobalKey();
-  final GlobalKey _milestonesKey = GlobalKey();
   final GlobalKey _memoriesKey = GlobalKey();
   final GlobalKey _guideKey = GlobalKey();
 
   String? _downloadingPdf;
-  final List<bool> _milestones = <bool>[true, true, true, false];
   final ImagePicker _imagePicker = ImagePicker();
   final List<BabyMemory> _memories = <BabyMemory>[
     BabyMemory(
-      id: 'sample-crawling',
-      title: 'First time crawling! ✨',
-      caption: 'From the play mat to Mama—you were so fast!',
+      id: 'sample-ultrasound',
+      title: 'Our first ultrasound ✨',
+      caption: 'The first little glimpse of our growing baby.',
       date: DateTime(2026, 7, 18),
-      assetPath: 'assets/images/baby.png',
+      assetPath: 'assets/images/ultrasound.png',
     ),
     BabyMemory(
-      id: 'sample-cuddle',
-      title: 'Safe in Mama’s arms',
-      caption: 'A quiet cuddle that made the whole day feel warm.',
+      id: 'sample-bump',
+      title: 'Five-month bump photo',
+      caption: 'Halfway through our pregnancy journey together.',
       date: DateTime(2026, 7, 20),
-      assetPath: 'assets/images/mother_baby_hero.png',
+      assetPath: 'assets/images/pregnant1.png',
     ),
   ];
-
-  int get _completedMilestones =>
-      _milestones.where((isComplete) => isComplete).length;
 
   Future<void> _openGuide(Uri uri) async {
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -117,25 +117,6 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
       );
     } finally {
       if (mounted) setState(() => _downloadingPdf = null);
-    }
-  }
-
-  Future<void> _goToSection(int index) async {
-    final keys = <GlobalKey>[
-      _todayKey,
-      _milestonesKey,
-      _memoriesKey,
-      _guideKey,
-    ];
-
-    final sectionContext = keys[index].currentContext;
-    if (sectionContext != null) {
-      await Scrollable.ensureVisible(
-        sectionContext,
-        duration: const Duration(milliseconds: 450),
-        curve: Curves.easeOutCubic,
-        alignment: 0.05,
-      );
     }
   }
 
@@ -206,7 +187,7 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
                       labelText: 'Memory title',
-                      hintText: 'First smile, family day…',
+                      hintText: 'Ultrasound, bump photo…',
                       prefixIcon: Icon(Icons.favorite_outline_rounded),
                     ),
                   ),
@@ -322,7 +303,7 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
                       const SizedBox(height: 24),
                       const _SectionHeading(
                         eyebrow: 'TODAY',
-                        title: 'How is baby?',
+                        title: 'Your pregnancy today',
                       ),
                       const SizedBox(height: 12),
                       const _BabyStatsCard(),
@@ -331,32 +312,21 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
                         onTap: () =>
                             _showMockupMessage('Appointment details', ''),
                       ),
-                      const SizedBox(height: 28),
-                      _SectionHeading(
-                        eyebrow: 'QUICK LOOK',
-                        title: 'Everything important, in one book',
-                        actionLabel: 'See all',
-                        onAction: () =>
-                            _showMockupMessage('Baby book sections', ''),
+                      const SizedBox(height: 32),
+                      PregnancyGrowthJourney(
+                        currentPregnancy: demoCurrentPregnancy,
+                        stages: pregnancyGrowthStages,
                       ),
-                      const SizedBox(height: 12),
-                      _QuickLinksGrid(
-                        onMilestonesTap: () => _goToSection(1),
-                        onMemoriesTap: () => _goToSection(2),
-                        onMockTap: _showMockupMessage,
+                      const SizedBox(height: 34),
+                      BabyGrowthMilestonesSection(
+                        currentPregnancy: demoCurrentPregnancy,
+                        initialMilestones: babyGrowthMilestoneSampleData,
                       ),
-                      const SizedBox(height: 30),
-                      _MilestonesCard(
-                        key: _milestonesKey,
-                        milestones: _milestones,
-                        completed: _completedMilestones,
-                        onChanged: (index) {
-                          setState(() {
-                            _milestones[index] = !_milestones[index];
-                          });
-                        },
+                      const SizedBox(height: 34),
+                      PregnancyHealthRecordsSection(
+                        initialRecords: pregnancyHealthSampleRecords,
                       ),
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 34),
                       _MemoryCard(
                         key: _memoriesKey,
                         memories: _memories,
@@ -410,139 +380,92 @@ class _BabyCoverCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 244,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFF86B7), Color(0xFFFF5A9B)],
-        ),
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.brandPrimary.withValues(alpha: 0.30),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/mother_baby_hero.png',
-              fit: BoxFit.cover,
-              alignment: Alignment.centerRight,
-            ),
-          ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  stops: const [0, 0.52, 1],
-                  colors: [
-                    const Color(0xFFF65299).withValues(alpha: 0.97),
-                    const Color(0xFFF85CA0).withValues(alpha: 0.83),
-                    const Color(0xFFFF8DBA).withValues(alpha: 0.08),
-                  ],
+    return BabyBookPictureCardShell(
+      key: const ValueKey<String>('pregnancy-cover-picture-card'),
+      assetPath: 'assets/images/mother_baby_hero.png',
+      semanticLabel: 'Mother holding her baby in the pregnancy story cover',
+      height: 196,
+      imageKey: const ValueKey<String>('pregnancy-cover-artwork'),
+      child: Padding(
+        padding: const EdgeInsets.all(17),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 235),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'YOUR PREGNANCY',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.86),
+                    fontSize: 8,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.05,
+                  ),
                 ),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 20, 190, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.25),
-                      ),
-                    ),
-                    child: Text(
-                      _t('SAMPLE PROFILE', 'HALIMBAWANG PROFILE'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Currently',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const Spacer(),
-                  Text(
-                    _t('Hello, I am', 'Hello, ako si'),
-                    style: const TextStyle(
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  '20 Weeks Pregnant',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 21,
+                    height: 1.1,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.45,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.pregnant_woman_rounded,
                       color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
+                      size: 14,
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Amara! 👋',
-                    maxLines: 1,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 31,
-                      height: 1.1,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.7,
-                    ),
-                  ),
-                  const SizedBox(height: 9),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.cake_outlined,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          _t('8 months old', '8 buwang gulang'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.95),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        'Month 5 • Second Trimester',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.94),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _t(
-                      'A little story of growth,\nhealth, and happy memories.',
-                      'Munting kuwento ng paglaki,\nkalusugan, at masasayang alaala.',
                     ),
-                    maxLines: 2,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.90),
-                      height: 1.35,
-                      fontSize: 12,
-                    ),
+                  ],
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  'Your baby is still growing inside the womb.',
+                  maxLines: 2,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    height: 1.35,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -622,26 +545,26 @@ class _BabyStatsCard extends StatelessWidget {
           Expanded(
             child: _StatItem(
               icon: Icons.calendar_month_rounded,
-              value: _t('Nov 12, 2025', 'Nob 12, 2025'),
-              label: _t('Birth date', 'Kapanganakan'),
+              value: 'Dec 8, 2026',
+              label: 'Estimated due date',
               color: const Color(0xFFFF68A5),
             ),
           ),
           const _VerticalDivider(),
           Expanded(
             child: _StatItem(
-              icon: Icons.monitor_weight_outlined,
-              value: '7.8 kg',
-              label: _t('Weight', 'Timbang'),
+              icon: Icons.timelapse_rounded,
+              value: 'Month 5',
+              label: 'Current month',
               color: const Color(0xFF68CBB8),
             ),
           ),
           const _VerticalDivider(),
           Expanded(
             child: _StatItem(
-              icon: Icons.height_rounded,
-              value: '68 cm',
-              label: _t('Height', 'Tangkad'),
+              icon: Icons.donut_large_rounded,
+              value: '50%',
+              label: 'Pregnancy progress',
               color: const Color(0xFFFFA85A),
             ),
           ),
@@ -692,10 +615,7 @@ class _StatItem extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 10,
-          ),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
         ),
       ],
     );
@@ -707,11 +627,7 @@ class _VerticalDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 58,
-      color: AppColors.borderPrimary,
-    );
+    return Container(width: 1, height: 58, color: AppColors.borderPrimary);
   }
 }
 
@@ -751,7 +667,7 @@ class _AppointmentCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _t('Next checkup', 'Susunod na checkup'),
+                      'Next prenatal checkup',
                       style: const TextStyle(
                         color: AppColors.brandText,
                         fontSize: 12,
@@ -781,327 +697,6 @@ class _AppointmentCard extends StatelessWidget {
               const Icon(
                 Icons.chevron_right_rounded,
                 color: AppColors.brandText,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickLinksGrid extends StatelessWidget {
-  final VoidCallback onMilestonesTap;
-  final VoidCallback onMemoriesTap;
-  final _MockAction onMockTap;
-
-  const _QuickLinksGrid({
-    required this.onMilestonesTap,
-    required this.onMemoriesTap,
-    required this.onMockTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.35,
-      children: [
-        _QuickLinkCard(
-          icon: Icons.show_chart_rounded,
-          title: _t('Growth', 'Paglaki'),
-          subtitle: _t('3 new records', '3 bagong tala'),
-          color: const Color(0xFF68CBB8),
-          onTap: () => onMockTap('Growth records', 'Mga tala ng paglaki'),
-        ),
-        _QuickLinkCard(
-          icon: Icons.vaccines_rounded,
-          title: _t('Vaccines', 'Bakuna'),
-          subtitle: _t('6 of 8 completed', '6 sa 8 kumpleto'),
-          color: const Color(0xFF7A8FE7),
-          onTap: () => onMockTap('Vaccination records', 'Mga tala ng bakuna'),
-        ),
-        _QuickLinkCard(
-          icon: Icons.emoji_events_rounded,
-          title: _t('Milestones', 'Mga Tagumpay'),
-          subtitle: _completedLabel,
-          color: const Color(0xFFFFA85A),
-          onTap: onMilestonesTap,
-        ),
-        _QuickLinkCard(
-          icon: Icons.auto_awesome_rounded,
-          title: _t('Memories', 'Mga Alaala'),
-          subtitle: _t('12 happy moments', '12 masasayang sandali'),
-          color: AppColors.brandPrimary,
-          onTap: onMemoriesTap,
-        ),
-      ],
-    );
-  }
-
-  String get _completedLabel =>
-      _t('3 milestones this month', '3 milestone ngayong buwan');
-}
-
-class _QuickLinkCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _QuickLinkCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _WhiteCard(
-      padding: EdgeInsets.zero,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(24),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      width: 39,
-                      height: 39,
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(13),
-                      ),
-                      child: Icon(icon, color: color, size: 20),
-                    ),
-                    const Icon(
-                      Icons.arrow_outward_rounded,
-                      color: Color(0xFFCBC5C8),
-                      size: 18,
-                    ),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MilestonesCard extends StatelessWidget {
-  final List<bool> milestones;
-  final int completed;
-  final ValueChanged<int> onChanged;
-
-  const _MilestonesCard({
-    super.key,
-    required this.milestones,
-    required this.completed,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final labels = <String>[
-      _t('Sits without support', 'Nakakaupo nang walang alalay'),
-      _t(
-        'Looks when their name is called',
-        'Tumitingin kapag tinatawag ang pangalan',
-      ),
-      _t(
-        'Passes a toy from one hand to the other',
-        'Nagpapasa ng laruan sa kabilang kamay',
-      ),
-      _t('Crawls or tries to crawl', 'Gumagapang o sumusubok gumapang'),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionHeading(
-          eyebrow: _t('LITTLE WINS', 'MUNTING TAGUMPAY'),
-          title: _t('Milestones this month', 'Milestones ngayong buwan'),
-        ),
-        const SizedBox(height: 12),
-        _WhiteCard(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: 58,
-                        height: 58,
-                        child: CircularProgressIndicator(
-                          value: completed / milestones.length,
-                          strokeWidth: 7,
-                          backgroundColor: const Color(0xFFFFE5EF),
-                          color: AppColors.brandPrimary,
-                          strokeCap: StrokeCap.round,
-                        ),
-                      ),
-                      Text(
-                        '$completed/${milestones.length}',
-                        style: const TextStyle(
-                          color: AppColors.brandText,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _t(
-                            '$completed of ${milestones.length} achieved',
-                            '$completed sa ${milestones.length} nakamit',
-                          ),
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _t(
-                            'Tap a box to mark a new achievement.',
-                            'I-tap ang kahon para markahan ang bagong achievement.',
-                          ),
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 11,
-                            height: 1.35,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Divider(color: AppColors.borderPrimary, height: 1),
-              const SizedBox(height: 8),
-              for (var index = 0; index < labels.length; index++)
-                _MilestoneRow(
-                  label: labels[index],
-                  isComplete: milestones[index],
-                  onTap: () => onChanged(index),
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MilestoneRow extends StatelessWidget {
-  final String label;
-  final bool isComplete;
-  final VoidCallback onTap;
-
-  const _MilestoneRow({
-    required this.label,
-    required this.isComplete,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      checked: isComplete,
-      label: label,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: isComplete
-                      ? AppColors.brandPrimary
-                      : const Color(0xFFFFF5F8),
-                  borderRadius: BorderRadius.circular(9),
-                  border: Border.all(
-                    color: isComplete
-                        ? AppColors.brandPrimary
-                        : const Color(0xFFFFC5DA),
-                    width: 1.5,
-                  ),
-                ),
-                child: isComplete
-                    ? const Icon(Icons.check_rounded,
-                        color: Colors.white, size: 17)
-                    : null,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: isComplete
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary,
-                    fontSize: 12,
-                    height: 1.3,
-                    fontWeight: isComplete ? FontWeight.w600 : FontWeight.w500,
-                  ),
-                ),
               ),
             ],
           ),
@@ -1314,8 +909,9 @@ class _MemoryCardState extends State<_MemoryCard> {
                                   duration: const Duration(milliseconds: 250),
                                   width: index == _currentIndex ? 15 : 6,
                                   height: 6,
-                                  margin:
-                                      const EdgeInsets.symmetric(horizontal: 3),
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 3,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: index == _currentIndex
                                         ? AppColors.brandPrimary
@@ -1397,8 +993,10 @@ class _MemoryCardState extends State<_MemoryCard> {
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        icon:
-                            const Icon(Icons.photo_library_outlined, size: 18),
+                        icon: const Icon(
+                          Icons.photo_library_outlined,
+                          size: 18,
+                        ),
                         label: Text(
                           'View gallery • ${widget.memories.length} photos',
                           style: const TextStyle(
@@ -2022,8 +1620,8 @@ class _GuideReferencesCard extends StatelessWidget {
         const SizedBox(height: 7),
         Text(
           _t(
-            'The mockup\'s health-record and milestone sections were informed by these guides.',
-            'Ang health-record at milestone sections ng mockup ay hinango sa mga gabay na ito.',
+            'The pregnancy guidance and Baby Book reader were informed by these maternal and child health references.',
+            '',
           ),
           style: const TextStyle(
             color: AppColors.textSecondary,
@@ -2196,8 +1794,9 @@ class _ReferenceTile extends StatelessWidget {
                     style: FilledButton.styleFrom(
                       backgroundColor: badgeColor,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor:
-                          badgeColor.withValues(alpha: 0.45),
+                      disabledBackgroundColor: badgeColor.withValues(
+                        alpha: 0.45,
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 11),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(13),
@@ -2257,8 +1856,8 @@ class _HealthDisclaimer extends StatelessWidget {
           Expanded(
             child: Text(
               _t(
-                'This is a UI mockup. Sample milestones and health data do not replace advice or assessment from a pediatrician or health worker.',
-                'UI mockup lamang ito. Ang sample milestones at health data ay hindi kapalit ng payo o assessment ng pediatrician o health worker.',
+                'This is a UI mockup. General pregnancy and health information does not replace advice or assessment from your doctor, midwife, or health worker.',
+                '',
               ),
               style: const TextStyle(
                 color: Color(0xFF8A632D),
