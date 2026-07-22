@@ -119,6 +119,11 @@
           </li>
         </ul>
         <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">Inventory &amp; Supplies</span>
+        <ul class="sidebar-nav">
+          <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
         <span class="sidebar-section-label">Patient Management</span>
         <ul class="sidebar-nav">
           <li>
@@ -554,9 +559,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script>
       (function () {
-        const SUPABASE_URL = "https://buvseyqcdacctlupznya.supabase.co";
-        const SUPABASE_ANON =
-          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1dnNleXFjZGFjY3RsdXB6bnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzE2NTUsImV4cCI6MjA4ODIwNzY1NX0.VPh8ZZFqdeFyb8YuMxllbJJa-nWl4VXNq74o6-Itjjw";
+        const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
+        const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
         const SESSION_KEY = "inaagapay_admin_session";
         const session = (() => {

@@ -1,0 +1,1502 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventory Management — InaAgapay Admin</title>
+    <link rel="icon" type="image/png" href="../images/logo_icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="../styles/main.css" />
+    <style>
+      /* Tab Styling */
+      .nav-tabs {
+        display: flex;
+        gap: 8px;
+        border-bottom: 2px solid var(--border-primary);
+        margin-bottom: 20px;
+        padding-bottom: 2px;
+      }
+      .tab-btn {
+        background: transparent;
+        border: none;
+        padding: 10px 18px;
+        font-family: var(--font);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        border-radius: var(--radius-pill);
+        transition: all var(--transition);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tab-btn:hover {
+        background: var(--bg-secondary);
+        color: var(--brand-primary);
+      }
+      .tab-btn.active {
+        background: var(--brand-primary);
+        color: var(--text-on-color);
+        box-shadow: var(--shadow-btn-primary);
+      }
+
+      /* Badges & Indicators */
+      .badge-type-vaccine { background: #e3f2fd; color: #1976d2; }
+      .badge-type-supplement { background: #e8f5e9; color: #2e7d32; }
+      .badge-type-medical_device { background: #fff3e0; color: #e65100; }
+      .badge-type-contraceptive { background: #f3e5f5; color: #7b1fa2; }
+      
+      .badge-stock-ok { background: #e8f5e9; color: #2e7d32; }
+      .badge-stock-low { background: #fff3e0; color: #ef6c00; font-weight: 700; }
+      .badge-stock-out { background: #ffebee; color: #c62828; font-weight: 700; }
+
+      .badge-tx-receipt { background: #e8f5e9; color: #2e7d32; }
+      .badge-tx-dispense { background: #e3f2fd; color: #1565c0; }
+      .badge-tx-adjustment { background: #fff3e0; color: #ef6c00; }
+      .badge-tx-expiry_disposal { background: #ffebee; color: #c62828; }
+
+      .tab-content {
+        display: none;
+      }
+      .tab-content.active {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-layout">
+      <!-- ── Header ───────────────────────────────── -->
+      <header class="app-header">
+        <div class="header-brand">
+          <button class="header-sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <img src="../images/logo_icon.png" alt="InaAgapay" class="header-logo" />
+        </div>
+        <div class="header-right">
+          <span class="header-badge">Admin Portal</span>
+          <div class="header-user" id="header-user-btn">
+            <div class="header-avatar" id="header-avatar">A</div>
+            <span class="header-user-name" id="header-user-name">Admin</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- ── Sidebar ──────────────────────────────── -->
+      <aside class="app-sidebar">
+        <span class="sidebar-section-label">Main Menu</span>
+        <ul class="sidebar-nav">
+          <li><a href="dashboard.html"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
+          <li><a href="accounts.html"><i class="fa-solid fa-users"></i> Account Management</a></li>
+          <li><a href="account-create.html"><i class="fa-solid fa-user-plus"></i> Account Creation</a></li>
+          <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">Inventory &amp; Supplies</span>
+        <ul class="sidebar-nav">
+          <li><a href="inventory.html" class="active"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">Patient Management</span>
+        <ul class="sidebar-nav">
+          <li><a href="patient-records.html"><i class="fa-solid fa-folder-open"></i> Patient Records</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">System</span>
+        <ul class="sidebar-nav">
+          <li><a href="audit-trail.html"><i class="fa-solid fa-clipboard-list"></i> Audit Trail</a></li>
+          <li><a href="backup.html"><i class="fa-solid fa-database"></i> Backup &amp; Restore</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-footer-nav">
+          <button class="sidebar-logout" id="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+        </div>
+      </aside>
+
+      <!-- ── Main Content ─────────────────────────── -->
+      <main class="app-main">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Inventory &amp; Supplies Management</h1>
+            <p class="page-subtitle">Track medical items, vaccines, batches, stock adjustments, and vaccine schedules</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-outline-pink btn-sm" id="btn-open-vaccine-modal">
+              <i class="fa-solid fa-syringe"></i> Add Vaccine Catalog
+            </button>
+            <button class="btn btn-primary btn-sm" id="btn-open-item-modal">
+              <i class="fa-solid fa-plus"></i> Add New Item
+            </button>
+          </div>
+        </div>
+
+        <!-- Stat Overview Grid -->
+        <div class="stats-grid">
+          <div class="stat-card" style="cursor:pointer;" onclick="switchTab('items')">
+            <div class="stat-icon pink"><i class="fa-solid fa-boxes-stacked"></i></div>
+            <div class="stat-info">
+              <div class="stat-value" id="stat-total-items">—</div>
+              <div class="stat-label">Total Inventory Items</div>
+            </div>
+          </div>
+          <div class="stat-card" style="cursor:pointer;" onclick="switchTab('items'); filterLowStockOnly();">
+            <div class="stat-icon amber"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div class="stat-info">
+              <div class="stat-value" id="stat-low-stock">—</div>
+              <div class="stat-label">Low Stock Alerts</div>
+            </div>
+          </div>
+          <div class="stat-card" style="cursor:pointer;" onclick="switchTab('batches')">
+            <div class="stat-icon blue"><i class="fa-solid fa-layer-group"></i></div>
+            <div class="stat-info">
+              <div class="stat-value" id="stat-active-batches">—</div>
+              <div class="stat-label">Active Batches</div>
+            </div>
+          </div>
+          <div class="stat-card" style="cursor:pointer;" onclick="switchTab('vaccines')">
+            <div class="stat-icon green"><i class="fa-solid fa-syringe"></i></div>
+            <div class="stat-info">
+              <div class="stat-value" id="stat-vaccines-count">—</div>
+              <div class="stat-label">Vaccines Catalog</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs">
+          <button class="tab-btn active" id="tab-btn-items" onclick="switchTab('items')">
+            <i class="fa-solid fa-boxes-stacked"></i> Inventory Items
+          </button>
+          <button class="tab-btn" id="tab-btn-batches" onclick="switchTab('batches')">
+            <i class="fa-solid fa-layer-group"></i> Batches &amp; Stock
+          </button>
+          <button class="tab-btn" id="tab-btn-transactions" onclick="switchTab('transactions')">
+            <i class="fa-solid fa-arrow-right-arrow-left"></i> Stock Movements
+          </button>
+          <button class="tab-btn" id="tab-btn-vaccines" onclick="switchTab('vaccines')">
+            <i class="fa-solid fa-syringe"></i> Vaccines Catalog
+          </button>
+        </div>
+
+        <!-- ── TAB 1: INVENTORY ITEMS ─────────────────────────────── -->
+        <div class="tab-content active" id="tab-items">
+          <div class="card">
+            <div class="toolbar" style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-between; padding: 16px 20px;">
+              <div class="search-box" style="flex: 1; min-width: 240px;">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input class="form-control" type="search" id="items-search" placeholder="Search item name…" />
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <select class="form-select" id="items-type-filter" style="width: auto; min-width: 150px;">
+                  <option value="">All Item Types</option>
+                  <option value="vaccine">Vaccine</option>
+                  <option value="supplement">Supplement</option>
+                  <option value="medical_device">Medical Device</option>
+                  <option value="contraceptive">Contraceptive</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" id="items-low-stock-btn" onclick="toggleLowStockFilter()">
+                  <i class="fa-solid fa-filter"></i> <span id="low-stock-btn-text">Low Stock Only</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Item Name</th>
+                    <th>Type</th>
+                    <th>Unit of Measure</th>
+                    <th>Min Threshold</th>
+                    <th>Current Active Stock</th>
+                    <th>Status</th>
+                    <th style="text-align: center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="items-tbody">
+                  <tr>
+                    <td colspan="7" style="text-align: center; padding: 48px; color: var(--text-secondary);">
+                      <div class="spinner" style="margin: 0 auto 12px;"></div>
+                      Loading inventory items…
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card-footer" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="pagination-info" id="items-page-info">Showing 0 of 0</span>
+              <div class="pagination" id="items-pagination"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB 2: BATCHES & STOCK ────────────────────────────── -->
+        <div class="tab-content" id="tab-batches">
+          <div class="card">
+            <div class="toolbar" style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-between; padding: 16px 20px;">
+              <div class="search-box" style="flex: 1; min-width: 240px;">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input class="form-control" type="search" id="batches-search" placeholder="Search batch #, manufacturer or item…" />
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <select class="form-select" id="batches-status-filter" style="width: auto; min-width: 140px;">
+                  <option value="">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="expired">Expired</option>
+                  <option value="discarded">Discarded</option>
+                </select>
+                <button class="btn btn-primary btn-sm" id="btn-open-batch-modal">
+                  <i class="fa-solid fa-plus"></i> Add Batch
+                </button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Batch Number</th>
+                    <th>Manufacturer</th>
+                    <th>Qty Received</th>
+                    <th>Qty Remaining</th>
+                    <th>Received Date</th>
+                    <th>Expiration Date</th>
+                    <th>Status</th>
+                    <th style="text-align: center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="batches-tbody">
+                  <tr>
+                    <td colspan="9" style="text-align: center; padding: 48px; color: var(--text-secondary);">
+                      <div class="spinner" style="margin: 0 auto 12px;"></div>
+                      Loading inventory batches…
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card-footer" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="pagination-info" id="batches-page-info">Showing 0 of 0</span>
+              <div class="pagination" id="batches-pagination"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB 3: STOCK MOVEMENTS / TRANSACTIONS ───────────────── -->
+        <div class="tab-content" id="tab-transactions">
+          <div class="card">
+            <div class="toolbar" style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-between; padding: 16px 20px;">
+              <div class="search-box" style="flex: 1; min-width: 240px;">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input class="form-control" type="search" id="tx-search" placeholder="Search reference or item…" />
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <select class="form-select" id="tx-type-filter" style="width: auto; min-width: 160px;">
+                  <option value="">All Movement Types</option>
+                  <option value="receipt">Receipt (Add)</option>
+                  <option value="dispense">Dispense (Deduct)</option>
+                  <option value="adjustment">Adjustment</option>
+                  <option value="expiry_disposal">Expiry Disposal</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Date &amp; Time</th>
+                    <th>Item &amp; Batch</th>
+                    <th>Movement Type</th>
+                    <th>Quantity</th>
+                    <th>Reference</th>
+                    <th>Logged By</th>
+                  </tr>
+                </thead>
+                <tbody id="tx-tbody">
+                  <tr>
+                    <td colspan="6" style="text-align: center; padding: 48px; color: var(--text-secondary);">
+                      <div class="spinner" style="margin: 0 auto 12px;"></div>
+                      Loading stock movements…
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card-footer" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="pagination-info" id="tx-page-info">Showing 0 of 0</span>
+              <div class="pagination" id="tx-pagination"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB 4: VACCINES CATALOG ────────────────────────────── -->
+        <div class="tab-content" id="tab-vaccines">
+          <div class="card">
+            <div class="toolbar" style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-between; padding: 16px 20px;">
+              <div class="search-box" style="flex: 1; min-width: 240px;">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input class="form-control" type="search" id="vaccines-search" placeholder="Search vaccine name or target…" />
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <select class="form-select" id="vaccines-target-filter" style="width: auto; min-width: 160px;">
+                  <option value="">All Target Recipients</option>
+                  <option value="child">Child</option>
+                  <option value="mother">Mother</option>
+                </select>
+                <button class="btn btn-primary btn-sm" onclick="openVaccineModal()">
+                  <i class="fa-solid fa-plus"></i> Add Vaccine
+                </button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Vaccine Name</th>
+                    <th>Dose Number</th>
+                    <th>Rec. Age (Months)</th>
+                    <th>Target Recipients</th>
+                    <th>Poster Category</th>
+                    <th>Notes</th>
+                    <th style="text-align: center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="vaccines-tbody">
+                  <tr>
+                    <td colspan="7" style="text-align: center; padding: 48px; color: var(--text-secondary);">
+                      <div class="spinner" style="margin: 0 auto 12px;"></div>
+                      Loading vaccines catalog…
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card-footer" style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="pagination-info" id="vaccines-page-info">Showing 0 of 0</span>
+              <div class="pagination" id="vaccines-pagination"></div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer class="app-footer">
+        <span>&copy; 2026 InaAgapay &mdash; Maternal &amp; Child Health Information System</span>
+        <span style="color: var(--border-primary)">|</span>
+        <span>Admin Portal v2.0</span>
+      </footer>
+    </div>
+
+    <!-- ── MODAL 1: ADD / EDIT INVENTORY ITEM ────────────────────────── -->
+    <div class="modal-overlay" id="item-modal">
+      <div class="modal" style="max-width: 520px">
+        <div class="modal-header">
+          <h2 class="modal-title" id="item-modal-title">Add Inventory Item</h2>
+          <button class="modal-close" id="item-modal-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <form id="item-form">
+            <input type="hidden" id="item-id" />
+            <div class="form-group">
+              <label class="form-label" for="item-name">Item Name <span class="req">*</span></label>
+              <input class="form-control" type="text" id="item-name" placeholder="e.g. BCG Vaccine, Iron + Folic Acid" required />
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="item-type">Item Type <span class="req">*</span></label>
+                <select class="form-select" id="item-type" required>
+                  <option value="vaccine">Vaccine</option>
+                  <option value="supplement">Supplement</option>
+                  <option value="medical_device">Medical Device</option>
+                  <option value="contraceptive">Contraceptive</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="item-unit">Unit of Measure <span class="req">*</span></label>
+                <input class="form-control" type="text" id="item-unit" placeholder="e.g. Vials, Tablets, Boxes" required />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="item-threshold">Minimum Stock Threshold <span class="req">*</span></label>
+              <input class="form-control" type="number" id="item-threshold" value="50" min="0" required />
+              <div class="form-hint">System will flag low stock when total available units drop below this threshold.</div>
+            </div>
+            <div class="form-group" id="sync-vaccine-checkbox-wrap" style="display: none; margin-top: 12px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+                <input type="checkbox" id="sync-vaccine-catalog" checked />
+                Also register in Vaccines Catalog (if not already existing)
+              </label>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="item-cancel">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="item-save"><i class="fa-solid fa-floppy-disk"></i> Save Item</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── MODAL 2: ADD / EDIT BATCH ──────────────────────────────────── -->
+    <div class="modal-overlay" id="batch-modal">
+      <div class="modal" style="max-width: 540px">
+        <div class="modal-header">
+          <h2 class="modal-title" id="batch-modal-title">Add Inventory Batch</h2>
+          <button class="modal-close" id="batch-modal-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <form id="batch-form">
+            <input type="hidden" id="batch-id" />
+            <div class="form-group">
+              <label class="form-label" for="batch-item-id">Inventory Item <span class="req">*</span></label>
+              <select class="form-select" id="batch-item-id" required>
+                <option value="">Select Item…</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="batch-number">Batch / Lot Number <span class="req">*</span></label>
+                <input class="form-control" type="text" id="batch-number" placeholder="e.g. LOT-2026-99" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="batch-qty-received">Quantity Received <span class="req">*</span></label>
+                <input class="form-control" type="number" id="batch-qty-received" min="1" placeholder="e.g. 500" required />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="batch-received-date">Received Date <span class="req">*</span></label>
+                <input class="form-control" type="date" id="batch-received-date" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="batch-expiration-date">Expiration Date <span class="req">*</span></label>
+                <input class="form-control" type="date" id="batch-expiration-date" required />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="batch-manufacturer">Manufacturer</label>
+                <input class="form-control" type="text" id="batch-manufacturer" placeholder="e.g. Sanofi Pasteur, Pfizer" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="batch-status">Status</label>
+                <select class="form-select" id="batch-status">
+                  <option value="active">Active</option>
+                  <option value="expired">Expired</option>
+                  <option value="discarded">Discarded</option>
+                </select>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="batch-cancel">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="batch-save"><i class="fa-solid fa-floppy-disk"></i> Save Batch</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── MODAL 3: STOCK ADJUSTMENT / DISPENSE ────────────────────────── -->
+    <div class="modal-overlay" id="tx-modal">
+      <div class="modal" style="max-width: 480px">
+        <div class="modal-header">
+          <h2 class="modal-title">Record Stock Movement</h2>
+          <button class="modal-close" id="tx-modal-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <form id="tx-form">
+            <input type="hidden" id="tx-batch-id" />
+            <div style="background: var(--bg-secondary); padding: 12px 16px; border-radius: 12px; margin-bottom: 16px;">
+              <div id="tx-item-info" style="font-weight: 700; color: var(--text-primary);">Item Name</div>
+              <div id="tx-batch-info" style="font-size: 13px; color: var(--text-secondary);">Batch # — Qty Remaining: 0</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="tx-type">Movement Type <span class="req">*</span></label>
+              <select class="form-select" id="tx-type" required>
+                <option value="dispense">Dispense / Issue (Deduct)</option>
+                <option value="receipt">Additional Receipt (Add)</option>
+                <option value="adjustment">Manual Adjustment</option>
+                <option value="expiry_disposal">Expiry Disposal (Deduct)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="tx-quantity">Quantity Change <span class="req">*</span></label>
+              <input class="form-control" type="number" id="tx-quantity" min="1" placeholder="e.g. 10" required />
+              <div class="form-hint" id="tx-qty-hint">Units to deduct or add to remaining stock.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="tx-notes">Reference / Notes</label>
+              <input class="form-control" type="text" id="tx-notes" placeholder="e.g. Issued to RHU 1, Spoilage, Inventory Audit" />
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="tx-cancel">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="tx-save"><i class="fa-solid fa-check"></i> Submit Movement</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── MODAL 4: VACCINE CATALOG MODAL ──────────────────────────────── -->
+    <div class="modal-overlay" id="vaccine-modal">
+      <div class="modal" style="max-width: 520px">
+        <div class="modal-header">
+          <h2 class="modal-title" id="vaccine-modal-title">Add Vaccine to Catalog</h2>
+          <button class="modal-close" id="vaccine-modal-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <form id="vaccine-form">
+            <input type="hidden" id="vaccine-id" />
+            <div class="form-group">
+              <label class="form-label" for="vaccine-name">Vaccine Name <span class="req">*</span></label>
+              <input class="form-control" type="text" id="vaccine-name" placeholder="e.g. Hepatitis B, Tetanus Toxoid, Pentavalent" required />
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="vaccine-dose">Dose Number <span class="req">*</span></label>
+                <input class="form-control" type="number" id="vaccine-dose" value="1" min="1" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="vaccine-age">Recommended Age (Months) <span class="req">*</span></label>
+                <input class="form-control" type="number" step="0.1" id="vaccine-age" value="0" min="0" required />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="vaccine-target">Target Recipients <span class="req">*</span></label>
+                <select class="form-select" id="vaccine-target" required>
+                  <option value="child">Child</option>
+                  <option value="mother">Mother</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="vaccine-poster">Poster Category</label>
+                <input class="form-control" type="number" id="vaccine-poster" placeholder="e.g. 1" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="vaccine-notes">Notes / Administration Instructions</label>
+              <textarea class="form-control" id="vaccine-notes" rows="2" style="height: auto; padding: 10px 14px;" placeholder="e.g. Given within 24 hours of birth"></textarea>
+            </div>
+            <div class="form-group">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+                <input type="checkbox" id="vaccine-create-inventory" checked />
+                Ensure item exists in Inventory Items list
+              </label>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="vaccine-cancel">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="vaccine-save"><i class="fa-solid fa-floppy-disk"></i> Save Vaccine</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="delete-modal">
+      <div class="modal" style="max-width: 420px">
+        <div class="modal-header">
+          <h2 class="modal-title" style="color: var(--error)">Delete Item</h2>
+          <button class="modal-close" id="delete-modal-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <div style="text-align: center">
+            <i class="fa-solid fa-triangle-exclamation" style="font-size: 40px; color: var(--warning); margin-bottom: 14px;"></i>
+            <p style="color: var(--text-primary);">Are you sure you want to delete <strong id="delete-item-name"></strong>?</p>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;" id="delete-warning-sub">This action will remove related records.</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="delete-cancel">Cancel</button>
+          <button class="btn btn-danger btn-sm" id="delete-confirm"><i class="fa-solid fa-trash"></i> Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script>
+      (function () {
+        const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
+        const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
+        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        const SESSION_KEY = "inaagapay_admin_session";
+        const session = (() => { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } })();
+        if (!session || session.account_type !== "admin") { window.location.href = "../index.html"; return; }
+
+        // Header Initialization
+        document.getElementById("header-user-name").textContent = [session.first_name, session.last_name].filter(Boolean).join(" ") || "Admin";
+        document.getElementById("header-avatar").textContent = ((session.first_name?.[0] ?? "") + (session.last_name?.[0] ?? "")).toUpperCase() || "A";
+        document.getElementById("logout-btn").addEventListener("click", () => { if (confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); window.location.href = "../index.html"; } });
+        document.getElementById("sidebar-toggle").addEventListener("click", () => document.querySelector(".app-sidebar").classList.toggle("open"));
+
+        // Helper Utilities
+        function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
+        function toUTC(ts) { if (!ts) return null; return new Date(/Z|[+-]\d{2}:?\d{2}$/.test(ts) ? ts : ts + "Z"); }
+        function fmtDate(ts) { if (!ts) return "—"; return toUTC(ts).toLocaleDateString("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "short", day: "numeric" }); }
+        function fmtDateTime(ts) { if (!ts) return "—"; return toUTC(ts).toLocaleString("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
+
+        function showToast(msg, type = "info") {
+          const icons = { success: "fa-circle-check", error: "fa-circle-xmark", warning: "fa-triangle-exclamation", info: "fa-circle-info" };
+          const c = document.getElementById("toast-container");
+          const t = document.createElement("div");
+          t.className = `toast ${type}`;
+          t.innerHTML = `<i class="fa-solid ${icons[type]}"></i><span class="toast-text">${esc(msg)}</span><button class="toast-close" onclick="this.closest('.toast').remove()"><i class="fa-solid fa-xmark"></i></button>`;
+          c.appendChild(t);
+          setTimeout(() => { t.style.animation = "fadeOut .3s ease forwards"; t.addEventListener("animationend", () => t.remove()); }, 4500);
+        }
+
+        // Tab Switching
+        window.switchTab = function (tabName) {
+          document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+          document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+
+          const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+          const activeContent = document.getElementById(`tab-${tabName}`);
+          if (activeBtn && activeContent) {
+            activeBtn.classList.add("active");
+            activeContent.classList.add("active");
+          }
+        };
+
+        // Global State
+        let allItems = [], allBatches = [], allTransactions = [], allVaccines = [];
+        let itemStockMap = new Map();
+        let itemsFiltered = [], batchesFiltered = [], txFiltered = [], vaccinesFiltered = [];
+        let itemsPage = 1, batchesPage = 1, txPage = 1, vaccinesPage = 1;
+        const PAGE_SIZE = 12;
+        let isLowStockOnly = false;
+        let deleteActionType = null, deleteTargetId = null;
+
+        // Load All Data
+        async function loadData() {
+          try {
+            await Promise.all([fetchItems(), fetchBatches(), fetchTransactions(), fetchVaccines()]);
+            computeStockLevels();
+            renderAll();
+          } catch (e) {
+            showToast("Failed to load inventory data: " + e.message, "error");
+          }
+        }
+
+        async function fetchItems() {
+          const { data, error } = await db.from("inventory_items").select("*").order("name");
+          if (error) throw error;
+          allItems = data || [];
+        }
+
+        async function fetchBatches() {
+          const { data, error } = await db.from("inventory_batches").select("*, inventory_items(name, item_type, unit_of_measure)").order("created_at", { ascending: false });
+          if (error) throw error;
+          allBatches = data || [];
+        }
+
+        async function fetchTransactions() {
+          const { data, error } = await db.from("inventory_transactions").select("*, inventory_batches(batch_number, item_id, inventory_items(name)), accounts(first_name, last_name)").order("logged_at", { ascending: false }).limit(200);
+          if (error) throw error;
+          allTransactions = data || [];
+        }
+
+        async function fetchVaccines() {
+          const { data, error } = await db.from("vaccines").select("*").order("vaccine_name");
+          if (error) throw error;
+          allVaccines = data || [];
+        }
+
+        function computeStockLevels() {
+          itemStockMap.clear();
+          // Active remaining stock sums only active non-expired batches
+          const nowStr = new Date().toISOString().slice(0, 10);
+          allBatches.forEach(b => {
+            if (b.status === "active" && b.expiration_date >= nowStr) {
+              const current = itemStockMap.get(b.item_id) || 0;
+              itemStockMap.set(b.item_id, current + (b.quantity_remaining || 0));
+            }
+          });
+
+          // Stat Card Updates
+          document.getElementById("stat-total-items").textContent = allItems.length;
+          document.getElementById("stat-active-batches").textContent = allBatches.filter(b => b.status === "active").length;
+          document.getElementById("stat-vaccines-count").textContent = allVaccines.length;
+
+          let lowStockCount = 0;
+          allItems.forEach(item => {
+            const currentStock = itemStockMap.get(item.item_id) || 0;
+            if (currentStock <= (item.minimum_stock_threshold ?? 50)) {
+              lowStockCount++;
+            }
+          });
+          document.getElementById("stat-low-stock").textContent = lowStockCount;
+        }
+
+        function renderAll() {
+          applyItemsFilters();
+          applyBatchesFilters();
+          applyTxFilters();
+          applyVaccinesFilters();
+          populateBatchItemSelect();
+        }
+
+        function populateBatchItemSelect() {
+          const select = document.getElementById("batch-item-id");
+          select.innerHTML = '<option value="">Select Item…</option>' +
+            allItems.map(i => `<option value="${i.item_id}">${esc(i.name)} (${esc(i.unit_of_measure)})</option>`).join("");
+        }
+
+        // ---------- TAB 1: INVENTORY ITEMS ----------
+        window.toggleLowStockFilter = function() {
+          isLowStockOnly = !isLowStockOnly;
+          const btn = document.getElementById("items-low-stock-btn");
+          const label = document.getElementById("low-stock-btn-text");
+          if (isLowStockOnly) {
+            btn.className = "btn btn-primary btn-sm";
+            label.textContent = "Showing Low Stock";
+          } else {
+            btn.className = "btn btn-secondary btn-sm";
+            label.textContent = "Low Stock Only";
+          }
+          applyItemsFilters();
+        };
+
+        window.filterLowStockOnly = function() {
+          if (!isLowStockOnly) toggleLowStockFilter();
+        };
+
+        function applyItemsFilters() {
+          const q = document.getElementById("items-search").value.trim().toLowerCase();
+          const type = document.getElementById("items-type-filter").value;
+
+          itemsFiltered = allItems.filter(item => {
+            if (q && !item.name.toLowerCase().includes(q)) return false;
+            if (type && item.item_type !== type) return false;
+            if (isLowStockOnly) {
+              const currentStock = itemStockMap.get(item.item_id) || 0;
+              if (currentStock > (item.minimum_stock_threshold ?? 50)) return false;
+            }
+            return true;
+          });
+          itemsPage = 1;
+          renderItemsTable();
+        }
+
+        function renderItemsTable() {
+          const start = (itemsPage - 1) * PAGE_SIZE;
+          const slice = itemsFiltered.slice(start, start + PAGE_SIZE);
+          const tbody = document.getElementById("items-tbody");
+
+          if (itemsFiltered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-boxes-packing" style="font-size:32px;margin-bottom:12px;display:block;color:var(--brand-primary);"></i>No inventory items found.</td></tr>`;
+            document.getElementById("items-page-info").textContent = "Showing 0 of 0";
+            document.getElementById("items-pagination").innerHTML = "";
+            return;
+          }
+
+          tbody.innerHTML = slice.map(item => {
+            const currentStock = itemStockMap.get(item.item_id) || 0;
+            const threshold = item.minimum_stock_threshold ?? 50;
+            let stockBadge = `<span class="badge badge-stock-ok">In Stock</span>`;
+            if (currentStock === 0) {
+              stockBadge = `<span class="badge badge-stock-out"><i class="fa-solid fa-circle-xmark"></i> Out of Stock</span>`;
+            } else if (currentStock <= threshold) {
+              stockBadge = `<span class="badge badge-stock-low"><i class="fa-solid fa-triangle-exclamation"></i> Low Stock</span>`;
+            }
+
+            const typeLabel = item.item_type.replace('_', ' ').toUpperCase();
+
+            return `<tr>
+              <td><span style="font-weight: 700; color: var(--text-primary);">${esc(item.name)}</span></td>
+              <td><span class="badge badge-type-${item.item_type}">${esc(typeLabel)}</span></td>
+              <td>${esc(item.unit_of_measure)}</td>
+              <td>${threshold}</td>
+              <td><strong style="font-size: 15px; color: ${currentStock <= threshold ? 'var(--error)' : 'var(--brand-primary)'};">${currentStock}</strong> ${esc(item.unit_of_measure)}</td>
+              <td>${stockBadge}</td>
+              <td style="text-align: center;">
+                <div style="display: flex; gap: 6px; justify-content: center;">
+                  <button class="btn btn-sm btn-outline-pink btn-icon" title="Add Batch" onclick="openAddBatchForItem(${item.item_id})"><i class="fa-solid fa-plus"></i></button>
+                  <button class="btn btn-sm btn-outline-pink btn-icon" title="Edit Item" onclick="openEditItem(${item.item_id})"><i class="fa-solid fa-pen"></i></button>
+                  <button class="btn btn-sm btn-icon" style="background:var(--error-10);color:var(--error);border:none;" title="Delete Item" onclick="confirmDeleteItem(${item.item_id})"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </td>
+            </tr>`;
+          }).join("");
+
+          document.getElementById("items-page-info").textContent = `Showing ${start + 1}–${Math.min(start + PAGE_SIZE, itemsFiltered.length)} of ${itemsFiltered.length}`;
+          renderPagination("items-pagination", itemsFiltered.length, itemsPage, (p) => { itemsPage = p; renderItemsTable(); });
+        }
+
+        document.getElementById("items-search").addEventListener("input", applyItemsFilters);
+        document.getElementById("items-type-filter").addEventListener("change", applyItemsFilters);
+
+        // Item Modal logic
+        const itemModal = document.getElementById("item-modal");
+        document.getElementById("btn-open-item-modal").addEventListener("click", () => openItemModal());
+
+        function openItemModal(item = null) {
+          document.getElementById("item-id").value = item ? item.item_id : "";
+          document.getElementById("item-name").value = item ? item.name : "";
+          document.getElementById("item-type").value = item ? item.item_type : "vaccine";
+          document.getElementById("item-unit").value = item ? item.unit_of_measure : "vials";
+          document.getElementById("item-threshold").value = item ? item.minimum_stock_threshold : 50;
+          document.getElementById("item-modal-title").textContent = item ? "Edit Inventory Item" : "Add Inventory Item";
+          
+          const syncWrap = document.getElementById("sync-vaccine-checkbox-wrap");
+          syncWrap.style.display = (!item || item.item_type === "vaccine") ? "block" : "none";
+
+          itemModal.classList.add("show");
+        }
+
+        window.openEditItem = function (id) {
+          const item = allItems.find(i => i.item_id === id);
+          if (item) openItemModal(item);
+        };
+
+        document.getElementById("item-type").addEventListener("change", (e) => {
+          document.getElementById("sync-vaccine-checkbox-wrap").style.display = e.target.value === "vaccine" ? "block" : "none";
+        });
+
+        ["item-modal-close", "item-cancel"].forEach(id => document.getElementById(id).addEventListener("click", () => itemModal.classList.remove("show")));
+
+        document.getElementById("item-save").addEventListener("click", async (e) => {
+          e.preventDefault();
+          const id = document.getElementById("item-id").value;
+          const name = document.getElementById("item-name").value.trim();
+          const type = document.getElementById("item-type").value;
+          const unit = document.getElementById("item-unit").value.trim();
+          const threshold = parseInt(document.getElementById("item-threshold").value) || 50;
+          const syncVaccine = document.getElementById("sync-vaccine-catalog").checked;
+
+          if (!name || !type || !unit) {
+            showToast("Please fill in all required fields.", "warning");
+            return;
+          }
+
+          const btn = document.getElementById("item-save");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Saving…';
+
+          try {
+            if (id) {
+              // Update
+              const oldItem = allItems.find(i => i.item_id === parseInt(id));
+              const { error } = await db.from("inventory_items").update({
+                name, item_type: type, unit_of_measure: unit, minimum_stock_threshold: threshold
+              }).eq("item_id", parseInt(id));
+
+              if (error) throw error;
+
+              await db.from("audit_trail").insert({
+                account_id: session.account_id,
+                action: "update_inventory_item",
+                table_name: "inventory_items",
+                description: `Updated inventory item #${id} (${name})`,
+                old_data: oldItem,
+                new_data: { name, item_type: type, unit_of_measure: unit, minimum_stock_threshold: threshold }
+              });
+
+              showToast("Item updated successfully.", "success");
+            } else {
+              // Create
+              const { data, error } = await db.from("inventory_items").insert({
+                name, item_type: type, unit_of_measure: unit, minimum_stock_threshold: threshold
+              }).select().single();
+
+              if (error) throw error;
+
+              await db.from("audit_trail").insert({
+                account_id: session.account_id,
+                action: "create_inventory_item",
+                table_name: "inventory_items",
+                description: `Created new inventory item: ${name} (${type})`
+              });
+
+              // Optional Vaccine Catalog Sync
+              if (type === "vaccine" && syncVaccine) {
+                const existingVac = allVaccines.find(v => v.vaccine_name.toLowerCase() === name.toLowerCase());
+                if (!existingVac) {
+                  await db.from("vaccines").insert({
+                    vaccine_name: name,
+                    dose_number: 1,
+                    recommended_age_months: 0,
+                    target_recipients: "child",
+                    notes: "Auto-synced from inventory creation"
+                  });
+                }
+              }
+
+              showToast("Inventory item added successfully.", "success");
+            }
+
+            itemModal.classList.remove("show");
+            await loadData();
+          } catch (err) {
+            showToast("Failed to save item: " + err.message, "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Item';
+          }
+        });
+
+        // Delete Item
+        window.confirmDeleteItem = function (id) {
+          const item = allItems.find(i => i.item_id === id);
+          if (!item) return;
+          deleteActionType = "item";
+          deleteTargetId = id;
+          document.getElementById("delete-item-name").textContent = item.name;
+          document.getElementById("delete-warning-sub").textContent = "Deleting this item will also delete associated batches and transactions.";
+          document.getElementById("delete-modal").classList.add("show");
+        };
+
+        // ---------- TAB 2: BATCHES & STOCK ----------
+        function applyBatchesFilters() {
+          const q = document.getElementById("batches-search").value.trim().toLowerCase();
+          const status = document.getElementById("batches-status-filter").value;
+
+          batchesFiltered = allBatches.filter(b => {
+            const itemName = b.inventory_items?.name?.toLowerCase() || "";
+            const bNum = b.batch_number?.toLowerCase() || "";
+            const mfg = b.manufacturer?.toLowerCase() || "";
+            if (q && !itemName.includes(q) && !bNum.includes(q) && !mfg.includes(q)) return false;
+            if (status && b.status !== status) return false;
+            return true;
+          });
+          batchesPage = 1;
+          renderBatchesTable();
+        }
+
+        function renderBatchesTable() {
+          const start = (batchesPage - 1) * PAGE_SIZE;
+          const slice = batchesFiltered.slice(start, start + PAGE_SIZE);
+          const tbody = document.getElementById("batches-tbody");
+          const nowStr = new Date().toISOString().slice(0, 10);
+
+          if (batchesFiltered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-layer-group" style="font-size:32px;margin-bottom:12px;display:block;color:var(--brand-primary);"></i>No inventory batches found.</td></tr>`;
+            document.getElementById("batches-page-info").textContent = "Showing 0 of 0";
+            document.getElementById("batches-pagination").innerHTML = "";
+            return;
+          }
+
+          tbody.innerHTML = slice.map(b => {
+            const isExpired = b.expiration_date < nowStr;
+            let statusBadge = `<span class="badge badge-active">Active</span>`;
+            if (b.status === "discarded") statusBadge = `<span class="badge badge-suspended">Discarded</span>`;
+            else if (b.status === "expired" || isExpired) statusBadge = `<span class="badge badge-suspended"><i class="fa-solid fa-clock"></i> Expired</span>`;
+
+            return `<tr>
+              <td><span style="font-weight: 700; color: var(--text-primary);">${esc(b.inventory_items?.name || "Item #" + b.item_id)}</span></td>
+              <td><code>${esc(b.batch_number)}</code></td>
+              <td>${esc(b.manufacturer || "—")}</td>
+              <td>${b.quantity_received}</td>
+              <td><strong style="color: ${b.quantity_remaining === 0 ? 'var(--error)' : 'var(--brand-primary)'}">${b.quantity_remaining}</strong> / ${b.quantity_received}</td>
+              <td style="font-size:12.5px;">${fmtDate(b.received_date)}</td>
+              <td style="font-size:12.5px; color: ${isExpired ? 'var(--error)' : 'inherit'}; font-weight: ${isExpired ? 'bold' : 'normal'};">${fmtDate(b.expiration_date)}</td>
+              <td>${statusBadge}</td>
+              <td style="text-align: center;">
+                <div style="display: flex; gap: 6px; justify-content: center;">
+                  <button class="btn btn-sm btn-outline-pink btn-icon" title="Adjust / Issue Stock" onclick="openTxModalForBatch(${b.batch_id})"><i class="fa-solid fa-arrow-right-arrow-left"></i></button>
+                  <button class="btn btn-sm btn-icon" style="background:var(--error-10);color:var(--error);border:none;" title="Delete Batch" onclick="confirmDeleteBatch(${b.batch_id})"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </td>
+            </tr>`;
+          }).join("");
+
+          document.getElementById("batches-page-info").textContent = `Showing ${start + 1}–${Math.min(start + PAGE_SIZE, batchesFiltered.length)} of ${batchesFiltered.length}`;
+          renderPagination("batches-pagination", batchesFiltered.length, batchesPage, (p) => { batchesPage = p; renderBatchesTable(); });
+        }
+
+        document.getElementById("batches-search").addEventListener("input", applyBatchesFilters);
+        document.getElementById("batches-status-filter").addEventListener("change", applyBatchesFilters);
+
+        // Batch Modal
+        const batchModal = document.getElementById("batch-modal");
+        document.getElementById("btn-open-batch-modal").addEventListener("click", () => openBatchModal());
+
+        window.openAddBatchForItem = function (itemId) {
+          switchTab("batches");
+          openBatchModal(itemId);
+        };
+
+        function openBatchModal(itemId = null) {
+          document.getElementById("batch-id").value = "";
+          document.getElementById("batch-item-id").value = itemId || "";
+          document.getElementById("batch-number").value = "LOT-" + new Date().getFullYear() + "-" + Math.floor(100 + Math.random() * 900);
+          document.getElementById("batch-qty-received").value = "";
+          document.getElementById("batch-received-date").value = new Date().toISOString().slice(0, 10);
+          
+          const defaultExpiry = new Date();
+          defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
+          document.getElementById("batch-expiration-date").value = defaultExpiry.toISOString().slice(0, 10);
+          document.getElementById("batch-manufacturer").value = "";
+          document.getElementById("batch-status").value = "active";
+
+          batchModal.classList.add("show");
+        }
+
+        ["batch-modal-close", "batch-cancel"].forEach(id => document.getElementById(id).addEventListener("click", () => batchModal.classList.remove("show")));
+
+        document.getElementById("batch-save").addEventListener("click", async (e) => {
+          e.preventDefault();
+          const itemId = parseInt(document.getElementById("batch-item-id").value);
+          const batchNum = document.getElementById("batch-number").value.trim();
+          const qty = parseInt(document.getElementById("batch-qty-received").value);
+          const recDate = document.getElementById("batch-received-date").value;
+          const expDate = document.getElementById("batch-expiration-date").value;
+          const mfg = document.getElementById("batch-manufacturer").value.trim();
+          const status = document.getElementById("batch-status").value;
+
+          if (!itemId || !batchNum || isNaN(qty) || qty <= 0 || !recDate || !expDate) {
+            showToast("Please fill in all required batch fields correctly.", "warning");
+            return;
+          }
+
+          if (expDate < recDate) {
+            showToast("Expiration date cannot be earlier than received date.", "warning");
+            return;
+          }
+
+          const btn = document.getElementById("batch-save");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Saving…';
+
+          try {
+            // Create Batch
+            const { data: newBatch, error } = await db.from("inventory_batches").insert({
+              item_id: itemId,
+              batch_number: batchNum,
+              quantity_received: qty,
+              quantity_remaining: qty,
+              received_date: recDate,
+              expiration_date: expDate,
+              manufacturer: mfg || null,
+              status
+            }).select().single();
+
+            if (error) throw error;
+
+            // Log Initial Receipt Transaction
+            await db.from("inventory_transactions").insert({
+              batch_id: newBatch.batch_id,
+              transaction_type: "receipt",
+              quantity: qty,
+              reference_type: "batch_receipt",
+              performed_by: session.account_id
+            });
+
+            await db.from("audit_trail").insert({
+              account_id: session.account_id,
+              action: "add_inventory_batch",
+              table_name: "inventory_batches",
+              description: `Added batch ${batchNum} (Qty: ${qty}) for item #${itemId}`
+            });
+
+            showToast("Batch added and stock recorded successfully.", "success");
+            batchModal.classList.remove("show");
+            await loadData();
+          } catch (err) {
+            showToast("Failed to save batch: " + err.message, "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Batch';
+          }
+        });
+
+        window.confirmDeleteBatch = function (id) {
+          const b = allBatches.find(x => x.batch_id === id);
+          if (!b) return;
+          deleteActionType = "batch";
+          deleteTargetId = id;
+          document.getElementById("delete-item-name").textContent = `Batch #${b.batch_number} (${b.inventory_items?.name})`;
+          document.getElementById("delete-warning-sub").textContent = "Deleting this batch will remove remaining stock and movement logs for this batch.";
+          document.getElementById("delete-modal").classList.add("show");
+        };
+
+        // ---------- TAB 3: STOCK MOVEMENTS / TRANSACTIONS ----------
+        function applyTxFilters() {
+          const q = document.getElementById("tx-search").value.trim().toLowerCase();
+          const type = document.getElementById("tx-type-filter").value;
+
+          txFiltered = allTransactions.filter(tx => {
+            const itemName = tx.inventory_batches?.inventory_items?.name?.toLowerCase() || "";
+            const bNum = tx.inventory_batches?.batch_number?.toLowerCase() || "";
+            const ref = tx.reference_type?.toLowerCase() || "";
+            if (q && !itemName.includes(q) && !bNum.includes(q) && !ref.includes(q)) return false;
+            if (type && tx.transaction_type !== type) return false;
+            return true;
+          });
+          txPage = 1;
+          renderTxTable();
+        }
+
+        function renderTxTable() {
+          const start = (txPage - 1) * PAGE_SIZE;
+          const slice = txFiltered.slice(start, start + PAGE_SIZE);
+          const tbody = document.getElementById("tx-tbody");
+
+          if (txFiltered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-arrow-right-arrow-left" style="font-size:32px;margin-bottom:12px;display:block;color:var(--brand-primary);"></i>No stock movements logged yet.</td></tr>`;
+            document.getElementById("tx-page-info").textContent = "Showing 0 of 0";
+            document.getElementById("tx-pagination").innerHTML = "";
+            return;
+          }
+
+          tbody.innerHTML = slice.map(tx => {
+            const itemName = tx.inventory_batches?.inventory_items?.name || "Item";
+            const bNum = tx.inventory_batches?.batch_number || "—";
+            const user = tx.accounts ? [tx.accounts.first_name, tx.accounts.last_name].filter(Boolean).join(" ") : "System / Auto";
+            const typeLabel = tx.transaction_type.replace('_', ' ').toUpperCase();
+            
+            const isDeduction = ["dispense", "expiry_disposal"].includes(tx.transaction_type);
+            const qtyDisplay = (isDeduction && tx.quantity > 0 ? "-" : tx.quantity > 0 ? "+" : "") + tx.quantity;
+            const qtyColor = isDeduction ? "var(--error)" : "var(--success)";
+
+            return `<tr>
+              <td style="font-size:12.5px; color: var(--text-secondary);">${fmtDateTime(tx.logged_at)}</td>
+              <td><span style="font-weight:700;">${esc(itemName)}</span> <div style="font-size:11.5px; color:var(--text-secondary);">Batch: <code>${esc(bNum)}</code></div></td>
+              <td><span class="badge badge-tx-${tx.transaction_type}">${esc(typeLabel)}</span></td>
+              <td><strong style="color: ${qtyColor}; font-size:15px;">${qtyDisplay}</strong></td>
+              <td style="font-size:12.5px;">${esc(tx.reference_type || "—")}</td>
+              <td style="font-size:12.5px;">${esc(user)}</td>
+            </tr>`;
+          }).join("");
+
+          document.getElementById("tx-page-info").textContent = `Showing ${start + 1}–${Math.min(start + PAGE_SIZE, txFiltered.length)} of ${txFiltered.length}`;
+          renderPagination("tx-pagination", txFiltered.length, txPage, (p) => { txPage = p; renderTxTable(); });
+        }
+
+        document.getElementById("tx-search").addEventListener("input", applyTxFilters);
+        document.getElementById("tx-type-filter").addEventListener("change", applyTxFilters);
+
+        // Transaction Movement Modal
+        const txModal = document.getElementById("tx-modal");
+
+        window.openTxModalForBatch = function (batchId) {
+          const b = allBatches.find(x => x.batch_id === batchId);
+          if (!b) return;
+
+          document.getElementById("tx-batch-id").value = batchId;
+          document.getElementById("tx-item-info").textContent = b.inventory_items?.name || "Item #" + b.item_id;
+          document.getElementById("tx-batch-info").textContent = `Batch #${b.batch_number} — Qty Remaining: ${b.quantity_remaining}`;
+          document.getElementById("tx-type").value = "dispense";
+          document.getElementById("tx-quantity").value = "";
+          document.getElementById("tx-notes").value = "";
+
+          txModal.classList.add("show");
+        };
+
+        ["tx-modal-close", "tx-cancel"].forEach(id => document.getElementById(id).addEventListener("click", () => txModal.classList.remove("show")));
+
+        document.getElementById("tx-save").addEventListener("click", async (e) => {
+          e.preventDefault();
+          const batchId = parseInt(document.getElementById("tx-batch-id").value);
+          const type = document.getElementById("tx-type").value;
+          const inputQty = parseInt(document.getElementById("tx-quantity").value);
+          const notes = document.getElementById("tx-notes").value.trim();
+
+          const batch = allBatches.find(b => b.batch_id === batchId);
+          if (!batch || isNaN(inputQty) || inputQty <= 0) {
+            showToast("Please enter a valid quantity.", "warning");
+            return;
+          }
+
+          let finalQty = inputQty;
+          let newRemaining = batch.quantity_remaining;
+
+          if (type === "dispense" || type === "expiry_disposal") {
+            if (inputQty > batch.quantity_remaining) {
+              showToast(`Cannot deduct ${inputQty} units. Only ${batch.quantity_remaining} remaining in this batch.`, "warning");
+              return;
+            }
+            finalQty = -inputQty;
+            newRemaining = batch.quantity_remaining - inputQty;
+          } else if (type === "receipt") {
+            finalQty = inputQty;
+            newRemaining = batch.quantity_remaining + inputQty;
+          } else if (type === "adjustment") {
+            // Can be positive or negative based on manual input context; here we treat entered value as new remaining or adjustment
+            finalQty = inputQty - batch.quantity_remaining;
+            newRemaining = inputQty;
+          }
+
+          const btn = document.getElementById("tx-save");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Submitting…';
+
+          try {
+            // Update Batch Remaining
+            const { error: batchErr } = await db.from("inventory_batches").update({
+              quantity_remaining: newRemaining
+            }).eq("batch_id", batchId);
+
+            if (batchErr) throw batchErr;
+
+            // Insert Transaction Log
+            const { error: txErr } = await db.from("inventory_transactions").insert({
+              batch_id: batchId,
+              transaction_type: type,
+              quantity: finalQty,
+              reference_type: notes || `manual_${type}`,
+              performed_by: session.account_id
+            });
+
+            if (txErr) throw txErr;
+
+            await db.from("audit_trail").insert({
+              account_id: session.account_id,
+              action: "inventory_transaction",
+              table_name: "inventory_transactions",
+              description: `Stock ${type}: ${finalQty} units for batch #${batch.batch_number}`
+            });
+
+            showToast("Stock movement logged successfully.", "success");
+            txModal.classList.remove("show");
+            await loadData();
+          } catch (err) {
+            showToast("Failed to record movement: " + err.message, "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> Submit Movement';
+          }
+        });
+
+        // ---------- TAB 4: VACCINES CATALOG ----------
+        function applyVaccinesFilters() {
+          const q = document.getElementById("vaccines-search").value.trim().toLowerCase();
+          const target = document.getElementById("vaccines-target-filter").value;
+
+          vaccinesFiltered = allVaccines.filter(v => {
+            if (q && !v.vaccine_name.toLowerCase().includes(q) && !(v.notes || "").toLowerCase().includes(q)) return false;
+            if (target && v.target_recipients !== target) return false;
+            return true;
+          });
+          vaccinesPage = 1;
+          renderVaccinesTable();
+        }
+
+        function renderVaccinesTable() {
+          const start = (vaccinesPage - 1) * PAGE_SIZE;
+          const slice = vaccinesFiltered.slice(start, start + PAGE_SIZE);
+          const tbody = document.getElementById("vaccines-tbody");
+
+          if (vaccinesFiltered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-syringe" style="font-size:32px;margin-bottom:12px;display:block;color:var(--brand-primary);"></i>No vaccines found in catalog.</td></tr>`;
+            document.getElementById("vaccines-page-info").textContent = "Showing 0 of 0";
+            document.getElementById("vaccines-pagination").innerHTML = "";
+            return;
+          }
+
+          tbody.innerHTML = slice.map(v => {
+            return `<tr>
+              <td><span style="font-weight: 700; color: var(--text-primary);">${esc(v.vaccine_name)}</span></td>
+              <td>Dose ${v.dose_number}</td>
+              <td>${v.recommended_age_months} month(s)</td>
+              <td><span class="badge badge-${v.target_recipients === 'child' ? 'mother' : 'admin'}">${esc(v.target_recipients.toUpperCase())}</span></td>
+              <td>Category ${v.poster_category ?? '—'}</td>
+              <td style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size:12.5px;">${esc(v.notes || "—")}</td>
+              <td style="text-align: center;">
+                <div style="display: flex; gap: 6px; justify-content: center;">
+                  <button class="btn btn-sm btn-outline-pink btn-icon" title="Edit Vaccine" onclick="openEditVaccine(${v.vaccine_id})"><i class="fa-solid fa-pen"></i></button>
+                  <button class="btn btn-sm btn-icon" style="background:var(--error-10);color:var(--error);border:none;" title="Delete Vaccine" onclick="confirmDeleteVaccine(${v.vaccine_id})"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </td>
+            </tr>`;
+          }).join("");
+
+          document.getElementById("vaccines-page-info").textContent = `Showing ${start + 1}–${Math.min(start + PAGE_SIZE, vaccinesFiltered.length)} of ${vaccinesFiltered.length}`;
+          renderPagination("vaccines-pagination", vaccinesFiltered.length, vaccinesPage, (p) => { vaccinesPage = p; renderVaccinesTable(); });
+        }
+
+        document.getElementById("vaccines-search").addEventListener("input", applyVaccinesFilters);
+        document.getElementById("vaccines-target-filter").addEventListener("change", applyVaccinesFilters);
+
+        // Vaccine Modal
+        const vaccineModal = document.getElementById("vaccine-modal");
+        document.getElementById("btn-open-vaccine-modal").addEventListener("click", () => openVaccineModal());
+
+        window.openVaccineModal = function (v = null) {
+          document.getElementById("vaccine-id").value = v ? v.vaccine_id : "";
+          document.getElementById("vaccine-name").value = v ? v.vaccine_name : "";
+          document.getElementById("vaccine-dose").value = v ? v.dose_number : 1;
+          document.getElementById("vaccine-age").value = v ? v.recommended_age_months : 0;
+          document.getElementById("vaccine-target").value = v ? v.target_recipients : "child";
+          document.getElementById("vaccine-poster").value = v ? (v.poster_category ?? "") : "";
+          document.getElementById("vaccine-notes").value = v ? (v.notes || "") : "";
+          document.getElementById("vaccine-modal-title").textContent = v ? "Edit Vaccine in Catalog" : "Add Vaccine to Catalog";
+
+          vaccineModal.classList.add("show");
+        };
+
+        window.openEditVaccine = function (id) {
+          const v = allVaccines.find(x => x.vaccine_id === id);
+          if (v) openVaccineModal(v);
+        };
+
+        ["vaccine-modal-close", "vaccine-cancel"].forEach(id => document.getElementById(id).addEventListener("click", () => vaccineModal.classList.remove("show")));
+
+        document.getElementById("vaccine-save").addEventListener("click", async (e) => {
+          e.preventDefault();
+          const id = document.getElementById("vaccine-id").value;
+          const name = document.getElementById("vaccine-name").value.trim();
+          const dose = parseInt(document.getElementById("vaccine-dose").value);
+          const age = parseFloat(document.getElementById("vaccine-age").value);
+          const target = document.getElementById("vaccine-target").value;
+          const poster = document.getElementById("vaccine-poster").value ? parseInt(document.getElementById("vaccine-poster").value) : null;
+          const notes = document.getElementById("vaccine-notes").value.trim();
+          const createInv = document.getElementById("vaccine-create-inventory").checked;
+
+          if (!name || isNaN(dose) || isNaN(age) || !target) {
+            showToast("Please fill in all required vaccine details.", "warning");
+            return;
+          }
+
+          const btn = document.getElementById("vaccine-save");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Saving…';
+
+          try {
+            if (id) {
+              const { error } = await db.from("vaccines").update({
+                vaccine_name: name, dose_number: dose, recommended_age_months: age,
+                target_recipients: target, poster_category: poster, notes
+              }).eq("vaccine_id", parseInt(id));
+
+              if (error) throw error;
+              showToast("Vaccine catalog updated.", "success");
+            } else {
+              const { error } = await db.from("vaccines").insert({
+                vaccine_name: name, dose_number: dose, recommended_age_months: age,
+                target_recipients: target, poster_category: poster, notes
+              });
+
+              if (error) throw error;
+
+              await db.from("audit_trail").insert({
+                account_id: session.account_id,
+                action: "create_vaccine",
+                table_name: "vaccines",
+                description: `Added vaccine: ${name} (Dose ${dose})`
+              });
+
+              if (createInv) {
+                const existingInv = allItems.find(i => i.name.toLowerCase() === name.toLowerCase());
+                if (!existingInv) {
+                  await db.from("inventory_items").insert({
+                    name, item_type: "vaccine", unit_of_measure: "vials", minimum_stock_threshold: 50
+                  });
+                }
+              }
+
+              showToast("Vaccine added to catalog.", "success");
+            }
+
+            vaccineModal.classList.remove("show");
+            await loadData();
+          } catch (err) {
+            showToast("Failed to save vaccine: " + err.message, "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Vaccine';
+          }
+        });
+
+        window.confirmDeleteVaccine = function (id) {
+          const v = allVaccines.find(x => x.vaccine_id === id);
+          if (!v) return;
+          deleteActionType = "vaccine";
+          deleteTargetId = id;
+          document.getElementById("delete-item-name").textContent = `${v.vaccine_name} (Dose ${v.dose_number})`;
+          document.getElementById("delete-warning-sub").textContent = "Deleting this vaccine will remove it from the immunization schedule options.";
+          document.getElementById("delete-modal").classList.add("show");
+        };
+
+        // ---------- SHARED DELETE CONFIRMATION HANDLER ----------
+        ["delete-modal-close", "delete-cancel"].forEach(id => document.getElementById(id).addEventListener("click", () => document.getElementById("delete-modal").classList.remove("show")));
+
+        document.getElementById("delete-confirm").addEventListener("click", async () => {
+          if (!deleteActionType || !deleteTargetId) return;
+
+          const btn = document.getElementById("delete-confirm");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Deleting…';
+
+          try {
+            if (deleteActionType === "item") {
+              const { error } = await db.from("inventory_items").delete().eq("item_id", deleteTargetId);
+              if (error) throw error;
+              await db.from("audit_trail").insert({
+                account_id: session.account_id, action: "delete_inventory_item", table_name: "inventory_items",
+                description: `Deleted inventory item #${deleteTargetId}`
+              });
+              showToast("Inventory item deleted.", "success");
+            } else if (deleteActionType === "batch") {
+              const { error } = await db.from("inventory_batches").delete().eq("batch_id", deleteTargetId);
+              if (error) throw error;
+              await db.from("audit_trail").insert({
+                account_id: session.account_id, action: "delete_inventory_batch", table_name: "inventory_batches",
+                description: `Deleted inventory batch #${deleteTargetId}`
+              });
+              showToast("Batch deleted.", "success");
+            } else if (deleteActionType === "vaccine") {
+              const { error } = await db.from("vaccines").delete().eq("vaccine_id", deleteTargetId);
+              if (error) throw error;
+              await db.from("audit_trail").insert({
+                account_id: session.account_id, action: "delete_vaccine", table_name: "vaccines",
+                description: `Deleted vaccine #${deleteTargetId}`
+              });
+              showToast("Vaccine deleted from catalog.", "success");
+            }
+
+            document.getElementById("delete-modal").classList.remove("show");
+            await loadData();
+          } catch (err) {
+            showToast("Delete failed: " + err.message, "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete';
+          }
+        });
+
+        // Pagination Component Helper
+        function renderPagination(containerId, totalCount, currentPage, onPageChange) {
+          const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+          const container = document.getElementById(containerId);
+          if (totalPages <= 1) { container.innerHTML = ""; return; }
+
+          let html = `<button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="gotoPageHandler('${containerId}', ${currentPage - 1})"><i class="fa-solid fa-chevron-left"></i></button>`;
+          for (let i = 1; i <= totalPages; i++) {
+            if (totalPages > 7 && i > 2 && i < currentPage - 1) { html += '<span>…</span>'; i = currentPage - 1; continue; }
+            if (totalPages > 7 && i > currentPage + 1 && i < totalPages - 1) { html += '<span>…</span>'; i = totalPages - 1; continue; }
+            html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="gotoPageHandler('${containerId}', ${i})">${i}</button>`;
+          }
+          html += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="gotoPageHandler('${containerId}', ${currentPage + 1})"><i class="fa-solid fa-chevron-right"></i></button>`;
+
+          container.innerHTML = html;
+          window.paginationHandlers = window.paginationHandlers || {};
+          window.paginationHandlers[containerId] = onPageChange;
+        }
+
+        window.gotoPageHandler = function (containerId, pageNum) {
+          if (window.paginationHandlers?.[containerId]) {
+            window.paginationHandlers[containerId](pageNum);
+          }
+        };
+
+        // Initialize Load
+        loadData();
+      })();
+    </script>
+  </body>
+</html>
