@@ -136,9 +136,11 @@ class _ChangeTemporaryPasswordScreenState
   Widget build(BuildContext context) {
     final strength = _calculateStrength(_newPasswordController.text);
 
-    return Scaffold(
-      backgroundColor: AppColors.bgPrimary,
-      body: SafeArea(
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: AppColors.bgPrimary,
+        body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -242,28 +244,10 @@ class _ChangeTemporaryPasswordScreenState
                 leftIcon: Icons.save,
               ),
               
-              const SizedBox(height: 16),
-              
-              TextButton(
-                onPressed: _isSkipping ? null : _skipForNow,
-                child: _isSkipping
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.brandPrimary,
-                        ),
-                      )
-                    : const Text(
-                        'Remind me later',
-                        style: TextStyle(color: AppColors.textSecondary),
-                      ),
-              ),
             ],
           ),
         ),
       ),
-    );
+    ));
   }
 }

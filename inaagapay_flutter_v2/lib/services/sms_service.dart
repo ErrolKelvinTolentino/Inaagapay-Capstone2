@@ -65,7 +65,14 @@ class SmsService {
       
       return false;
     } catch (e) {
-      if (kDebugMode) print('Error sending SMS message: $e');
+      if (kDebugMode) {
+        print('Error sending SMS message: $e');
+        print('\n--- [FALLBACK SMS SENDER (CORS/Network Error)] ---');
+        print('Recipient: $phoneNumber');
+        print('Content: $message');
+        print('--------------------------------------------------\n');
+        if (kIsWeb) return true; // Bypass CORS block for web developers
+      }
       return false;
     }
   }
@@ -128,7 +135,14 @@ class SmsService {
       
       return false;
     } catch (e) {
-      if (kDebugMode) print('Error sending SMS: $e');
+      if (kDebugMode) {
+        print('Error sending SMS: $e');
+        print('\n--- [FALLBACK OTP SENDER (CORS/Network Error)] ---');
+        print('Recipient: $phoneNumber');
+        print('OTP Code: $code');
+        print('-------------------------------------------------\n');
+        if (kIsWeb) return true; // Bypass CORS block for web developers
+      }
       return false;
     }
   }
@@ -181,7 +195,14 @@ class SmsService {
       }
       return false;
     } catch (e) {
-      if (kDebugMode) print('Error sending OTP via priority: $e');
+      if (kDebugMode) {
+        print('Error sending OTP via priority: $e');
+        print('\n--- [FALLBACK OTP PRIORITY SENDER (CORS/Network Error)] ---');
+        print('Recipient: $phoneNumber');
+        print('OTP Code: $code');
+        print('----------------------------------------------------------\n');
+        if (kIsWeb) return true; // Bypass CORS block for web developers
+      }
       return false;
     }
   }

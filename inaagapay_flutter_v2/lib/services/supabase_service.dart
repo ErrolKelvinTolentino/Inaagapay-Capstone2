@@ -116,7 +116,7 @@ class SupabaseService {
       final list = await client
           .from('accounts')
           .select('account_id')
-          .or('phone_number.eq.$format1,phone_number.eq.$format2,phone_number.eq.$format3')
+          .or('phone_number.eq."$format1",phone_number.eq."$format2",phone_number.eq."$format3"')
           .limit(1);
           
       return list.isEmpty;
@@ -280,29 +280,84 @@ class SupabaseService {
     }
   }
 
+  // Resolves an account from an identifier (email or phone) in a format-agnostic way
+  static Future<Map<String, dynamic>?> _resolveAccountByIdentifier(String contact) async {
+    final cleanContact = contact.trim();
+    if (cleanContact.isEmpty) return null;
+
+    final isEmail = cleanContact.contains('@');
+    final digits = cleanContact.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (isEmail) {
+      final account = await client
+          .from('accounts')
+          .select('account_id, email_address, phone_number, reset_code, reset_expires, verification_code, verification_expires')
+          .eq('email_address', cleanContact)
+          .maybeSingle();
+      if (account != null) {
+        return {
+          'account': account,
+          'field': 'account_id',
+          'value': account['account_id'],
+          'isPhone': false,
+        };
+      }
+    } else if (digits.isNotEmpty) {
+      String format1 = digits;
+      String format2 = digits;
+      String format3 = digits;
+      
+      if (digits.startsWith('0') && digits.length == 11) {
+        format1 = '0${digits.substring(1)}';
+        format2 = '+63${digits.substring(1)}';
+        format3 = '63${digits.substring(1)}';
+      } else if (digits.startsWith('63') && digits.length == 12) {
+        format1 = '0${digits.substring(2)}';
+        format2 = '+$digits';
+        format3 = digits;
+      } else if (digits.length == 10) {
+        format1 = '0$digits';
+        format2 = '+63$digits';
+        format3 = '63$digits';
+      }
+      
+      final account = await client
+          .from('accounts')
+          .select('account_id, email_address, phone_number, reset_code, reset_expires, verification_code, verification_expires')
+          .or('phone_number.eq."$format1",phone_number.eq."$format2",phone_number.eq."$format3"')
+          .maybeSingle();
+          
+      if (account != null) {
+        return {
+          'account': account,
+          'field': 'account_id',
+          'value': account['account_id'],
+          'isPhone': true,
+        };
+      }
+    }
+    return null;
+  }
+
   // Forgot Password (supports email or phone)
   static Future<Map<String, dynamic>> forgotPassword(String contact) async {
     try {
       if (kDebugMode) debugPrint('Sending password reset to: $contact');
 
-      final isPhone = isValidPhilippineNumber(contact);
-      final field = isPhone ? 'phone_number' : 'email_address';
-      final formattedContact =
-          isPhone ? SmsService.formatPhilippineNumber(contact) : contact;
-
-      final account = await client
-          .from('accounts')
-          .select('account_id')
-          .eq(field, formattedContact)
-          .maybeSingle();
-
-      if (account == null) {
+      final resolved = await _resolveAccountByIdentifier(contact);
+      if (resolved == null) {
+        final isPhone = isValidPhilippineNumber(contact);
         return {
           'success': false,
           'message':
               'No account found with this ${isPhone ? 'phone number' : 'email address'}.',
         };
       }
+
+      final account = resolved['account'] as Map<String, dynamic>;
+      final field = resolved['field'] as String;
+      final value = resolved['value'];
+      final isPhone = resolved['isPhone'] as bool;
 
       final code = _generateOTP();
       final expires =
@@ -311,10 +366,14 @@ class SupabaseService {
       await client.from('accounts').update({
         'reset_code': code,
         'reset_expires': expires,
-      }).eq(field, formattedContact);
+      }).eq(field, value);
+
+      final contactForCode = isPhone
+          ? (account['phone_number'] ?? contact)
+          : (account['email_address'] ?? contact);
 
       final sent = await EmailService.sendPasswordResetCode(
-        contact: formattedContact,
+        contact: contactForCode,
         code: code,
         channel: isPhone ? 'sms' : 'email',
       );
@@ -338,18 +397,13 @@ class SupabaseService {
   // Verify code (supports email or phone)
   static Future<bool> verifyCode(String contact, String code) async {
     try {
-      final isPhone = isValidPhilippineNumber(contact);
-      final field = isPhone ? 'phone_number' : 'email_address';
-      final formattedContact =
-          isPhone ? SmsService.formatPhilippineNumber(contact) : contact;
+      final resolved = await _resolveAccountByIdentifier(contact);
+      if (resolved == null) return false;
 
-      final account = await client
-          .from('accounts')
-          .select('verification_code, verification_expires')
-          .eq(field, formattedContact)
-          .maybeSingle();
+      final account = resolved['account'] as Map<String, dynamic>;
+      final field = resolved['field'] as String;
+      final value = resolved['value'];
 
-      if (account == null) return false;
       if (account['verification_code'] != code) return false;
 
       final expires = DateTime.parse(account['verification_expires']);
@@ -359,7 +413,7 @@ class SupabaseService {
         'is_verified': true,
         'verification_code': null,
         'verification_expires': null,
-      }).eq(field, formattedContact);
+      }).eq(field, value);
 
       return true;
     } catch (e) {
@@ -371,18 +425,10 @@ class SupabaseService {
   // Verify reset code
   static Future<bool> verifyResetCode(String contact, String code) async {
     try {
-      final isPhone = isValidPhilippineNumber(contact);
-      final field = isPhone ? 'phone_number' : 'email_address';
-      final formattedContact =
-          isPhone ? SmsService.formatPhilippineNumber(contact) : contact;
+      final resolved = await _resolveAccountByIdentifier(contact);
+      if (resolved == null) return false;
 
-      final account = await client
-          .from('accounts')
-          .select('reset_code, reset_expires')
-          .eq(field, formattedContact)
-          .maybeSingle();
-
-      if (account == null) return false;
+      final account = resolved['account'] as Map<String, dynamic>;
       if (account['reset_code'] != code) return false;
 
       final expires = DateTime.parse(account['reset_expires']);
@@ -399,18 +445,20 @@ class SupabaseService {
   static Future<Map<String, dynamic>> resetPasswordWithNew(
       String contact, String newPassword) async {
     try {
-      final isPhone = isValidPhilippineNumber(contact);
-      final field = isPhone ? 'phone_number' : 'email_address';
-      final formattedContact =
-          isPhone ? SmsService.formatPhilippineNumber(contact) : contact;
+      final resolved = await _resolveAccountByIdentifier(contact);
+      if (resolved == null) {
+        return {'success': false, 'message': 'Account not found'};
+      }
 
+      final field = resolved['field'] as String;
+      final value = resolved['value'];
       final newHash = _hashPassword(newPassword);
 
       await client.from('accounts').update({
         'password_hash': newHash,
         'reset_code': null,
         'reset_expires': null,
-      }).eq(field, formattedContact);
+      }).eq(field, value);
 
       return {'success': true, 'message': 'Password reset successfully'};
     } catch (e) {
@@ -478,7 +526,7 @@ class SupabaseService {
         }
         
         accountResponse = await query
-            .or('phone_number.eq.$format1,phone_number.eq.$format2,phone_number.eq.$format3')
+            .or('phone_number.eq."$format1",phone_number.eq."$format2",phone_number.eq."$format3"')
             .maybeSingle();
       }
 
@@ -1164,7 +1212,7 @@ class SupabaseService {
                 )
               ''')
               .eq('account_type', 'mother')
-              .or('phone_number.eq.$format1,phone_number.eq.$format2,phone_number.eq.$format3')
+              .or('phone_number.eq."$format1",phone_number.eq."$format2",phone_number.eq."$format3"')
               .maybeSingle();
         }
       }
