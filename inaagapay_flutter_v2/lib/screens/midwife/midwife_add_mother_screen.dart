@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../models/ocr_result.dart';
+import '../../models/obstetric_score.dart';
 import '../../services/auth_storage.dart';
 import '../../services/groq_service.dart';
 import '../../services/supabase_service.dart';
@@ -764,16 +765,18 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
   List<String> _evaluatePregnancyRisk() {
     final factors = <String>[];
 
-    // 1. Demographics — Adolescent pregnancy
+    // 1. Demographics — Adolescent pregnancy (<19)
     if (_calculatedAge != null && _calculatedAge! < 19) {
       factors.add('Maternal age below 19 years');
     }
 
-    // 1. Demographics — Advanced maternal age (first pregnancy only per Annex P)
-    if (_calculatedAge != null &&
-        _calculatedAge! >= 35 &&
-        _pastPregnancies.isEmpty) {
-      factors.add('First pregnancy age ≥ 35 years');
+    // 1. Demographics — Advanced maternal age (≥ 35 years)
+    if (_calculatedAge != null && _calculatedAge! >= 35) {
+      if (_pastPregnancies.isEmpty) {
+        factors.add('First pregnancy age ≥ 35 years (Elderly Primigravida)');
+      } else {
+        factors.add('Advanced maternal age (≥ 35 years)');
+      }
     }
 
     // 2. Multiple gestation
@@ -782,7 +785,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       factors.add('Multiple gestation');
     }
 
-    // 3. Short interpregnancy interval
+    // 3. Short interpregnancy interval (< 6 months / 180 days)
     if (_lmp != null && _pastPregnancies.isNotEmpty) {
       DateTime? mostRecentOutcome;
       for (final p in _pastPregnancies) {
@@ -794,12 +797,12 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       if (mostRecentOutcome != null) {
         final gapDays = _lmp!.difference(mostRecentOutcome).inDays;
         if (gapDays > 0 && gapDays < 180) {
-          factors.add('Short interpregnancy interval');
+          factors.add('Short interpregnancy interval (< 6 months)');
         }
       }
     }
 
-    // 4. Obstetric History
+    // 4. Obstetric History & Grand Multiparity
     int miscarriages = 0;
     bool hasStillbirth = false;
     bool hasCs = false;
@@ -811,18 +814,25 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         if (o == 'stillbirth') hasStillbirth = true;
 
         final method = outcome.deliveryMethod?.toLowerCase() ?? '';
-        if (method.contains('cesarean') || method == 'cs') hasCs = true;
+        if (method.contains('cesarean') || method == 'cs' || method.contains('c-section')) {
+          hasCs = true;
+        }
       }
     }
-    if (miscarriages >= 3) {
-      factors.add('History of 3 or more miscarriages/abortions');
+    if (miscarriages >= 2) {
+      factors.add('History of recurrent miscarriage/abortion ($miscarriages)');
     }
     if (hasStillbirth) factors.add('History of stillbirth');
     if (hasCs) {
       factors.add('History of major obstetric surgery (Cesarean section)');
     }
 
-    // 5. Medical Conditions — ACTIVE / ONGOING only
+    final totalGravida = _pastPregnancies.length + (_lmp != null ? 1 : 0);
+    if (totalGravida >= 5) {
+      factors.add('Grand multiparity (5 or more pregnancies)');
+    }
+
+    // 5. Medical Conditions — ACTIVE / ONGOING chronic diseases
     final dohConditions = [
       'Hypertension',
       'Preeclampsia',
@@ -838,6 +848,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       'Bleeding',
       'Clotting',
       'Hemophilia',
+      'Anemia',
     ];
     for (final mc in _medicalConditions) {
       final st = mc.status.toLowerCase();
@@ -848,15 +859,35 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       }
     }
 
-    // 6. Morbid obesity (BMI >= 40, pre-pregnancy weight only)
-    if (_heightCtrl.text.isNotEmpty &&
-        _prePregnancyWeightCtrl.text.isNotEmpty) {
+    // 6. Pre-Pregnancy BMI Risk Boundaries
+    final weightStr = _knowsPrePregnancyWeight
+        ? _prePregnancyWeightCtrl.text.trim()
+        : (_bmiEstimation != null
+            ? (_bmiEstimation!['estimatedWeight'] as num?)?.toString() ?? ''
+            : _weightCtrl.text.trim());
+    if (_heightCtrl.text.isNotEmpty && weightStr.isNotEmpty) {
       final heightCm = double.tryParse(_heightCtrl.text) ?? 0;
-      final weightKg = double.tryParse(_prePregnancyWeightCtrl.text) ?? 0;
+      final weightKg = double.tryParse(weightStr) ?? 0;
       if (heightCm > 0 && weightKg > 0) {
         final heightM = heightCm / 100;
         final bmi = weightKg / (heightM * heightM);
-        if (bmi >= 40) factors.add('Morbid obesity');
+        if (bmi < 18.5) {
+          factors.add('Pre-pregnancy underweight (BMI < 18.5 kg/m²)');
+        } else if (bmi >= 40.0) {
+          factors.add('Obesity Class III (BMI ≥ 40 kg/m²)');
+        } else if (bmi >= 30.0) {
+          factors.add('Pre-pregnancy obesity (BMI ≥ 30 kg/m²)');
+        }
+      }
+    }
+
+    // 7. Clinical Alert: Drug/Material Allergies
+    for (final alg in _allergies) {
+      final aName = alg.allergen.toLowerCase();
+      if (aName.contains('penicillin') ||
+          aName.contains('latex') ||
+          aName.contains('anaphylaxis')) {
+        factors.add('Clinical Alert: ${alg.allergen} Allergy');
       }
     }
 
@@ -5268,10 +5299,103 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     );
   }
 
+  Widget _obScoreChip(String label, String value, String description) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: AppColors.brandPrimary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+            color: Colors.black87,
+          ),
+        ),
+        Text(
+          description,
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.grey.shade600,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _stepPregnancyHistory() {
+    final obScore = ObstetricScore.calculate(
+      pastPregnancies: _pastPregnancies,
+      isCurrentlyPregnant: _lmp != null,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.brandPrimary.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: AppColors.brandPrimary.withValues(alpha: 0.2)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.analytics_outlined,
+                      color: AppColors.brandPrimary, size: 18),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Derived Obstetric Score',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: AppColors.brandPrimary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPrimary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      obScore.formattedGpa,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _obScoreChip('Gravida (G)', '${obScore.gravida}', 'Pregnancies'),
+                  _obScoreChip('Para (P)', '${obScore.para}', 'Deliveries'),
+                  _obScoreChip('Abortus (A)', '${obScore.abortus}', 'Losses'),
+                ],
+              ),
+            ],
+          ),
+        ),
         if (_pastPregnancies.isEmpty)
           Container(
             decoration: BoxDecoration(

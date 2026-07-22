@@ -4753,6 +4753,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   const SizedBox(height: 8),
                   _buildInfoRow(
                       'Blood Type', profile['blood_type'] ?? 'Not set'),
+                  const SizedBox(height: 8),
+                  _buildInfoRow(
+                      'Obstetric Score (G-P-A)',
+                      'G${profile['gravida'] ?? 0} P${profile['para'] ?? 0} A${profile['abortus'] ?? 0}'),
                   if (!widget.readOnly) ...[
                     const SizedBox(height: 16),
                     Align(

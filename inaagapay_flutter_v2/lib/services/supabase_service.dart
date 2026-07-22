@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'email_service.dart';
 import 'sms_service.dart';
+import '../models/obstetric_score.dart';
 
 class SupabaseService {
   static SupabaseClient get client => Supabase.instance.client;
@@ -1333,6 +1334,11 @@ class SupabaseService {
             .eq('created_by', 'self');
       }
 
+      final obScore = ObstetricScore.calculate(
+        pastPregnancies: pastPregnancies,
+        isCurrentlyPregnant: lmp != null,
+      );
+
       await client.from('mothers').update({
         'assigned_bhc_id': assignedBhcId,
         'house_number': houseNumber,
@@ -1343,6 +1349,10 @@ class SupabaseService {
         'height': heightCm,
         'weight': weightKg,
         'blood_type': bloodType,
+        'gravida': obScore.gravida,
+        'para': obScore.para,
+        'abortus': obScore.abortus,
+        'living_children': obScore.livingChildren,
         'status': 'active',
       }).eq('mother_id', motherId);
 
@@ -1445,18 +1455,39 @@ class SupabaseService {
 
           if (outcome['place_of_delivery'] != null ||
               outcome['delivery_method'] != null) {
-            await client.from('deliveries').insert({
+            final encRow = await client.from('clinical_encounters').insert({
               'pregnancy_id': pastPregId,
-              'fetus_number': fetusNumber,
-              'delivery_date': outcome['outcome_date'],
-              'is_delivery_date_estimated':
-                  outcome['is_outcome_date_estimated'] ?? false,
-              'place_of_delivery': outcome['place_of_delivery'],
-              'delivery_method': outcome['delivery_method'],
-            });
+              'mother_id': motherId,
+              'encounter_type': 'delivery',
+              'encounter_datetime': outcome['outcome_date'] != null
+                  ? '${outcome['outcome_date']}T00:00:00'
+                  : DateTime.now().toIso8601String(),
+            }).select('encounter_id').maybeSingle();
+
+            if (encRow != null) {
+              final encId = encRow['encounter_id'] as int;
+              await client.from('deliveries').insert({
+                'encounter_id': encId,
+                'pregnancy_id': pastPregId,
+                'fetus_number': fetusNumber,
+                'delivery_date': outcome['outcome_date'],
+                'is_delivery_date_estimated':
+                    outcome['is_outcome_date_estimated'] ?? false,
+                'place_of_delivery': outcome['place_of_delivery'],
+                'delivery_method': outcome['delivery_method'],
+              });
+            }
           }
         }
       }
+
+      // Final update to preserve exact derived OB score after DB triggers fire
+      await client.from('mothers').update({
+        'gravida': obScore.gravida,
+        'para': obScore.para,
+        'abortus': obScore.abortus,
+        'living_children': obScore.livingChildren,
+      }).eq('mother_id', motherId);
 
       return {
         'success': true,
@@ -1606,6 +1637,11 @@ class SupabaseService {
           .eq('account_id', accountId)
           .maybeSingle();
 
+      final obScore = ObstetricScore.calculate(
+        pastPregnancies: pastPregnancies,
+        isCurrentlyPregnant: lmp != null,
+      );
+
       int motherId;
       if (existingMother != null) {
         motherId = existingMother['mother_id'] as int;
@@ -1620,6 +1656,10 @@ class SupabaseService {
           'height': heightCm,
           'weight': weightKg,
           'blood_type': bloodType,
+          'gravida': obScore.gravida,
+          'para': obScore.para,
+          'abortus': obScore.abortus,
+          'living_children': obScore.livingChildren,
           'status': 'active',
         }).eq('mother_id', motherId);
       } else {
@@ -1637,6 +1677,10 @@ class SupabaseService {
               'height': heightCm,
               'weight': weightKg,
               'blood_type': bloodType,
+              'gravida': obScore.gravida,
+              'para': obScore.para,
+              'abortus': obScore.abortus,
+              'living_children': obScore.livingChildren,
               'status': 'active',
             })
             .select('mother_id')
@@ -1801,18 +1845,40 @@ class SupabaseService {
 
           if (outcome['place_of_delivery'] != null ||
               outcome['delivery_method'] != null) {
-            await client.from('deliveries').insert({
+            final encRow = await client.from('clinical_encounters').insert({
               'pregnancy_id': pastPregId,
-              'fetus_number': fetusNumber,
-              'delivery_date': outcome['outcome_date'],
-              'is_delivery_date_estimated':
-                  outcome['is_outcome_date_estimated'] ?? false,
-              'place_of_delivery': outcome['place_of_delivery'],
-              'delivery_method': outcome['delivery_method'],
-            });
+              'mother_id': motherId,
+              'recorded_by': midwifeId,
+              'encounter_type': 'delivery',
+              'encounter_datetime': outcome['outcome_date'] != null
+                  ? '${outcome['outcome_date']}T00:00:00'
+                  : DateTime.now().toIso8601String(),
+            }).select('encounter_id').maybeSingle();
+
+            if (encRow != null) {
+              final encId = encRow['encounter_id'] as int;
+              await client.from('deliveries').insert({
+                'encounter_id': encId,
+                'pregnancy_id': pastPregId,
+                'fetus_number': fetusNumber,
+                'delivery_date': outcome['outcome_date'],
+                'is_delivery_date_estimated':
+                    outcome['is_outcome_date_estimated'] ?? false,
+                'place_of_delivery': outcome['place_of_delivery'],
+                'delivery_method': outcome['delivery_method'],
+              });
+            }
           }
         }
       }
+
+      // Final update to preserve exact derived OB score after DB triggers fire
+      await client.from('mothers').update({
+        'gravida': obScore.gravida,
+        'para': obScore.para,
+        'abortus': obScore.abortus,
+        'living_children': obScore.livingChildren,
+      }).eq('mother_id', motherId);
 
       final isInternalEmail = email.endsWith('@inaagapay.internal');
       bool credentialsSent = false;
