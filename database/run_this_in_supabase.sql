@@ -29,6 +29,18 @@ CREATE TABLE IF NOT EXISTS device_tokens (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS email_queue (
+    queue_id BIGSERIAL PRIMARY KEY,
+    recipient VARCHAR(255) NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    html_content TEXT NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Fix created_by check constraint on accounts if present
+ALTER TABLE accounts DROP CONSTRAINT IF EXISTS accounts_created_by_check;
+
 -- ============================================================
 -- SECTION 2: INDEXES
 -- ============================================================
@@ -43,6 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_device_tokens_account ON device_tokens(account_id
 -- ============================================================
 
 ALTER TABLE notifications DISABLE ROW LEVEL SECURITY;
+ALTER TABLE email_queue DISABLE ROW LEVEL SECURITY;
 ALTER TABLE device_tokens DISABLE ROW LEVEL SECURITY;
 ALTER TABLE checkup_schedule DISABLE ROW LEVEL SECURITY;
 
@@ -345,6 +358,15 @@ $$ LANGUAGE plpgsql;
 
 -- SELECT cron.schedule('day-before-checkup-sms', '0 22 * * *', 'SELECT send_day_before_checkup_sms()');
 -- Runs at 6 AM PHT (22:00 UTC previous day)
+
+-- ============================================================
+-- ADD STOCK TRACKING PER BHC
+-- ============================================================
+ALTER TABLE public.inventory_batches ADD COLUMN IF NOT EXISTS facility_id bigint REFERENCES public.health_facilities(facility_id) ON DELETE SET NULL;
+ALTER TABLE public.inventory_transactions ADD COLUMN IF NOT EXISTS facility_id bigint REFERENCES public.health_facilities(facility_id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_inventory_batches_facility ON public.inventory_batches(facility_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_transactions_facility ON public.inventory_transactions(facility_id);
 
 -- ============================================================
 -- DONE! You should see "Success" with no errors.

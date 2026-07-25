@@ -27,6 +27,7 @@
             <i class="fa-solid fa-bars"></i>
           </button>
           <img src="../images/logo_icon.png" alt="InaAgapay" class="header-logo" />
+          <img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" />
         </div>
         <div class="header-right">
           <span class="header-badge">Admin Portal</span>
@@ -42,8 +43,9 @@
         <ul class="sidebar-nav">
           <li><a href="dashboard.html"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
           <li><a href="accounts.html"><i class="fa-solid fa-users"></i> Account Management</a></li>
-          <li><a href="account-create.html"><i class="fa-solid fa-user-plus"></i> Account Creation</a></li>
           <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
+          <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
+          <li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li>
         </ul>
         <div class="sidebar-divider"></div>
         <span class="sidebar-section-label">Patient Management</span>
@@ -71,9 +73,6 @@
           <div class="page-actions" style="display: flex; gap: 8px;">
             <button class="btn btn-primary btn-sm" id="export-btn"><i class="fa-solid fa-file-pdf"></i> Download PDF Report</button>
             <button class="btn btn-secondary btn-sm" id="refresh-btn"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
-            <button class="btn btn-primary btn-sm" id="analyze-activity-btn">
-              <i class="fa-solid fa-microchip"></i> Analyze Activity
-            </button>
           </div>
         </div>
 
@@ -151,7 +150,7 @@
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    <script src="ai-groq.js"></script>
+    <script src="common-security.js"></script>
     <script>
       (function(){
         const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
@@ -160,6 +159,8 @@
         const SESSION_KEY = "inaagapay_admin_session";
         const session = (()=>{ try{ return JSON.parse(localStorage.getItem(SESSION_KEY)); }catch{ return null; }})();
         if(!session || session.account_type !== "admin"){ window.location.href="../index.html"; return; }
+
+        if (window.verifyAdminSessionWithDB) { window.verifyAdminSessionWithDB(db); }
 
         // ----- RESOLVE CACHE -----
         const resolveCache = new Map();
@@ -262,9 +263,12 @@
             const name = await resolveAccountName(value);
             return name || 'Unknown User';
           }
-          if((key === 'created_by' || key === 'updated_by' || key === 'deleted_by' || key === 'reviewed_by') && typeof value === 'number'){
-            const name = await resolveAccountName(value);
-            return name || 'Unknown User';
+          if(key === 'created_by' || key === 'updated_by' || key === 'deleted_by' || key === 'reviewed_by'){
+            const numericVal = typeof value === 'number' ? value : parseInt(value);
+            if(!isNaN(numericVal)){
+              const name = await resolveAccountName(numericVal);
+              return name || `User #${numericVal}`;
+            }
           }
           if(key === 'ai_response_id' && typeof value === 'number'){
             const aiLabel = await resolveAIResponseLabel(value);
@@ -312,12 +316,24 @@
         async function loadAudit(){
           try{
             const { data, error } = await db.from('audit_trail').select('*, accounts(first_name, last_name, email_address, account_type)').order('action_timestamp',{ascending:false}).limit(5000);
-            if(error) throw error;
-            allLogs = data||[];
+            if(!error && data){
+              allLogs = data;
+            } else {
+              // Resilient Fallback Query without FK join
+              const { data: baseLogs, error: logErr } = await db.from('audit_trail').select('*').order('action_timestamp',{ascending:false}).limit(5000);
+              if (logErr) throw logErr;
+              const accountIds = [...new Set((baseLogs||[]).map(l=>l.account_id).filter(Boolean))];
+              let accMap = {};
+              if (accountIds.length > 0) {
+                const { data: accs } = await db.from('accounts').select('account_id, first_name, last_name, email_address, account_type').in('account_id', accountIds);
+                (accs||[]).forEach(a => accMap[a.account_id] = a);
+              }
+              allLogs = (baseLogs||[]).map(l => ({ ...l, accounts: accMap[l.account_id] || null }));
+            }
             renderStats();
             applyFilters();
           }catch(e){
-            document.getElementById('audit-tbody').innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--error);">Error: ${esc(e.message)}</td></tr>`;
+            document.getElementById('audit-tbody').innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--error);">Error loading activity log: ${esc(e.message)}</td></tr>`;
           }
         }
 
@@ -557,9 +573,13 @@
 
         document.getElementById('refresh-btn')?.addEventListener('click',loadAudit);
         document.getElementById('sidebar-toggle')?.addEventListener('click',()=>document.querySelector('.app-sidebar')?.classList.toggle('open'));
-        document.getElementById('logout-btn')?.addEventListener('click',()=>{
+        document.getElementById('logout-btn')?.addEventListener('click', async ()=>{
           if(confirm('Logout?')){
-            db.from('audit_trail').insert({ account_id:session.account_id, action:'logout', description:'Logged out from admin portal' }).catch(e=>console.warn);
+            try {
+              await db.from('audit_trail').insert({ account_id:session.account_id, action:'logout', description:'Logged out from admin portal' });
+            } catch (e) {
+              console.warn(e);
+            }
             localStorage.removeItem(SESSION_KEY);
             window.location.href='../index.html';
           }

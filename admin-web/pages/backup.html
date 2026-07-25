@@ -83,6 +83,11 @@
             alt="InaAgapay"
             class="header-logo"
           />
+          <img
+            src="../images/inaagapay_name.png"
+            alt="InaAgapay"
+            class="header-logo-label"
+          />
         </div>
         <div class="header-right">
           <span class="header-badge">Admin Portal</span>
@@ -108,13 +113,18 @@
             >
           </li>
           <li>
-            <a href="account-create.html"
-              ><i class="fa-solid fa-user-plus"></i> Account Creation</a
+            <a href="midwife-assignment.html"
+              ><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a
             >
           </li>
           <li>
-            <a href="midwife-assignment.html"
-              ><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a
+            <a href="inventory.html"
+              ><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a
+            >
+          </li>
+          <li>
+            <a href="reports.html"
+              ><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a
             >
           </li>
         </ul>
@@ -552,6 +562,7 @@
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="common-security.js"></script>
     <script>
       (function () {
         const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
@@ -570,6 +581,8 @@
           window.location.href = "../index.html";
           return;
         }
+
+        if (window.verifyAdminSessionWithDB) { window.verifyAdminSessionWithDB(db); }
 
         document.getElementById("header-user-name").textContent =
           [session.first_name, session.last_name].filter(Boolean).join(" ") ||
@@ -652,6 +665,9 @@
           "mother_medications",
           "given_medications",
           "journal_entries",
+          "inventory_items",
+          "inventory_batches",
+          "inventory_transactions",
           "audit_trail",
         ];
 
