@@ -17,7 +17,12 @@ import '../shared/record_detail_screen.dart';
 import '../../services/mother_profile_service.dart';
 
 class MidwifeDashboard extends StatefulWidget {
-  const MidwifeDashboard({super.key});
+  final ValueNotifier<int>? refreshNotifier;
+
+  const MidwifeDashboard({
+    super.key,
+    this.refreshNotifier,
+  });
 
   @override
   State<MidwifeDashboard> createState() => _MidwifeDashboardState();
@@ -61,16 +66,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
   bool _showSearchResults = false;
 
   // BHC Visit data for chart
-  List<double> _bhcVisitValues = [0, 0, 0, 0, 0, 0, 0];
-  final List<String> _bhcVisitDays = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun'
-  ];
+  List<double> _bhcVisitValues = List.filled(7, 0.0);
+  List<String> _bhcVisitDays = [];
 
   // Computed RHU Visits this week
   int get _rhuVisitsThisWeek =>
@@ -84,12 +81,14 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
   @override
   void initState() {
     super.initState();
+    widget.refreshNotifier?.addListener(_loadDashboardData);
     _loadDashboardData();
     _searchController.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
+    widget.refreshNotifier?.removeListener(_loadDashboardData);
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
@@ -432,6 +431,13 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
         final sevenDaysAgoDate = sevenDaysAgo.toIso8601String().split('T')[0];
 
+        final nowTime = DateTime.now();
+        final currentWeekday = nowTime.weekday;
+        final sunday = currentWeekday == 7 ? nowTime : nowTime.subtract(Duration(days: currentWeekday));
+        final sundayStart = DateTime(sunday.year, sunday.month, sunday.day, 0, 0, 0);
+        final saturday = sundayStart.add(const Duration(days: 6));
+        final saturdayEnd = DateTime(saturday.year, saturday.month, saturday.day, 23, 59, 59);
+
         List<dynamic> recentCheckups = [];
         List<dynamic> recentUltrasounds = [];
         List<dynamic> recentLabTests = [];
@@ -495,7 +501,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                   .from('clinical_encounters')
                   .select('encounter_datetime')
                   .eq('encounter_type', 'checkup')
-                  .gte('encounter_datetime', sevenDaysAgo.toIso8601String())
+                  .gte('encounter_datetime', sundayStart.toIso8601String())
+                  .lte('encounter_datetime', saturdayEnd.toIso8601String())
                   .inFilter('pregnancy_id', pregnancyIds)
             else
               Future.value([]),
@@ -557,10 +564,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           // Map recentCheckups
           recentCheckups = [];
           for (final enc in recentCheckupsRaw) {
-            final checkupList = enc['checkup'] as List?;
-            final innerCheckup = checkupList != null && checkupList.isNotEmpty
-                ? checkupList.first as Map<String, dynamic>
-                : null;
+            final innerCheckup = enc['checkup'] as Map<String, dynamic>?;
             if (innerCheckup != null) {
               final double aog = ((enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0) +
                   ((enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0) / 7.0;
@@ -590,10 +594,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           // Map checkupsData
           checkupsData = [];
           for (final enc in checkupsDataRaw) {
-            final checkupList = enc['checkup'] as List?;
-            final innerCheckup = checkupList != null && checkupList.isNotEmpty
-                ? checkupList.first as Map<String, dynamic>
-                : null;
+            final innerCheckup = enc['checkup'] as Map<String, dynamic>?;
             if (innerCheckup != null) {
               final double aog = ((enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0) +
                   ((enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0) / 7.0;
@@ -618,70 +619,89 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
         _tdDosesGiven = tdResponse.length;
 
-        // Process recent visits
-        final List<Map<String, dynamic>> combinedVisits = [];
-        for (var checkup in recentCheckups) {
-          final dt = DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
-          if (dt != null) {
-            combinedVisits.add({'type': 'checkup', 'date': dt, 'record': checkup, 'id': checkup['prenatal_checkup_id'], 'pregId': checkup['pregnancy_id']});
-          }
-        }
-        for (var us in recentUltrasounds) {
-          final dt = DateTime.tryParse(us['ultrasound_date']?.toString() ?? '');
-          if (dt != null) {
-            combinedVisits.add({'type': 'ultrasound', 'date': dt, 'record': us, 'id': us['encounter_id'], 'pregId': us['pregnancy_id']});
-          }
-        }
-        for (var lt in recentLabTests) {
-          final dt = DateTime.tryParse(lt['lab_test_date']?.toString() ?? '');
-          if (dt != null) {
-            combinedVisits.add({'type': 'labtest', 'date': dt, 'record': lt, 'id': lt['encounter_id'], 'pregId': lt['pregnancy_id']});
-          }
-        }
-
-        combinedVisits.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+        // Process recent visits (based solely on checkups, with optional lab/ultrasound labels)
         _recentVisits = [];
+        
+        recentCheckups.sort((a, b) {
+          final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return db.compareTo(da);
+        });
 
-        for (var item in combinedVisits.take(3)) {
-          final pregId = item['pregId'] as int?;
+        for (var checkup in recentCheckups.take(3)) {
+          final pregId = checkup['pregnancy_id'] as int?;
           final mother = pregId != null ? _pregnancyToMotherMap[pregId] : null;
           final fullName = mother != null ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'.trim() : 'Unknown Mother';
           final motherId = mother != null ? mother['mother_id'] as int? : null;
+          final bhcPatientId = mother != null ? mother['bhc_patient_id']?.toString() : null;
+          final displayId = bhcPatientId ?? (motherId != null ? 'INA-${motherId.toString().padLeft(3, '0')}' : 'INA-000');
 
-          final dt = item['date'] as DateTime;
-          final nowTime = DateTime.now();
-          final diffDays = nowTime.difference(DateTime(dt.year, dt.month, dt.day)).inDays;
+          final dt = DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
+          if (dt == null) continue;
 
-          String timeLabel = diffDays == 0 ? 'Today' : (diffDays == 1 ? 'Yesterday' : '$diffDays days ago');
-          String visitTypeLabel = 'Prenatal Check-up';
-          if (item['type'] == 'ultrasound') {
-            visitTypeLabel = 'Ultrasound Assessment';
-          } else if (item['type'] == 'labtest') {
-            final testType = item['record']['lab_test_type'] ?? 'Lab Test';
-            visitTypeLabel = 'Lab Test ($testType)';
+          final dateString = checkup['checkup_datetime']?.toString().split('T')[0];
+
+          // Check for matching ultrasound on the same day
+          bool hasUltrasound = false;
+          for (var us in recentUltrasounds) {
+            if (us['pregnancy_id'] == pregId && us['ultrasound_date']?.toString() == dateString) {
+              hasUltrasound = true;
+              break;
+            }
           }
 
+          // Check for matching lab test on the same day
+          bool hasLabTest = false;
+          for (var lt in recentLabTests) {
+            final ltDateStr = lt['lab_test_date']?.toString().split('T')[0];
+            if (lt['pregnancy_id'] == pregId && ltDateStr == dateString) {
+              hasLabTest = true;
+              break;
+            }
+          }
+
+          final List<String> visitTypeParts = ['Prenatal Check-up'];
+          if (hasUltrasound) visitTypeParts.add('Ultrasound Record');
+          if (hasLabTest) visitTypeParts.add('Lab Test Result');
+          final visitTypeLabel = visitTypeParts.join(', ');
+
+          final diffDays = nowTime.difference(DateTime(dt.year, dt.month, dt.day)).inDays;
+          String timeLabel = diffDays == 0 ? 'Today' : (diffDays == 1 ? 'Yesterday' : '$diffDays days ago');
+
           _recentVisits.add(MidwifeVisitItem(
-            fullName: fullName,
+            name: fullName,
+            displayId: displayId,
             visitType: visitTypeLabel,
             timeLabel: timeLabel,
             onTap: () => _navigateToSearchResult({
-              'type': item['type'],
-              'id': item['id'],
+              'type': 'checkup',
+              'id': checkup['prenatal_checkup_id'],
               'motherId': motherId,
-              'record': item['record'],
+              'record': checkup,
             }),
           ));
         }
 
-        // Process BHC Chart checkup counts (past 7 days including today)
-        _bhcVisitValues = List.filled(7, 0);
+        // Process BHC Chart checkup counts (Sunday to Saturday of current week)
+        _bhcVisitValues = List.filled(7, 0.0);
+        final List<String> dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        _bhcVisitDays = [];
+        for (int i = 0; i < 7; i++) {
+          final dayDate = sundayStart.add(Duration(days: i));
+          final formattedDate = DateFormat('MMM dd').format(dayDate);
+          _bhcVisitDays.add('${dayLabels[i]}\n$formattedDate');
+        }
+
         for (final checkup in chartCheckups) {
           final dt = DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
           if (dt != null) {
             final localDt = dt.toLocal();
-            int chartIndex = localDt.weekday == 7 ? 6 : localDt.weekday - 1;
-            _bhcVisitValues[chartIndex] += 1;
+            final localDateOnly = DateTime(localDt.year, localDt.month, localDt.day);
+            final sundayStartOnly = DateTime(sundayStart.year, sundayStart.month, sundayStart.day);
+            final diffDays = localDateOnly.difference(sundayStartOnly).inDays;
+            if (diffDays >= 0 && diffDays < 7) {
+              _bhcVisitValues[diffDays] += 1;
+            }
           }
         }
 
@@ -703,7 +723,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         _thirdTrimester = 0;
         _recentVisits = [];
         _priorityTasks = [];
-        _bhcVisitValues = [0, 0, 0, 0, 0, 0, 0];
+        _bhcVisitValues = List.filled(7, 0.0);
+        _bhcVisitDays = List.generate(7, (i) => '');
         _allCheckups = [];
         _allUltrasounds = [];
         _allLabTests = [];
@@ -843,14 +864,16 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
   void _navigateToSearchResult(Map<String, dynamic> result) async {
     _clearSearch();
     if (result['type'] == 'mother') {
-      Navigator.pushNamed(context, '/mother-profile', arguments: result['id']);
+      await Navigator.pushNamed(context, '/mother-profile', arguments: result['id']);
+      if (mounted) _loadDashboardData();
     } else if (result['type'] == 'child') {
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => ChildProfilePage(childId: result['id']),
         ),
       );
+      if (mounted) _loadDashboardData();
     } else if (result['type'] == 'checkup') {
       final record = result['record'] as Map<String, dynamic>;
       final checkupId = result['id'] as int;
@@ -1422,14 +1445,21 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
       }
     }
 
-    final bestDay = _bhcVisitDays[maxIndex];
+    final List<String> fullDays = [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday'
+    ];
+    final bestDay = fullDays[maxIndex];
 
     if (maxValue == 0) {
-      return 'No visits recorded in the last 7 days.';
-    } else if (maxValue == 1) {
-      return '$bestDay had 1 prenatal visit this week.';
+      return 'No visits recorded this week.';
     } else {
-      return '$bestDay had the most prenatal visits ($maxValue visits) this week!';
+      return '$bestDay had the most visits';
     }
   }
 

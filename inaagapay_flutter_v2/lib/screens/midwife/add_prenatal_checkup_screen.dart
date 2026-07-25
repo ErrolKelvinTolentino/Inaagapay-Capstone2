@@ -398,19 +398,31 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   Future<void> _loadLatestCheckupWeight() async {
     try {
       final res = await Supabase.instance.client
-          .from('prenatal_checkups')
-          .select('checkup_weight')
+          .from('clinical_encounters')
+          .select('''
+            encounter_datetime,
+            checkup:prenatal_checkups (
+              checkup_weight
+            )
+          ''')
           .eq('pregnancy_id', widget.pregnancyId)
-          .order('checkup_datetime', ascending: false)
+          .eq('encounter_type', 'checkup')
+          .order('encounter_datetime', ascending: false)
           .limit(1)
           .maybeSingle();
 
-      if (res != null && res['checkup_weight'] != null && mounted) {
-        final latestWeight = double.tryParse(res['checkup_weight'].toString());
-        if (latestWeight != null) {
-          setState(() {
-            _weightCtrl.text = latestWeight.toStringAsFixed(1);
-          });
+      if (res != null) {
+        final checkupList = res['checkup'] as List?;
+        final innerCheckup = checkupList != null && checkupList.isNotEmpty
+            ? checkupList.first as Map<String, dynamic>
+            : null;
+        if (innerCheckup != null && innerCheckup['checkup_weight'] != null && mounted) {
+          final latestWeight = double.tryParse(innerCheckup['checkup_weight'].toString());
+          if (latestWeight != null) {
+            setState(() {
+              _weightCtrl.text = latestWeight.toStringAsFixed(1);
+            });
+          }
         }
       }
     } catch (_) {
@@ -528,21 +540,44 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
         }
       }
 
-      final previousCheckups = await client
-          .from('prenatal_checkups')
+      final rawCheckups = await client
+          .from('clinical_encounters')
           .select('''
-            prenatal_checkup_id,
-            checkup_datetime,
-            age_of_gestation,
-            checkup_weight,
-            blood_pressure_systolic,
-            blood_pressure_diastolic,
-            fetal_heart_beat,
-            remarks
+            encounter_datetime,
+            midwife_notes,
+            age_of_gestation_weeks,
+            age_of_gestation_days,
+            checkup:prenatal_checkups (
+              encounter_id,
+              checkup_weight,
+              blood_pressure_systolic,
+              blood_pressure_diastolic,
+              fetal_heart_beat
+            )
           ''')
           .eq('pregnancy_id', widget.pregnancyId)
-          .order('checkup_datetime', ascending: false)
+          .eq('encounter_type', 'checkup')
+          .order('encounter_datetime', ascending: false)
           .limit(6);
+
+      final previousCheckups = (rawCheckups as List).map((enc) {
+        final innerCheckup = enc['checkup'] as List?;
+        final checkupData = innerCheckup != null && innerCheckup.isNotEmpty
+            ? innerCheckup.first as Map<String, dynamic>
+            : null;
+        final weeks = (enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0;
+        final days = (enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0;
+        return {
+          'prenatal_checkup_id': checkupData?['encounter_id'],
+          'checkup_datetime': enc['encounter_datetime'],
+          'age_of_gestation': weeks + days / 7.0,
+          'checkup_weight': checkupData?['checkup_weight'],
+          'blood_pressure_systolic': checkupData?['blood_pressure_systolic'],
+          'blood_pressure_diastolic': checkupData?['blood_pressure_diastolic'],
+          'fetal_heart_beat': checkupData?['fetal_heart_beat'],
+          'remarks': enc['midwife_notes'],
+        };
+      }).toList();
 
       if (!mounted) return;
       setState(() {

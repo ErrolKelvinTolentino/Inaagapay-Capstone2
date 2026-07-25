@@ -54,6 +54,7 @@ class GrowthLineChart extends StatelessWidget {
             bottomTitles: AxisTitles(
   sideTitles: SideTitles(
     showTitles: true,
+    reservedSize: 38,
     interval: 1, // 👈 VERY IMPORTANT
     getTitlesWidget: (value, meta) {
       if (value % 1 != 0) {
@@ -69,7 +70,11 @@ class GrowthLineChart extends StatelessWidget {
         padding: const EdgeInsets.only(top: 8),
         child: Text(
           labels[index],
-          style: const TextStyle(fontSize: 10),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 10,
+            height: 1.2,
+          ),
         ),
       );
     },

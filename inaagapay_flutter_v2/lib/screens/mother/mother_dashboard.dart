@@ -536,10 +536,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
           .eq('pregnancy_id', _pregnancyId);
 
       final checkupsList = (checkupsRaw as List).map((enc) {
-        final checkupList = enc['checkup'] as List?;
-        final innerCheckup = checkupList != null && checkupList.isNotEmpty
-            ? checkupList.first as Map<String, dynamic>
-            : null;
+        final innerCheckup = enc['checkup'] as Map<String, dynamic>?;
         final weeks = (enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0;
         final days = (enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0;
         return {

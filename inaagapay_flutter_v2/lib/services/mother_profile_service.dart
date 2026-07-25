@@ -126,7 +126,7 @@ class MotherProfileService {
               created_at
             ),
             delivery:deliveries (
-              delivery_id,
+              delivery_id:encounter_id,
               delivery_date,
               place_of_delivery,
               delivery_method,
@@ -360,6 +360,11 @@ class MotherProfileService {
         'weight': motherResponse['weight'],
         'blood_type': motherResponse['blood_type'],
         'status': motherResponse['status'],
+        'gravida': motherResponse['gravida'],
+        'para': motherResponse['para'],
+        'abortus': motherResponse['abortus'],
+        'living_children': motherResponse['living_children'],
+        'registered_by': motherResponse['registered_by'],
 
         // Account info
         'first_name': account['first_name'],

@@ -36,7 +36,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
   String _selectedBarangayFilter = 'All';
   Timer? _searchDebounceTimer;
 
-  String _selectedSort = 'Name (A-Z)';
+  String _selectedSort = 'ID Number';
 
   // Filter options
   final List<String> _riskFilters = ['All', 'Low Risk', 'High Risk'];
@@ -131,7 +131,12 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
     }
 
     // Apply sorting
-    if (_selectedSort == 'Age (Ascending)') {
+    if (_selectedSort == 'ID Number') {
+      results.sort((a, b) => (a['mother_id'] as int? ?? 0).compareTo(b['mother_id'] as int? ?? 0));
+    } else if (_selectedSort == 'Name (A-Z)') {
+      results.sort((a, b) => (a['full_name']?.toString() ?? '')
+          .compareTo(b['full_name']?.toString() ?? ''));
+    } else if (_selectedSort == 'Age (Ascending)') {
       results.sort(
           (a, b) => (a['age'] as int? ?? 0).compareTo(b['age'] as int? ?? 0));
     } else if (_selectedSort == 'Age (Descending)') {
@@ -159,9 +164,6 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         if (dateB == null) return -1;
         return dateB.compareTo(dateA);
       });
-    } else {
-      results.sort((a, b) => (a['full_name']?.toString() ?? '')
-          .compareTo(b['full_name']?.toString() ?? ''));
     }
 
     setState(() {
@@ -511,7 +513,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
     setState(() {
       _searchController.clear();
       _searchQuery = '';
-      _selectedSort = 'Name (A-Z)';
+      _selectedSort = 'ID Number';
       _selectedRiskFilter = 'All';
       _selectedBarangayFilter = 'All';
       _applyFilters();
@@ -562,6 +564,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
+                        'ID Number',
                         'Name (A-Z)',
                         'Age (Ascending)',
                         'Age (Descending)',
@@ -577,12 +580,11 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                               setModalState(() => tempSort = sortOption);
                             }
                           },
-                          selectedColor:
-                              AppColors.brandPrimary.withValues(alpha: 0.2),
+                          selectedColor: AppColors.brandPrimary,
                           backgroundColor: AppColors.bgSecondary,
                           labelStyle: TextStyle(
                             color: isSelected
-                                ? AppColors.brandPrimary
+                                ? Colors.white
                                 : AppColors.textPrimary,
                             fontWeight: isSelected
                                 ? FontWeight.bold
@@ -619,12 +621,11 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                               setModalState(() => tempRisk = riskOption);
                             }
                           },
-                          selectedColor:
-                              AppColors.brandPrimary.withValues(alpha: 0.2),
+                          selectedColor: AppColors.brandPrimary,
                           backgroundColor: AppColors.bgSecondary,
                           labelStyle: TextStyle(
                             color: isSelected
-                                ? AppColors.brandPrimary
+                                ? Colors.white
                                 : AppColors.textPrimary,
                             fontWeight: isSelected
                                 ? FontWeight.bold
@@ -815,34 +816,33 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            AppColors.brandPrimary.withValues(alpha: 0.1),
-                        foregroundColor: AppColors.brandPrimary,
-                        elevation: 0,
+                        backgroundColor: AppColors.brandPrimary,
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                        shadowColor: AppColors.brandPrimary.withValues(alpha: 0.3),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
                       onPressed: _showFilterSortDialog,
-                      icon: const Icon(Icons.filter_list),
+                      icon: const Icon(Icons.filter_list, color: Colors.white),
                       label: const Text('Sort & Filter',
                           style: TextStyle(fontWeight: FontWeight.w600)),
                     ),
                   ),
-                  if (_selectedSort != 'Name (A-Z)' ||
+                  if (_selectedSort != 'ID Number' ||
                       _selectedRiskFilter != 'All' ||
                       _selectedBarangayFilter != 'All' ||
                       _searchQuery.isNotEmpty) ...[
                     const SizedBox(width: 12),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            AppColors.brandPrimary.withValues(alpha: 0.1),
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.brandPrimary,
+                        side: const BorderSide(color: AppColors.brandPrimary, width: 1.5),
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(
-                            vertical: 14, horizontal: 16),
+                            vertical: 14, horizontal: 20),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),

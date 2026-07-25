@@ -19,13 +19,20 @@ class MidwifeShell extends StatefulWidget {
 
 class _MidwifeShellState extends State<MidwifeShell> {
   int _currentIndex = 0;
+  final ValueNotifier<int> _refreshNotifier = ValueNotifier<int>(0);
 
-  final List<Widget> _screens = const [
-    MidwifeDashboard(),
-    MidwifeMothersScreen(),
-    MidwifeChildrenScreen(),
-    MidwifeSchedulesScreen(),
-  ];
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      MidwifeDashboard(refreshNotifier: _refreshNotifier),
+      const MidwifeMothersScreen(),
+      const MidwifeChildrenScreen(),
+      const MidwifeSchedulesScreen(),
+    ];
+  }
 
   final List<String> _titles = [
     'HOME',
@@ -39,6 +46,12 @@ class _MidwifeShellState extends State<MidwifeShell> {
     await AuthStorage.clearAll();
     if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+  }
+
+  @override
+  void dispose() {
+    _refreshNotifier.dispose();
+    super.dispose();
   }
 
   @override
@@ -90,7 +103,14 @@ class _MidwifeShellState extends State<MidwifeShell> {
               activeIcon: Icons.home,
               label: 'Home',
               isActive: _currentIndex == 0,
-              onTap: () => setState(() => _currentIndex = 0),
+              onTap: () {
+                if (_currentIndex == 0) {
+                  _refreshNotifier.value++;
+                } else {
+                  setState(() => _currentIndex = 0);
+                  _refreshNotifier.value++;
+                }
+              },
             ),
             _NavItem(
               icon: Icons.pregnant_woman_outlined,

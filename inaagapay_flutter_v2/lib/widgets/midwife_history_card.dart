@@ -80,20 +80,47 @@ class _VisitRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               /// LEFT TEXT
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      visit.fullName,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textPrimary,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            visit.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.brandPrimary.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.brandPrimary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Text(
+                            visit.displayId,
+                            style: const TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.brandPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -106,9 +133,21 @@ class _VisitRow extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
 
               /// RIGHT INDICATOR
-              _VisitTimeIndicator(label: visit.timeLabel),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _VisitTimeIndicator(label: visit.timeLabel),
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: AppColors.textSecondary,
+                    size: 20,
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -143,13 +182,15 @@ class _VisitTimeIndicator extends StatelessWidget {
 }
 
 class MidwifeVisitItem {
-  final String fullName;
+  final String name;
+  final String displayId;
   final String visitType;
   final String timeLabel;
   final VoidCallback? onTap;
 
   const MidwifeVisitItem({
-    required this.fullName,
+    required this.name,
+    required this.displayId,
     required this.visitType,
     required this.timeLabel,
     this.onTap,

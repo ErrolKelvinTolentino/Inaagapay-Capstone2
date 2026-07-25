@@ -165,9 +165,8 @@ class _RecordsScreenState extends State<RecordsScreen>
 
       final List<Map<String, dynamic>> checkupsResponse = [];
       for (final enc in (encountersResponse as List)) {
-        final checkupList = enc['checkup'] as List?;
-        final checkupMap = checkupList != null && checkupList.isNotEmpty
-            ? Map<String, dynamic>.from(checkupList.first as Map)
+        final checkupMap = enc['checkup'] != null
+            ? Map<String, dynamic>.from(enc['checkup'] as Map)
             : null;
         if (checkupMap != null) {
           checkupMap['checkup_datetime'] = enc['encounter_datetime'];
