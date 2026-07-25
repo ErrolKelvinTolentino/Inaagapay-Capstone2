@@ -176,17 +176,58 @@ class _RecordsScreenState extends State<RecordsScreen>
         }
       }
 
-      final ultrasoundsResponse = await SupabaseService.client
+      final rawUltrasounds = await SupabaseService.client
           .from('ultrasounds')
-          .select('*, recorded_by:midwives!recorded_by_midwife_id(midwife_id, account:accounts(first_name, last_name))')
+          .select('''
+            *,
+            remarks:findings_summary,
+            encounter:clinical_encounters (
+              recorded_by:midwives (
+                midwife_id,
+                account:accounts (first_name, last_name)
+              )
+            )
+          ''')
           .inFilter('pregnancy_id', pregnancyIds)
           .order('ultrasound_date', ascending: false);
 
-      final labTestsResponse = await SupabaseService.client
+      final ultrasoundsResponse = (rawUltrasounds as List).map((u) {
+        final map = Map<String, dynamic>.from(u as Map);
+        map['ultrasound_id'] = map['encounter_id'];
+        map['recorded_by'] = map['encounter']?['recorded_by'];
+        return map;
+      }).toList();
+
+      final rawLabTests = await SupabaseService.client
           .from('lab_tests')
-          .select('*, recorded_by:midwives!recorded_by_midwife_id(midwife_id, account:accounts(first_name, last_name))')
-          .inFilter('pregnancy_id', pregnancyIds)
-          .order('lab_test_date', ascending: false);
+          .select('''
+            *,
+            encounter:clinical_encounters (
+              encounter_datetime,
+              midwife_notes,
+              recorded_by:midwives (
+                midwife_id,
+                account:accounts (first_name, last_name)
+              )
+            )
+          ''')
+          .inFilter('pregnancy_id', pregnancyIds);
+
+      final labTestsResponse = (rawLabTests as List).map((l) {
+        final map = Map<String, dynamic>.from(l as Map);
+        map['lab_test_id'] = map['encounter_id'];
+        map['lab_test_date'] = map['encounter']?['encounter_datetime'];
+        map['remarks'] = map['encounter']?['midwife_notes'];
+        map['recorded_by'] = map['encounter']?['recorded_by'];
+        return map;
+      }).toList();
+
+      // Sort lab tests by date descending
+      labTestsResponse.sort((a, b) {
+        final da = DateTime.tryParse(a['lab_test_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final db = DateTime.tryParse(b['lab_test_date']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return db.compareTo(da);
+      });
 
       final maternalVitalsResponse = await SupabaseService.client
           .from('maternal_vitals')
@@ -200,7 +241,7 @@ class _RecordsScreenState extends State<RecordsScreen>
           .inFilter('pregnancy_id', pregnancyIds);
 
       final checkupIds = (checkupsResponse as List)
-          .map<int?>((c) => _toInt(c['prenatal_checkup_id']))
+          .map<int?>((c) => _toInt(c['encounter_id']))
           .whereType<int>()
           .toList();
 
@@ -209,12 +250,12 @@ class _RecordsScreenState extends State<RecordsScreen>
         final symptomRows = await SupabaseService.client
             .from('pregnancy_symptoms')
             .select(
-                'prenatal_checkup_id, symptom_type_id, notes, symptom_type:symptom_types(symptom_name, risk_category)')
-            .inFilter('prenatal_checkup_id', checkupIds);
+                'encounter_id, symptom_type_id, notes, symptom_type:symptom_types(symptom_name, risk_category)')
+            .inFilter('encounter_id', checkupIds);
 
         for (final symbol
             in (symptomRows as List).cast<Map<String, dynamic>>()) {
-          final checkupId = _toInt(symbol['prenatal_checkup_id']);
+          final checkupId = _toInt(symbol['encounter_id']);
           if (checkupId == null) continue;
           final symptomType = symbol['symptom_type'] as Map<String, dynamic>?;
           final name = symptomType?['symptom_name']?.toString() ??

@@ -40,8 +40,7 @@ class MotherProfileService {
       final pregnanciesResponse = await client.from('pregnancies').select('''
             *,
             checkups:prenatal_checkups (
-              prenatal_checkup_id,
-              age_of_gestation,
+              encounter_id,
               checkup_weight,
               blood_pressure_systolic,
               blood_pressure_diastolic,
@@ -50,67 +49,71 @@ class MotherProfileService {
               fetal_heart_tone,
               td_vaccine_dose,
               edema,
-              remarks,
               next_schedule,
               encounter:clinical_encounters (
                 encounter_datetime,
+                age_of_gestation_weeks,
+                age_of_gestation_days,
+                midwife_notes,
                 recorded_by:midwives (
                   midwife_id,
                   account:accounts (first_name, last_name)
+                ),
+                symptoms:pregnancy_symptoms (
+                  symptom_id,
+                  notes,
+                  symptom_type_id,
+                  symptom_type:symptom_types (
+                    symptom_name,
+                    risk_category
+                  )
+                ),
+                weight_gain:weight_gain_evaluations (
+                  evaluation_id,
+                  mode,
+                  status,
+                  confidence,
+                  message,
+                  flags,
+                  actual_gain,
+                  weekly_gain
                 )
-              ),
-              symptoms:pregnancy_symptoms (
-                symptom_id,
-                notes,
-                symptom_type_id,
-                symptom_type:symptom_types (
-                  symptom_name,
-                  risk_category
-                )
-              ),
-              weight_gain:weight_gain_evaluations (
-                evaluation_id,
-                mode,
-                status,
-                confidence,
-                message,
-                flags,
-                actual_gain,
-                weekly_gain
               )
             ),
             ultrasounds (
-              ultrasound_id,
+              encounter_id,
               ultrasound_date,
               ultrasound_location,
               ultrasound_image,
-              remarks,
+              remarks:findings_summary,
               health_worker_name,
               health_worker_institution,
               health_worker_profession,
               monitoring_classification,
               created_at,
-              recorded_by_midwife_id,
-              recorded_by:midwives!recorded_by_midwife_id (
-                midwife_id,
-                account:accounts (first_name, last_name)
+              encounter:clinical_encounters (
+                recorded_by:midwives (
+                  midwife_id,
+                  account:accounts (first_name, last_name)
+                )
               )
             ),
             lab_tests (
-              lab_test_id,
+              encounter_id,
               lab_test_type,
-              lab_test_date,
               lab_test_location,
               lab_test_image,
-              remarks,
               health_worker_name,
               health_worker_institution,
               health_worker_profession,
               created_at,
-              recorded_by_midwife_id,
-              recorded_by:midwives!recorded_by_midwife_id (
-                midwife_id,
-                account:accounts (first_name, last_name)
+              encounter:clinical_encounters (
+                encounter_datetime,
+                midwife_notes,
+                recorded_by:midwives (
+                  midwife_id,
+                  account:accounts (first_name, last_name)
+                )
               )
             ),
             maternal_vitals (
@@ -148,7 +151,7 @@ class MotherProfileService {
         final map = p as Map<String, dynamic>;
         final checkups = (map['checkups'] as List?) ?? const [];
         for (final c in checkups) {
-          final cid = (c as Map<String, dynamic>)['prenatal_checkup_id'];
+          final cid = (c as Map<String, dynamic>)['encounter_id'];
           if (cid is int) checkupIds.add(cid);
         }
       }
@@ -243,9 +246,15 @@ class MotherProfileService {
           if (encounter != null) {
             checkup['checkup_datetime'] = encounter['encounter_datetime'];
             checkup['midwife'] = encounter['recorded_by'];
+            final weeks = (encounter['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0;
+            final days = (encounter['age_of_gestation_days'] as num?)?.toDouble() ?? 0;
+            checkup['age_of_gestation'] = weeks + days / 7.0;
+            checkup['remarks'] = encounter['midwife_notes'];
+            checkup['symptoms'] = encounter['symptoms'];
+            checkup['weight_gain'] = encounter['weight_gain'];
           }
 
-          final checkupId = checkup['prenatal_checkup_id'];
+          final checkupId = checkup['encounter_id'];
           if (checkupId is! int) continue;
           final aiRow = aiByCheckupId[checkupId];
           if (aiRow != null) {
@@ -263,6 +272,22 @@ class MotherProfileService {
               }
             }
           }
+        }
+        
+        final ultrasounds = (pregnancy['ultrasounds'] as List?) ?? const [];
+        for (final us in ultrasounds) {
+          final usMap = us as Map<String, dynamic>;
+          usMap['ultrasound_id'] = usMap['encounter_id'];
+          usMap['recorded_by'] = usMap['encounter']?['recorded_by'];
+        }
+        
+        final labTests = (pregnancy['lab_tests'] as List?) ?? const [];
+        for (final lt in labTests) {
+          final ltMap = lt as Map<String, dynamic>;
+          ltMap['lab_test_id'] = ltMap['encounter_id'];
+          ltMap['lab_test_date'] = ltMap['encounter']?['encounter_datetime'];
+          ltMap['remarks'] = ltMap['encounter']?['midwife_notes'];
+          ltMap['recorded_by'] = ltMap['encounter']?['recorded_by'];
         }
       }
 

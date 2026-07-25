@@ -480,14 +480,14 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 .gte('encounter_datetime', sevenDaysAgo.toIso8601String()),
             SupabaseService.client
                 .from('ultrasounds')
-                .select('ultrasound_id, ultrasound_date, remarks, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
+                .select('encounter_id, ultrasound_date, remarks:findings_summary, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
                 .inFilter('pregnancy_id', allPregnancyIds)
                 .gte('ultrasound_date', sevenDaysAgoDate),
             SupabaseService.client
                 .from('lab_tests')
-                .select('lab_test_id, lab_test_type, lab_test_date, remarks, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession')
+                .select('encounter_id, lab_test_type, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession, encounter:clinical_encounters!inner(encounter_datetime, midwife_notes)')
                 .inFilter('pregnancy_id', allPregnancyIds)
-                .gte('lab_test_date', sevenDaysAgoDate),
+                .gte('encounter.encounter_datetime', sevenDaysAgo.toIso8601String()),
 
             // BHC Chart query (single call for 7 days)
             if (pregnancyIds.isNotEmpty)
@@ -509,7 +509,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                   age_of_gestation_weeks,
                   age_of_gestation_days,
                   checkup:prenatal_checkups (
-                    prenatal_checkup_id,
+                    encounter_id,
                     td_vaccine_dose,
                     pregnancy_id,
                     blood_pressure_systolic,
@@ -525,22 +525,34 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 .eq('encounter_type', 'checkup'),
             SupabaseService.client
                 .from('ultrasounds')
-                .select('ultrasound_id, ultrasound_date, remarks, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
+                .select('encounter_id, ultrasound_date, remarks:findings_summary, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
                 .inFilter('pregnancy_id', allPregnancyIds),
             SupabaseService.client
                 .from('lab_tests')
-                .select('lab_test_id, lab_test_type, lab_test_date, remarks, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession')
+                .select('encounter_id, lab_test_type, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession, encounter:clinical_encounters(encounter_datetime, midwife_notes)')
                 .inFilter('pregnancy_id', allPregnancyIds),
           ]);
 
           tdResponse = clinicalResponses[0];
           final List recentCheckupsRaw = clinicalResponses[1];
-          recentUltrasounds = clinicalResponses[2];
-          recentLabTests = clinicalResponses[3];
+          recentUltrasounds = (clinicalResponses[2] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          recentLabTests = (clinicalResponses[3] as List).map((e) {
+            final map = Map<String, dynamic>.from(e as Map);
+            final enc = map['encounter'] as Map<String, dynamic>?;
+            map['lab_test_date'] = enc?['encounter_datetime'];
+            map['remarks'] = enc?['midwife_notes'];
+            return map;
+          }).toList();
           final List chartCheckupsRaw = clinicalResponses[4];
           final List checkupsDataRaw = clinicalResponses[5];
-          ultrasoundsData = clinicalResponses[6];
-          labTestsData = clinicalResponses[7];
+          ultrasoundsData = (clinicalResponses[6] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          labTestsData = (clinicalResponses[7] as List).map((e) {
+            final map = Map<String, dynamic>.from(e as Map);
+            final enc = map['encounter'] as Map<String, dynamic>?;
+            map['lab_test_date'] = enc?['encounter_datetime'];
+            map['remarks'] = enc?['midwife_notes'];
+            return map;
+          }).toList();
 
           // Map recentCheckups
           recentCheckups = [];
@@ -553,7 +565,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
               final double aog = ((enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0) +
                   ((enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0) / 7.0;
               recentCheckups.add({
-                'prenatal_checkup_id': innerCheckup['prenatal_checkup_id'],
+                'prenatal_checkup_id': innerCheckup['encounter_id'],
                 'checkup_datetime': enc['encounter_datetime'],
                 'remarks': enc['midwife_notes'],
                 'age_of_gestation': aog,
@@ -586,7 +598,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
               final double aog = ((enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0) +
                   ((enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0) / 7.0;
               checkupsData.add({
-                'prenatal_checkup_id': innerCheckup['prenatal_checkup_id'],
+                'prenatal_checkup_id': innerCheckup['encounter_id'],
                 'checkup_datetime': enc['encounter_datetime'],
                 'remarks': enc['midwife_notes'],
                 'age_of_gestation': aog,
@@ -617,13 +629,13 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         for (var us in recentUltrasounds) {
           final dt = DateTime.tryParse(us['ultrasound_date']?.toString() ?? '');
           if (dt != null) {
-            combinedVisits.add({'type': 'ultrasound', 'date': dt, 'record': us, 'id': us['ultrasound_id'], 'pregId': us['pregnancy_id']});
+            combinedVisits.add({'type': 'ultrasound', 'date': dt, 'record': us, 'id': us['encounter_id'], 'pregId': us['pregnancy_id']});
           }
         }
         for (var lt in recentLabTests) {
           final dt = DateTime.tryParse(lt['lab_test_date']?.toString() ?? '');
           if (dt != null) {
-            combinedVisits.add({'type': 'labtest', 'date': dt, 'record': lt, 'id': lt['lab_test_id'], 'pregId': lt['pregnancy_id']});
+            combinedVisits.add({'type': 'labtest', 'date': dt, 'record': lt, 'id': lt['encounter_id'], 'pregId': lt['pregnancy_id']});
           }
         }
 
@@ -1363,7 +1375,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
             .from('pregnancy_symptoms')
             .select(
                 'symptom_type_id, notes, symptom_type:symptom_types(symptom_name, risk_category)')
-            .eq('prenatal_checkup_id', prenatalCheckupId);
+            .eq('encounter_id', prenatalCheckupId);
 
         if ((symRows as List).isNotEmpty) {
           final items = <String>[];

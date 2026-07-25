@@ -2266,13 +2266,13 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     }
   }
 
-  Future<void> _insertSymptomRecords(int prenatalCheckupId) async {
+  Future<void> _insertSymptomRecords(int encounterId) async {
     if (_symptoms.isEmpty) return;
     final payload = _symptoms
         .map(
           (entry) => {
             'pregnancy_id': widget.pregnancyId,
-            'prenatal_checkup_id': prenatalCheckupId,
+            'encounter_id': encounterId,
             'symptom_type_id': entry.symptomTypeId,
             'notes': entry.notes,
           },
@@ -2281,7 +2281,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     await Supabase.instance.client.from('pregnancy_symptoms').insert(payload);
   }
 
-  Future<void> _persistRiskAssessment(int prenatalCheckupId) async {
+  Future<void> _persistRiskAssessment(int encounterId) async {
     final snapshot = _riskSnapshot ?? _buildRuleBasedRiskSnapshot();
     final client = Supabase.instance.client;
     final originalText =
@@ -2302,7 +2302,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         .from('ai_responses')
         .select('ai_response_id')
         .eq('reference_table', 'prenatal_checkups')
-        .eq('reference_id', prenatalCheckupId)
+        .eq('reference_id', encounterId)
         .eq('response_type', 'risk_assessment')
         .maybeSingle();
 
@@ -2325,7 +2325,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           .insert({
             'response_type': 'risk_assessment',
             'reference_table': 'prenatal_checkups',
-            'reference_id': prenatalCheckupId,
+            'reference_id': encounterId,
             'ai_model': snapshot.aiModel ?? 'Rule Engine',
             'confidence_score': null,
             'response': finalAiText,
@@ -2365,7 +2365,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         'approved_by': _aiResponseApproved ? _accountId : null,
       },
       'description':
-          'Saved AI risk assessment for prenatal checkup $prenatalCheckupId.',
+          'Saved AI risk assessment for prenatal checkup $encounterId.',
     });
 
     if (wasEdited) {
@@ -2413,7 +2413,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               'factor': f.factor,
               'risk_influence': f.influence,
               'source_table': f.sourceTable ?? 'prenatal_checkups',
-              'source_id': f.sourceId ?? prenatalCheckupId,
+              'source_id': f.sourceId ?? encounterId,
             },
           )
           .toList();
@@ -2428,7 +2428,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
   /// Evaluates and persists maternal weight gain analysis for this checkup.
   Future<void> _persistWeightGainEvaluation(
-      int prenatalCheckupId, double currentWeight) async {
+      int encounterId, double currentWeight) async {
     try {
       // Guard: skip if gestational age is unknown
       final aog = _aogWeeks;
@@ -2461,15 +2461,33 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           int.tryParse(pregnancyData?['fetal_count']?.toString() ?? '') ?? 1;
 
       // Fetch all checkups for this pregnancy (ascending order)
-      final rawCheckups = await client
-          .from('prenatal_checkups')
-          .select('checkup_weight, age_of_gestation, checkup_datetime')
+      final rawEncounters = await client
+          .from('clinical_encounters')
+          .select('''
+            encounter_datetime,
+            age_of_gestation_weeks,
+            age_of_gestation_days,
+            checkup:prenatal_checkups (
+              checkup_weight
+            )
+          ''')
           .eq('pregnancy_id', widget.pregnancyId)
-          .order('checkup_datetime', ascending: true);
+          .eq('encounter_type', 'checkup')
+          .order('encounter_datetime', ascending: true);
 
-      final checkupList = (rawCheckups as List)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
+      final checkupList = (rawEncounters as List).map((enc) {
+        final innerCheckup = enc['checkup'] as List?;
+        final checkupData = innerCheckup != null && innerCheckup.isNotEmpty
+            ? innerCheckup.first as Map<String, dynamic>
+            : null;
+        final weeks = (enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0;
+        final days = (enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0;
+        return {
+          'checkup_weight': checkupData?['checkup_weight'],
+          'age_of_gestation': weeks + days / 7.0,
+          'checkup_datetime': enc['encounter_datetime'],
+        };
+      }).toList();
 
       // Run the weight gain engine
       final result = WeightGainEngine.evaluate(
@@ -2484,7 +2502,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       // Persist evaluation result
       await client.from('weight_gain_evaluations').insert({
         'pregnancy_id': widget.pregnancyId,
-        'prenatal_checkup_id': prenatalCheckupId,
+        'encounter_id': encounterId,
         'mode': result.mode == WeightGainMode.full ? 'FULL' : 'TREND',
         'bmi_category': result.bmiCategory,
         'baseline_weight': result.baselineWeight,
@@ -2504,7 +2522,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       await client.from('ai_responses').insert({
         'response_type': 'weight_gain_analysis',
         'reference_table': 'prenatal_checkups',
-        'reference_id': prenatalCheckupId,
+        'reference_id': encounterId,
         'ai_model': 'Weight Gain Engine (IOM 2009)',
         'confidence_score': null,
         'response': result.message,
@@ -2564,12 +2582,43 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     try {
       await _refreshRiskPreview();
 
-      final checkup = await Supabase.instance.client
-          .from('prenatal_checkups')
+      final lmp = _effectiveLmp();
+      int? aogWeeks;
+      int? aogDays;
+      if (lmp != null) {
+        final totalDays = _normalizedDate(_checkupDateTime).difference(_normalizedDate(lmp)).inDays;
+        if (totalDays >= 0) {
+          aogWeeks = totalDays ~/ 7;
+          aogDays = totalDays % 7;
+        }
+      }
+
+      final encounter = await Supabase.instance.client
+          .from('clinical_encounters')
           .insert({
             'pregnancy_id': widget.pregnancyId,
-            'midwife_id': _midwifeId,
-            'age_of_gestation': _aogWeeks,
+            'mother_id': widget.motherId,
+            'recorded_by': _midwifeId,
+            'encounter_type': 'checkup',
+            'encounter_datetime': _checkupDateTime.toIso8601String(),
+            'age_of_gestation_weeks': aogWeeks,
+            'age_of_gestation_days': aogDays,
+            'midwife_notes': _remarksCtrl.text.trim().isEmpty ? null : _remarksCtrl.text.trim(),
+          })
+          .select('encounter_id')
+          .maybeSingle();
+
+      if (encounter == null) {
+        throw Exception('Failed to create clinical encounter record');
+      }
+
+      final encounterId = encounter['encounter_id'] as int;
+
+      await Supabase.instance.client
+          .from('prenatal_checkups')
+          .insert({
+            'encounter_id': encounterId,
+            'pregnancy_id': widget.pregnancyId,
             'checkup_weight': weight,
             'blood_pressure_systolic': systolic,
             'blood_pressure_diastolic': diastolic,
@@ -2577,29 +2626,17 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             'fetal_heart_tone': _fetalTone,
             'td_vaccine_dose': _tdDose,
             'edema': _edema == 'none' ? null : _edema,
-            'remarks': _remarksCtrl.text.trim().isEmpty
-                ? null
-                : _remarksCtrl.text.trim(),
-            'checkup_datetime': _checkupDateTime.toIso8601String(),
             'next_schedule': _nextSchedule?.toIso8601String().split('T')[0],
-          })
-          .select('prenatal_checkup_id')
-          .maybeSingle();
+          });
 
-      if (checkup == null) {
-        throw Exception('Failed to create prenatal checkup record');
-      }
-
-      final prenatalCheckupId = checkup['prenatal_checkup_id'] as int;
-
-      await _insertSymptomRecords(prenatalCheckupId);
+      await _insertSymptomRecords(encounterId);
 
       await _insertSupplementRecords();
 
-      await _persistRiskAssessment(prenatalCheckupId);
+      await _persistRiskAssessment(encounterId);
 
       // Weight Gain Monitoring — evaluate and persist
-      await _persistWeightGainEvaluation(prenatalCheckupId, weight);
+      await _persistWeightGainEvaluation(encounterId, weight);
 
       // If a next schedule is specified, send an automated SMS reminder to the mother
       if (_nextSchedule != null) {

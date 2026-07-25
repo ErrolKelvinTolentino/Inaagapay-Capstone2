@@ -1304,25 +1304,6 @@ class _MotherCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: riskColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: riskColor.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Text(
-                              riskLabel,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: riskColor,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
                               color: AppColors.brandPrimary.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
@@ -1335,6 +1316,25 @@ class _MotherCard extends StatelessWidget {
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.brandPrimary,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: riskColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: riskColor.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Text(
+                              riskLabel,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: riskColor,
                               ),
                             ),
                           ),

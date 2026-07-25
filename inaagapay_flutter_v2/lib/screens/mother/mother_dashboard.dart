@@ -520,8 +520,9 @@ class _MotherDashboardState extends State<MotherDashboard> {
           .from('clinical_encounters')
           .select('''
             checkup_datetime:encounter_datetime,
+            age_of_gestation_weeks,
+            age_of_gestation_days,
             checkup:prenatal_checkups (
-              age_of_gestation,
               checkup_weight
             )
           ''')
@@ -535,10 +536,15 @@ class _MotherDashboardState extends State<MotherDashboard> {
           .eq('pregnancy_id', _pregnancyId);
 
       final checkupsList = (checkupsRaw as List).map((enc) {
-        final innerCheckup = enc['checkup'] as Map<String, dynamic>?;
+        final checkupList = enc['checkup'] as List?;
+        final innerCheckup = checkupList != null && checkupList.isNotEmpty
+            ? checkupList.first as Map<String, dynamic>
+            : null;
+        final weeks = (enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0;
+        final days = (enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0;
         return {
           'checkup_datetime': enc['checkup_datetime'],
-          'age_of_gestation': innerCheckup?['age_of_gestation'],
+          'age_of_gestation': weeks + days / 7.0,
           'checkup_weight': innerCheckup?['checkup_weight'],
         };
       }).toList();
