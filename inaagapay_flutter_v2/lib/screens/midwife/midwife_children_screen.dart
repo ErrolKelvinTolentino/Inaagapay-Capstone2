@@ -175,6 +175,19 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
       seenIds.add(id);
       return true;
     }).toList();
+
+    // Assign stable BHC patient IDs by sorting child_id ascending
+    final sortedForId = List<Map<String, dynamic>>.from(childrenList);
+    sortedForId.sort((a, b) => (a['child_id'] as int).compareTo(b['child_id'] as int));
+    
+    final idMap = <int, String>{};
+    for (int i = 0; i < sortedForId.length; i++) {
+      idMap[sortedForId[i]['child_id'] as int] = 'ANA-${(i + 1).toString().padLeft(3, '0')}';
+    }
+    
+    for (var child in childrenList) {
+      child['bhc_child_id'] = idMap[child['child_id'] as int];
+    }
     
     childrenList.sort((a, b) {
       final dateA = DateTime.tryParse(a['added_at'] ?? '');
@@ -272,6 +285,19 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
         seenIds.add(id);
         return true;
       }).toList();
+
+      // Assign stable BHC patient IDs by sorting child_id ascending
+      final sortedForId = List<Map<String, dynamic>>.from(childrenList);
+      sortedForId.sort((a, b) => (a['child_id'] as int).compareTo(b['child_id'] as int));
+      
+      final idMap = <int, String>{};
+      for (int i = 0; i < sortedForId.length; i++) {
+        idMap[sortedForId[i]['child_id'] as int] = 'ANA-${(i + 1).toString().padLeft(3, '0')}';
+      }
+      
+      for (var child in childrenList) {
+        child['bhc_child_id'] = idMap[child['child_id'] as int];
+      }
       
       childrenList.sort((a, b) {
         final dateA = DateTime.tryParse(a['added_at'] ?? '');
@@ -530,6 +556,7 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
                                     age: age,
                                     parentName: parentName,
                                     isGuardianChild: isGuardianChild,
+                                    bhcChildId: child['bhc_child_id']?.toString(),
                                     onTap: () {
                                       Navigator.push(
                                         context,
@@ -562,6 +589,7 @@ class _ChildCard extends StatelessWidget {
   final String age;
   final String parentName;
   final bool isGuardianChild;
+  final String? bhcChildId;
   final VoidCallback onTap;
 
   const _ChildCard({
@@ -570,6 +598,7 @@ class _ChildCard extends StatelessWidget {
     required this.age,
     required this.parentName,
     required this.isGuardianChild,
+    this.bhcChildId,
     required this.onTap,
   });
 
@@ -632,6 +661,27 @@ class _ChildCard extends StatelessWidget {
                                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppColors.textPrimary),
                               ),
                             ),
+                            if (bhcChildId != null) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.brandPrimary.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.brandPrimary.withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                child: Text(
+                                  'ID: $bhcChildId',
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.brandPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
                             if (isGuardianChild) ...[
                               const SizedBox(width: 8),
                               Container(

@@ -16,6 +16,8 @@ import '../../services/groq_service.dart';
 import '../../services/sms_service.dart';
 import '../../services/notification_service.dart';
 import 'immunization_ocr_review_page.dart';
+import '../../services/auth_storage.dart';
+import '../../services/supabase_service.dart';
 
 class AddImmunizationPage extends StatefulWidget {
   final int childId;
@@ -543,7 +545,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
   Future<void> _loadTakenVaccines() async {
     try {
       final response = await Supabase.instance.client
-          .from('immunization_record')
+          .from('immunization_records')
           .select('vaccine_id')
           .eq('child_id', widget.childId);
 
@@ -832,14 +834,26 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     }
 
     try {
+      int? midwifeId;
+      try {
+        final accountId = await AuthStorage.getUserId();
+        if (accountId != null) {
+          final ctx = await SupabaseService.getMidwifeContext(accountId);
+          midwifeId = ctx['midwife_id'] as int?;
+        }
+      } catch (e) {
+        debugPrint('Error getting midwife ID: $e');
+      }
+
       await Supabase.instance.client
-          .from('immunization_record')
+          .from('immunization_records')
           .insert({
             'child_id': widget.childId,
             'vaccine_id': _selectedVaccineId!,
             'vaccination_date': _selectedDate!.toIso8601String().split('T')[0],
             'remarks': _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
             'created_at': DateTime.now().toIso8601String(),
+            if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
           });
 
       setState(() {

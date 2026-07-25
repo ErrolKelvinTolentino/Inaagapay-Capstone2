@@ -12,6 +12,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/groq_service.dart';
 import '../../services/auth_storage.dart';
+import '../../services/supabase_service.dart';
 import '../../services/ultrasound_interpretation_engine.dart';
 import '../../models/groq_response.dart';
 import '../../theme/app_colors.dart';
@@ -2061,6 +2062,17 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
       }).eq('pregnancy_id', _pregnancyId);
 
       print('DEBUG: inserting ultrasound record');
+      int? midwifeId;
+      try {
+        final accountId = await AuthStorage.getUserId();
+        if (accountId != null) {
+          final ctx = await SupabaseService.getMidwifeContext(accountId);
+          midwifeId = ctx['midwife_id'] as int?;
+        }
+      } catch (e) {
+        print('Error getting midwife ID: $e');
+      }
+
       final ultrasoundResponse = await Supabase.instance.client
           .from('ultrasounds')
           .insert({
@@ -2087,6 +2099,7 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
                     _monitoringClassification)
                 : null,
             'created_at': DateTime.now().toIso8601String(),
+            if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
           })
           .select('ultrasound_id')
           .single();

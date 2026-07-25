@@ -107,7 +107,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
       birthData = birthResponse;
 
       final growthResponse = await Supabase.instance.client
-          .from('child_details')
+          .from('child_growth_records')
           .select('*')
           .eq('child_id', widget.childId)
           .order('created_at', ascending: true);
@@ -120,7 +120,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
       }
 
       final immunizationResponse = await Supabase.instance.client
-          .from('immunization_record')
+          .from('immunization_records')
           .select('''
             *,
             vaccine:vaccine_id (*)
@@ -1182,9 +1182,9 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                                   final weight = double.parse(weightCtrl.text);
                                   final bmi = weight / ((height / 100) * (height / 100));
 
-                                  // Insert into child_details
+                                  // Insert into child_growth_records
                                   final insertResult = await Supabase.instance.client
-                                      .from('child_details')
+                                      .from('child_growth_records')
                                       .insert({
                                     'child_id': widget.childId,
                                     'child_height': height,
@@ -1213,7 +1213,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
 
                                   // Insert into ai_responses
                                   await Supabase.instance.client.from('ai_responses').insert({
-                                    'reference_table': 'child_details',
+                                    'reference_table': 'child_growth_records',
                                     'reference_id': childDetailsId,
                                     'response_type': 'growth_analysis',
                                     'response_category': 'growth_mother',
@@ -1315,7 +1315,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
               'ai_model': 'groq',
               'updated_at': DateTime.now().toIso8601String(),
             })
-            .eq('reference_table', 'child_details')
+            .eq('reference_table', 'child_growth_records')
             .eq('reference_id', childDetailsId)
             .eq('response_type', 'growth_analysis');
       }
@@ -1335,7 +1335,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
       final saved = await Supabase.instance.client
           .from('ai_responses')
           .select('response, response_category, generated_by_ai')
-          .eq('reference_table', 'child_details')
+          .eq('reference_table', 'child_growth_records')
           .eq('reference_id', latestRecordId)
           .eq('response_type', 'growth_analysis')
           .maybeSingle();
@@ -1425,13 +1425,13 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
       final existing = await Supabase.instance.client
           .from('ai_responses')
           .select('ai_response_id')
-          .eq('reference_table', 'child_details')
+          .eq('reference_table', 'child_growth_records')
           .eq('reference_id', latestRecordId)
           .eq('response_type', 'growth_analysis')
           .maybeSingle();
 
       final values = {
-        'reference_table': 'child_details',
+        'reference_table': 'child_growth_records',
         'reference_id': latestRecordId,
         'response_type': 'growth_analysis',
         'response_category': aiAnalysisCategory ?? 'growth',

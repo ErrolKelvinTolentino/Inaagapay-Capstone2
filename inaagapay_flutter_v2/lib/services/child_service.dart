@@ -82,7 +82,7 @@ class ChildService {
 
       // Fetch growth records
       final growthResponse = await client
-          .from('child_details')
+          .from('child_growth_records')
           .select('*')
           .eq('child_id', childId)
           .order('created_at', ascending: false)
@@ -91,7 +91,7 @@ class ChildService {
 
       // Fetch immunization records
       final immunizationResponse = await client
-          .from('immunization_record')
+          .from('immunization_records')
           .select('''
             *,
             vaccine:vaccine_id (*)
@@ -155,7 +155,7 @@ class ChildService {
       }
 
       final growthResponse = await client
-          .from('child_details')
+          .from('child_growth_records')
           .select('*')
           .eq('child_id', childId)
           .order('created_at', ascending: true);
@@ -211,7 +211,7 @@ class ChildService {
       int childId) async {
     try {
       final response = await client
-          .from('immunization_record')
+          .from('immunization_records')
           .select('''
             *,
             vaccine:vaccine_id (*)

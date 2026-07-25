@@ -244,7 +244,7 @@ class _MidwifeSmsRemindersScreenState extends State<MidwifeSmsRemindersScreen> w
 
       // 3. Fetch completed immunization records
       final recordsRes = await Supabase.instance.client
-          .from('immunization_record')
+          .from('immunization_records')
           .select('child_id, vaccine_id');
 
       final recordsMap = <int, Set<int>>{};

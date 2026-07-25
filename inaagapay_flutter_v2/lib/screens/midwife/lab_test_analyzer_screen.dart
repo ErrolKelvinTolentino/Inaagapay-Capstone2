@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/groq_service.dart';
 import '../../services/auth_storage.dart';
+import '../../services/supabase_service.dart';
 import '../../services/lab_cbc_interpretation_engine.dart';
 import '../../services/ultrasound_interpretation_engine.dart'
     show MonitoringClassification, Trimester;
@@ -1012,6 +1013,17 @@ class _LabTestAnalyzerScreenState extends State<LabTestAnalyzerScreen> {
           })
           .eq('pregnancy_id', _pregnancyId);
 
+      int? midwifeId;
+      try {
+        final accountId = await AuthStorage.getUserId();
+        if (accountId != null) {
+          final ctx = await SupabaseService.getMidwifeContext(accountId);
+          midwifeId = ctx['midwife_id'] as int?;
+        }
+      } catch (e) {
+        print('Error getting midwife ID: $e');
+      }
+
       final labTestResponse = await Supabase.instance.client
           .from('lab_tests')
           .insert({
@@ -1031,6 +1043,7 @@ class _LabTestAnalyzerScreenState extends State<LabTestAnalyzerScreen> {
             'health_worker_profession':
                 _healthWorkerProfessionController.text.trim(),
             'created_at': DateTime.now().toIso8601String(),
+            if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
           })
           .select('lab_test_id')
           .single();

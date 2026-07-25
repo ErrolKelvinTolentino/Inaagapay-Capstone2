@@ -366,7 +366,7 @@ class SmsService {
 
       // 4. Fetch already taken vaccines (which includes the newly inserted record(s))
       final recordsRes = await client
-          .from('immunization_record')
+          .from('immunization_records')
           .select('vaccine_id')
           .eq('child_id', childId);
 

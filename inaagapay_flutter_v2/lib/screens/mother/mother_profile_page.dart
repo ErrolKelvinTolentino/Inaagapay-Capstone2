@@ -2305,11 +2305,21 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             hasClosedLoading = true;
           }
 
+          String midwifeName = '—';
+          if (checkup['midwife'] != null) {
+            final midwife = checkup['midwife'] as Map<String, dynamic>;
+            final account = midwife['account'] as Map<String, dynamic>?;
+            if (account != null) {
+              midwifeName = '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'.trim();
+            }
+          }
+
           _showRecordDetails(
             title: 'Prenatal Checkup',
             subtitle: date,
             icon: Icons.medical_services,
             rows: [
+              MapEntry('Conducted by', midwifeName),
               MapEntry('Fetal Count', fetalCount.toString()),
               MapEntry('Age of Gestation', aog),
               MapEntry('Weight (kg)', weight),
@@ -2403,6 +2413,15 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               ? aiAnalysis.trim()
               : split.extractedAi ?? _generateUltrasoundAIInsights(ultrasound);
 
+          String midwifeName = '—';
+          if (ultrasound['recorded_by'] != null) {
+            final recordedBy = ultrasound['recorded_by'] as Map<String, dynamic>;
+            final account = recordedBy['account'] as Map<String, dynamic>?;
+            if (account != null) {
+              midwifeName = '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'.trim();
+            }
+          }
+
           if (mounted && !hasClosedLoading) {
             Navigator.of(context, rootNavigator: true).pop();
             hasClosedLoading = true;
@@ -2414,6 +2433,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             icon: Icons.monitor_heart,
             imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
             rows: [
+              MapEntry('Recorded by', midwifeName),
               MapEntry(
                   'Ultrasound Date', _formatDate(ultrasound['ultrasound_date'])),
               MapEntry(
@@ -2483,11 +2503,20 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 await MotherProfileService.getLabTestAIAnalysis(labTestId);
           }
 
-          if (!mounted) return;
+           if (!mounted) return;
 
           aiAnalysis = (aiAnalysis != null && aiAnalysis.trim().isNotEmpty)
               ? aiAnalysis.trim()
               : split.extractedAi;
+
+          String midwifeName = '—';
+          if (labTest['recorded_by'] != null) {
+            final recordedBy = labTest['recorded_by'] as Map<String, dynamic>;
+            final account = recordedBy['account'] as Map<String, dynamic>?;
+            if (account != null) {
+              midwifeName = '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'.trim();
+            }
+          }
 
           if (mounted && !hasClosedLoading) {
             Navigator.of(context, rootNavigator: true).pop();
@@ -2500,6 +2529,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             icon: Icons.science,
             imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
             rows: [
+              MapEntry('Recorded by', midwifeName),
               MapEntry('Lab Test Type', type),
               MapEntry('Lab Test Date', _formatDate(labTest['lab_test_date'])),
               MapEntry('Full Name', _formatValue(labTest['health_worker_name'])),
@@ -4757,6 +4787,20 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   _buildInfoRow(
                       'Obstetric Score (G-P-A)',
                       'G${profile['gravida'] ?? 0} P${profile['para'] ?? 0} A${profile['abortus'] ?? 0}'),
+                  const SizedBox(height: 8),
+                  _buildInfoRow(
+                      'Registered by',
+                      () {
+                        String rbName = '—';
+                        if (profile['registered_by'] != null) {
+                          final rb = profile['registered_by'] as Map<String, dynamic>;
+                          final account = rb['account'] as Map<String, dynamic>?;
+                          if (account != null) {
+                            rbName = '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'.trim();
+                          }
+                        }
+                        return rbName;
+                      }()),
                   if (!widget.readOnly) ...[
                     const SizedBox(height: 16),
                     Align(

@@ -342,44 +342,42 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
       // Get registered children count and load for search
       if (_motherIds.isNotEmpty) {
-        final childrenResponse =
-            await SupabaseService.client.from('children').select('''
-              child_id,
-              first_name,
-              last_name,
-              mother_id
-            ''').inFilter('mother_id', _motherIds);
+        // Parallelize initial children and pregnancies queries
+        final responses = await Future.wait([
+          SupabaseService.client.from('children').select('child_id, first_name, last_name, mother_id').inFilter('mother_id', _motherIds),
+          SupabaseService.client.from('pregnancies').select('pregnancy_id, mother_id, last_menstrual_period, status').inFilter('mother_id', _motherIds),
+        ]);
+
+        final childrenResponse = responses[0] as List<dynamic>;
+        final allPregnanciesResponse = responses[1] as List<dynamic>;
 
         _registeredChildren = childrenResponse.length;
         _allChildren = List<Map<String, dynamic>>.from(childrenResponse);
-      } else {
-        _registeredChildren = 0;
-        _allChildren = [];
-      }
 
-      // Get medication statistics
-      if (_motherIds.isNotEmpty) {
-        // Ferrous FA
-        final ferrousResponse = await SupabaseService.client
-            .from('given_medications')
-            .select('given_medication_id')
-            .eq('given_medication_name', 'Ferrous FA')
-            .inFilter('mother_id', _motherIds);
-        _ferrousGiven = ferrousResponse.length;
+        // Get medication statistics defensively
+        try {
+          final ferrousResponse = await SupabaseService.client
+              .from('given_medications')
+              .select('given_medication_id')
+              .eq('given_medication_name', 'Ferrous FA')
+              .inFilter('mother_id', _motherIds);
+          _ferrousGiven = ferrousResponse.length;
+        } catch (e) {
+          if (kDebugMode) debugPrint('Error fetching Ferrous: $e');
+          _ferrousGiven = 0;
+        }
 
-        // Calcium
-        final calciumResponse = await SupabaseService.client
-            .from('given_medications')
-            .select('given_medication_id')
-            .eq('given_medication_name', 'Calcium')
-            .inFilter('mother_id', _motherIds);
-        _calciumGiven = calciumResponse.length;
-
-        // Get all pregnancies for these mothers to populate map and search records correctly
-        final allPregnanciesResponse = await SupabaseService.client
-            .from('pregnancies')
-            .select('pregnancy_id, mother_id, last_menstrual_period, status')
-            .inFilter('mother_id', _motherIds);
+        try {
+          final calciumResponse = await SupabaseService.client
+              .from('given_medications')
+              .select('given_medication_id')
+              .eq('given_medication_name', 'Calcium')
+              .inFilter('mother_id', _motherIds);
+          _calciumGiven = calciumResponse.length;
+        } catch (e) {
+          if (kDebugMode) debugPrint('Error fetching Calcium: $e');
+          _calciumGiven = 0;
+        }
 
         final pregnanciesResponse = allPregnanciesResponse
             .where((p) => p['status'] == 'ongoing')
@@ -394,7 +392,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
             .map<int>((p) => p['pregnancy_id'] as int)
             .toList();
 
-        // Populate _pregnancyToMotherMap early
+        // Populate _pregnancyToMotherMap
         _pregnancyToMotherMap = {};
         for (var p in allPregnanciesResponse) {
           final mId = p['mother_id'] as int?;
@@ -430,121 +428,219 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           }
         }
 
-        // Get TD vaccine doses given
-        if (pregnancyIds.isNotEmpty) {
-          final tdResponse = await SupabaseService.client
-              .from('prenatal_checkups')
-              .select('prenatal_checkup_id')
-              .inFilter('pregnancy_id', pregnancyIds)
-              .not('td_vaccine_dose', 'is', null);
-          _tdDosesGiven = tdResponse.length;
-        } else {
-          _tdDosesGiven = 0;
-        }
-
-        // Get recent visits (last 7 days)
+        // Parallelize clinical fetches
         final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
         final sevenDaysAgoDate = sevenDaysAgo.toIso8601String().split('T')[0];
 
-        // Fetch recent checkups, ultrasounds, and lab tests safely
-        final List<dynamic> recentCheckups = allPregnancyIds.isNotEmpty
-            ? await SupabaseService.client
-                .from('prenatal_checkups')
-                .select(
-                    'prenatal_checkup_id, checkup_datetime, remarks, age_of_gestation, td_vaccine_dose, pregnancy_id, blood_pressure_systolic, blood_pressure_diastolic, checkup_weight, fetal_position, fetal_heart_tone, fetal_heart_beat, next_schedule')
-                .inFilter('pregnancy_id', allPregnancyIds)
-                .gte('checkup_datetime', sevenDaysAgo.toIso8601String())
-            : [];
+        List<dynamic> recentCheckups = [];
+        List<dynamic> recentUltrasounds = [];
+        List<dynamic> recentLabTests = [];
+        List<dynamic> tdResponse = [];
+        List<dynamic> chartCheckups = [];
+        List<dynamic> checkupsData = [];
+        List<dynamic> ultrasoundsData = [];
+        List<dynamic> labTestsData = [];
 
-        final List<dynamic> recentUltrasounds = allPregnancyIds.isNotEmpty
-            ? await SupabaseService.client
+        if (allPregnancyIds.isNotEmpty) {
+          final clinicalResponses = await Future.wait([
+            // TD Vaccine doses
+            if (pregnancyIds.isNotEmpty)
+              SupabaseService.client
+                  .from('clinical_encounters')
+                  .select('prenatal_checkups!inner(prenatal_checkup_id)')
+                  .inFilter('pregnancy_id', pregnancyIds)
+                  .eq('encounter_type', 'checkup')
+                  .not('prenatal_checkups.td_vaccine_dose', 'is', null)
+            else
+              Future.value([]),
+
+            // Recent visits
+            SupabaseService.client
+                .from('clinical_encounters')
+                .select('''
+                  encounter_datetime,
+                  midwife_notes,
+                  age_of_gestation_weeks,
+                  age_of_gestation_days,
+                  checkup:prenatal_checkups (
+                    prenatal_checkup_id,
+                    td_vaccine_dose,
+                    pregnancy_id,
+                    blood_pressure_systolic,
+                    blood_pressure_diastolic,
+                    checkup_weight,
+                    fetal_position,
+                    fetal_heart_tone,
+                    fetal_heart_beat,
+                    next_schedule
+                  )
+                ''')
+                .inFilter('pregnancy_id', allPregnancyIds)
+                .eq('encounter_type', 'checkup')
+                .gte('encounter_datetime', sevenDaysAgo.toIso8601String()),
+            SupabaseService.client
                 .from('ultrasounds')
-                .select(
-                    'ultrasound_id, ultrasound_date, remarks, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
+                .select('ultrasound_id, ultrasound_date, remarks, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
                 .inFilter('pregnancy_id', allPregnancyIds)
-                .gte('ultrasound_date', sevenDaysAgoDate)
-            : [];
-
-        final List<dynamic> recentLabTests = allPregnancyIds.isNotEmpty
-            ? await SupabaseService.client
+                .gte('ultrasound_date', sevenDaysAgoDate),
+            SupabaseService.client
                 .from('lab_tests')
-                .select(
-                    'lab_test_id, lab_test_type, lab_test_date, remarks, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession')
+                .select('lab_test_id, lab_test_type, lab_test_date, remarks, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession')
                 .inFilter('pregnancy_id', allPregnancyIds)
-                .gte('lab_test_date', sevenDaysAgoDate)
-            : [];
+                .gte('lab_test_date', sevenDaysAgoDate),
 
-        final List<Map<String, dynamic>> combinedVisits = [];
+            // BHC Chart query (single call for 7 days)
+            if (pregnancyIds.isNotEmpty)
+              SupabaseService.client
+                  .from('clinical_encounters')
+                  .select('encounter_datetime')
+                  .eq('encounter_type', 'checkup')
+                  .gte('encounter_datetime', sevenDaysAgo.toIso8601String())
+                  .inFilter('pregnancy_id', pregnancyIds)
+            else
+              Future.value([]),
 
-        for (var checkup in recentCheckups) {
-          final dt =
-              DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
-          if (dt != null) {
-            combinedVisits.add({
-              'type': 'checkup',
-              'date': dt,
-              'record': checkup,
-              'id': checkup['prenatal_checkup_id'],
-              'pregId': checkup['pregnancy_id'],
-            });
+            // Search records
+            SupabaseService.client
+                .from('clinical_encounters')
+                .select('''
+                  encounter_datetime,
+                  midwife_notes,
+                  age_of_gestation_weeks,
+                  age_of_gestation_days,
+                  checkup:prenatal_checkups (
+                    prenatal_checkup_id,
+                    td_vaccine_dose,
+                    pregnancy_id,
+                    blood_pressure_systolic,
+                    blood_pressure_diastolic,
+                    checkup_weight,
+                    fetal_position,
+                    fetal_heart_tone,
+                    fetal_heart_beat,
+                    next_schedule
+                  )
+                ''')
+                .inFilter('pregnancy_id', allPregnancyIds)
+                .eq('encounter_type', 'checkup'),
+            SupabaseService.client
+                .from('ultrasounds')
+                .select('ultrasound_id, ultrasound_date, remarks, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
+                .inFilter('pregnancy_id', allPregnancyIds),
+            SupabaseService.client
+                .from('lab_tests')
+                .select('lab_test_id, lab_test_type, lab_test_date, remarks, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession')
+                .inFilter('pregnancy_id', allPregnancyIds),
+          ]);
+
+          tdResponse = clinicalResponses[0];
+          final List recentCheckupsRaw = clinicalResponses[1];
+          recentUltrasounds = clinicalResponses[2];
+          recentLabTests = clinicalResponses[3];
+          final List chartCheckupsRaw = clinicalResponses[4];
+          final List checkupsDataRaw = clinicalResponses[5];
+          ultrasoundsData = clinicalResponses[6];
+          labTestsData = clinicalResponses[7];
+
+          // Map recentCheckups
+          recentCheckups = [];
+          for (final enc in recentCheckupsRaw) {
+            final checkupList = enc['checkup'] as List?;
+            final innerCheckup = checkupList != null && checkupList.isNotEmpty
+                ? checkupList.first as Map<String, dynamic>
+                : null;
+            if (innerCheckup != null) {
+              final double aog = ((enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0) +
+                  ((enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0) / 7.0;
+              recentCheckups.add({
+                'prenatal_checkup_id': innerCheckup['prenatal_checkup_id'],
+                'checkup_datetime': enc['encounter_datetime'],
+                'remarks': enc['midwife_notes'],
+                'age_of_gestation': aog,
+                'td_vaccine_dose': innerCheckup['td_vaccine_dose'],
+                'pregnancy_id': innerCheckup['pregnancy_id'],
+                'blood_pressure_systolic': innerCheckup['blood_pressure_systolic'],
+                'blood_pressure_diastolic': innerCheckup['blood_pressure_diastolic'],
+                'checkup_weight': innerCheckup['checkup_weight'],
+                'fetal_position': innerCheckup['fetal_position'],
+                'fetal_heart_tone': innerCheckup['fetal_heart_tone'],
+                'fetal_heart_beat': innerCheckup['fetal_heart_beat'],
+                'next_schedule': innerCheckup['next_schedule'],
+              });
+            }
+          }
+
+          // Map chartCheckups
+          chartCheckups = chartCheckupsRaw.map((enc) => {
+            'checkup_datetime': enc['encounter_datetime'],
+          }).toList();
+
+          // Map checkupsData
+          checkupsData = [];
+          for (final enc in checkupsDataRaw) {
+            final checkupList = enc['checkup'] as List?;
+            final innerCheckup = checkupList != null && checkupList.isNotEmpty
+                ? checkupList.first as Map<String, dynamic>
+                : null;
+            if (innerCheckup != null) {
+              final double aog = ((enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0) +
+                  ((enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0) / 7.0;
+              checkupsData.add({
+                'prenatal_checkup_id': innerCheckup['prenatal_checkup_id'],
+                'checkup_datetime': enc['encounter_datetime'],
+                'remarks': enc['midwife_notes'],
+                'age_of_gestation': aog,
+                'td_vaccine_dose': innerCheckup['td_vaccine_dose'],
+                'pregnancy_id': innerCheckup['pregnancy_id'],
+                'blood_pressure_systolic': innerCheckup['blood_pressure_systolic'],
+                'blood_pressure_diastolic': innerCheckup['blood_pressure_diastolic'],
+                'checkup_weight': innerCheckup['checkup_weight'],
+                'fetal_position': innerCheckup['fetal_position'],
+                'fetal_heart_tone': innerCheckup['fetal_heart_tone'],
+                'fetal_heart_beat': innerCheckup['fetal_heart_beat'],
+                'next_schedule': innerCheckup['next_schedule'],
+              });
+            }
           }
         }
 
+        _tdDosesGiven = tdResponse.length;
+
+        // Process recent visits
+        final List<Map<String, dynamic>> combinedVisits = [];
+        for (var checkup in recentCheckups) {
+          final dt = DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
+          if (dt != null) {
+            combinedVisits.add({'type': 'checkup', 'date': dt, 'record': checkup, 'id': checkup['prenatal_checkup_id'], 'pregId': checkup['pregnancy_id']});
+          }
+        }
         for (var us in recentUltrasounds) {
           final dt = DateTime.tryParse(us['ultrasound_date']?.toString() ?? '');
           if (dt != null) {
-            combinedVisits.add({
-              'type': 'ultrasound',
-              'date': dt,
-              'record': us,
-              'id': us['ultrasound_id'],
-              'pregId': us['pregnancy_id'],
-            });
+            combinedVisits.add({'type': 'ultrasound', 'date': dt, 'record': us, 'id': us['ultrasound_id'], 'pregId': us['pregnancy_id']});
           }
         }
-
         for (var lt in recentLabTests) {
           final dt = DateTime.tryParse(lt['lab_test_date']?.toString() ?? '');
           if (dt != null) {
-            combinedVisits.add({
-              'type': 'labtest',
-              'date': dt,
-              'record': lt,
-              'id': lt['lab_test_id'],
-              'pregId': lt['pregnancy_id'],
-            });
+            combinedVisits.add({'type': 'labtest', 'date': dt, 'record': lt, 'id': lt['lab_test_id'], 'pregId': lt['pregnancy_id']});
           }
         }
 
-        // Sort by date descending
-        combinedVisits.sort(
-            (a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
-
+        combinedVisits.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
         _recentVisits = [];
 
         for (var item in combinedVisits.take(3)) {
           final pregId = item['pregId'] as int?;
           final mother = pregId != null ? _pregnancyToMotherMap[pregId] : null;
-          final fullName = mother != null
-              ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'
-                  .trim()
-              : 'Unknown Mother';
+          final fullName = mother != null ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'.trim() : 'Unknown Mother';
           final motherId = mother != null ? mother['mother_id'] as int? : null;
 
           final dt = item['date'] as DateTime;
           final nowTime = DateTime.now();
-          final diffDays =
-              nowTime.difference(DateTime(dt.year, dt.month, dt.day)).inDays;
+          final diffDays = nowTime.difference(DateTime(dt.year, dt.month, dt.day)).inDays;
 
-          String timeLabel;
-          if (diffDays == 0) {
-            timeLabel = 'Today';
-          } else if (diffDays == 1) {
-            timeLabel = 'Yesterday';
-          } else {
-            timeLabel = '$diffDays days ago';
-          }
-
+          String timeLabel = diffDays == 0 ? 'Today' : (diffDays == 1 ? 'Yesterday' : '$diffDays days ago');
           String visitTypeLabel = 'Prenatal Check-up';
           if (item['type'] == 'ultrasound') {
             visitTypeLabel = 'Ultrasound Assessment';
@@ -553,88 +649,38 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
             visitTypeLabel = 'Lab Test ($testType)';
           }
 
-          final itemType = item['type'] as String;
-          final itemId = item['id'] as int;
-          final recordMap = item['record'] as Map<String, dynamic>;
-
           _recentVisits.add(MidwifeVisitItem(
             fullName: fullName,
             visitType: visitTypeLabel,
             timeLabel: timeLabel,
-            onTap: () {
-              _navigateToSearchResult({
-                'type': itemType,
-                'id': itemId,
-                'motherId': motherId,
-                'record': recordMap,
-              });
-            },
+            onTap: () => _navigateToSearchResult({
+              'type': item['type'],
+              'id': item['id'],
+              'motherId': motherId,
+              'record': item['record'],
+            }),
           ));
         }
 
-        // Get BHC visit data
-        if (pregnancyIds.isNotEmpty) {
-          final List<double> dailyVisits = List.filled(7, 0);
-
-          for (int i = 0; i < 7; i++) {
-            final day = DateTime.now().subtract(Duration(days: i));
-            final startOfDay = DateTime(day.year, day.month, day.day);
-            final endOfDay = startOfDay.add(const Duration(days: 1));
-
-            final dayVisitsResponse = await SupabaseService.client
-                .from('prenatal_checkups')
-                .select('prenatal_checkup_id')
-                .gte('checkup_datetime', startOfDay.toIso8601String())
-                .lt('checkup_datetime', endOfDay.toIso8601String())
-                .inFilter('pregnancy_id', pregnancyIds);
-
-            int chartIndex;
-            if (day.weekday == 7) {
-              chartIndex = 6;
-            } else {
-              chartIndex = day.weekday - 1;
-            }
-
-            dailyVisits[chartIndex] = dayVisitsResponse.length.toDouble();
+        // Process BHC Chart checkup counts (past 7 days including today)
+        _bhcVisitValues = List.filled(7, 0);
+        for (final checkup in chartCheckups) {
+          final dt = DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
+          if (dt != null) {
+            final localDt = dt.toLocal();
+            int chartIndex = localDt.weekday == 7 ? 6 : localDt.weekday - 1;
+            _bhcVisitValues[chartIndex] += 1;
           }
-
-          _bhcVisitValues = dailyVisits;
-        } else {
-          _bhcVisitValues = [0, 0, 0, 0, 0, 0, 0];
         }
 
-        // Fetch prenatal checkups, ultrasounds, and lab tests for search
-        _allCheckups = [];
-        _allUltrasounds = [];
-        _allLabTests = [];
-
-        if (allPregnancyIds.isNotEmpty) {
-          final checkupsData = await SupabaseService.client
-              .from('prenatal_checkups')
-              .select(
-                  'prenatal_checkup_id, checkup_datetime, remarks, age_of_gestation, td_vaccine_dose, pregnancy_id, blood_pressure_systolic, blood_pressure_diastolic, checkup_weight, fetal_position, fetal_heart_tone, fetal_heart_beat, next_schedule')
-              .inFilter('pregnancy_id', allPregnancyIds);
-          _allCheckups = List<Map<String, dynamic>>.from(checkupsData);
-
-          final ultrasoundsData = await SupabaseService.client
-              .from('ultrasounds')
-              .select(
-                  'ultrasound_id, ultrasound_date, remarks, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
-              .inFilter('pregnancy_id', allPregnancyIds);
-          _allUltrasounds = List<Map<String, dynamic>>.from(ultrasoundsData);
-
-          final labTestsData = await SupabaseService.client
-              .from('lab_tests')
-              .select(
-                  'lab_test_id, lab_test_type, lab_test_date, remarks, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession')
-              .inFilter('pregnancy_id', allPregnancyIds);
-          _allLabTests = List<Map<String, dynamic>>.from(labTestsData);
-        }
+        // Process search records
+        _allCheckups = List<Map<String, dynamic>>.from(checkupsData);
+        _allUltrasounds = List<Map<String, dynamic>>.from(ultrasoundsData);
+        _allLabTests = List<Map<String, dynamic>>.from(labTestsData);
 
         // Load priority tasks
         await _loadPriorityTasks(pregnancyIds);
       } else {
-        // No mothers found - set default values
         _registeredChildren = 0;
         _ferrousGiven = 0;
         _calciumGiven = 0;

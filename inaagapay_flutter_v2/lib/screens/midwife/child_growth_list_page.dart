@@ -183,7 +183,7 @@ class _ChildGrowthListPageState extends State<ChildGrowthListPage> {
 
   Future<void> _fetchGrowthRecords() async {
     final response = await Supabase.instance.client
-        .from('child_details')
+        .from('child_growth_records')
         .select('*')
         .eq('child_id', widget.childId)
         .order('created_at', ascending: true);
@@ -207,7 +207,7 @@ class _ChildGrowthListPageState extends State<ChildGrowthListPage> {
     return await Supabase.instance.client
         .from('ai_responses')
         .select('*')
-        .eq('reference_table', 'child_details')
+        .eq('reference_table', 'child_growth_records')
         .eq('reference_id', childDetailsId)
         .eq('response_type', 'growth_analysis')
         .maybeSingle();
@@ -330,13 +330,13 @@ $recordsSummary
       final existing = await Supabase.instance.client
           .from('ai_responses')
           .select('ai_response_id')
-          .eq('reference_table', 'child_details')
+          .eq('reference_table', 'child_growth_records')
           .eq('reference_id', childDetailsId)
           .eq('response_type', 'growth_analysis')
           .maybeSingle();
 
       final values = {
-        'reference_table': 'child_details',
+        'reference_table': 'child_growth_records',
         'reference_id': childDetailsId,
         'response_type': 'growth_analysis',
         'response_category': 'growth',

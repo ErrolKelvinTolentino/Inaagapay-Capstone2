@@ -17,6 +17,10 @@ class MotherProfileService {
       // Get account ID from mother record
       final motherResponse = await client.from('mothers').select('''
             *,
+            registered_by:midwives!registered_by_midwife_id (
+              midwife_id,
+              account:accounts (first_name, last_name)
+            ),
             account:account_id (
               account_id,
               email_address,
@@ -47,8 +51,14 @@ class MotherProfileService {
               td_vaccine_dose,
               edema,
               remarks,
-              checkup_datetime,
               next_schedule,
+              encounter:clinical_encounters (
+                encounter_datetime,
+                recorded_by:midwives (
+                  midwife_id,
+                  account:accounts (first_name, last_name)
+                )
+              ),
               symptoms:pregnancy_symptoms (
                 symptom_id,
                 notes,
@@ -79,7 +89,12 @@ class MotherProfileService {
               health_worker_institution,
               health_worker_profession,
               monitoring_classification,
-              created_at
+              created_at,
+              recorded_by_midwife_id,
+              recorded_by:midwives!recorded_by_midwife_id (
+                midwife_id,
+                account:accounts (first_name, last_name)
+              )
             ),
             lab_tests (
               lab_test_id,
@@ -91,7 +106,12 @@ class MotherProfileService {
               health_worker_name,
               health_worker_institution,
               health_worker_profession,
-              created_at
+              created_at,
+              recorded_by_midwife_id,
+              recorded_by:midwives!recorded_by_midwife_id (
+                midwife_id,
+                account:accounts (first_name, last_name)
+              )
             ),
             maternal_vitals (
               vital_id,
@@ -217,6 +237,14 @@ class MotherProfileService {
         final checkups = (pregnancy['checkups'] as List?) ?? const [];
         for (final c in checkups) {
           final checkup = c as Map<String, dynamic>;
+
+          // Map encounter fields to top-level keys
+          final encounter = checkup['encounter'] as Map<String, dynamic>?;
+          if (encounter != null) {
+            checkup['checkup_datetime'] = encounter['encounter_datetime'];
+            checkup['midwife'] = encounter['recorded_by'];
+          }
+
           final checkupId = checkup['prenatal_checkup_id'];
           if (checkupId is! int) continue;
           final aiRow = aiByCheckupId[checkupId];
@@ -284,7 +312,7 @@ class MotherProfileService {
       final childrenResponse = await client.from('children').select('''
             *,
             birth_details (*),
-            child_details (*)
+            child_growth_records (*)
           ''').eq('mother_id', motherId).order('added_at', ascending: false);
 
       final List<dynamic> children = childrenResponse as List<dynamic>;

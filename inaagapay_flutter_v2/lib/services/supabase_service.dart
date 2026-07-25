@@ -1661,6 +1661,7 @@ class SupabaseService {
           'abortus': obScore.abortus,
           'living_children': obScore.livingChildren,
           'status': 'active',
+          'registered_by_midwife_id': midwifeId,
         }).eq('mother_id', motherId);
       } else {
         final motherRow = await client
@@ -1682,6 +1683,7 @@ class SupabaseService {
               'abortus': obScore.abortus,
               'living_children': obScore.livingChildren,
               'status': 'active',
+              'registered_by_midwife_id': midwifeId,
             })
             .select('mother_id')
             .maybeSingle();

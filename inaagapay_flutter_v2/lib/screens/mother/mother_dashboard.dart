@@ -443,14 +443,35 @@ class _MotherDashboardState extends State<MotherDashboard> {
 
   Future<void> _loadLatestVitals() async {
     try {
-      // 1. Fetch latest prenatal checkup
-      final latestCheckup = await SupabaseService.client
-          .from('prenatal_checkups')
-          .select('checkup_weight, blood_pressure_systolic, blood_pressure_diastolic, checkup_datetime')
+      // 1. Fetch latest prenatal checkup via clinical_encounters
+      final latestEncounter = await SupabaseService.client
+          .from('clinical_encounters')
+          .select('''
+            encounter_datetime,
+            checkup:prenatal_checkups (
+              checkup_weight,
+              blood_pressure_systolic,
+              blood_pressure_diastolic
+            )
+          ''')
           .eq('pregnancy_id', _pregnancyId)
-          .order('checkup_datetime', ascending: false)
+          .eq('encounter_type', 'checkup')
+          .order('encounter_datetime', ascending: false)
           .limit(1)
           .maybeSingle();
+
+      Map<String, dynamic>? latestCheckup;
+      if (latestEncounter != null) {
+        final innerCheckup = latestEncounter['checkup'] as Map<String, dynamic>?;
+        if (innerCheckup != null) {
+          latestCheckup = {
+            'checkup_weight': innerCheckup['checkup_weight'],
+            'blood_pressure_systolic': innerCheckup['blood_pressure_systolic'],
+            'blood_pressure_diastolic': innerCheckup['blood_pressure_diastolic'],
+            'checkup_datetime': latestEncounter['encounter_datetime'],
+          };
+        }
+      }
 
       // 2. Fetch latest maternal vitals
       final latestMaternal = await SupabaseService.client
@@ -494,11 +515,18 @@ class _MotherDashboardState extends State<MotherDashboard> {
         _latestVitalsSource = 'mother_self';
       }
 
-      // 3. Fetch checkups for weight gain engine
+      // 3. Fetch checkups for weight gain engine via clinical_encounters
       final checkupsRaw = await SupabaseService.client
-          .from('prenatal_checkups')
-          .select('checkup_datetime, age_of_gestation, checkup_weight')
-          .eq('pregnancy_id', _pregnancyId);
+          .from('clinical_encounters')
+          .select('''
+            checkup_datetime:encounter_datetime,
+            checkup:prenatal_checkups (
+              age_of_gestation,
+              checkup_weight
+            )
+          ''')
+          .eq('pregnancy_id', _pregnancyId)
+          .eq('encounter_type', 'checkup');
 
       // 4. Fetch maternal vitals for weight gain engine
       final vitalsRaw = await SupabaseService.client
@@ -506,7 +534,14 @@ class _MotherDashboardState extends State<MotherDashboard> {
           .select('recorded_at, age_of_gestation, weight_kg, height_cm')
           .eq('pregnancy_id', _pregnancyId);
 
-      final checkupsList = (checkupsRaw as List).cast<Map<String, dynamic>>();
+      final checkupsList = (checkupsRaw as List).map((enc) {
+        final innerCheckup = enc['checkup'] as Map<String, dynamic>?;
+        return {
+          'checkup_datetime': enc['checkup_datetime'],
+          'age_of_gestation': innerCheckup?['age_of_gestation'],
+          'checkup_weight': innerCheckup?['checkup_weight'],
+        };
+      }).toList();
       final vitalsList = (vitalsRaw as List).cast<Map<String, dynamic>>();
 
       // Extract the latest non-null height from maternal vitals logs

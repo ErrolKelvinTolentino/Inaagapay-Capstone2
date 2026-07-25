@@ -247,12 +247,16 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
           )
         ''').eq('assigned_bhc_id', _assignedBhcId!);
 
-    final List<dynamic> rawMothers = response;
+    final List<dynamic> rawMothers = List<dynamic>.from(response);
+    rawMothers.sort((a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
+
     final List<Map<String, dynamic>> parsedMothers = [];
 
-    for (var raw in rawMothers) {
+    for (int i = 0; i < rawMothers.length; i++) {
+      final raw = rawMothers[i];
       final int motherId = raw['mother_id'] as int;
       final int accountId = raw['account_id'] as int;
+      final String bhcPatientId = 'INA-${(i + 1).toString().padLeft(3, '0')}';
       final account = raw['accounts'] as Map<String, dynamic>?;
       if (account == null) continue;
 
@@ -300,6 +304,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         'phone_number': account['phone_number']?.toString() ?? '',
         'email_address': account['email_address']?.toString() ?? '',
         'mother_id': motherId,
+        'bhc_patient_id': bhcPatientId,
         'age': age,
         'gest_weeks': gestWeeks,
         'risk_level': riskLevel,
@@ -360,12 +365,16 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
             )
           ''').eq('assigned_bhc_id', _assignedBhcId!);
 
-      final List<dynamic> rawMothers = response;
+      final List<dynamic> rawMothers = List<dynamic>.from(response);
+      rawMothers.sort((a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
+
       final List<Map<String, dynamic>> parsedMothers = [];
 
-      for (var raw in rawMothers) {
+      for (int i = 0; i < rawMothers.length; i++) {
+        final raw = rawMothers[i];
         final int motherId = raw['mother_id'] as int;
         final int accountId = raw['account_id'] as int;
+        final String bhcPatientId = 'INA-${(i + 1).toString().padLeft(3, '0')}';
         final account = raw['accounts'] as Map<String, dynamic>?;
         if (account == null) continue;
 
@@ -422,6 +431,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
           'profile_picture': profilePictureUrl,
           'pregnancy_id': ongoingPregnancy?['pregnancy_id'] as int?,
           'last_menstrual_period': ongoingPregnancy?['last_menstrual_period'] as String?,
+          'bhc_patient_id': bhcPatientId,
         });
       }
 
@@ -1275,6 +1285,7 @@ class _MotherCard extends StatelessWidget {
                     children: [
                       Wrap(
                         spacing: 8,
+                        runSpacing: 4,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           ConstrainedBox(
@@ -1305,6 +1316,25 @@ class _MotherCard extends StatelessWidget {
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
                                 color: riskColor,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.brandPrimary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.brandPrimary.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: Text(
+                              'ID: ${mother['bhc_patient_id'] ?? mother['mother_id']}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.brandPrimary,
                               ),
                             ),
                           ),

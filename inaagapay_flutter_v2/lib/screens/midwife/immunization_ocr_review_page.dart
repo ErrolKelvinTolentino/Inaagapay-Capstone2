@@ -11,6 +11,8 @@ import '../../widgets/dialog_box.dart';
 import '../../widgets/confirmation_dialog_box.dart';
 import '../../services/sms_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/auth_storage.dart';
+import '../../services/supabase_service.dart';
 
 class ReviewItem {
   final String vaccineNameRaw;
@@ -241,6 +243,17 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
       final client = Supabase.instance.client;
       final List<Map<String, dynamic>> recordsToInsert = [];
 
+      int? midwifeId;
+      try {
+        final accountId = await AuthStorage.getUserId();
+        if (accountId != null) {
+          final ctx = await SupabaseService.getMidwifeContext(accountId);
+          midwifeId = ctx['midwife_id'] as int?;
+        }
+      } catch (e) {
+        debugPrint('Error getting midwife ID: $e');
+      }
+
       for (final item in selectedItems) {
         recordsToInsert.add({
           'child_id': widget.childId,
@@ -248,11 +261,12 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
           'vaccination_date': DateFormat('yyyy-MM-dd').format(item.vaccinationDate!),
           'remarks': item.remarks.trim().isEmpty ? null : item.remarks.trim(),
           'created_at': DateTime.now().toIso8601String(),
+          if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
         });
       }
 
       // Perform bulk upsert to handle overlapping records that were already taken but confirmed to overwrite
-      await client.from('immunization_record').upsert(
+      await client.from('immunization_records').upsert(
             recordsToInsert,
             onConflict: 'child_id,vaccine_id',
           );

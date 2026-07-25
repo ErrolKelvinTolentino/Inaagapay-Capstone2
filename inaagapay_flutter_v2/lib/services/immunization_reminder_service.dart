@@ -102,7 +102,7 @@ class ImmunizationReminderService {
 
           final childVaccineIds = childVaccines.map((v) => v['vaccine_id'] as int).toList();
           final recordsRes = await _client
-              .from('immunization_record')
+              .from('immunization_records')
               .select('child_id, vaccine_id')
               .inFilter('child_id', childIds)
               .inFilter('vaccine_id', childVaccineIds);

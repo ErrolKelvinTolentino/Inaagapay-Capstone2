@@ -15,6 +15,8 @@ import '../../widgets/validation_message.dart';
 import '../../services/growth_calculator.dart';
 import '../../services/groq_service.dart';
 import '../../widgets/profile_helpers.dart';
+import '../../services/auth_storage.dart';
+import '../../services/supabase_service.dart';
 
 class AddGrowthStep1 extends StatefulWidget {
   final int childId;
@@ -113,7 +115,7 @@ class _AddGrowthStep1State extends State<AddGrowthStep1> {
       _gender = childResponse['sex']?.toString().toLowerCase() ?? '';
 
       final growthResponse = await Supabase.instance.client
-          .from('child_details')
+          .from('child_growth_records')
           .select('*')
           .eq('child_id', widget.childId)
           .order('created_at', ascending: true);
@@ -535,11 +537,23 @@ $recordsSummary
       final height = double.parse(_heightController.text);
       final weight = double.parse(_weightController.text);
 
-      final insertResult = await Supabase.instance.client.from('child_details').insert({
+      int? midwifeId;
+      try {
+        final accountId = await AuthStorage.getUserId();
+        if (accountId != null) {
+          final ctx = await SupabaseService.getMidwifeContext(accountId);
+          midwifeId = ctx['midwife_id'] as int?;
+        }
+      } catch (e) {
+        debugPrint('Error getting midwife ID: $e');
+      }
+
+      final insertResult = await Supabase.instance.client.from('child_growth_records').insert({
         'child_id': widget.childId,
         'child_height': height,
         'child_weight': weight,
         'created_at': DateTime.now().toIso8601String(),
+        if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
       }).select('child_details_id').single();
 
       return insertResult['child_details_id'] as int;
@@ -617,7 +631,7 @@ $recordsSummary
         final combinedText = '## English\n$englishText\n\n## Filipino\n$filipinoText';
 
         final values = {
-          'reference_table': 'child_details',
+          'reference_table': 'child_growth_records',
           'reference_id': childDetailsId,
           'response_type': 'growth_analysis',
           'response_category': 'growth',
@@ -716,7 +730,7 @@ $recordsSummary
               'ai_model': 'groq',
               'updated_at': DateTime.now().toIso8601String(),
             })
-            .eq('reference_table', 'child_details')
+            .eq('reference_table', 'child_growth_records')
             .eq('reference_id', childDetailsId)
             .eq('response_type', 'growth_analysis');
       }

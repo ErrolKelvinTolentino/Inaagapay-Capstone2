@@ -67,7 +67,7 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
 
       // Fetch immunization records with vaccine details
       final immunizationResponse = await Supabase.instance.client
-          .from('immunization_record')
+          .from('immunization_records')
           .select('''
             *,
             vaccine:vaccine_id (

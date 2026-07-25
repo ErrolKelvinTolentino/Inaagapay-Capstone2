@@ -95,7 +95,7 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
       birthData = birthResponse;
 
       final growthResponse = await Supabase.instance.client
-          .from('child_details')
+          .from('child_growth_records')
           .select('*')
           .eq('child_id', widget.childId)
           .order('created_at', ascending: true);
@@ -108,7 +108,7 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
       }
 
       final immunizationResponse = await Supabase.instance.client
-          .from('immunization_record')
+          .from('immunization_records')
           .select('''
             *,
             vaccine:vaccine_id (*)
@@ -1178,7 +1178,7 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
       final saved = await Supabase.instance.client
           .from('ai_responses')
           .select('response, generated_by_ai')
-          .eq('reference_table', 'child_details')
+          .eq('reference_table', 'child_growth_records')
           .eq('reference_id', latestRecordId)
           .eq('response_type', 'growth_analysis')
           .maybeSingle();
@@ -1267,13 +1267,13 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
       final existing = await Supabase.instance.client
           .from('ai_responses')
           .select('ai_response_id')
-          .eq('reference_table', 'child_details')
+          .eq('reference_table', 'child_growth_records')
           .eq('reference_id', latestRecordId)
           .eq('response_type', 'growth_analysis')
           .maybeSingle();
 
       final values = {
-        'reference_table': 'child_details',
+        'reference_table': 'child_growth_records',
         'reference_id': latestRecordId,
         'response_type': 'growth_analysis',
         'response_category': 'growth',

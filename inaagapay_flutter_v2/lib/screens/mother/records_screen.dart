@@ -137,22 +137,54 @@ class _RecordsScreenState extends State<RecordsScreen>
 
   Future<void> _loadRecordsForPregnancies(List<int> pregnancyIds) async {
     if (pregnancyIds.isNotEmpty) {
-      final checkupsResponse = await SupabaseService.client
-          .from('prenatal_checkups')
-          .select(
-              '*, weight_gain:weight_gain_evaluations (evaluation_id, mode, status, confidence, message, flags, actual_gain, weekly_gain)')
+      final encountersResponse = await SupabaseService.client
+          .from('clinical_encounters')
+          .select('''
+            encounter_datetime,
+            recorded_by:midwives (
+              midwife_id,
+              account:accounts (first_name, last_name)
+            ),
+            checkup:prenatal_checkups (
+              *,
+              weight_gain:weight_gain_evaluations (
+                evaluation_id,
+                mode,
+                status,
+                confidence,
+                message,
+                flags,
+                actual_gain,
+                weekly_gain
+              )
+            )
+          ''')
           .inFilter('pregnancy_id', pregnancyIds)
-          .order('checkup_datetime', ascending: false);
+          .eq('encounter_type', 'checkup')
+          .order('encounter_datetime', ascending: false);
+
+      final List<Map<String, dynamic>> checkupsResponse = [];
+      for (final enc in (encountersResponse as List)) {
+        final checkupList = enc['checkup'] as List?;
+        final checkupMap = checkupList != null && checkupList.isNotEmpty
+            ? Map<String, dynamic>.from(checkupList.first as Map)
+            : null;
+        if (checkupMap != null) {
+          checkupMap['checkup_datetime'] = enc['encounter_datetime'];
+          checkupMap['midwife'] = enc['recorded_by'];
+          checkupsResponse.add(checkupMap);
+        }
+      }
 
       final ultrasoundsResponse = await SupabaseService.client
           .from('ultrasounds')
-          .select('*')
+          .select('*, recorded_by:midwives!recorded_by_midwife_id(midwife_id, account:accounts(first_name, last_name))')
           .inFilter('pregnancy_id', pregnancyIds)
           .order('ultrasound_date', ascending: false);
 
       final labTestsResponse = await SupabaseService.client
           .from('lab_tests')
-          .select('*')
+          .select('*, recorded_by:midwives!recorded_by_midwife_id(midwife_id, account:accounts(first_name, last_name))')
           .inFilter('pregnancy_id', pregnancyIds)
           .order('lab_test_date', ascending: false);
 
@@ -1608,6 +1640,20 @@ class _RecordsScreenState extends State<RecordsScreen>
                                   icon: Icons.medical_services,
                                   rows: [
                                     MapEntry(
+                                      _t('Conducted by', 'Isinagawa ni'),
+                                      () {
+                                        String mwName = '—';
+                                        if (record['midwife'] != null) {
+                                          final mw = record['midwife'] as Map<String, dynamic>;
+                                          final acc = mw['account'] as Map<String, dynamic>?;
+                                          if (acc != null) {
+                                            mwName = '${acc['first_name'] ?? ''} ${acc['last_name'] ?? ''}'.trim();
+                                          }
+                                        }
+                                        return mwName;
+                                      }(),
+                                    ),
+                                    MapEntry(
                                         _t('Date', 'Petsa'),
                                         record['checkup_datetime'] == null
                                             ? _notInputted()
@@ -1732,6 +1778,20 @@ class _RecordsScreenState extends State<RecordsScreen>
                                       imageUrls.isNotEmpty ? imageUrls : null,
                                   rows: [
                                     MapEntry(
+                                      _t('Recorded by', 'Itinala ni'),
+                                      () {
+                                        String mwName = '—';
+                                        if (record['recorded_by'] != null) {
+                                          final rb = record['recorded_by'] as Map<String, dynamic>;
+                                          final acc = rb['account'] as Map<String, dynamic>?;
+                                          if (acc != null) {
+                                            mwName = '${acc['first_name'] ?? ''} ${acc['last_name'] ?? ''}'.trim();
+                                          }
+                                        }
+                                        return mwName;
+                                      }(),
+                                    ),
+                                    MapEntry(
                                         _t('Record Added', 'Pinasok Noong'),
                                         addedDate),
                                     MapEntry(
@@ -1798,6 +1858,20 @@ class _RecordsScreenState extends State<RecordsScreen>
                                   imageUrls:
                                       imageUrls.isNotEmpty ? imageUrls : null,
                                   rows: [
+                                    MapEntry(
+                                      _t('Recorded by', 'Itinala ni'),
+                                      () {
+                                        String mwName = '—';
+                                        if (record['recorded_by'] != null) {
+                                          final rb = record['recorded_by'] as Map<String, dynamic>;
+                                          final acc = rb['account'] as Map<String, dynamic>?;
+                                          if (acc != null) {
+                                            mwName = '${acc['first_name'] ?? ''} ${acc['last_name'] ?? ''}'.trim();
+                                          }
+                                        }
+                                        return mwName;
+                                      }(),
+                                    ),
                                     MapEntry(
                                         _t('Record Added', 'Pinasok Noong'),
                                         addedDate),
