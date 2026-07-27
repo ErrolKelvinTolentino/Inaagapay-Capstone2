@@ -637,7 +637,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.info_outline, size: 40, color: AppColors.info),
+              const Icon(Icons.info_outline, size: 40, color: AppColors.brandPrimary),
               const SizedBox(height: 16),
               const Text(
                 'BMI Estimation Reference',
@@ -648,26 +648,30 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'This estimation uses the Institute of Medicine (IOM) 2009 '
-                'Gestational Weight Gain Guidelines to work backwards from the '
-                'mother\'s current weight and gestational age.\n\n'
-                'How it works:\n'
-                '• For early pregnancy (≤13 weeks): Current weight is used directly '
-                'as a close approximation since minimal weight gain occurs before week 13.\n\n'
-                '• For later pregnancy (>13 weeks): The system tests each BMI category '
-                '(Underweight, Normal, Overweight, Obese) by subtracting the expected '
-                'weight gain for that category, then checking if the resulting BMI is '
-                'self-consistent with the tested category.\n\n'
-                'Important: This is an estimation tool. If the mother later recalls '
-                'or finds her actual pre-pregnancy weight (e.g., from old records, ID '
-                'applications), it can be updated for more accurate tracking.\n\n'
-                'Reference: IOM (Institute of Medicine) and NRC (National Research '
-                'Council). 2009. Weight Gain During Pregnancy: Reexamining the Guidelines.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                  height: 1.5,
+              Flexible(
+                child: SingleChildScrollView(
+                  child: const Text(
+                    'This estimation uses the Institute of Medicine (IOM) 2009 '
+                    'Gestational Weight Gain Guidelines to work backwards from the '
+                    'mother\'s current weight and gestational age.\n\n'
+                    'How it works:\n'
+                    '• For early pregnancy (≤13 weeks): Current weight is used directly '
+                    'as a close approximation since minimal weight gain occurs before week 13.\n\n'
+                    '• For later pregnancy (>13 weeks): The system tests each BMI category '
+                    '(Underweight, Normal, Overweight, Obese) by subtracting the expected '
+                    'weight gain for that category, then checking if the resulting BMI is '
+                    'self-consistent with the tested category.\n\n'
+                    'Important: This is an estimation tool. If the mother later recalls '
+                    'or finds her actual pre-pregnancy weight (e.g., from old records, ID '
+                    'applications), it can be updated for more accurate tracking.\n\n'
+                    'Reference: IOM (Institute of Medicine) and NRC (National Research '
+                    'Council). 2009. Weight Gain During Pregnancy: Reexamining the Guidelines.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      height: 1.5,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -2937,34 +2941,100 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                               ),
                             ],
                             const SizedBox(height: 8),
-                            GestureDetector(
-                              onTap: () => setS(() => isPregnancyDateEstimated =
-                                  !isPregnancyDateEstimated),
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: Checkbox(
-                                      value: isPregnancyDateEstimated,
-                                      onChanged: (v) => setS(() =>
-                                          isPregnancyDateEstimated =
-                                              v ?? false),
-                                      activeColor: AppColors.brandPrimary,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(4)),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => setS(() => isPregnancyDateEstimated = false),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                      decoration: BoxDecoration(
+                                        color: !isPregnancyDateEstimated
+                                            ? AppColors.brandPrimary.withValues(alpha: 0.08)
+                                            : Colors.white,
+                                        border: Border.all(
+                                          color: !isPregnancyDateEstimated
+                                              ? AppColors.brandPrimary
+                                              : AppColors.borderPrimary,
+                                          width: 1.5,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: Radio<bool>(
+                                              value: false,
+                                              groupValue: isPregnancyDateEstimated,
+                                              activeColor: AppColors.brandPrimary,
+                                              onChanged: (val) => setS(() => isPregnancyDateEstimated = false),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          const Expanded(
+                                            child: Text(
+                                              'Exact Date',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.textPrimary,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    'Date is estimated',
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        color: AppColors.brandText),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => setS(() => isPregnancyDateEstimated = true),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                      decoration: BoxDecoration(
+                                        color: isPregnancyDateEstimated
+                                            ? AppColors.brandPrimary.withValues(alpha: 0.08)
+                                            : Colors.white,
+                                        border: Border.all(
+                                          color: isPregnancyDateEstimated
+                                              ? AppColors.brandPrimary
+                                              : AppColors.borderPrimary,
+                                          width: 1.5,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: Radio<bool>(
+                                              value: true,
+                                              groupValue: isPregnancyDateEstimated,
+                                              activeColor: AppColors.brandPrimary,
+                                              onChanged: (val) => setS(() => isPregnancyDateEstimated = true),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          const Expanded(
+                                            child: Text(
+                                              'Estimated Date',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.textPrimary,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 20),
                             Column(
@@ -4195,7 +4265,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       color = AppColors.warning;
     } else if (bmi < 25) {
       label = 'Normal';
-      color = const Color(0xFF4CAF50);
+      color = AppColors.success;
     } else if (bmi < 30) {
       label = 'Overweight';
       color = AppColors.warning;
@@ -5029,12 +5099,13 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
               SizedBox(
                 height: 24,
                 width: 24,
-                child: Checkbox(
-                  value: _knowsPrePregnancyWeight,
+                child: Radio<bool>(
+                  value: true,
+                  groupValue: _knowsPrePregnancyWeight,
                   activeColor: AppColors.brandPrimary,
                   onChanged: (val) {
                     setState(() {
-                      _knowsPrePregnancyWeight = val ?? false;
+                      _knowsPrePregnancyWeight = !_knowsPrePregnancyWeight;
                       if (!_knowsPrePregnancyWeight) {
                         _prePregnancyWeightCtrl.clear();
                         _prePregnancyWeightError = null;
@@ -5169,16 +5240,16 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.info.withValues(alpha: 0.06),
+              color: AppColors.bgSecondary,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.info.withValues(alpha: 0.25)),
+              border: Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.25)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.auto_fix_high, size: 18, color: AppColors.info),
+                    const Icon(Icons.auto_fix_high, size: 18, color: AppColors.brandPrimary),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -5188,7 +5259,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.info,
+                          color: AppColors.brandText,
                         ),
                       ),
                     ),
@@ -5197,10 +5268,10 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: AppColors.info.withValues(alpha: 0.12),
+                          color: AppColors.brandPrimary.withValues(alpha: 0.12),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.help_outline, size: 16, color: AppColors.info),
+                        child: const Icon(Icons.help_outline, size: 16, color: AppColors.brandPrimary),
                       ),
                     ),
                   ],
@@ -5416,6 +5487,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                 activeTrackColor: AppColors.brandPrimary.withValues(alpha: 0.5),
                 inactiveThumbColor: Colors.grey.shade400,
                 inactiveTrackColor: Colors.grey.shade200,
+                trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 shape: RoundedRectangleBorder(
@@ -6116,14 +6188,6 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
             SecondaryHeader(
               title: 'Add Mother',
               onBack: () => Navigator.pop(context),
-              trailing: TextButton.icon(
-                onPressed: _startOcrFlow,
-                icon: const Icon(Icons.document_scanner_outlined, size: 18),
-                label: const Text('Scan'),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.brandPrimary,
-                ),
-              ),
             ),
             LinearProgressIndicator(
               value: (_step + 1) / _totalSteps,

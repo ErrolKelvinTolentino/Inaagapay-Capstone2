@@ -33,21 +33,14 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _selectedRiskFilter = 'All';
-  String _selectedBarangayFilter = 'All';
   Timer? _searchDebounceTimer;
 
   String _selectedSort = 'ID Number';
+  int _currentPage = 1;
+  static const int _pageSize = 5;
 
   // Filter options
   final List<String> _riskFilters = ['All', 'Low Risk', 'High Risk'];
-  final List<String> _barangayFilters = [
-    'All',
-    'Sta Barbara',
-    'Tarcan',
-    'San Jose',
-    'Tiaong',
-    'Pinagbarilan',
-  ];
 
   // Scroll controller
   final ScrollController _scrollController = ScrollController();
@@ -87,14 +80,9 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
   }
 
   void _onSearchChanged() {
-    if (_searchDebounceTimer?.isActive ?? false) {
-      _searchDebounceTimer?.cancel();
-    }
-    _searchDebounceTimer = Timer(const Duration(milliseconds: 500), () {
-      setState(() {
-        _searchQuery = _searchController.text.trim().toLowerCase();
-        _applyFilters();
-      });
+    setState(() {
+      _searchQuery = _searchController.text.trim().toLowerCase();
+      _applyFilters();
     });
   }
 
@@ -119,14 +107,6 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         if (filterLower == 'high risk') return riskLevel == 'high';
         if (filterLower == 'low risk') return riskLevel == 'low';
         return true;
-      }).toList();
-    }
-
-    // Apply barangay filter
-    if (_selectedBarangayFilter != 'All') {
-      results = results.where((mother) {
-        final barangay = mother['barangay']?.toString() ?? '';
-        return barangay == _selectedBarangayFilter;
       }).toList();
     }
 
@@ -168,6 +148,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
 
     setState(() {
       _filteredMothers = results;
+      _currentPage = 1;
     });
   }
 
@@ -503,9 +484,6 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
     if (_selectedRiskFilter != 'All' && _filteredMothers.isEmpty) {
       return 'No mothers matching the risk filter';
     }
-    if (_selectedBarangayFilter != 'All' && _filteredMothers.isEmpty) {
-      return 'No mothers in this barangay';
-    }
     return 'No mothers found';
   }
 
@@ -515,7 +493,6 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
       _searchQuery = '';
       _selectedSort = 'ID Number';
       _selectedRiskFilter = 'All';
-      _selectedBarangayFilter = 'All';
       _applyFilters();
     });
   }
@@ -523,7 +500,6 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
   void _showFilterSortDialog() {
     String tempSort = _selectedSort;
     String tempRisk = _selectedRiskFilter;
-    String tempBarangay = _selectedBarangayFilter;
 
     showDialog(
       context: context,
@@ -581,22 +557,22 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                             }
                           },
                           selectedColor: AppColors.brandPrimary,
-                          backgroundColor: AppColors.bgSecondary,
+                          backgroundColor: Colors.white,
                           labelStyle: TextStyle(
                             color: isSelected
                                 ? Colors.white
-                                : AppColors.textPrimary,
+                                : AppColors.brandPrimary,
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                          side: const BorderSide(
+                            color: AppColors.brandPrimary,
+                            width: 1,
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
-                            side: BorderSide(
-                              color: isSelected
-                                  ? AppColors.brandPrimary
-                                  : Colors.transparent,
-                            ),
                           ),
                           showCheckmark: false,
                         );
@@ -622,85 +598,42 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                             }
                           },
                           selectedColor: AppColors.brandPrimary,
-                          backgroundColor: AppColors.bgSecondary,
+                          backgroundColor: Colors.white,
                           labelStyle: TextStyle(
                             color: isSelected
                                 ? Colors.white
-                                : AppColors.textPrimary,
+                                : AppColors.brandPrimary,
                             fontWeight: isSelected
                                 ? FontWeight.bold
                                 : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                          side: const BorderSide(
+                            color: AppColors.brandPrimary,
+                            width: 1,
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
-                            side: BorderSide(
-                              color: isSelected
-                                  ? AppColors.brandPrimary
-                                  : Colors.transparent,
-                            ),
                           ),
                           showCheckmark: false,
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 24),
-                    const Text('Filter by Barangay',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    DropdownMenu<String>(
-                      initialSelection: tempBarangay,
-                      width: MediaQuery.of(context).size.width - 48,
-                      textStyle: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      menuStyle: MenuStyle(
-                        backgroundColor: WidgetStateProperty.all(Colors.white),
-                        shape: WidgetStateProperty.all(
-                          RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                        ),
-                        elevation: WidgetStateProperty.all(4),
-                      ),
-                      inputDecorationTheme: InputDecorationTheme(
-                        fillColor: AppColors.bgSecondary,
-                        filled: true,
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 16),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      onSelected: (val) {
-                        if (val != null) {
-                          setModalState(() => tempBarangay = val);
-                        }
-                      },
-                      dropdownMenuEntries: _barangayFilters
-                          .map((b) => DropdownMenuEntry<String>(
-                                value: b,
-                                label: b == 'All' ? 'All Barangays' : b,
-                              ))
-                          .toList(),
-                    ),
                     const SizedBox(height: 32),
                     SizedBox(
                       width: double.infinity,
-                      height: 50,
+                      height: 52,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.brandPrimary,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(28)),
                           elevation: 0,
                         ),
                         onPressed: () {
                           setState(() {
                             _selectedSort = tempSort;
                             _selectedRiskFilter = tempRisk;
-                            _selectedBarangayFilter = tempBarangay;
                             _applyFilters();
                           });
                           Navigator.pop(context);
@@ -724,6 +657,15 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final int totalMothersCount = _filteredMothers.length;
+    final int startIndex = (_currentPage - 1) * _pageSize;
+    final int endIndex = startIndex + _pageSize < totalMothersCount
+        ? startIndex + _pageSize
+        : totalMothersCount;
+    final List<Map<String, dynamic>> displayedMothers = _filteredMothers.isEmpty
+        ? <Map<String, dynamic>>[]
+        : _filteredMothers.sublist(startIndex, endIndex);
+
     return Scaffold(
       backgroundColor: AppColors.bgPrimaryOf(context),
       body: SafeArea(
@@ -731,163 +673,110 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         bottom: false,
         child: Column(
           children: [
-            // Header Banner
-            Container(
-              width: double.infinity,
-              height: 110,
-              margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                image: const DecorationImage(
-                  image: AssetImage('assets/images/pinkbg.png'),
-                  fit: BoxFit.cover,
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    top: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                          right: 16.0, top: 4.0, bottom: 4.0),
-                      child: Image.asset(
-                        'assets/images/pregnant1.png',
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 24,
-                    top: 0,
-                    bottom: 0,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Showing',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        Text(
-                          '${_filteredMothers.length}/${_allMothers.length} Mothers',
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.brandPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Search Bar
+            const SizedBox(height: 8),
+            // Search & Filter Row
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: AppInputField(
-                hintText: 'Search Mother by name or email',
-                controller: _searchController,
-                leadingIcon: Icons.search,
-                trailingIcon:
-                    _searchController.text.isNotEmpty ? Icons.clear : null,
-                onTrailingTap: _searchController.text.isNotEmpty
-                    ? () {
-                        _searchController.clear();
-                        _searchQuery = '';
-                        _applyFilters();
-                      }
-                    : null,
-              ),
-            ),
-
-            // Filter & Sort Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Row(
                 children: [
                   Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.brandPrimary,
-                        foregroundColor: Colors.white,
-                        elevation: 2,
-                        shadowColor: AppColors.brandPrimary.withValues(alpha: 0.3),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                    child: AppInputField(
+                      hintText: 'Search Mother by name or email',
+                      controller: _searchController,
+                      leadingIcon: Icons.search,
+                      trailingIcon:
+                          _searchController.text.isNotEmpty ? Icons.clear : null,
+                      onTrailingTap: _searchController.text.isNotEmpty
+                          ? () {
+                              _searchController.clear();
+                              _searchQuery = '';
+                              _applyFilters();
+                            }
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Sort & Filter Icon Button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: (_selectedSort != 'ID Number' ||
+                              _selectedRiskFilter != 'All' ||
+                              _searchQuery.isNotEmpty)
+                          ? AppColors.brandPrimary
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: (_selectedSort != 'ID Number' ||
+                                _selectedRiskFilter != 'All' ||
+                                _searchQuery.isNotEmpty)
+                            ? AppColors.brandPrimary
+                            : AppColors.borderPrimary,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.filter_list,
+                        color: (_selectedSort != 'ID Number' ||
+                                _selectedRiskFilter != 'All' ||
+                                _searchQuery.isNotEmpty)
+                            ? Colors.white
+                            : AppColors.brandPrimary,
                       ),
                       onPressed: _showFilterSortDialog,
-                      icon: const Icon(Icons.filter_list, color: Colors.white),
-                      label: const Text('Sort & Filter',
-                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      tooltip: 'Sort & Filter',
                     ),
                   ),
                   if (_selectedSort != 'ID Number' ||
                       _selectedRiskFilter != 'All' ||
-                      _selectedBarangayFilter != 'All' ||
                       _searchQuery.isNotEmpty) ...[
-                    const SizedBox(width: 12),
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.brandPrimary,
-                        side: const BorderSide(color: AppColors.brandPrimary, width: 1.5),
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 14, horizontal: 20),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppColors.borderPrimary,
+                          width: 1.5,
                         ),
                       ),
-                      onPressed: _resetFilters,
-                      child: const Text('Clear',
-                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.refresh_rounded,
+                          color: AppColors.brandPrimary,
+                        ),
+                        onPressed: _resetFilters,
+                        tooltip: 'Clear Filters',
+                      ),
                     ),
                   ],
                 ],
               ),
             ),
 
-            // Results Count
-            if (_searchQuery.isNotEmpty ||
-                _selectedRiskFilter != 'All' ||
-                _selectedBarangayFilter != 'All')
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Showing ${_filteredMothers.length} of ${_allMothers.length} mothers',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
+            // Results Count & Pagination Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    (_searchQuery.isNotEmpty ||
+                            _selectedRiskFilter != 'All')
+                        ? 'Showing ${_filteredMothers.length} of ${_allMothers.length} mothers'
+                        : 'Total of ${_allMothers.length} registered mothers',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.brandText,
                     ),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (_filteredMothers.length > _pageSize) ...[
+                    _buildPaginationWidget(_filteredMothers.length),
                   ],
-                ),
-              ),
-
-            // Helper Text
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-              child: Text(
-                'Tap a mother to view health records',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
+                ],
               ),
             ),
 
@@ -981,36 +870,9 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                                 physics: const AlwaysScrollableScrollPhysics(),
                                 padding:
                                     const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                                itemCount: _filteredMothers.length +
-                                    (_hasMoreData &&
-                                            _searchQuery.isEmpty &&
-                                            _selectedRiskFilter == 'All' &&
-                                            _selectedBarangayFilter == 'All'
-                                        ? 1
-                                        : 0),
+                                itemCount: displayedMothers.length,
                                 itemBuilder: (context, index) {
-                                  if (index == _filteredMothers.length &&
-                                      _hasMoreData &&
-                                      _searchQuery.isEmpty &&
-                                      _selectedRiskFilter == 'All' &&
-                                      _selectedBarangayFilter == 'All') {
-                                    return const Padding(
-                                      padding:
-                                          EdgeInsets.symmetric(vertical: 20),
-                                      child: Center(
-                                        child: SizedBox(
-                                          width: 30,
-                                          height: 30,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: AppColors.brandPrimary,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }
-
-                                  final mother = _filteredMothers[index];
+                                  final mother = displayedMothers[index];
                                   final int? motherId =
                                       mother['mother_id'] as int?;
                                   final riskLevel =
@@ -1110,7 +972,78 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         backgroundColor: AppColors.brandPrimary,
         foregroundColor: Colors.white,
         tooltip: 'Add Mother',
+        shape: const CircleBorder(),
         child: const Icon(Icons.person_add_rounded),
+      ),
+    );
+  }
+
+  Widget _buildPaginationWidget(int totalMothers) {
+    final totalPages = (totalMothers / _pageSize).ceil();
+    if (totalPages <= 1) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left_rounded, size: 24),
+                color: AppColors.brandPrimary,
+                disabledColor: Colors.grey.shade300,
+                onPressed: _currentPage > 1
+                    ? () => setState(() => _currentPage--)
+                    : null,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 12),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(totalPages, (index) {
+                  final pageNum = index + 1;
+                  final isCurrent = _currentPage == pageNum;
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: isCurrent ? AppColors.brandPrimary : Colors.transparent,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.brandPrimary,
+                        width: 1.5,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(width: 12),
+              IconButton(
+                icon: const Icon(Icons.chevron_right_rounded, size: 24),
+                color: AppColors.brandPrimary,
+                disabledColor: Colors.grey.shade300,
+                onPressed: _currentPage < totalPages
+                    ? () => setState(() => _currentPage++)
+                    : null,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '$_currentPage of $totalPages',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.brandText,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1189,12 +1122,12 @@ class _MotherCard extends StatelessWidget {
       subtitleBuffer.write('Age unknown');
     }
 
-    if (hasPregnancy && gestWeeks > 0) {
-      subtitleBuffer.write(' • $gestWeeks weeks pregnant');
-    }
-
-    if (barangay.isNotEmpty) {
-      subtitleBuffer.write(' • $barangay');
+    if (dueDateText != null && dueDateText!.isNotEmpty) {
+      String dueStr = dueDateText!;
+      if (dueStr.toLowerCase().startsWith('due ')) {
+        dueStr = 'due ${dueStr.substring(4)}';
+      }
+      subtitleBuffer.write(' • $dueStr');
     }
 
     return Container(
@@ -1226,8 +1159,8 @@ class _MotherCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        riskColor.withValues(alpha: 0.3),
-                        riskColor.withValues(alpha: 0.2),
+                        AppColors.brandPrimary.withValues(alpha: 0.15),
+                        AppColors.brandPrimary.withValues(alpha: 0.05),
                       ],
                     ),
                     shape: BoxShape.circle,
@@ -1244,23 +1177,23 @@ class _MotherCard extends StatelessWidget {
                               return Center(
                                 child: Text(
                                   _getInitials(displayName),
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
-                                    color: riskColor,
+                                    color: AppColors.brandPrimary,
                                   ),
                                 ),
                               );
                             },
                             loadingBuilder: (context, child, loadingProgress) {
                               if (loadingProgress == null) return child;
-                              return Center(
+                              return const Center(
                                 child: SizedBox(
                                   width: 24,
                                   height: 24,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: riskColor,
+                                    color: AppColors.brandPrimary,
                                   ),
                                 ),
                               );
@@ -1269,10 +1202,10 @@ class _MotherCard extends StatelessWidget {
                         : Center(
                             child: Text(
                               _getInitials(displayName),
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
-                                color: riskColor,
+                                color: AppColors.brandPrimary,
                               ),
                             ),
                           ),
@@ -1288,18 +1221,6 @@ class _MotherCard extends StatelessWidget {
                         runSpacing: 4,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 220),
-                            child: Text(
-                              displayName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                                color: AppColors.textPrimary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
@@ -1311,7 +1232,7 @@ class _MotherCard extends StatelessWidget {
                               ),
                             ),
                             child: Text(
-                              'ID: ${mother['bhc_patient_id'] ?? mother['mother_id']}',
+                              '${mother['bhc_patient_id'] ?? mother['mother_id']}',
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
@@ -1319,23 +1240,16 @@ class _MotherCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: riskColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: riskColor.withValues(alpha: 0.3),
-                              ),
-                            ),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 160),
                             child: Text(
-                              riskLabel,
-                              style: TextStyle(
-                                fontSize: 10,
+                              displayName,
+                              style: const TextStyle(
                                 fontWeight: FontWeight.w600,
-                                color: riskColor,
+                                fontSize: 16,
+                                color: AppColors.textPrimary,
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -1349,34 +1263,39 @@ class _MotherCard extends StatelessWidget {
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
-                      if (dueDateText != null) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.event_available,
-                              size: 12,
-                              color: Colors.pink[300],
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              dueDateText!,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.pink[300],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.chevron_right,
-                  color: AppColors.brandPrimary,
-                  size: 24,
+                const SizedBox(width: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: riskColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: riskColor.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        riskLabel,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: riskColor,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: AppColors.brandPrimary,
+                      size: 24,
+                    ),
+                  ],
                 ),
               ],
             ),
