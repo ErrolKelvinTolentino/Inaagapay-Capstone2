@@ -179,15 +179,19 @@ class ProfileSection extends StatelessWidget {
 // ── Info row used inside sections ─────────────────────────────────────────
 
 class ProfileInfoRow extends StatelessWidget {
-  final String label;
-  final String value;
+  final String? label;
+  final Widget? labelWidget;
+  final String? value;
+  final Widget? valueWidget;
   final Color? valueColor;
   final IconData? icon;
 
   const ProfileInfoRow({
     super.key,
-    required this.label,
-    required this.value,
+    this.label,
+    this.labelWidget,
+    this.value,
+    this.valueWidget,
     this.valueColor,
     this.icon,
   });
@@ -204,26 +208,28 @@ class ProfileInfoRow extends StatelessWidget {
           ],
           Expanded(
             flex: 2,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
+            child: labelWidget ??
+                Text(
+                  label ?? '',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
           ),
           Expanded(
             flex: 3,
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: valueColor ?? AppColors.inputText,
-              ),
-            ),
+            child: valueWidget ??
+                Text(
+                  value ?? '',
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: valueColor ?? AppColors.inputText,
+                  ),
+                ),
           ),
         ],
       ),

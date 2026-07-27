@@ -5240,6 +5240,24 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   // ── Overview tab static section builders (Pic 2 style) ──────────────────────
 
   Widget _buildMedicalInfoSection(Map<String, dynamic> profile) {
+    final double? heightCm = double.tryParse(_personalControllers['height']?.text ?? '') ??
+        (profile['height'] != null ? (profile['height'] as num).toDouble() : null);
+
+    final double? prePregWeight = double.tryParse(_personalControllers['pre_pregnancy_weight']?.text ?? '') ??
+        (profile['pre_pregnancy_weight'] != null ? (profile['pre_pregnancy_weight'] as num).toDouble() : null);
+
+    final double? currWeight = double.tryParse(_personalControllers['weight']?.text ?? '') ??
+        (profile['weight'] != null ? (profile['weight'] as num).toDouble() : null);
+
+    final double? bmi = computePregnancyBMI(
+      prePregnancyWeight: prePregWeight,
+      currentWeight: currWeight,
+      heightCm: heightCm,
+    );
+
+    final String? bmiStatus = bmi != null ? getBMIStatus(bmi) : null;
+    final Color bmiColor = bmiStatus != null ? getBMIStatusColor(bmiStatus) : AppColors.textSecondary;
+
     return ProfileCardSection(
       title: 'Medical Information',
       icon: Icons.medical_information,
@@ -5272,6 +5290,45 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           value: _personalControllers['pre_pregnancy_weight']?.text.isNotEmpty == true
               ? '${_personalControllers['pre_pregnancy_weight']!.text} kg'
               : 'Unknown',
+        ),
+        ProfileInfoRow(
+          icon: Icons.speed_rounded,
+          labelWidget: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'BMI',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+              if (bmiStatus != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: bmiColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: bmiColor.withValues(alpha: 0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    bmiStatus,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: bmiColor,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          value: bmi != null ? bmi.toStringAsFixed(1) : 'Not calculated',
         ),
         ProfileInfoRow(icon: Icons.bloodtype_outlined, label: 'Blood Type', value: profile['blood_type'] ?? 'Not set'),
         ProfileInfoRow(
