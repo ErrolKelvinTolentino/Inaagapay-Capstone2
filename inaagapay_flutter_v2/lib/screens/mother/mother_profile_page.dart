@@ -4712,140 +4712,853 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     }
   }
 
-  // ── Expandable section shell ────────────────────────────────────────────
+  // ── Modal Sheet Helpers for Editing Overview Sections ───────────────────────
 
-  Widget _buildExpandableSection(
-      String title, IconData icon, List<Widget> children) {
-    return ProfileSection(
-      title: title,
-      icon: icon,
-      children: children,
+  void _showEditMedicalInfoModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.borderPrimary,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.medical_information, color: AppColors.brandPrimary, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Edit Medical Information',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.brandText,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  _buildEditableMedicalForm(),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: MainButton(
+                          label: 'Cancel',
+                          isWhiteVariant: true,
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: MainButton(
+                          label: 'Save Changes',
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            await _savePersonalInfo();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return ProfileInfoRow(label: label, value: value);
+  void _showEditAddressModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderPrimary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.home_outlined, color: AppColors.brandPrimary, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Edit Address',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.brandText,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              _buildEditableAddressForm(),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: MainButton(
+                      label: 'Cancel',
+                      isWhiteVariant: true,
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: MainButton(
+                      label: 'Save Changes',
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _saveAddress();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
-  // ── Editable form widgets ───────────────────────────────────────────────
-
-  Widget _buildMedicalInfoSection(Map<String, dynamic> profile) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 5,
-              offset: const Offset(0, 2))
-        ],
+  void _showManageMedicalConditionsModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          dividerColor: Colors.transparent,
-        ),
-        child: ExpansionTile(
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-                color: AppColors.brandPrimary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.medical_information,
-                color: AppColors.brandPrimary, size: 18),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.75,
           ),
-          title: const Text('Medical Information',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderPrimary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
                 children: [
-                  _buildInfoRow('Birthdate', _formatDate(profile['birthdate'])),
-                  const SizedBox(height: 8),
-                  _buildInfoRow(
-                      'Height',
-                      _personalControllers['height']?.text.isNotEmpty == true
-                          ? '${_personalControllers['height']!.text} cm'
-                          : 'Not set'),
-                  const SizedBox(height: 8),
-                  _buildInfoRow(
-                      'Weight',
-                      _personalControllers['weight']?.text.isNotEmpty == true
-                          ? '${_personalControllers['weight']!.text} kg'
-                          : 'Not set'),
-                  const SizedBox(height: 8),
-                  _buildInfoRow(
-                      'Pre-Pregnancy Weight',
-                      _personalControllers['pre_pregnancy_weight']?.text.isNotEmpty == true
-                          ? '${_personalControllers['pre_pregnancy_weight']!.text} kg'
-                          : 'Unknown'),
-                  const SizedBox(height: 8),
-                  _buildInfoRow(
-                      'Blood Type', profile['blood_type'] ?? 'Not set'),
-                  const SizedBox(height: 8),
-                  _buildInfoRow(
-                      'Obstetric Score (G-P-A)',
-                      'G${profile['gravida'] ?? 0} P${profile['para'] ?? 0} A${profile['abortus'] ?? 0}'),
-                  const SizedBox(height: 8),
-                  _buildInfoRow(
-                      'Registered by',
-                      () {
-                        String rbName = '—';
-                        if (profile['registered_by'] != null) {
-                          final rb = profile['registered_by'] as Map<String, dynamic>;
-                          final account = rb['account'] as Map<String, dynamic>?;
-                          if (account != null) {
-                            rbName = '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'.trim();
-                          }
-                        }
-                        return rbName;
-                      }()),
-                  if (!widget.readOnly) ...[
-                    const SizedBox(height: 16),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        // FIX #6: close address edit if open
-                        onPressed: () => setState(() {
-                          _isEditingPersonal = true;
-                          _isEditingAddress = false;
-                        }),
-                        icon: const Icon(Icons.edit_outlined, size: 16),
-                        label: const Text('Edit Medical Info'),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.medical_services_outlined, color: AppColors.brandPrimary, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Medical Conditions',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.brandText,
                       ),
                     ),
-                    if (_isEditingPersonal) ...[
-                      const SizedBox(height: 12),
-                      _buildEditableMedicalForm(),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: MainButton(
-                              label: 'Cancel',
-                              isWhiteVariant: true,
-                              onPressed: () => setState(
-                                  () => _isEditingPersonal = false),
-                            ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _addMedicalCondition();
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (_currentMedicalConditions.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 30),
+                  child: Center(
+                    child: Text(
+                      'No medical conditions recorded',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: _currentMedicalConditions.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final c = _currentMedicalConditions[index] as Map<String, dynamic>;
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: c['status'] == 'active' ? AppColors.warning : AppColors.success,
+                            shape: BoxShape.circle,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: MainButton(
-                              label: 'Save Changes',
-                              onPressed: _savePersonalInfo,
+                        ),
+                        title: Text(
+                          c['condition_name'] ?? '-',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        subtitle: Text(
+                          '${c['status'] ?? 'active'} • ${_formatDate(c['diagnosis_date'])}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, color: AppColors.brandPrimary, size: 20),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _editMedicalCondition(c);
+                              },
                             ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _removeMedicalCondition(c);
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showManageAllergiesModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.75,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderPrimary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.warning_amber_outlined, color: AppColors.brandPrimary, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Allergies',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.brandText,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _addAllergy();
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (_currentAllergies.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 30),
+                  child: Center(
+                    child: Text(
+                      'No allergies recorded',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: _currentAllergies.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final a = _currentAllergies[index] as Map<String, dynamic>;
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: a['status'] == 'active' ? AppColors.warning : AppColors.success,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        title: Text(
+                          a['allergen'] ?? '-',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        subtitle: Text(
+                          '${a['status'] ?? 'active'} • ${_formatDate(a['diagnosis_date'])}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, color: AppColors.brandPrimary, size: 20),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _editAllergy(a);
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _removeAllergy(a);
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showManageEmergencyContactsModal(List emergencyContacts) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.75,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderPrimary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.contacts_outlined, color: AppColors.brandPrimary, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Emergency Contacts',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.brandText,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showEmergencyContactDialog();
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (emergencyContacts.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 30),
+                  child: Center(
+                    child: Text(
+                      'No emergency contacts',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: emergencyContacts.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final c = emergencyContacts[index] as Map<String, dynamic>;
+                      final name = [c['first_name'], c['middle_name'], c['last_name'], c['extension_name']].whereType<String>().join(' ');
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          name,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        subtitle: Text(
+                          '${c['phone_number'] ?? '-'} ${c['affiliation'] != null ? '• ${c['affiliation']}' : ''}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, color: AppColors.brandPrimary, size: 20),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _showEmergencyContactDialog(prefill: c);
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: AppColors.error, size: 20),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _removeEmergencyContact(c);
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Overview tab static section builders (Pic 2 style) ──────────────────────
+
+  Widget _buildMedicalInfoSection(Map<String, dynamic> profile) {
+    return ProfileCardSection(
+      title: 'Medical Information',
+      icon: Icons.medical_information,
+      actionButton: !widget.readOnly
+          ? IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.brandPrimary),
+              onPressed: _showEditMedicalInfoModal,
+              tooltip: 'Edit Medical Info',
+            )
+          : null,
+      children: [
+        ProfileInfoRow(icon: Icons.cake_outlined, label: 'Birthdate', value: _formatDate(profile['birthdate'])),
+        ProfileInfoRow(
+          icon: Icons.straighten,
+          label: 'Height',
+          value: _personalControllers['height']?.text.isNotEmpty == true
+              ? '${_personalControllers['height']!.text} cm'
+              : 'Not set',
+        ),
+        ProfileInfoRow(
+          icon: Icons.scale_outlined,
+          label: 'Weight',
+          value: _personalControllers['weight']?.text.isNotEmpty == true
+              ? '${_personalControllers['weight']!.text} kg'
+              : 'Not set',
+        ),
+        ProfileInfoRow(
+          icon: Icons.monitor_weight_outlined,
+          label: 'Pre-Pregnancy Weight',
+          value: _personalControllers['pre_pregnancy_weight']?.text.isNotEmpty == true
+              ? '${_personalControllers['pre_pregnancy_weight']!.text} kg'
+              : 'Unknown',
+        ),
+        ProfileInfoRow(icon: Icons.bloodtype_outlined, label: 'Blood Type', value: profile['blood_type'] ?? 'Not set'),
+        ProfileInfoRow(
+          icon: Icons.medical_services_outlined,
+          label: 'Obstetric Score',
+          value: 'G${profile['gravida'] ?? 0} P${profile['para'] ?? 0} A${profile['abortus'] ?? 0}',
+        ),
+        ProfileInfoRow(
+          icon: Icons.person_outline,
+          label: 'Registered by',
+          value: () {
+            String rbName = '—';
+            if (profile['registered_by'] != null) {
+              final rb = profile['registered_by'] as Map<String, dynamic>;
+              final account = rb['account'] as Map<String, dynamic>?;
+              if (account != null) {
+                rbName = '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'.trim();
+              }
+            }
+            return rbName;
+          }(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAddressSection(Map<String, dynamic> profile) {
+    return ProfileCardSection(
+      title: 'Address',
+      icon: Icons.home_outlined,
+      actionButton: !widget.readOnly
+          ? IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.brandPrimary),
+              onPressed: _showEditAddressModal,
+              tooltip: 'Edit Address',
+            )
+          : null,
+      children: [
+        ProfileInfoRow(icon: Icons.numbers_outlined, label: 'House No.', value: profile['house_number'] ?? '-'),
+        ProfileInfoRow(icon: Icons.add_road_outlined, label: 'Street', value: profile['street'] ?? '-'),
+        ProfileInfoRow(icon: Icons.location_city_outlined, label: 'Barangay', value: profile['barangay'] ?? '-'),
+        ProfileInfoRow(icon: Icons.location_on_outlined, label: 'City', value: profile['city_municipality'] ?? '-'),
+        ProfileInfoRow(icon: Icons.map_outlined, label: 'Province', value: profile['province'] ?? '-'),
+      ],
+    );
+  }
+
+  Widget _buildMedicalConditionsSection(List medicalConditions) {
+    return ProfileCardSection(
+      title: 'Medical Conditions',
+      icon: Icons.medical_services_outlined,
+      actionButton: !widget.readOnly
+          ? IconButton(
+              icon: const Icon(Icons.edit_note_outlined, size: 20, color: AppColors.brandPrimary),
+              onPressed: _showManageMedicalConditionsModal,
+              tooltip: 'Manage Medical Conditions',
+            )
+          : null,
+      children: [
+        if (medicalConditions.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: Text(
+                'No medical conditions recorded',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ),
+          )
+        else
+          ...medicalConditions.map<Widget>((c) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: c['status'] == 'active' ? AppColors.warning : AppColors.success,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            c['condition_name'] ?? '-',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.inputText),
+                          ),
+                          Text(
+                            '${c['status'] ?? 'active'} • ${_formatDate(c['diagnosis_date'])}',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ],
-                ],
+                ),
+              )),
+      ],
+    );
+  }
+
+  Widget _buildAllergiesSection(List allergies) {
+    return ProfileCardSection(
+      title: 'Allergies',
+      icon: Icons.warning_amber_outlined,
+      actionButton: !widget.readOnly
+          ? IconButton(
+              icon: const Icon(Icons.edit_note_outlined, size: 20, color: AppColors.brandPrimary),
+              onPressed: _showManageAllergiesModal,
+              tooltip: 'Manage Allergies',
+            )
+          : null,
+      children: [
+        if (allergies.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: Text(
+                'No allergies recorded',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
             ),
-          ],
-        ),
-      ),
+          )
+        else
+          ...allergies.map<Widget>((a) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: a['status'] == 'active' ? AppColors.warning : AppColors.success,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            a['allergen'] ?? '-',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.inputText),
+                          ),
+                          Text(
+                            '${a['status'] ?? 'active'} • ${_formatDate(a['diagnosis_date'])}',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+      ],
+    );
+  }
+
+  Widget _buildEmergencyContactsSection(List emergencyContacts) {
+    return ProfileCardSection(
+      title: 'Emergency Contacts',
+      icon: Icons.contacts_outlined,
+      actionButton: !widget.readOnly
+          ? IconButton(
+              icon: const Icon(Icons.edit_note_outlined, size: 20, color: AppColors.brandPrimary),
+              onPressed: () => _showManageEmergencyContactsModal(emergencyContacts),
+              tooltip: 'Manage Emergency Contacts',
+            )
+          : null,
+      children: [
+        if (emergencyContacts.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: Text(
+                'No emergency contacts',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ),
+          )
+        else
+          ...emergencyContacts.map<Widget>((c) {
+            final name = [c['first_name'], c['middle_name'], c['last_name'], c['extension_name']].whereType<String>().join(' ');
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  const Icon(Icons.phone_outlined, size: 16, color: AppColors.brandPrimary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.inputText),
+                        ),
+                        Text(
+                          '${c['phone_number'] ?? '-'} ${c['affiliation'] != null ? '• ${c['affiliation']}' : ''}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
+  Widget _buildChildrenSection(List children) {
+    return ProfileCardSection(
+      title: 'Children',
+      icon: Icons.child_care_outlined,
+      children: [
+        if (children.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: Text(
+                'No children registered',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ),
+          )
+        else
+          ...children.map<Widget>((c) {
+            final childName = [c['first_name'], c['middle_name'], c['last_name']].whereType<String>().join(' ');
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 14,
+                    backgroundColor: AppColors.brandPrimary.withValues(alpha: 0.12),
+                    child: Text(
+                      c['first_name']?.toString().substring(0, 1).toUpperCase() ?? 'C',
+                      style: const TextStyle(color: AppColors.brandPrimary, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          childName,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.inputText),
+                        ),
+                        if (c['added_at'] != null)
+                          Text(
+                            'Added: ${_formatDate(c['added_at'])}',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+      ],
     );
   }
 
@@ -4999,32 +5712,22 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           // EDD countdown
           if (weeksToGo != null && weeksToGo > 0)
             Text(
-              '$weeksToGo weeks to go',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: trimesterColor.withValues(alpha: 0.8),
-              ),
-            )
-          else if (weeksToGo != null && weeksToGo <= 0)
-            Text(
-              'Due any day now!',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.error,
-              ),
-            ),
-          if (edd != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              'EDD: ${DateFormat('MMMM d, yyyy').format(edd)}',
-              style: TextStyle(
+              '$weeksToGo weeks left until expected delivery',
+              style: const TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
               ),
             ),
-          ],
+          if (edd != null) const SizedBox(height: 4),
+          if (edd != null)
+            Text(
+              'Expected Due Date: ${_formatDate(edd.toIso8601String())}',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
           // Progress bar
           if (gestWeeks != null) ...[
             const SizedBox(height: 16),
@@ -5056,7 +5759,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // OVERVIEW TAB
+  // OVERVIEW TAB (Task 5.2 - Focus on what mothers need)
   // ══════════════════════════════════════════════════════════════════════════
 
   Widget _buildOverviewTab(
@@ -5108,414 +5811,45 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             ),
             const SizedBox(height: 16),
 
-            // Task 5.2: Focus on what mothers need — next checkup, weight gain status
-            // (ProfileRiskCard remains as it is useful)
+            // ProfileRiskCard
             if (currentPregnancy != null)
               ProfileRiskCard(profile: profile, pregnancy: currentPregnancy),
             if (currentPregnancy != null) const SizedBox(height: 16),
 
+            // Overview Section Cards (Pic 2 style)
             _buildMedicalInfoSection(profile),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
-            // Address (editable)
-            _buildReadOnlySection(
-              'Address',
-              Icons.home_outlined,
-              [
-                _buildInfoRow('House No.', profile['house_number'] ?? '-'),
-                _buildInfoRow('Street', profile['street'] ?? '-'),
-                _buildInfoRow('Barangay', profile['barangay'] ?? '-'),
-                _buildInfoRow('City', profile['city_municipality'] ?? '-'),
-                _buildInfoRow('Province', profile['province'] ?? '-'),
-                const SizedBox(height: 8),
-                if (!widget.readOnly)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      // FIX #6: close personal edit if open
-                      onPressed: () => setState(() {
-                        _isEditingAddress = true;
-                        _isEditingPersonal = false;
-                      }),
-                      icon: const Icon(Icons.edit_outlined, size: 16),
-                      label: const Text('Edit Address'),
-                    ),
-                  ),
-                if (!widget.readOnly && _isEditingAddress) ...[
-                  const SizedBox(height: 12),
-                  _buildEditableAddressForm(),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: MainButton(
-                          label: 'Cancel',
-                          isWhiteVariant: true,
-                          onPressed: () =>
-                              setState(() => _isEditingAddress = false),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: MainButton(
-                          label: 'Save Changes',
-                          onPressed: _saveAddress,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 12),
+            _buildAddressSection(profile),
+            const SizedBox(height: 14),
 
-            // Medical Conditions (Task 5.5: add/remove)
-            _buildExpandableSection(
-              'Medical Conditions',
-              Icons.medical_services_outlined,
-              [
-                if (medicalConditions.isEmpty)
-                  const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: Text('No medical conditions recorded',
-                          style: TextStyle(color: AppColors.textSecondary)))
-                else
-                  ...medicalConditions.map<Widget>((c) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                    color: c['status'] == 'active'
-                                        ? AppColors.warning
-                                        : AppColors.success,
-                                    shape: BoxShape.circle)),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(c['condition_name'] ?? '-',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w500)),
-                                  Text(
-                                      '${c['status'] ?? 'active'} - ${_formatDate(c['diagnosis_date'])}',
-                                      style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.textSecondary)),
-                                ],
-                              ),
-                            ),
-                            if (!widget.readOnly && _isEditingConditions) ...[
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined,
-                                    color: AppColors.brandPrimary, size: 20),
-                                onPressed: () => _editMedicalCondition(
-                                    c as Map<String, dynamic>),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                              ),
-                              const SizedBox(width: 8),
-                              if (c['status'] == 'active')
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline,
-                                      color: AppColors.error, size: 20),
-                                  onPressed: () => _removeMedicalCondition(
-                                      c as Map<String, dynamic>),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                ),
-                            ],
-                          ],
-                        ),
-                      )),
-                if (!widget.readOnly) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () => setState(
-                            () => _isEditingConditions = !_isEditingConditions),
-                        icon: Icon(
-                            _isEditingConditions
-                                ? Icons.check
-                                : Icons.edit_outlined,
-                            size: 16),
-                        label: Text(_isEditingConditions ? 'Done' : 'Edit'),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton.icon(
-                        onPressed: _addMedicalCondition,
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Add'),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 12),
+            _buildMedicalConditionsSection(medicalConditions),
+            const SizedBox(height: 14),
 
-            // Allergies (Task 5.5: add/remove)
-            _buildExpandableSection(
-              'Allergies',
-              Icons.warning_amber_outlined,
-              [
-                if (allergies.isEmpty)
-                  const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: Text('No allergies recorded',
-                          style: TextStyle(color: AppColors.textSecondary)))
-                else
-                  ...allergies.map<Widget>((a) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: [
-                            Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                    color: a['status'] == 'active'
-                                        ? AppColors.warning
-                                        : AppColors.success,
-                                    shape: BoxShape.circle)),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(a['allergen'] ?? '-',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w500)),
-                                  Text(
-                                      '${a['status'] ?? 'active'} - ${_formatDate(a['diagnosis_date'])}',
-                                      style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.textSecondary)),
-                                ],
-                              ),
-                            ),
-                            if (!widget.readOnly && _isEditingAllergies) ...[
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined,
-                                    color: AppColors.brandPrimary, size: 20),
-                                onPressed: () => _editAllergy(
-                                    a as Map<String, dynamic>),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                              ),
-                              const SizedBox(width: 8),
-                              if (a['status'] == 'active')
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline,
-                                      color: AppColors.error, size: 20),
-                                  onPressed: () =>
-                                      _removeAllergy(a as Map<String, dynamic>),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                ),
-                            ],
-                          ],
-                        ),
-                      )),
-                if (!widget.readOnly) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () => setState(
-                            () => _isEditingAllergies = !_isEditingAllergies),
-                        icon: Icon(
-                            _isEditingAllergies
-                                ? Icons.check
-                                : Icons.edit_outlined,
-                            size: 16),
-                        label: Text(_isEditingAllergies ? 'Done' : 'Edit'),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton.icon(
-                        onPressed: _addAllergy,
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Add'),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 12),
+            _buildAllergiesSection(allergies),
+            const SizedBox(height: 14),
 
-            // Emergency Contacts
-            _buildExpandableSection(
-              'Emergency Contacts',
-              Icons.contacts_outlined,
-              [
-                if (emergencyContacts.isEmpty)
-                  const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: Text('No emergency contacts',
-                          style: TextStyle(color: AppColors.textSecondary)))
-                else
-                  ...emergencyContacts.map<Widget>((c) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                      [
-                                        c['first_name'],
-                                        c['middle_name'],
-                                        c['last_name'],
-                                        c['extension_name']
-                                      ].whereType<String>().join(' '),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 4),
-                                  Row(children: [
-                                    const Icon(Icons.phone_outlined,
-                                        size: 14, color: AppColors.textSecondary),
-                                    const SizedBox(width: 4),
-                                    Text(c['phone_number'] ?? '-')
-                                  ]),
-                                  if (c['affiliation'] != null) ...[
-                                    const SizedBox(height: 2),
-                                    Row(children: [
-                                      const Icon(Icons.business,
-                                          size: 14,
-                                          color: AppColors.textSecondary),
-                                      const SizedBox(width: 4),
-                                      Text(c['affiliation'].toString())
-                                    ]),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            if (!widget.readOnly && _isEditingContacts) ...[
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined,
-                                    color: AppColors.brandPrimary, size: 20),
-                                onPressed: () => _showEmergencyContactDialog(
-                                    prefill: c as Map<String, dynamic>),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(Icons.remove_circle_outline,
-                                    color: AppColors.error, size: 20),
-                                onPressed: () => _removeEmergencyContact(
-                                    c as Map<String, dynamic>),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                              ),
-                            ],
-                          ],
-                        ),
-                      )),
-                if (!widget.readOnly) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () => setState(
-                            () => _isEditingContacts = !_isEditingContacts),
-                        icon: Icon(
-                            _isEditingContacts
-                                ? Icons.check
-                                : Icons.edit_outlined,
-                            size: 16),
-                        label: Text(_isEditingContacts ? 'Done' : 'Edit'),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton.icon(
-                        onPressed: () => _showEmergencyContactDialog(),
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Add'),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 12),
+            _buildEmergencyContactsSection(emergencyContacts),
+            const SizedBox(height: 14),
 
-            // Children
-            _buildExpandableSection(
-              'Children',
-              Icons.child_care_outlined,
-              [
-                TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search children...',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    filled: true,
-                    fillColor: AppColors.bgSecondary,
-                  ),
-                  onChanged: (v) => setState(() => _childQuery = v),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.bgSecondary,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _childSort,
-                    decoration: const InputDecoration(
-                        labelText: 'Sort by', border: InputBorder.none),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'recent', child: Text('Most recent')),
-                      DropdownMenuItem(value: 'name', child: Text('Name A-Z')),
-                    ],
-                    onChanged: (v) =>
-                        setState(() => _childSort = v ?? 'recent'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ..._filterAndSortChildren(children).map((c) => Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor:
-                              AppColors.brandPrimary.withValues(alpha: 0.1),
-                          child: Text(
-                            c['first_name']
-                                    ?.toString()
-                                    .substring(0, 1)
-                                    .toUpperCase() ??
-                                'C',
-                            style: TextStyle(color: AppColors.brandPrimary),
-                          ),
-                        ),
-                        title: Text([
-                          c['first_name'],
-                          c['middle_name'],
-                          c['last_name'],
-                        ].whereType<String>().join(' ')),
-                        subtitle: Text('Added: ${_formatDate(c['added_at'])}'),
-                        trailing: const Icon(Icons.chevron_right,
-                            color: AppColors.textSecondary),
-                        onTap: () {},
-                      ),
-                    )),
-              ],
-            ),
+            _buildChildrenSection(children),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildExpandableSection(
+      String title, IconData icon, List<Widget> children) {
+    return ProfileSection(
+      title: title,
+      icon: icon,
+      children: children,
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return ProfileInfoRow(label: label, value: value);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
