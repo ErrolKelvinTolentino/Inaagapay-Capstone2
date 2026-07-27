@@ -25,13 +25,20 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
   String? _errorMessage;
   int? _assignedBhcId;
 
+  // Search, Filter, Sort and Pagination
+  String _searchQuery = '';
+  String _selectedGenderFilter = 'All';
+  String _selectedSort = 'ID Number';
+  int _currentPage = 1;
+  static const int _pageSize = 5;
+
   static List<Map<String, dynamic>>? _childrenCache;
 
   @override
   void initState() {
     super.initState();
     _loadMidwifeContext();
-    _searchController.addListener(_filterChildren);
+    _searchController.addListener(_onSearchChanged);
   }
 
   @override
@@ -73,10 +80,10 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
     if (_childrenCache != null) {
       setState(() {
         _children = List<Map<String, dynamic>>.from(_childrenCache!);
-        _filteredChildren = List<Map<String, dynamic>>.from(_childrenCache!);
         _loading = false;
         _errorMessage = null;
       });
+      _applyFilters();
       _revalidateChildren();
       return;
     }
@@ -201,9 +208,9 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
     if (mounted) {
       setState(() {
         _children = childrenList;
-        _filteredChildren = childrenList;
         _loading = false;
       });
+      _applyFilters();
     }
   }
 
@@ -330,30 +337,307 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
         _childrenCache = childrenList;
         setState(() {
           _children = childrenList;
-          _filterChildren();
         });
+        _applyFilters();
       }
     } catch (e) {
       debugPrint('Error revalidating children: $e');
     }
   }
 
-  void _filterChildren() {
-    final query = _searchController.text.toLowerCase().trim();
-    if (query.isEmpty) {
-      setState(() {
-        _filteredChildren = List.from(_children);
+  void _onSearchChanged() {
+    setState(() {
+      _searchQuery = _searchController.text.trim().toLowerCase();
+      _applyFilters();
+    });
+  }
+
+  void _applyFilters() {
+    List<Map<String, dynamic>> results = List.from(_children);
+
+    // Apply search filter
+    if (_searchQuery.isNotEmpty) {
+      results = results.where((child) {
+        final firstName = (child['first_name'] ?? '').toString().toLowerCase();
+        final lastName = (child['last_name'] ?? '').toString().toLowerCase();
+        final fullName = '$firstName $lastName';
+        return fullName.contains(_searchQuery) || firstName.contains(_searchQuery) || lastName.contains(_searchQuery);
+      }).toList();
+    }
+
+    // Apply gender filter
+    if (_selectedGenderFilter != 'All') {
+      results = results.where((child) {
+        final sex = child['sex']?.toString().toLowerCase() ?? '';
+        return sex == _selectedGenderFilter.toLowerCase();
+      }).toList();
+    }
+
+    // Apply sorting
+    if (_selectedSort == 'ID Number') {
+      results.sort((a, b) => (a['child_id'] as int? ?? 0).compareTo(b['child_id'] as int? ?? 0));
+    } else if (_selectedSort == 'Name (A-Z)') {
+      results.sort((a, b) {
+        final nameA = '${a['first_name'] ?? ''} ${a['last_name'] ?? ''}'.trim().toLowerCase();
+        final nameB = '${b['first_name'] ?? ''} ${b['last_name'] ?? ''}'.trim().toLowerCase();
+        return nameA.compareTo(nameB);
       });
-    } else {
-      setState(() {
-        _filteredChildren = _children.where((child) {
-          final firstName = (child['first_name'] ?? '').toString().toLowerCase();
-          final lastName = (child['last_name'] ?? '').toString().toLowerCase();
-          final fullName = '$firstName $lastName';
-          return fullName.contains(query) || firstName.contains(query) || lastName.contains(query);
-        }).toList();
+    } else if (_selectedSort == 'Age (Ascending)') {
+      results.sort((a, b) {
+        final detailsA = a['birth_details'] as Map<String, dynamic>?;
+        final detailsB = b['birth_details'] as Map<String, dynamic>?;
+        final dateA = DateTime.tryParse(detailsA?['birthdate']?.toString() ?? '') ?? DateTime(1970);
+        final dateB = DateTime.tryParse(detailsB?['birthdate']?.toString() ?? '') ?? DateTime(1970);
+        return dateB.compareTo(dateA);
+      });
+    } else if (_selectedSort == 'Age (Descending)') {
+      results.sort((a, b) {
+        final detailsA = a['birth_details'] as Map<String, dynamic>?;
+        final detailsB = b['birth_details'] as Map<String, dynamic>?;
+        final dateA = DateTime.tryParse(detailsA?['birthdate']?.toString() ?? '') ?? DateTime(1970);
+        final dateB = DateTime.tryParse(detailsB?['birthdate']?.toString() ?? '') ?? DateTime(1970);
+        return dateA.compareTo(dateB);
       });
     }
+
+    setState(() {
+      _filteredChildren = results;
+    });
+  }
+
+  void _resetFilters() {
+    setState(() {
+      _searchController.clear();
+      _searchQuery = '';
+      _selectedSort = 'ID Number';
+      _selectedGenderFilter = 'All';
+      _applyFilters();
+    });
+  }
+
+  void _showFilterSortDialog() {
+    String tempSort = _selectedSort;
+    String tempGender = _selectedGenderFilter;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24)),
+              backgroundColor: AppColors.cardColorOf(context),
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Sort & Filter',
+                            style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.brandPrimary)),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Sort By',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        'ID Number',
+                        'Name (A-Z)',
+                        'Age (Ascending)',
+                        'Age (Descending)'
+                      ].map((sortOption) {
+                        final isSelected = tempSort == sortOption;
+                        return ChoiceChip(
+                          label: Text(sortOption),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setModalState(() => tempSort = sortOption);
+                            }
+                          },
+                          selectedColor: AppColors.brandPrimary,
+                          backgroundColor: Colors.white,
+                          labelStyle: TextStyle(
+                            color: isSelected
+                                ? Colors.white
+                                : AppColors.brandPrimary,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                          side: const BorderSide(
+                            color: AppColors.brandPrimary,
+                            width: 1,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          showCheckmark: false,
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text('Filter by Gender',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children:
+                          ['All', 'Male', 'Female'].map((genderOption) {
+                        final isSelected = tempGender == genderOption;
+                        return ChoiceChip(
+                          label: Text(genderOption),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            if (selected) {
+                              setModalState(() => tempGender = genderOption);
+                            }
+                          },
+                          selectedColor: AppColors.brandPrimary,
+                          backgroundColor: Colors.white,
+                          labelStyle: TextStyle(
+                            color: isSelected
+                                ? Colors.white
+                                : AppColors.brandPrimary,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                          side: const BorderSide(
+                            color: AppColors.brandPrimary,
+                            width: 1,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          showCheckmark: false,
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.brandPrimary,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(28)),
+                          elevation: 0,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _selectedSort = tempSort;
+                            _selectedGenderFilter = tempGender;
+                            _applyFilters();
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Apply',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPaginationWidget(int totalChildren) {
+    final totalPages = (totalChildren / _pageSize).ceil();
+    if (totalPages <= 1) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left_rounded, size: 24),
+                color: AppColors.brandPrimary,
+                disabledColor: Colors.grey.shade300,
+                onPressed: _currentPage > 1
+                    ? () => setState(() => _currentPage--)
+                    : null,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 12),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(totalPages, (index) {
+                  final pageNum = index + 1;
+                  final isCurrent = _currentPage == pageNum;
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: isCurrent ? AppColors.brandPrimary : Colors.transparent,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.brandPrimary,
+                        width: 1.5,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(width: 12),
+              IconButton(
+                icon: const Icon(Icons.chevron_right_rounded, size: 24),
+                color: AppColors.brandPrimary,
+                disabledColor: Colors.grey.shade300,
+                onPressed: _currentPage < totalPages
+                    ? () => setState(() => _currentPage++)
+                    : null,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '$_currentPage of $totalPages',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.brandText,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _formatAge(DateTime? birthdate) {
@@ -433,6 +717,14 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Pagination slicing
+    final startIndex = (_currentPage - 1) * _pageSize;
+    final endIndex = startIndex + _pageSize;
+    final displayedChildren = _filteredChildren.sublist(
+      startIndex,
+      endIndex > _filteredChildren.length ? _filteredChildren.length : endIndex,
+    );
+
     return Scaffold(
       backgroundColor: AppColors.bgPrimary,
       body: SafeArea(
@@ -442,15 +734,24 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
           children: [
             const SizedBox(height: 16),
 
+            // Modern Banner
             Container(
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              height: 110,
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              height: 100,
               decoration: BoxDecoration(
-                image: const DecorationImage(
-                  image: AssetImage('assets/images/pinkbg.png'),
-                  fit: BoxFit.cover,
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.brandPrimary.withValues(alpha: 0.08),
+                    AppColors.brandPrimary.withValues(alpha: 0.02),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppColors.brandPrimary.withValues(alpha: 0.15),
+                  width: 1.5,
+                ),
               ),
               child: Stack(
                 children: [
@@ -471,8 +772,23 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Showing', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textSecondary)),
-                        Text('${_filteredChildren.length}/${_children.length} Children', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.brandPrimary)),
+                        const Text(
+                          'Children Directory',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.brandText,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Track health growth and immunizations',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.brandText.withValues(alpha: 0.7),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -480,29 +796,102 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
               ),
             ),
 
-            const SizedBox(height: 20),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: AppInputField(
-                hintText: 'Search child by name',
-                controller: _searchController,
-                leadingIcon: Icons.search,
-              ),
-            ),
-
             const SizedBox(height: 16),
 
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-              child: Text(
-                'Tap a child to view health records',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+            // Search and Sort/Filter Row
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: AppInputField(
+                      hintText: 'Search child by name',
+                      controller: _searchController,
+                      leadingIcon: Icons.search,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: (_selectedSort != 'ID Number' ||
+                              _selectedGenderFilter != 'All' ||
+                              _searchQuery.isNotEmpty)
+                          ? AppColors.brandPrimary
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: (_selectedSort != 'ID Number' ||
+                                _selectedGenderFilter != 'All' ||
+                                _searchQuery.isNotEmpty)
+                            ? AppColors.brandPrimary
+                            : AppColors.borderPrimary,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.filter_list,
+                        color: (_selectedSort != 'ID Number' ||
+                                _selectedGenderFilter != 'All' ||
+                                _searchQuery.isNotEmpty)
+                            ? Colors.white
+                            : AppColors.brandPrimary,
+                      ),
+                      onPressed: _showFilterSortDialog,
+                      tooltip: 'Sort & Filter',
+                    ),
+                  ),
+                  if (_selectedSort != 'ID Number' ||
+                      _selectedGenderFilter != 'All' ||
+                      _searchQuery.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppColors.borderPrimary,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.refresh_rounded,
+                          color: AppColors.brandPrimary,
+                        ),
+                        onPressed: _resetFilters,
+                        tooltip: 'Clear Filters',
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
 
-            const SizedBox(height: 8),
+            // Results Count & Pagination Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    (_searchQuery.isNotEmpty || _selectedGenderFilter != 'All')
+                        ? 'Showing ${_filteredChildren.length} of ${_children.length} children'
+                        : 'Total of ${_children.length} registered children',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.brandText,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (_filteredChildren.length > _pageSize) ...[
+                    _buildPaginationWidget(_filteredChildren.length),
+                  ],
+                ],
+              ),
+            ),
 
             Expanded(
               child: RefreshIndicator(
@@ -536,12 +925,11 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
                                   ],
                                 ),
                               )
-                            : ListView.separated(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                                itemCount: _filteredChildren.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                            : ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                                itemCount: displayedChildren.length,
                                 itemBuilder: (context, index) {
-                                  final child = _filteredChildren[index];
+                                  final child = displayedChildren[index];
                                   final firstName = child['first_name']?.toString() ?? '';
                                   final lastName = child['last_name']?.toString() ?? '';
                                   final birthDetails = child['birth_details'] as Map<String, dynamic>?;
@@ -550,19 +938,22 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
                                   final parentName = _getParentName(child);
                                   final isGuardianChild = child['guardian_id'] != null && child['mother_id'] == null;
                                   
-                                  return _ChildCard(
-                                    firstName: firstName,
-                                    lastName: lastName,
-                                    age: age,
-                                    parentName: parentName,
-                                    isGuardianChild: isGuardianChild,
-                                    bhcChildId: child['bhc_child_id']?.toString(),
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(builder: (_) => ChildProfilePage(childId: child['child_id'] as int)),
-                                      ).then((_) => _fetchChildren());
-                                    },
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _ChildCard(
+                                      firstName: firstName,
+                                      lastName: lastName,
+                                      age: age,
+                                      parentName: parentName,
+                                      isGuardianChild: isGuardianChild,
+                                      bhcChildId: child['bhc_child_id']?.toString(),
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => ChildProfilePage(childId: child['child_id'] as int)),
+                                        ).then((_) => _fetchChildren());
+                                      },
+                                    ),
                                   );
                                 },
                               ),
@@ -577,6 +968,7 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
         backgroundColor: AppColors.brandPrimary,
         foregroundColor: Colors.white,
         tooltip: 'Add Child',
+        shape: const CircleBorder(),
         child: const Icon(Icons.add),
       ),
     );
@@ -616,53 +1008,60 @@ class _ChildCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 0),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            )
+          ],
         ),
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(24),
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(24),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 20, 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: Row(
                 children: [
                   Container(
                     width: 50,
                     height: 50,
-                    decoration: BoxDecoration(
-                      color: isGuardianChild ? AppColors.success.withValues(alpha: 0.3) : AppColors.brandPrimary.withValues(alpha: 0.3),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Color(0xFFFFEEF3),
+                          Color(0xFFFFD5E2),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       shape: BoxShape.circle,
                     ),
                     child: Center(
                       child: Text(
                         _initials,
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isGuardianChild ? AppColors.success : AppColors.brandPrimary),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.brandPrimary,
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Flexible(
-                              child: Text(
-                                fullName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppColors.textPrimary),
-                              ),
-                            ),
                             if (bhcChildId != null) ...[
-                              const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
@@ -673,7 +1072,7 @@ class _ChildCard extends StatelessWidget {
                                   ),
                                 ),
                                 child: Text(
-                                  'ID: $bhcChildId',
+                                  bhcChildId!,
                                   style: const TextStyle(
                                     fontSize: 9,
                                     fontWeight: FontWeight.w700,
@@ -681,31 +1080,61 @@ class _ChildCard extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                            ],
-                            if (isGuardianChild) ...[
                               const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.success.withValues(alpha: 0.3))),
-                                child: const Text('Guardian', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: AppColors.success)),
-                              ),
                             ],
+                            Expanded(
+                              child: Text(
+                                fullName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: AppColors.brandText,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 2),
-                        Text(age, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Icon(isGuardianChild ? Icons.person_outline : Icons.pregnant_woman, size: 12, color: AppColors.textSecondary),
-                            const SizedBox(width: 4),
-                            Expanded(child: Text(parentName, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary), overflow: TextOverflow.ellipsis)),
-                          ],
+                        const SizedBox(height: 4),
+                        Text(
+                          '$age • $parentName',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right, size: 24, color: AppColors.textSecondary),
+                  const SizedBox(width: 8),
+                  if (isGuardianChild) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.success.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: const Text(
+                        'Guardian',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 24,
+                    color: AppColors.textSecondary,
+                  ),
                 ],
               ),
             ),

@@ -674,9 +674,71 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         child: Column(
           children: [
             const SizedBox(height: 8),
+            // Modern Banner
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              height: 100,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.brandPrimary.withValues(alpha: 0.08),
+                    AppColors.brandPrimary.withValues(alpha: 0.02),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppColors.brandPrimary.withValues(alpha: 0.15),
+                  width: 1.5,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    top: 0,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 16.0, top: 4.0, bottom: 4.0),
+                      child: Image.asset('assets/images/pregnant1.png', fit: BoxFit.contain),
+                    ),
+                  ),
+                  Positioned(
+                    left: 24,
+                    top: 0,
+                    bottom: 0,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Mothers Directory',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.brandText,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Manage prenatal visits and health records',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.brandText.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
             // Search & Filter Row
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: Row(
                 children: [
                   Expanded(
