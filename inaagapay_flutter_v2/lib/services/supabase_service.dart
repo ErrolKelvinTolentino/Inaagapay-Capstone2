@@ -476,14 +476,6 @@ class SupabaseService {
     try {
       if (kDebugMode) debugPrint('Attempting login for: $identifier');
 
-      final isConnected = await testConnection();
-      if (!isConnected) {
-        return {
-          'success': false,
-          'message':
-              'Cannot connect to server. Please check your internet connection.'
-        };
-      }
       final digits = identifier.trim().replaceAll(RegExp(r'[^0-9]'), '');
       
       final query = client.from('accounts').select('''

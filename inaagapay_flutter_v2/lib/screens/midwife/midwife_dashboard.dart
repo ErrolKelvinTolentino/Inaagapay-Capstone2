@@ -341,42 +341,23 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
       // Get registered children count and load for search
       if (_motherIds.isNotEmpty) {
-        // Parallelize initial children and pregnancies queries
+        // Parallelize initial children, pregnancies, and given medications queries
         final responses = await Future.wait([
           SupabaseService.client.from('children').select('child_id, first_name, last_name, mother_id').inFilter('mother_id', _motherIds),
           SupabaseService.client.from('pregnancies').select('pregnancy_id, mother_id, last_menstrual_period, status').inFilter('mother_id', _motherIds),
+          SupabaseService.client.from('given_medications').select('given_medication_id').eq('given_medication_name', 'Ferrous FA').inFilter('mother_id', _motherIds),
+          SupabaseService.client.from('given_medications').select('given_medication_id').eq('given_medication_name', 'Calcium').inFilter('mother_id', _motherIds),
         ]);
 
         final childrenResponse = responses[0] as List<dynamic>;
         final allPregnanciesResponse = responses[1] as List<dynamic>;
+        final ferrousResponse = responses[2] as List<dynamic>;
+        final calciumResponse = responses[3] as List<dynamic>;
 
         _registeredChildren = childrenResponse.length;
         _allChildren = List<Map<String, dynamic>>.from(childrenResponse);
-
-        // Get medication statistics defensively
-        try {
-          final ferrousResponse = await SupabaseService.client
-              .from('given_medications')
-              .select('given_medication_id')
-              .eq('given_medication_name', 'Ferrous FA')
-              .inFilter('mother_id', _motherIds);
-          _ferrousGiven = ferrousResponse.length;
-        } catch (e) {
-          if (kDebugMode) debugPrint('Error fetching Ferrous: $e');
-          _ferrousGiven = 0;
-        }
-
-        try {
-          final calciumResponse = await SupabaseService.client
-              .from('given_medications')
-              .select('given_medication_id')
-              .eq('given_medication_name', 'Calcium')
-              .inFilter('mother_id', _motherIds);
-          _calciumGiven = calciumResponse.length;
-        } catch (e) {
-          if (kDebugMode) debugPrint('Error fetching Calcium: $e');
-          _calciumGiven = 0;
-        }
+        _ferrousGiven = ferrousResponse.length;
+        _calciumGiven = calciumResponse.length;
 
         final pregnanciesResponse = allPregnanciesResponse
             .where((p) => p['status'] == 'ongoing')

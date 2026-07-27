@@ -1090,7 +1090,7 @@ class _ChildCard extends StatelessWidget {
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
-                                  color: AppColors.brandText,
+                                  color: AppColors.inputText,
                                 ),
                               ),
                             ),
