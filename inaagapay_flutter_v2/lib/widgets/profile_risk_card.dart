@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_colors.dart';
 import '../services/risk_engine.dart';
+import '../services/auth_storage.dart';
 
 class ConsiderableFactor {
   final DateTime date;
@@ -21,11 +22,13 @@ class ConsiderableFactor {
 class ProfileRiskCard extends StatefulWidget {
   final Map<String, dynamic> profile;
   final Map<String, dynamic> pregnancy;
+  final bool? isMotherView;
 
   const ProfileRiskCard({
     super.key,
     required this.profile,
     required this.pregnancy,
+    this.isMotherView,
   });
 
   @override
@@ -34,18 +37,36 @@ class ProfileRiskCard extends StatefulWidget {
 
 class _ProfileRiskCardState extends State<ProfileRiskCard> {
   bool _loading = true;
+  bool _isMotherViewComputed = false;
   List<String> _registrationRiskFactors = [];
   Map<int, String> _labTestAiResponses = {};
 
   @override
   void initState() {
     super.initState();
+    _determineViewRole();
     _loadDetails();
+  }
+
+  Future<void> _determineViewRole() async {
+    if (widget.isMotherView != null) {
+      if (mounted) {
+        setState(() => _isMotherViewComputed = widget.isMotherView!);
+      }
+    } else {
+      final role = await AuthStorage.getUserRole();
+      if (mounted) {
+        setState(() => _isMotherViewComputed = (role?.toLowerCase() == 'mother'));
+      }
+    }
   }
 
   @override
   void didUpdateWidget(covariant ProfileRiskCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.isMotherView != widget.isMotherView) {
+      _determineViewRole();
+    }
     if (oldWidget.pregnancy['pregnancy_id'] != widget.pregnancy['pregnancy_id']) {
       setState(() => _loading = true);
       _loadDetails();
@@ -161,8 +182,6 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
                    (dbRiskLevel == null && checkupRiskLevel == 'high') ||
                    (dbRiskLevel == null && checkupRiskLevel == null && ruleRisk.level == 'high');
 
-    final riskColor = isHigh ? AppColors.error : AppColors.success;
-
     // ── Compile Current Risk Factors ──────────────────────────────────────────
     final List<String> currentRiskFactors = [];
     currentRiskFactors.addAll(_registrationRiskFactors);
@@ -258,19 +277,43 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
     // Sort Considerable Factors by date descending (newest first)
     considerableFactors.sort((a, b) => b.date.compareTo(a.date));
 
-    // Compile banner note
-    String bannerNote = isHigh ? 'High risk factors detected' : 'All readings within normal range';
-    if (currentRiskFactors.isNotEmpty) {
-      if (isHigh) {
-        bannerNote = '${currentRiskFactors.length} risk factor(s) identified';
+    // Compile banner title, note, and styling based on _isMotherViewComputed
+    final bool isMother = _isMotherViewComputed;
+
+    final String bannerTitle = isMother
+        ? (isHigh ? 'SPECIAL CARE NEEDED' : 'ROUTINE CARE')
+        : (isHigh ? 'HIGH RISK' : 'LOW RISK');
+
+    String bannerNote;
+    if (isMother) {
+      if (currentRiskFactors.isNotEmpty) {
+        bannerNote = isHigh
+            ? '${currentRiskFactors.length} health indicator(s) under observation'
+            : 'Monitored: ${currentRiskFactors.join(', ')}';
       } else {
-        bannerNote = currentRiskFactors.join(', ');
+        bannerNote = isHigh
+            ? 'Closer midwife monitoring recommended'
+            : 'All pregnancy metrics are on track';
+      }
+    } else {
+      if (currentRiskFactors.isNotEmpty) {
+        bannerNote = isHigh
+            ? '${currentRiskFactors.length} risk factor(s) identified'
+            : currentRiskFactors.join(', ');
+      } else {
+        bannerNote = isHigh
+            ? 'High risk factors detected'
+            : 'All readings within normal range';
       }
     }
 
-    final Color bgColor = isHigh ? const Color(0xFFFFF3F0) : const Color(0xFFEBF7F5);
-    final Color borderColor = isHigh ? const Color(0xFFFFAB91) : const Color(0xFFB2DFDB);
-    final Color textColor = isHigh ? const Color(0xFFD84315) : const Color(0xFF00796B);
+    final Color bgColor = isHigh ? const Color(0xFFFFF1F2) : const Color(0xFFF0FDF4);
+    final Color borderColor = isHigh ? const Color(0xFFFECDD3) : const Color(0xFFBBF7D0);
+    final Color textColor = isHigh ? const Color(0xFF9F1239) : const Color(0xFF15803D);
+
+    final IconData bannerIcon = isMother
+        ? (isHigh ? Icons.medical_services_outlined : Icons.check_circle_outline_rounded)
+        : (isHigh ? Icons.gpp_maybe_rounded : Icons.check_circle_outline_rounded);
 
     return Material(
       color: Colors.transparent,
@@ -282,14 +325,16 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
           currentRiskFactors: currentRiskFactors,
           considerableFactors: considerableFactors,
           isHigh: isHigh,
-          riskColor: riskColor,
+          riskColor: textColor,
+          bannerTitle: bannerTitle,
           bannerNote: bannerNote,
+          isMotherView: isMother,
         ),
         child: Ink(
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: borderColor, width: 1.5),
+            border: Border.all(color: borderColor, width: 1.2),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.02),
@@ -309,7 +354,7 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    isHigh ? Icons.gpp_maybe_rounded : Icons.check_circle_outline_rounded,
+                    bannerIcon,
                     color: textColor,
                     size: 22,
                   ),
@@ -320,9 +365,9 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isHigh ? 'HIGH RISK' : 'LOW RISK',
+                        bannerTitle,
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 15,
                           fontWeight: FontWeight.w800,
                           color: textColor,
                           letterSpacing: 0.5,
@@ -344,7 +389,7 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
                 ),
                 Icon(
                   Icons.chevron_right_rounded,
-                  color: textColor,
+                  color: textColor.withValues(alpha: 0.7),
                   size: 24,
                 ),
               ],
@@ -419,7 +464,9 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
     required List<ConsiderableFactor> considerableFactors,
     required bool isHigh,
     required Color riskColor,
+    required String bannerTitle,
     required String bannerNote,
+    required bool isMotherView,
   }) {
     showModalBottomSheet<void>(
       context: context,
@@ -459,10 +506,10 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
                         const SizedBox(height: 16),
                         Row(
                           children: [
-                            const Expanded(
+                            Expanded(
                               child: Text(
-                                'Risk Assessment',
-                                style: TextStyle(
+                                isMotherView ? 'Care & Health Assessment' : 'Risk Assessment',
+                                style: const TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.w800,
                                   color: AppColors.textPrimary,
@@ -479,26 +526,30 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
                         const SizedBox(height: 12),
                         _buildStatusBanner(
                           isHigh: isHigh,
+                          titleText: bannerTitle,
                           note: bannerNote,
                           riskColor: riskColor,
+                          isMotherView: isMotherView,
                         ),
                         const SizedBox(height: 16),
                         _buildRiskSection(
-                          title: 'Current Risk Factors',
+                          title: isMotherView ? 'Health Indicators Being Monitored' : 'Current Risk Factors',
                           icon: isHigh
-                              ? Icons.warning_amber_rounded
+                              ? (isMotherView ? Icons.medical_services_outlined : Icons.warning_amber_rounded)
                               : Icons.check_circle_outline_rounded,
                           iconColor: riskColor,
                           children: currentRiskFactors.isEmpty
                               ? [
                                   _buildDetailRow(
-                                    'No current risk factors identified',
+                                    isMotherView
+                                        ? 'No concerns or special care factors identified'
+                                        : 'No current risk factors identified',
                                     AppColors.success,
                                   ),
                                 ]
                               : currentRiskFactors
                                   .map((finding) =>
-                                      _buildDetailRow(finding, isHigh ? AppColors.error : AppColors.warning))
+                                      _buildDetailRow(finding, isHigh ? riskColor : AppColors.warning))
                                   .toList(),
                         ),
                       ],
@@ -512,19 +563,25 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
 
   Widget _buildStatusBanner({
     required bool isHigh,
+    required String titleText,
     required String note,
     required Color riskColor,
+    required bool isMotherView,
   }) {
-    final Color bgColor = isHigh ? const Color(0xFFFFF3F0) : const Color(0xFFEBF7F5);
-    final Color borderColor = isHigh ? const Color(0xFFFFAB91) : const Color(0xFFB2DFDB);
-    final Color textColor = isHigh ? const Color(0xFFD84315) : const Color(0xFF00796B);
+    final Color bgColor = isHigh ? const Color(0xFFFFF1F2) : const Color(0xFFF0FDF4);
+    final Color borderColor = isHigh ? const Color(0xFFFECDD3) : const Color(0xFFBBF7D0);
+    final Color textColor = isHigh ? const Color(0xFF9F1239) : const Color(0xFF15803D);
+
+    final IconData bannerIcon = isMotherView
+        ? (isHigh ? Icons.medical_services_outlined : Icons.check_circle_outline_rounded)
+        : (isHigh ? Icons.gpp_maybe_rounded : Icons.check_circle_outline_rounded);
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor, width: 1.5),
+        border: Border.all(color: borderColor, width: 1.2),
       ),
       child: Row(
         children: [
@@ -535,7 +592,7 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isHigh ? Icons.gpp_maybe_rounded : Icons.check_circle_outline_rounded,
+              bannerIcon,
               color: textColor,
               size: 20,
             ),
@@ -546,7 +603,7 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isHigh ? 'HIGH RISK' : 'LOW RISK',
+                  titleText,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
@@ -554,17 +611,15 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
                     letterSpacing: 0.4,
                   ),
                 ),
-                if (isHigh) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    note,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textPrimary,
-                      height: 1.35,
-                    ),
+                const SizedBox(height: 2),
+                Text(
+                  note,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: textColor.withValues(alpha: 0.9),
+                    height: 1.35,
                   ),
-                ],
+                ),
               ],
             ),
           ),
