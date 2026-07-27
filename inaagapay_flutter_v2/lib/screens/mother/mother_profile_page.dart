@@ -109,13 +109,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   String _childQuery = '';
   String _childSort = 'recent';
   final Set<String> _expandedLabInsightAspects = <String>{};
-
-  // Pagination states — show 5 records at a time
   static const int _pageSize = 5;
-  int _checkupDisplayCount = _pageSize;
-  int _ultrasoundDisplayCount = _pageSize;
-  int _labTestDisplayCount = _pageSize;
-  int _vitalDisplayCount = _pageSize;
+
   // History tab pagination per pregnancy (keyed by pregnancy_id)
   final Map<int, int> _historyCheckupDisplayCounts = {};
   final Map<int, int> _historyUltrasoundDisplayCounts = {};
@@ -1096,10 +1091,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       _isEditingAllergies = false;
       _profileFuture = MotherProfileService.fetchMotherProfile(widget.motherId);
       // Reset pagination counts
-      _checkupDisplayCount = _pageSize;
-      _ultrasoundDisplayCount = _pageSize;
-      _labTestDisplayCount = _pageSize;
-      _vitalDisplayCount = _pageSize;
       _historyCheckupDisplayCounts.clear();
       _historyUltrasoundDisplayCounts.clear();
       _historyLabTestDisplayCounts.clear();
@@ -5839,14 +5830,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     );
   }
 
-  Widget _buildExpandableSection(
-      String title, IconData icon, List<Widget> children) {
-    return ProfileSection(
-      title: title,
-      icon: icon,
-      children: children,
-    );
-  }
 
   Widget _buildInfoRow(String label, String value) {
     return ProfileInfoRow(label: label, value: value);
@@ -6231,132 +6214,81 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               const SizedBox(height: 12),
             ],
 
-            _buildExpandableSection(
-              'Prenatal Checkups (${sortedCheckups.length})',
-              Icons.medical_services_outlined,
-              [
-                _buildSortRow(_checkupSort,
-                    (v) => setState(() => _checkupSort = v ?? 'desc')),
-                const SizedBox(height: 12),
-                if (sortedCheckups.isEmpty)
-                  const Center(
-                      child: Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Text('No checkups recorded')))
-                else ...[
-                  ...sortedCheckups.take(_checkupDisplayCount).map((c) =>
-                      _buildCheckupCard(
-                          c,
-                          pregnancy['pregnancy_id'] ?? -1,
-                          int.tryParse(
-                                  pregnancy['fetal_count']?.toString() ?? '') ??
-                              1)),
-                  if (sortedCheckups.length > _checkupDisplayCount)
-                    _buildLoadMoreButton(
-                      current: _checkupDisplayCount,
-                      total: sortedCheckups.length,
-                      onPressed: () =>
-                          setState(() => _checkupDisplayCount += _pageSize),
-                    ),
-                ],
-              ],
+            // ── Prenatal Checkups ──
+            _buildPreviewRecordSection(
+              title: 'PRENATAL CHECKUPS',
+              icon: Icons.medical_services_outlined,
+              totalCount: sortedCheckups.length,
+              previewWidgets: sortedCheckups.take(3).map((c) =>
+                  _buildCheckupCard(
+                      c,
+                      pregnancy['pregnancy_id'] ?? -1,
+                      int.tryParse(
+                              pregnancy['fetal_count']?.toString() ?? '') ??
+                          1)).toList(),
+              allWidgets: sortedCheckups.map((c) =>
+                  _buildCheckupCard(
+                      c,
+                      pregnancy['pregnancy_id'] ?? -1,
+                      int.tryParse(
+                              pregnancy['fetal_count']?.toString() ?? '') ??
+                          1)).toList(),
+              emptyText: 'No checkups recorded yet',
+              modalTitle: 'Prenatal Checkups History',
+              sortValue: _checkupSort,
+              onSortChanged: (v) => setState(() => _checkupSort = v ?? 'desc'),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
-            _buildExpandableSection(
-              'Ultrasounds (${ultrasounds.length})',
-              Icons.photo_outlined,
-              () {
-                final sortedUltrasounds = _sortByDate(
-                    ultrasounds, 'ultrasound_date', _ultrasoundSort);
-                return [
-                  _buildSortRow(_ultrasoundSort,
-                      (v) => setState(() => _ultrasoundSort = v ?? 'desc')),
-                  const SizedBox(height: 12),
-                  if (ultrasounds.isEmpty)
-                    const Center(
-                        child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Text('No ultrasounds recorded')))
-                  else ...[
-                    ...sortedUltrasounds
-                        .take(_ultrasoundDisplayCount)
-                        .map((u) => _buildUltrasoundCard(u)),
-                    if (sortedUltrasounds.length > _ultrasoundDisplayCount)
-                      _buildLoadMoreButton(
-                        current: _ultrasoundDisplayCount,
-                        total: sortedUltrasounds.length,
-                        onPressed: () => setState(
-                            () => _ultrasoundDisplayCount += _pageSize),
-                      ),
-                  ],
-                ];
-              }(),
-            ),
-            const SizedBox(height: 12),
+            // ── Ultrasounds ──
+            () {
+              final sortedUltrasounds = _sortByDate(ultrasounds, 'ultrasound_date', _ultrasoundSort);
+              return _buildPreviewRecordSection(
+                title: 'ULTRASOUNDS',
+                icon: Icons.photo_outlined,
+                totalCount: ultrasounds.length,
+                previewWidgets: sortedUltrasounds.take(3).map((u) => _buildUltrasoundCard(u)).toList(),
+                allWidgets: sortedUltrasounds.map((u) => _buildUltrasoundCard(u)).toList(),
+                emptyText: 'No ultrasounds recorded yet',
+                modalTitle: 'Ultrasound Records',
+                sortValue: _ultrasoundSort,
+                onSortChanged: (v) => setState(() => _ultrasoundSort = v ?? 'desc'),
+              );
+            }(),
+            const SizedBox(height: 14),
 
-            _buildExpandableSection(
-              'Lab Tests (${labTests.length})',
-              Icons.science_outlined,
-              () {
-                final sortedLabTests =
-                    _sortByDate(labTests, 'lab_test_date', _labSort);
-                return [
-                  _buildSortRow(
-                      _labSort, (v) => setState(() => _labSort = v ?? 'desc')),
-                  const SizedBox(height: 12),
-                  if (labTests.isEmpty)
-                    const Center(
-                        child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Text('No lab tests recorded')))
-                  else ...[
-                    ...sortedLabTests
-                        .take(_labTestDisplayCount)
-                        .map((l) => _buildLabTestCard(l)),
-                    if (sortedLabTests.length > _labTestDisplayCount)
-                      _buildLoadMoreButton(
-                        current: _labTestDisplayCount,
-                        total: sortedLabTests.length,
-                        onPressed: () =>
-                            setState(() => _labTestDisplayCount += _pageSize),
-                      ),
-                  ],
-                ];
-              }(),
-            ),
-            const SizedBox(height: 12),
+            // ── Lab Tests ──
+            () {
+              final sortedLabTests = _sortByDate(labTests, 'lab_test_date', _labSort);
+              return _buildPreviewRecordSection(
+                title: 'LAB TESTS',
+                icon: Icons.science_outlined,
+                totalCount: labTests.length,
+                previewWidgets: sortedLabTests.take(3).map((l) => _buildLabTestCard(l)).toList(),
+                allWidgets: sortedLabTests.map((l) => _buildLabTestCard(l)).toList(),
+                emptyText: 'No lab tests recorded yet',
+                modalTitle: 'Lab Test Results',
+                sortValue: _labSort,
+                onSortChanged: (v) => setState(() => _labSort = v ?? 'desc'),
+              );
+            }(),
+            const SizedBox(height: 14),
 
-            _buildExpandableSection(
-              'Self-logged Vitals (${vitals.length})',
-              Icons.monitor_weight_outlined,
-              () {
-                final sortedVitals =
-                    _sortByDate(vitals, 'recorded_at', _vitalSort);
-                return [
-                  _buildSortRow(_vitalSort,
-                      (v) => setState(() => _vitalSort = v ?? 'desc')),
-                  const SizedBox(height: 12),
-                  if (vitals.isEmpty)
-                    const Center(
-                        child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Text('No self-logged vitals recorded')))
-                  else ...[
-                    ...sortedVitals
-                        .take(_vitalDisplayCount)
-                        .map((v) => _buildMaternalVitalCard(v)),
-                    if (sortedVitals.length > _vitalDisplayCount)
-                      _buildLoadMoreButton(
-                        current: _vitalDisplayCount,
-                        total: sortedVitals.length,
-                        onPressed: () =>
-                            setState(() => _vitalDisplayCount += _pageSize),
-                      ),
-                  ],
-                ];
-              }(),
-            ),
+            // ── Self-logged Vitals ──
+            () {
+              final sortedVitals = _sortByDate(vitals, 'recorded_at', _vitalSort);
+              return _buildPreviewRecordSection(
+                title: 'SELF-LOGGED VITALS',
+                icon: Icons.monitor_weight_outlined,
+                totalCount: vitals.length,
+                previewWidgets: sortedVitals.take(3).map((v) => _buildMaternalVitalCard(v)).toList(),
+                allWidgets: sortedVitals.map((v) => _buildMaternalVitalCard(v)).toList(),
+                emptyText: 'No vitals logged yet',
+                modalTitle: 'Self-logged Vitals History',
+                sortValue: _vitalSort,
+                onSortChanged: (v) => setState(() => _vitalSort = v ?? 'desc'),
+              );
+            }(),
             if (!widget.readOnly) ...[
               const SizedBox(height: 24),
               Card(
@@ -6420,6 +6352,210 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       total: total,
       pageSize: _pageSize,
       onPressed: onPressed,
+    );
+  }
+
+  Widget _buildPreviewRecordSection({
+    required String title,
+    required IconData icon,
+    required int totalCount,
+    required List<Widget> previewWidgets,
+    required List<Widget> allWidgets,
+    required String emptyText,
+    required String modalTitle,
+    required String sortValue,
+    required ValueChanged<String?> onSortChanged,
+  }) {
+    final hasRecords = allWidgets.isNotEmpty;
+
+    return ProfileCardSection(
+      title: '$title ($totalCount)',
+      icon: icon,
+      actionButton: hasRecords
+          ? InkWell(
+              onTap: () => _showAllRecordsModal(
+                context: context,
+                title: modalTitle,
+                icon: icon,
+                recordWidgets: allWidgets,
+                currentSort: sortValue,
+                onSortChanged: onSortChanged,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.brandPrimary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'View All ($totalCount)',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.brandPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 16,
+                      color: AppColors.brandPrimary,
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
+      children: [
+        if (!hasRecords)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 16,
+                  color: AppColors.textSecondary.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  emptyText,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else ...[
+          for (int i = 0; i < previewWidgets.length; i++) ...[
+            previewWidgets[i],
+            if (i < previewWidgets.length - 1) const SizedBox(height: 10),
+          ],
+        ],
+      ],
+    );
+  }
+
+  void _showAllRecordsModal({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required List<Widget> recordWidgets,
+    required String currentSort,
+    required ValueChanged<String?> onSortChanged,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final bottomPadding = MediaQuery.of(sheetContext).viewInsets.bottom;
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.78,
+              minChildSize: 0.4,
+              maxChildSize: 0.94,
+              expand: false,
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.borderPrimary,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(icon, color: AppColors.brandPrimary, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => Navigator.pop(sheetContext),
+                              icon: const Icon(Icons.close_rounded),
+                              color: AppColors.textSecondary,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${recordWidgets.length} record(s) total',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            _buildSortRow(currentSort, (v) {
+                              onSortChanged(v);
+                              setModalState(() {});
+                            }),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(height: 1, color: AppColors.borderPrimary),
+                      Expanded(
+                        child: ListView.separated(
+                          controller: scrollController,
+                          padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPadding + 24),
+                          itemCount: recordWidgets.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (_, index) => recordWidgets[index],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 
