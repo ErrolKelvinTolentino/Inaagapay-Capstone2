@@ -204,6 +204,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   String _backupFilipino = '';
   String _backupEnglish = '';
   final _symptomSearchCtrl = TextEditingController();
+  final _heightCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
   final _sysCtrl = TextEditingController();
   final _diaCtrl = TextEditingController();
@@ -488,6 +489,17 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
             blood_type
           ''').eq('mother_id', widget.motherId).maybeSingle();
 
+      if (mounted && mother != null) {
+        final motherHeight = mother['height']?.toString();
+        setState(() {
+          if (motherHeight != null && motherHeight.isNotEmpty && motherHeight != 'null') {
+            _heightCtrl.text = '$motherHeight cm';
+          } else {
+            _heightCtrl.text = 'Not recorded in profile';
+          }
+        });
+      }
+
       final pregnancy = await client.from('pregnancies').select('''
             pregnancy_id,
             status,
@@ -594,6 +606,13 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
             pregnancy?['pregnancy_risk_level']?.toString().toLowerCase();
         if (pregLevel != null) {
           _pregnancyRiskLevel = pregLevel;
+        }
+
+        final motherHeight = mother?['height']?.toString();
+        if (motherHeight != null && motherHeight.isNotEmpty && motherHeight != 'null') {
+          _heightCtrl.text = '$motherHeight cm';
+        } else {
+          _heightCtrl.text = 'Not recorded in profile';
         }
       });
     } catch (e, st) {
@@ -1440,6 +1459,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     _aiFilipinoCtrl.dispose();
     _aiEnglishCtrl.dispose();
     _symptomSearchCtrl.dispose();
+    _heightCtrl.dispose();
     _weightCtrl.dispose();
     _sysCtrl.dispose();
     _diaCtrl.dispose();
@@ -1675,6 +1695,68 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           Text(s.label,
               style: TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w600, color: s.color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _bpClinicalGuidanceCard() {
+    final sys = int.tryParse(_sysCtrl.text.trim());
+    final dia = int.tryParse(_diaCtrl.text.trim());
+
+    if (sys == null || dia == null || sys <= 0 || dia <= 0 || sys <= dia) {
+      return const SizedBox.shrink();
+    }
+
+    final isLow = sys < 90 || dia < 60;
+    final isSevere = sys >= 160 || dia >= 110;
+    final isHypertensive = (sys >= 140 || dia >= 90) && !isSevere;
+
+    String statusText;
+    Color statusColor;
+    IconData statusIcon;
+
+    if (isSevere) {
+      statusText = 'Severe Hypertension (≥160/110 mmHg) — Immediate Referral Required';
+      statusColor = const Color(0xFFB71C1C);
+      statusIcon = Icons.error_rounded;
+    } else if (isHypertensive) {
+      statusText = 'Hypertension in Pregnancy (≥140/90 mmHg)';
+      statusColor = AppColors.error;
+      statusIcon = Icons.warning_rounded;
+    } else if (isLow) {
+      statusText = 'Low Blood Pressure (<90/60 mmHg)';
+      statusColor = Colors.blue.shade700;
+      statusIcon = Icons.arrow_downward_rounded;
+    } else {
+      statusText = 'Normal Blood Pressure (Within acceptable range)';
+      statusColor = AppColors.success;
+      statusIcon = Icons.check_circle_rounded;
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: statusColor.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(statusIcon, size: 16, color: statusColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              statusText,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: statusColor,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -2895,12 +2977,42 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         const SizedBox(height: 12),
         _sectionCard(
           title: 'Height',
-          child: AppInputField(
-            hintText: 'Height (cm)',
-            controller:
-                TextEditingController(text: motherHeight ?? 'Not recorded'),
-            readOnly: true,
-          ),
+          child: _motherRiskContext == null && _heightCtrl.text.isEmpty
+              ? Container(
+                  height: 48,
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.bgSecondary,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.borderPrimary),
+                  ),
+                  child: const Row(
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.brandPrimary,
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      Text(
+                        'Loading height...',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : AppInputField(
+                  hintText: 'Height (cm)',
+                  controller: _heightCtrl,
+                  readOnly: true,
+                ),
         ),
         const SizedBox(height: 12),
         _sectionCard(
@@ -2935,8 +3047,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         _sectionCard(
           title: 'Blood Pressure',
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: AppInputField(
@@ -2945,14 +3059,19 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       isRequired: true,
-                      errorText: _sysError,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  const Text('/',
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      '/',
                       style: TextStyle(
-                          fontSize: 22, color: AppColors.textSecondary)),
-                  const SizedBox(width: 10),
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
                   Expanded(
                     child: AppInputField(
                       hintText: 'Diastolic (mmHg)',
@@ -2960,13 +3079,36 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       isRequired: true,
-                      errorText: _diaError,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              _bpBadge(),
+              if (_sysError != null || _diaError != null)
+                Container(
+                  margin: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, size: 14, color: AppColors.error),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _sysError ?? _diaError!,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.error,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              _bpClinicalGuidanceCard(),
             ],
           ),
         ),
