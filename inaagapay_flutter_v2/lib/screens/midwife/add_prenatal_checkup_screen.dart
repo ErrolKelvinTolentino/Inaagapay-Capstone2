@@ -195,14 +195,6 @@ enum _BpStatus {
 
 class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   final _groqService = GroqService();
-  final _aiAssessmentCtrl = TextEditingController();
-  final _aiAssessmentEditCtrl = TextEditingController();
-  final _aiFilipinoCtrl = TextEditingController();
-  final _aiEnglishCtrl = TextEditingController();
-  String _selectedLanguage = 'filipino';
-  String _activeRiskTab = 'pregnancy';
-  String _backupFilipino = '';
-  String _backupEnglish = '';
   final _symptomSearchCtrl = TextEditingController();
   final _heightCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
@@ -222,8 +214,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   final List<_SymptomEntry> _symptoms = [];
   List<SymptomType> _symptomTypes = [];
 
-  bool _aiAnalysisSkipped = false;
-
   DateTime _checkupDateTime = DateTime.now();
   DateTime? _nextSchedule;
 
@@ -239,7 +229,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   String? _calciumError;
 
   int _step = 0;
-  static const int _totalSteps = 7;
+  static const int _totalSteps = 6;
   bool _submitting = false;
   bool _loadingSymptomTypes = false;
   String _symptomRiskFilter = 'all';
@@ -251,14 +241,20 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   String? _lastRiskSignature;
   String? _lastRiskAiPrompt;
   Map<String, dynamic>? _motherRiskContext;
-  String? _aiOriginalAssessment;
-  bool _aiAssessmentEdited = false;
-  bool _aiResponseApproved = false;
-  bool _isEditingAiAssessment = false;
   String _editableRiskLevel = 'low';
   String _pregnancyRiskLevel = 'low';
   List<_RiskFactorItem> _editableRiskFactors = [];
-  List<String> _editableSuggestedActions = [];
+
+  // ── AI Remarks (Option C) ─────────────────────────────────────────────────
+  bool _generatingAiRemarks = false;
+  String _remarksSource = 'midwife_authored'; // midwife_authored | ai_generated_approved | ai_generated_edited
+  String? _aiOriginalRemarksEn;   // original AI English text (for audit)
+  String? _aiOriginalRemarksFil;  // original AI Filipino text (for audit)
+  String _remarksLanguage = 'english'; // toggle for bilingual AI remarks
+  String _aiRemarksEnglish = '';   // stored AI English text
+  String _aiRemarksFilipino = '';  // stored AI Filipino text
+  String? _aiRemarksModel;         // AI model used
+  double? _initialSessionWeight;   // Locked baseline weight for session calculation
 
   static const List<String> _fetalTones = [
     'Normal',
@@ -766,99 +762,86 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   }
 
   String _buildRuleBasedAssessmentText(_RiskSnapshot snapshot) {
-    final currentBp =
-        _sysCtrl.text.trim().isEmpty || _diaCtrl.text.trim().isEmpty
-            ? null
-            : '${_sysCtrl.text.trim()}/${_diaCtrl.text.trim()}';
+    final weekStr = _aogWeeks != null ? '${_aogWeeks!.toInt()}' : '7';
+    final sysText = _sysCtrl.text.trim();
+    final diaText = _diaCtrl.text.trim();
+    final bpText = (sysText.isNotEmpty && diaText.isNotEmpty) ? '$sysText/$diaText mmHg' : null;
+    final fhrText = _fetalBeatCtrl.text.trim().isNotEmpty ? '${_fetalBeatCtrl.text.trim()} bpm' : null;
+
+    final reasPoints = <String>[];
+    if (bpText != null && _bpStatus == _BpStatus.normal) {
+      reasPoints.add('Blood pressure ($bpText)');
+    }
+    if (fhrText != null) {
+      reasPoints.add('fetal heart rate ($fhrText)');
+    }
+
+    final buf = StringBuffer();
+    buf.writeln('Checkup Summary — Week $weekStr AOG');
+    buf.writeln();
+
+    if (reasPoints.isNotEmpty) {
+      final joined = reasPoints.join(' and ');
+      buf.write('$joined ${reasPoints.length > 1 ? "are both" : "is"} within expected range this visit. ');
+    } else {
+      buf.write('Vitals recorded during this prenatal checkup are documented. ');
+    }
+
     final highFactors = snapshot.factors
         .where((f) => f.influence == 'high')
         .map((f) => f.factor)
         .toList();
-    final keyAction = snapshot.suggestedActions.isNotEmpty
-        ? snapshot.suggestedActions.first
-        : 'Continue with regular prenatal visits so we can keep watching over you and your baby.';
-
-    final buf = StringBuffer();
-
-    if (snapshot.level == 'low' && highFactors.isEmpty) {
-      buf.write('Based on your checkup today, everything is looking good. ');
-      if (currentBp != null) {
-        buf.write(
-            'Your blood pressure reading of $currentBp is within a healthy range, which is a wonderful sign for you and your baby. ');
-      }
-      buf.write(
-          'Keep taking good care of yourself — eating nutritious food, resting well, and staying hydrated will help you and your little one stay healthy. ');
+    if (highFactors.isEmpty) {
+      buf.write('All recorded vitals and findings are progressing smoothly for this stage of pregnancy.');
     } else {
-      buf.write(
-          'Some of the recent pregnancy monitoring information may need closer healthcare attention. ');
-      if (highFactors.isNotEmpty) {
-        final symptomsText = highFactors.join(', ');
-        buf.write(
-            'The current pregnancy monitoring record includes $symptomsText, which may require consultation with healthcare personnel. ');
-      }
-      if (currentBp != null) {
-        buf.write(
-            'Your blood pressure was recorded at $currentBp during this visit. ');
-      }
-      buf.write('$keyAction ');
+      final itemsText = highFactors.join(', ');
+      buf.write('Note that $itemsText — these are worth tracking closely at your next checkup.');
     }
-
-    buf.write(
-        'Continued prenatal checkups are recommended to help support your health during pregnancy.');
 
     return buf.toString();
   }
 
   String _buildRuleBasedAssessmentTextFilipino(_RiskSnapshot snapshot) {
-    final currentBp =
-        _sysCtrl.text.trim().isEmpty || _diaCtrl.text.trim().isEmpty
-            ? null
-            : '${_sysCtrl.text.trim()}/${_diaCtrl.text.trim()}';
+    final weekStr = _aogWeeks != null ? '${_aogWeeks!.toInt()}' : '7';
+    final sysText = _sysCtrl.text.trim();
+    final diaText = _diaCtrl.text.trim();
+    final bpText = (sysText.isNotEmpty && diaText.isNotEmpty) ? '$sysText/$diaText mmHg' : null;
+    final fhrText = _fetalBeatCtrl.text.trim().isNotEmpty ? '${_fetalBeatCtrl.text.trim()} bpm' : null;
+
+    final reasPoints = <String>[];
+    if (bpText != null && _bpStatus == _BpStatus.normal) {
+      reasPoints.add('Ang blood pressure ($bpText)');
+    }
+    if (fhrText != null) {
+      reasPoints.add('fetal heart rate ($fhrText)');
+    }
+
+    final buf = StringBuffer();
+    buf.writeln('Buod ng Checkup — Linggo $weekStr ng AOG');
+    buf.writeln();
+
+    if (reasPoints.isNotEmpty) {
+      final joined = reasPoints.join(' at ');
+      buf.write('$joined ay parehong nasa karaniwang inaasahang antas sa bisitang ito. ');
+    } else {
+      buf.write('Naitala nang maayos ang mga resulta para sa prenatal checkup na ito. ');
+    }
+
     final highFactors = snapshot.factors
         .where((f) => f.influence == 'high')
         .map((f) => f.factor)
         .toList();
-
-    final buf = StringBuffer();
-
-    if (snapshot.level == 'low' && highFactors.isEmpty) {
-      buf.write(
-          'Kamusta, mommy! Sa checkup natin ngayon, maayos at normal naman ang lahat. ');
-      if (currentBp != null) {
-        buf.write(
-            'Ang iyong blood pressure na $currentBp ay nasa magandang antas, na isang napakagandang balita para sa inyo ni baby. ');
-      }
-      buf.write(
-          'Patuloy ka sanang mag-alaga sa iyong sarili — kumain ng masusustansyang pagkain, matulog nang sapat, at uminom ng maraming tubig para manatiling malakas kayo ng iyong munting anghel. ');
+    if (highFactors.isEmpty) {
+      buf.write('Maayos ang lagay ng lahat ng naitalang resulta para sa yugtong ito ng pagbubuntis.');
     } else {
-      buf.write(
-          'May ilang detalye sa iyong checkup ngayon na kailangan nating bigyan ng kaunting pansin at subaybayan. ');
-      if (highFactors.isNotEmpty) {
-        final symptomsText = highFactors.map((f) {
-          var translated = f;
-          if (f.startsWith('Severe symptom:')) {
-            translated = f.replaceAll('Severe symptom:', 'Sintomas na');
-          }
-          return translated;
-        }).join(', ');
-        buf.write(
-            'Kasama sa ating talaan ngayon ang $symptomsText, na mas mabuting masubaybayan natin kasama ng mga doktor o healthcare personnel. ');
-      }
-      if (currentBp != null) {
-        buf.write(
-            'Ang iyong blood pressure ay naitala sa $currentBp sa bisitang ito. ');
-      }
-      buf.write(
-          'Huwag mag-alala, mommy, babantayan natin ito nang mabuti at sundin ang mga payo sa pangangalaga. ');
+      final itemsText = highFactors.join(', ');
+      buf.write('Napansin ang $itemsText — karaniwan itong nababantayan at magandang masubaybayan sa susunod na checkup.');
     }
-
-    buf.write(
-        'Ang patuloy na prenatal checkup ay inirerekomenda upang suportahan ang iyong kalusugan sa buong pagbubuntis.');
 
     return buf.toString();
   }
 
-  void _parseBilingualText(String text) {
+  Map<String, String> _parseBilingualText(String text) {
     String filipino = '';
     String english = '';
 
@@ -891,52 +874,43 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
       filipino = _translateRuleTextToFilipino(text);
     }
 
-    _aiFilipinoCtrl.text = filipino;
-    _aiEnglishCtrl.text = english;
+    return {'filipino': filipino, 'english': english};
   }
 
   String _translateRuleTextToFilipino(String text) {
     final isLow =
-        text.contains('everything is looking good') || text.contains('maayos');
+        text.contains('everything is looking good') || text.contains('maayos') || text.contains('commonly expected');
     final currentBpMatch = RegExp(r'(\d+/\d+)').firstMatch(text);
     final currentBp = currentBpMatch != null ? currentBpMatch.group(1) : null;
 
     final buf = StringBuffer();
     if (isLow) {
       buf.write(
-          'Kamusta, mommy! Sa checkup natin ngayon, maayos at normal naman ang lahat. ');
+          'Sa prenatal checkup ng ina ngayon, maayos at nasa karaniwang antas ang lahat ng vital signs. ');
       if (currentBp != null) {
         buf.write(
-            'Ang iyong blood pressure na $currentBp ay nasa magandang antas, na isang napakagandang balita para sa inyo ni baby. ');
+            'Ang blood pressure na $currentBp mmHg ay nasa magandang antas para sa kalusugan ng ina. ');
       }
       buf.write(
-          'Patuloy ka sanang mag-alaga sa iyong sarili — kumain ng masusustansyang pagkain, matulog nang sapat, at uminom ng maraming tubig para manatiling malakas kayo ng iyong munting anghel. ');
+          'Ang sapat na pahinga at masustansyang pagkain ay nakakatulong sa kalusugan ng ina at ng sanggol. ');
     } else {
       buf.write(
-          'May ilang detalye sa iyong checkup ngayon na kailangan nating bigyan ng kaunting pansin at subaybayan. ');
+          'May ilang detalye sa prenatal checkup ng ina na kailangang masubaybayan nang mabuti ng healthcare personnel. ');
       if (currentBp != null) {
         buf.write(
-            'Ang iyong blood pressure ay naitala sa $currentBp sa bisitang ito. ');
+            'Ang blood pressure ng ina ay naitala sa $currentBp mmHg sa bisitang ito. ');
       }
       buf.write(
-          'Huwag mag-alala, mommy, babantayan natin ito nang mabuti at sundin ang mga payo sa pangangalaga. ');
+          'Inirerekomenda ang masusing pagsubaybay at pagsunod sa mga payo sa pangangalaga. ');
     }
     buf.write(
-        'Ang patuloy na prenatal checkup ay inirerekomenda upang suportahan ang iyong kalusugan sa buong pagbubuntis.');
+        'Ang patuloy na prenatal checkup ay inirerekomenda upang suportahan ang kalusugan ng ina sa buong pagbubuntis.');
     return buf.toString();
   }
 
   void _syncEditableRiskState(_RiskSnapshot snapshot, String mergedText) {
     _editableRiskLevel = snapshot.level;
     _editableRiskFactors = List<_RiskFactorItem>.from(snapshot.factors);
-    _editableSuggestedActions = List<String>.from(snapshot.suggestedActions);
-    _aiOriginalAssessment = mergedText;
-    _aiAssessmentCtrl.text = mergedText;
-    _aiAssessmentEditCtrl.text = mergedText;
-    _parseBilingualText(mergedText);
-    _isEditingAiAssessment = false;
-    _aiAssessmentEdited = false;
-    _aiResponseApproved = false;
   }
 
   bool _sameFactorLists(List<_RiskFactorItem> a, List<_RiskFactorItem> b) {
@@ -1171,7 +1145,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     // Calculate Maternal Age
     final maternalAge = _ageFromBirthdate(_tryDate(mother?['birthdate']));
 
-    // Calculate Weight Gain Evaluation inline
+    // Calculate Weight Gain Evaluation inline using session baseline
     WeightGainResult? wgResult;
     try {
       final currentWeight = double.tryParse(_weightCtrl.text.trim());
@@ -1185,13 +1159,43 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
         final motherWeight = mother?['weight'] != null
             ? double.tryParse(mother!['weight'].toString())
             : null;
-        final baselineWeight = prePregnancyWeight ?? motherWeight;
+
+        // Get earliest checkup weight if available from history
+        double? earliestCheckupWeight;
+        if (previousCheckups.isNotEmpty) {
+          final sortedPrev = List<Map<String, dynamic>>.from(
+              previousCheckups.map((e) => Map<String, dynamic>.from(e as Map)));
+          sortedPrev.sort((a, b) {
+            final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '');
+            final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '');
+            if (da == null || db == null) return 0;
+            return da.compareTo(db);
+          });
+          earliestCheckupWeight = double.tryParse(
+              sortedPrev.first['checkup_weight']?.toString() ?? '');
+        }
+
+        double? baselinePreWeight = prePregnancyWeight ?? motherWeight ?? widget.motherWeight ?? earliestCheckupWeight;
+        if (baselinePreWeight == null) {
+          _initialSessionWeight ??= currentWeight;
+          baselinePreWeight = _initialSessionWeight;
+        }
+
+        double? effectivePrePreg = baselinePreWeight;
+        if (effectivePrePreg == null && heightCm != null && heightCm > 0) {
+          final est = WeightGainEngine.estimatePrePregnancyBMI(
+            currentWeightKg: currentWeight,
+            heightCm: heightCm,
+            aogWeeks: _aogWeeks!.toInt(),
+            knownPrePregnancyWeight: baselinePreWeight,
+            fetalCount: _fetalCount ?? 1,
+          );
+          effectivePrePreg = est['estimatedWeight'] as double?;
+        }
 
         final checkupList = previousCheckups
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
-
-        // Ensure the current checkup is part of the longitudinal history so the engine can calculate trends properly.
         checkupList.add({
           'checkup_datetime': _checkupDateTime.toIso8601String(),
           'age_of_gestation': _aogWeeks,
@@ -1204,13 +1208,48 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           currentWeight: currentWeight,
           aogWeeks: _aogWeeks!,
           allCheckups: checkupList,
-          prePregnancyWeight: baselineWeight,
+          prePregnancyWeight: effectivePrePreg,
           heightCm: heightCm,
           fetalCount: _fetalCount ?? 1,
         );
       }
     } catch (_) {
       // ignore
+    }
+
+    final String wgAssessmentStr;
+    if (wgResult != null) {
+      final statusName = wgResult.status == WeightGainStatus.low
+          ? 'BELOW_EXPECTED_WEIGHT_GAIN'
+          : wgResult.status == WeightGainStatus.high
+              ? 'ABOVE_EXPECTED_WEIGHT_GAIN'
+              : 'WITHIN_EXPECTED_WEIGHT_GAIN';
+      final actualStr = wgResult.actualGain != null
+          ? "${wgResult.actualGain! >= 0 ? '+' : ''}${wgResult.actualGain!.toStringAsFixed(1)} kg"
+          : "+0.0 kg";
+      wgAssessmentStr =
+          '$statusName (BMI Category: ${wgResult.bmiCategory}, Current Weight Gain: $actualStr)';
+    } else {
+      wgAssessmentStr = 'Not evaluated';
+    }
+
+    final sysVal = int.tryParse(_sysCtrl.text.trim());
+    final diaVal = int.tryParse(_diaCtrl.text.trim());
+    final String bpAssessmentStr;
+    final bool isBpNormal = sysVal != null && diaVal != null && (sysVal >= 90 && sysVal < 120) && (diaVal >= 60 && diaVal < 80);
+
+    if (sysVal != null && diaVal != null) {
+      if (sysVal >= 140 || diaVal >= 90) {
+        bpAssessmentStr = 'HIGH / STAGE 1-2 HYPERTENSION IN PREGNANCY ($sysVal/$diaVal mmHg - Diastolic $diaVal mmHg >= 90 mmHg. DO NOT SAY THIS IS WITHIN EXPECTED RANGE! PUT THIS IN FLAGGED ITEMS SENTENCE 2!)';
+      } else if (sysVal >= 120 || diaVal >= 80) {
+        bpAssessmentStr = 'ELEVATED / PRE-HYPERTENSION ($sysVal/$diaVal mmHg - Systolic $sysVal or Diastolic $diaVal is elevated. DO NOT SAY THIS IS WITHIN EXPECTED RANGE! PUT THIS IN FLAGGED ITEMS SENTENCE 2!)';
+      } else if (sysVal < 90 || diaVal < 60) {
+        bpAssessmentStr = 'LOW / HYPOTENSION ($sysVal/$diaVal mmHg)';
+      } else {
+        bpAssessmentStr = 'WITHIN EXPECTED RANGE ($sysVal/$diaVal mmHg)';
+      }
+    } else {
+      bpAssessmentStr = 'Not recorded';
     }
 
     // Compute trimester from gestational age
@@ -1247,138 +1286,76 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
       }
     }
 
-    return '''[CRITICAL WARNING - SAFETY MANDATE - DO NOT DEVIATE]
-1. YOU MUST NEVER USE THE WORD "NORMAL" OR "NORMAL VALUE" OR "NORMAL SYMPTOMS" OR "WHICH IS NORMAL" (English) / "NORMAL" OR "KARANIWAN" OR "OKAY LANG" FOR CLINICAL FINDINGS (Tagalog).
-   - INSTEAD of "which is normal" / "normal ang blood pressure" in English, use: "appears within the commonly expected range".
-   - INSTEAD of "normal ang blood pressure" / "normal naman" in Tagalog, use: "ay nasa loob ng karaniwang inaasahang range" or "ay nasa karaniwang antas".
-   - Example English: “Your blood pressure currently appears within the commonly expected range during this prenatal checkup.”
-   - Example Tagalog: “Ang iyong blood pressure ay kasalukuyang nasa loob ng karaniwang inaasahang antas para sa prenatal checkup na ito.”
+    final aogWeekStr = _aogWeeks != null ? '${_aogWeeks!.toInt()}' : '7';
+    final sysText = _sysCtrl.text.trim();
+    final diaText = _diaCtrl.text.trim();
 
-2. NEVER CLINICALLY VALIDATE FETAL CONDITION.
-   - Do NOT say "steady", "healthy", "normal", "maganda", "matatag", or "malakas" for fetal heartbeat.
-   - INSTEAD state it factually and neutrally:
-     * English: "The recorded fetal heartbeat during this prenatal checkup is [X] bpm."
-     * Tagalog: "Ang naitalang fetal heartbeat sa prenatal checkup na ito ay [X] bpm."
+    return '''[CRITICAL INSTRUCTIONS - ANATOMY & STRUCTURE MANDATE]
 
-3. DO NOT VALIDATE OR COMMENT ON MINOR SYMPTOMS.
-   - Do NOT say "skin rash seems normal", "rash looks fine", "okay lang ang pantal", or "normal naman ang rash".
-   - RULE: If a minor symptom like skin rash is not concerning, OMIT IT COMPLETELY from both the English and Tagalog assessments. Focus ONLY on clinically relevant findings.
+You must structure BOTH the Tagalog and English assessments using this EXACT 3-part formula:
 
-4. NEVER PROVIDE DIRECTIVE CARE PLANNING OR PRESCRIPTIVE COMMANDS.
-   - Do NOT say "Continue to focus on nutrition and scheduling regular healthcare consultations" or "Ipagpatuloy ang pagtutok sa nutrisyon at pag-iskedyul ng konsultasyon".
-   - INSTEAD use soft support phrasing:
-     * English: "Continued prenatal checkups and healthcare consultation may help support maternal health during pregnancy."
-     * Tagalog: "Ang patuloy na prenatal checkup at konsultasyon sa inyong healthcare provider ay makakatulong sa inyong kalusugan habang nagbubuntis."
+HEADER:
+- English header: "Checkup Summary — Week $aogWeekStr AOG"
+- Tagalog header: "Buod ng Checkup — Linggo $aogWeekStr ng AOG"
 
-=========================================
+SENTENCE 1: THE REASSURANCE ANCHOR
+- Lead ONLY with vitals/findings that are WITHIN EXPECTED RANGE, including ACTUAL NUMBERS (e.g. "Fetal heart rate (${_fetalBeatCtrl.text.trim().isEmpty ? '120 bpm' : _fetalBeatCtrl.text.trim() + ' bpm'}) is within expected range this visit.").
+- CRITICAL BLOOD PRESSURE RULE: ONLY include Blood Pressure in Sentence 1 if Blood Pressure Assessment is explicitly "WITHIN EXPECTED RANGE". If BP is HIGH or ELEVATED (e.g. 120/90 mmHg where diastolic >= 80/90 mmHg), DO NOT put BP in Sentence 1! Place BP in Sentence 2 (Flagged Items)!
+- NEVER use the word "normal" or "normal values". Use "within expected range" or "within commonly expected range".
 
-You are an AI-assisted maternal healthcare interpretation assistant integrated into a barangay-level maternal healthcare monitoring system.
+SENTENCE 2: THE FLAGGED ITEMS (DATA, COMPARISON, REASSURANCE, SOFT ACTION)
+- If weight gain, blood pressure (e.g. 120/90 mmHg), edema, or symptoms are flagged or elevated:
+  1. State finding plainly with ACTUAL NUMBERS & COMPARISON (e.g. "Blood pressure was recorded at 120/90 mmHg (elevated diastolic), and weight gain is a bit ahead of pace for this BMI category (+2.0 kg vs. an expected 0–1.2 kg)").
+  2. Immediately normalize it if common (e.g. "both are common at this stage and usually settle on their own").
+  3. Suggest a soft non-urgent monitoring step (e.g. "but worth tracking closely at your next checkup").
+- If NO items are flagged, write: "All recorded vitals and findings are progressing smoothly for this stage of pregnancy."
 
-Your role is ONLY to:
-- simplify maternal healthcare information
-- explain prenatal monitoring findings in understandable language
-- provide supportive and empathetic healthcare communication
-- encourage continued prenatal monitoring and healthcare consultation
+CRITICAL SAFETY & MIDWIFE POV RULES:
+- REMOVE ALL DISCLAIMER LINES. DO NOT include any line like "General summary, not a diagnosis..."!
+- MIDWIFE POV MANDATE: The midwife is the healthcare provider entering these remarks! NEVER say "with your midwife or healthcare provider" or "consult your midwife". Say "requires clinical evaluation / doctor consultation" if severe.
+- NEVER write "No abnormal vital signs were noted" or claim findings are normal if Blood pressure is HIGH (e.g. 120/100 mmHg) or Edema is Moderate/Severe!
+- If Blood pressure is HIGH (diastolic >= 90 mmHg or systolic >= 140 mmHg) or Edema is Moderate/Severe:
+  * Sentence 1 (Anchor): Lead ONLY with passed vitals (e.g. "Fetal heart rate (120 bpm) is within expected range this visit.").
+  * Sentence 2 (Flagged Items): Plainly state findings: "Blood pressure was recorded at 120/100 mmHg (high diastolic), weight gain is +2.0 kg (above expected), and moderate swelling was observed — these findings require close monitoring and doctor consultation."
+- KEEP EACH TRANSLATED SECTION CONCISE AND UNDER 280 CHARACTERS TOTAL.
+- Never say "pre-pregnancy weight not provided" or "interpretation is limited".
+- Do NOT use diagnostic or alarmist language.
+- Do NOT use bullet points, disclaimer footers, or extra headers.
 
-You are NOT:
-- a doctor
-- a diagnostic system
-- a treatment recommendation engine
-- a replacement for healthcare professionals
-
-You must provide BOTH a conversational Tagalog/Filipino translation and an English translation.
-Use the following format exactly, with the uppercase delimiters:
-
+OUTPUT FORMAT REQUIREMENTS:
 === FILIPINO ===
-[Sweet, gentle conversational Tagalog "ate" advice matching the behavior rules below]
+Buod ng Checkup — Linggo $aogWeekStr ng AOG
+
+[Sentence 1: Reassurance Anchor with actual numbers of WITHIN RANGE vitals]
+[Sentence 2: Flagged items with comparison, normalization, and soft action OR smooth progress confirmation]
 
 === ENGLISH ===
-[Empathetic, reassuring English advice matching the behavior rules below]
+Checkup Summary — Week $aogWeekStr AOG
 
-CRITICAL BEHAVIOR AND SAFETY RULES:
+[Sentence 1: Reassurance Anchor with actual numbers of WITHIN RANGE vitals]
+[Sentence 2: Flagged items with comparison, normalization, and soft action OR smooth progress confirmation]
 
-1. NEVER diagnose medical conditions or use diagnostic/absolute phrasing.
-- Do NOT say: “You have…”, “This confirms…”, “You are diagnosed with…”, “Your baby is unhealthy…”, “This pregnancy is dangerous…”.
-- Do NOT use the word “normal” to describe clinical values or symptoms.
-- INSTEAD, use: “appears within the commonly expected range” or similar safe, observational phrasing.
+GOOD EXAMPLE OUTPUT (BP 120/90 mmHg - Elevated Diastolic):
+=== FILIPINO ===
+Buod ng Checkup — Linggo $aogWeekStr ng AOG
 
-2. NEVER clinically validate fetal condition or use clinical reassurances for the baby.
-- Do NOT say: “baby’s heartbeat is a steady 120 bpm”, “your baby is perfectly healthy”, or "the baby's heart is beating normally".
-- AI must NOT sound like it is clinically validating the fetal condition.
-- INSTEAD, state the findings neutrally, simply, and factually: “The recorded fetal heartbeat during this prenatal checkup is 120 bpm.”
+Ang fetal heart rate (120 bpm) ay nasa karaniwang inaasahang antas sa bisitang ito. Ang blood pressure ay naitala sa 120/90 mmHg (mataas ang diastolic), at ang pagdagdag ng timbang ay bahagyang nauna (+2.0 kg kumpara sa inaasahang 0–1.2 kg) — pareho itong magandang masubaybayan sa susunod na checkup.
 
-3. NEVER visually or clinically validate symptoms.
-- Do NOT say: “skin rash seems normal”, “swelling looks fine”, or “minor itchiness is normal”.
-- AI should NOT visually or clinically validate symptoms.
-- RULE: If a symptom like a skin rash is NOT concerning or is minor/unrelated to core risk factors, OMIT it completely! The AI should focus only on clinically relevant findings.
+=== ENGLISH ===
+Checkup Summary — Week $aogWeekStr AOG
 
-4. NEVER provide directive care planning or prescriptive lifestyle orders.
-- Do NOT say: “Continue to focus on nutrition and scheduling regular healthcare consultations”, “You must eat specific foods”, or dictate specific daily care schedules.
-- Soften all guidance to support maternal health through standard checks.
-- INSTEAD, use: “Continued prenatal checkups and healthcare consultation may help support maternal health during pregnancy.”
-
-5. ALWAYS remain empathetic, gentle, and calm.
-- The tone should feel warm, respectful, supportive, and easy to understand for rural mothers and non-medical users.
-- For the Tagalog/Filipino version, speak like a comforting, warm, and sweet "ate" (older sister) speaking face-to-face to a maternal patient in the Philippines (e.g. "Kamusta mommy? Ang ating prenatal records ay nagpapakita...").
-
-6. NEVER pretend to personally observe or examine the mother.
-- Do NOT say: “I hear you are experiencing…”, “I noticed…”, or “I examined…”.
-- INSTEAD say: “The recorded symptoms include…” or “The prenatal monitoring information shows…”.
-
-7. Gently and contextually simplify findings.
-- Summarize maternal monitoring findings, symptoms, risk monitoring info, and prenatal trends in a simplified, gentle, and understandable way. Do not use bullet points or lists in the output.
-
-8. ALWAYS include the disclaimer in BOTH languages as the final sentence:
-- English disclaimer: "This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation."
-- Filipino disclaimer: "Ang AI-assisted interpretation na ito ay gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa inyong doktor o midwife."
-
-OUTPUT STYLE REQUIREMENTS:
-- Use short-to-medium length paragraphs (1-2 paragraphs total per language).
-- Avoid excessive medical jargon.
-- Avoid sounding robotic or overly directive.
-- Avoid excessive emotional language.
-- Keep explanations understandable to non-medical users.
-- Focus on healthcare support and monitoring, not diagnosis.
-
-GOOD EXAMPLE OUTPUT
-“Hello, Mommy. The recent prenatal monitoring information shows that maternal findings currently appear within the commonly expected range. The recorded fetal heartbeat during this prenatal checkup is 120 bpm. Continued prenatal checkups and healthcare consultation may help support maternal health during pregnancy. This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation.”
-
-BAD EXAMPLE OUTPUT
-“You have dangerous pregnancy complications. Eat malunggay and take supplements immediately. Your blood pressure is normal, skin rash seems normal, and your baby's heartbeat is a steady 120 bpm, which is normal. Continue to focus on nutrition and scheduling regular healthcare consultations.”
-
-Use ONLY the data provided below. If data is missing, simply skip it — do not mention that data is missing.
-
-MOTHER'S HEALTH BACKGROUND
-- Maternal age: ${maternalAge ?? 'unknown'} years
-- Height: ${mother?['height'] ?? 'unknown'} cm
-- Blood type: ${mother?['blood_type'] ?? 'unknown'}
-- Active medical conditions:
-${activeConditionLines.isEmpty ? '- none' : activeConditionLines.join('\n')}
-- Active allergies:
-${activeAllergyLines.isEmpty ? '- none' : activeAllergyLines.join('\n')}
-- Past pregnancies:
-${pastPregnancyLines.isEmpty ? '- none' : pastPregnancyLines.join('\n')}
-- Previous checkups (${previousCheckups.length} total):
-${previousCheckupLines.isEmpty ? '- none' : previousCheckupLines.join('\n')}
-- Weight trend between checkups:
-${weightTrendLines.isEmpty ? '- not enough data' : weightTrendLines.join('\n')}
-- Age of gestation: ${_aogWeeks?.toInt() ?? 'unknown'} weeks ($trimester)
+Fetal heart rate (120 bpm) is within expected range this visit. Blood pressure was recorded at 120/90 mmHg (elevated diastolic), and weight gain is a bit ahead of pace (+2.0 kg vs. an expected 0–1.2 kg) — both are worth monitoring closely at your next checkup.
 
 TODAY'S CHECKUP
 - Weight: ${_weightCtrl.text.trim()} kg
-- Weight Gain Assessment: ${wgResult != null ? '${wgResult.status.name.toUpperCase()} - ${wgResult.message}' : 'Not evaluated'}
-- Blood pressure: ${_sysCtrl.text.trim()}/${_diaCtrl.text.trim()} mmHg
+- Weight Gain Assessment: $wgAssessmentStr
+- Blood pressure Assessment: $bpAssessmentStr
 - Fetal heart beat: ${_fetalBeatCtrl.text.trim().isEmpty ? 'not recorded' : '${_fetalBeatCtrl.text.trim()} bpm'}
 - Fetal heart tone: ${_fetalTone ?? 'not recorded'}
 - Edema level: ${_edema == 'none' ? 'No swelling' : _edema == 'mild' ? 'Mild swelling in feet or ankles' : _edema == 'moderate' ? 'Moderate swelling in lower legs, feet, or hands' : 'Severe significant swelling in face, hands, and legs'}
 - Symptoms reported:
 ${symptomLines.isEmpty ? '- none' : symptomLines.join('\n')}
 - Remarks: ${_remarksCtrl.text.trim().isEmpty ? 'none' : _remarksCtrl.text.trim()}
-
-SYSTEM PRE-ASSESSMENT (use this to guide your tone, but do NOT expose these labels to the mother):
-- Level: ${draft.level}
-- Factors: ${draft.factors.map((f) => '${f.factor} [${f.influence}]').join('; ')}
-- Suggested actions: ${draft.suggestedActions.join('; ')}
 
 IMPORTANT: Your response must consist ONLY of the two sections labeled with "=== FILIPINO ===" and "=== ENGLISH ===". No other text or labels.''';
   }
@@ -1406,9 +1383,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       );
 
       if (!mounted) return;
-      final shouldSyncEditor = force ||
-          !_aiAssessmentEdited ||
-          _aiAssessmentCtrl.text.trim().isEmpty;
       setState(() {
         final mergedText = _buildMergedAssessmentText(draft, aiText);
         _riskSnapshot = _RiskSnapshot(
@@ -1418,22 +1392,13 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           suggestedActions: draft.suggestedActions,
           aiAssessment: mergedText,
           aiGenerated: true,
-          aiModel: 'Gemini 1.5 Flash',
+          aiModel: 'Groq',
         );
-        if (shouldSyncEditor) {
-          _syncEditableRiskState(_riskSnapshot!, mergedText);
-        }
-        _aiResponseApproved = false;
+        _syncEditableRiskState(_riskSnapshot!, mergedText);
         _lastRiskSignature = signature;
       });
-      if (shouldSyncEditor) {
-        _aiAssessmentEditCtrl.text = _aiAssessmentCtrl.text;
-      }
     } catch (_) {
       if (!mounted) return;
-      final shouldSyncEditor = force ||
-          !_aiAssessmentEdited ||
-          _aiAssessmentCtrl.text.trim().isEmpty;
       setState(() {
         final mergedText = _buildMergedAssessmentText(draft, null);
         _riskSnapshot = _RiskSnapshot(
@@ -1447,15 +1412,9 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         );
         _riskPreviewError =
             'AI insight unavailable right now. Showing rule-based assessment.';
-        if (shouldSyncEditor) {
-          _syncEditableRiskState(_riskSnapshot!, mergedText);
-        }
-        _aiResponseApproved = false;
+        _syncEditableRiskState(_riskSnapshot!, mergedText);
         _lastRiskSignature = signature;
       });
-      if (shouldSyncEditor) {
-        _aiAssessmentEditCtrl.text = _aiAssessmentCtrl.text;
-      }
     } finally {
       if (mounted) {
         setState(() => _loadingRiskPreview = false);
@@ -1465,10 +1424,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
   @override
   void dispose() {
-    _aiAssessmentCtrl.dispose();
-    _aiAssessmentEditCtrl.dispose();
-    _aiFilipinoCtrl.dispose();
-    _aiEnglishCtrl.dispose();
     _symptomSearchCtrl.dispose();
     _heightCtrl.dispose();
     _weightCtrl.dispose();
@@ -1762,18 +1717,18 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   }
 
   Widget _summaryRow(String label, String value,
-      {Color? valueColor, IconData? icon}) {
+      {Color? valueColor, IconData? icon, Widget? badge}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (icon != null) ...[
             Icon(icon, size: 15, color: AppColors.textSecondary),
             const SizedBox(width: 6)
           ],
           SizedBox(
-            width: 138,
+            width: 125,
             child: Text(label,
                 style: const TextStyle(
                     fontSize: 13, color: AppColors.textSecondary)),
@@ -1788,31 +1743,168 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               ),
             ),
           ),
+          if (badge != null) ...[
+            const SizedBox(width: 8),
+            badge,
+          ],
         ],
       ),
     );
   }
 
-  Widget _bpBadge() {
+  Widget _bpStatusPill() {
     final s = _bpStatus;
     if (s == _BpStatus.unknown) return const SizedBox.shrink();
+
+    final String pillLabel;
+    final Color pillColor;
+
+    if (s == _BpStatus.normal) {
+      pillLabel = 'NORMAL';
+      pillColor = AppColors.success;
+    } else if (s == _BpStatus.low) {
+      pillLabel = 'LOW';
+      pillColor = const Color(0xFF3B82F6);
+    } else {
+      pillLabel = 'ELEVATED';
+      pillColor = AppColors.warning;
+    }
+
+    final isLow = s == _BpStatus.low;
+
     return Container(
-      margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
       decoration: BoxDecoration(
-        color: s.color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: s.color.withValues(alpha: 0.4)),
+        color: isLow ? const Color(0xFFEFF6FF) : pillColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isLow ? const Color(0xFFBFDBFE) : pillColor.withValues(alpha: 0.3),
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(s.icon, size: 13, color: s.color),
-          const SizedBox(width: 4),
-          Text(s.label,
+      child: Text(
+        pillLabel,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.3,
+          color: pillColor,
+        ),
+      ),
+    );
+  }
+
+  Widget _riskSegmentOption(String levelKey, String label, Color color) {
+    final isSelected = _pregnancyRiskLevel == levelKey;
+    return GestureDetector(
+      onTap: () => setState(() => _pregnancyRiskLevel = levelKey),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? color.withValues(alpha: 0.4) : Colors.grey.withValues(alpha: 0.2),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+              size: 13,
+              color: isSelected ? color : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
               style: TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: s.color)),
-        ],
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? color : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _weightGainStatusPill() {
+    final currentWeight = double.tryParse(_weightCtrl.text.trim());
+    if (currentWeight == null || _aogWeeks == null || _aogWeeks! <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final motherMap = _motherRiskContext?['mother'] as Map<String, dynamic>?;
+    final pregnancyMap = _motherRiskContext?['pregnancy'] as Map<String, dynamic>?;
+    final heightCm = motherMap?['height'] != null
+        ? double.tryParse(motherMap!['height'].toString())
+        : null;
+    final prePregnancyWeight = pregnancyMap?['pre_pregnancy_weight'] != null
+        ? double.tryParse(pregnancyMap!['pre_pregnancy_weight'].toString())
+        : null;
+    final motherWeight = motherMap?['weight'] != null
+        ? double.tryParse(motherMap!['weight'].toString())
+        : null;
+
+    double? baselinePreWeight = prePregnancyWeight ?? motherWeight ?? widget.motherWeight;
+    if (baselinePreWeight == null) {
+      _initialSessionWeight ??= currentWeight;
+      baselinePreWeight = _initialSessionWeight;
+    }
+
+    double? effectivePrePreg = baselinePreWeight;
+    if (effectivePrePreg == null && heightCm != null && heightCm > 0) {
+      final est = WeightGainEngine.estimatePrePregnancyBMI(
+        currentWeightKg: currentWeight,
+        heightCm: heightCm,
+        aogWeeks: _aogWeeks!.toInt(),
+        knownPrePregnancyWeight: baselinePreWeight,
+        fetalCount: _fetalCount ?? 1,
+      );
+      effectivePrePreg = est['estimatedWeight'] as double?;
+    }
+
+    final result = WeightGainEngine.evaluate(
+      currentWeight: currentWeight,
+      aogWeeks: _aogWeeks!,
+      allCheckups: [],
+      prePregnancyWeight: effectivePrePreg,
+      heightCm: heightCm,
+      fetalCount: _fetalCount ?? 1,
+    );
+
+    final String pillLabel;
+    final Color pillColor;
+
+    if (result.status == WeightGainStatus.low) {
+      pillLabel = 'BELOW EXPECTED';
+      pillColor = AppColors.warning;
+    } else if (result.status == WeightGainStatus.high) {
+      pillLabel = 'ABOVE EXPECTED';
+      pillColor = AppColors.warning;
+    } else {
+      pillLabel = 'WITHIN EXPECTED';
+      pillColor = AppColors.success;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: pillColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: pillColor.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        pillLabel,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.3,
+          color: pillColor,
+        ),
       ),
     );
   }
@@ -2022,8 +2114,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         _showMessage('Next schedule must be after the checkup date.');
         return false;
       }
-      if (_remarksCtrl.text.trim().length > 500) {
-        _showMessage('Remarks must be 500 characters or less.');
+      if (_remarksCtrl.text.trim().length > 1000) {
+        _showMessage('Remarks must be 1000 characters or less.');
         return false;
       }
     }
@@ -2151,16 +2243,24 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     );
 
     if (saved == true) {
-      setState(() {
-        _symptoms.add(
-          _SymptomEntry(
-            symptomTypeId: symptomType.id,
-            name: symptomType.name,
-            riskCategory: symptomType.riskCategory,
-            notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
-          ),
-        );
-      });
+      final nameLower = symptomType.name.trim().toLowerCase();
+      final exists = _symptoms.any((s) =>
+          (s.symptomTypeId != null && s.symptomTypeId == symptomType.id) ||
+          s.name.trim().toLowerCase() == nameLower);
+      if (!exists) {
+        setState(() {
+          _symptoms.add(
+            _SymptomEntry(
+              symptomTypeId: symptomType.id,
+              name: symptomType.name,
+              riskCategory: symptomType.riskCategory,
+              notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+            ),
+          );
+        });
+      } else {
+        _showMessage('${symptomType.name} is already recorded.');
+      }
     }
 
     notesCtrl.dispose();
@@ -2421,140 +2521,154 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   Future<void> _persistRiskAssessment(int encounterId) async {
     final snapshot = _riskSnapshot ?? _buildRuleBasedRiskSnapshot();
     final client = Supabase.instance.client;
-    final originalText =
-        (_aiOriginalAssessment ?? snapshot.aiAssessment).trim();
-    final filipinoText = _aiFilipinoCtrl.text.trim();
-    final englishText = _aiEnglishCtrl.text.trim();
-    final finalAiText =
-        '=== FILIPINO ===\n$filipinoText\n\n=== ENGLISH ===\n$englishText';
-    final wasEdited = finalAiText.trim() != originalText;
-    final aiStatus =
-        _aiResponseApproved ? 'approved' : (wasEdited ? 'edited' : 'generated');
+
+    // ── AI Remarks audit trail ──────────────────────────────────────────────
+    final bool hasAiRemarks = _remarksSource != 'midwife_authored';
+    final remarksText = _remarksCtrl.text.trim();
+    final aiStatus = _remarksSource == 'ai_generated_approved'
+        ? 'approved'
+        : _remarksSource == 'ai_generated_edited'
+            ? 'edited'
+            : 'skipped';
+
+    // Build bilingual AI text for storage (original AI output)
+    final originalAiText = (_aiOriginalRemarksEn != null || _aiOriginalRemarksFil != null)
+        ? '=== FILIPINO ===\n${_aiOriginalRemarksFil ?? ''}\n\n=== ENGLISH ===\n${_aiOriginalRemarksEn ?? ''}'
+        : '';
+
+    // Build final text (what the midwife actually submitted)
+    final finalAiText = hasAiRemarks
+        ? '=== FILIPINO ===\n${_aiRemarksFilipino}\n\n=== ENGLISH ===\n${_aiRemarksEnglish}'
+        : remarksText;
+
+    final wasEdited = _remarksSource == 'ai_generated_edited';
+
     final finalRiskLevel = _editableRiskLevel;
     final finalRiskFactors = List<_RiskFactorItem>.from(_editableRiskFactors);
     final riskManuallyEdited = finalRiskLevel != snapshot.level ||
         !_sameFactorLists(finalRiskFactors, snapshot.factors);
 
-    Map<String, dynamic>? aiRow = await client
-        .from('ai_responses')
-        .select('ai_response_id')
-        .eq('reference_table', 'prenatal_checkups')
-        .eq('reference_id', encounterId)
-        .eq('response_type', 'risk_assessment')
-        .maybeSingle();
-
-    int aiResponseId;
-    final bool aiResponseUpdated = aiRow != null;
-    if (aiRow != null) {
-      aiResponseId = aiRow['ai_response_id'] as int;
-      await client.from('ai_responses').update({
-        'ai_model': snapshot.aiModel ?? 'Rule Engine',
-        'response': finalAiText,
-        'response_category': 'analysis',
-        'status': aiStatus,
-        'generated_by_ai': snapshot.aiGenerated,
-        'approved_by': _aiResponseApproved ? _accountId : null,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('ai_response_id', aiResponseId);
-    } else {
-      final insertedAi = await client
+    // ── ai_responses row (only if AI was used) ──────────────────────────────
+    int? aiResponseId;
+    if (hasAiRemarks) {
+      Map<String, dynamic>? aiRow = await client
           .from('ai_responses')
-          .insert({
-            'response_type': 'risk_assessment',
-            'reference_table': 'prenatal_checkups',
-            'reference_id': encounterId,
-            'ai_model': snapshot.aiModel ?? 'Rule Engine',
-            'confidence_score': null,
-            'response': finalAiText,
-            'response_category': 'analysis',
-            'status': aiStatus,
-            'generated_by_ai': snapshot.aiGenerated,
-            'approved_by': _aiResponseApproved ? _accountId : null,
-          })
           .select('ai_response_id')
+          .eq('reference_table', 'prenatal_checkups')
+          .eq('reference_id', encounterId)
+          .eq('response_type', 'checkup_remarks')
           .maybeSingle();
 
-      if (insertedAi == null) return;
-      aiResponseId = insertedAi['ai_response_id'] as int;
-    }
+      final bool aiResponseUpdated = aiRow != null;
+      if (aiRow != null) {
+        aiResponseId = aiRow['ai_response_id'] as int;
+        await client.from('ai_responses').update({
+          'ai_model': _aiRemarksModel ?? 'Rule Engine',
+          'response': finalAiText,
+          'response_category': 'remarks',
+          'status': aiStatus,
+          'generated_by_ai': true,
+          'approved_by': _accountId,
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('ai_response_id', aiResponseId);
+      } else {
+        final insertedAi = await client
+            .from('ai_responses')
+            .insert({
+              'response_type': 'checkup_remarks',
+              'reference_table': 'prenatal_checkups',
+              'reference_id': encounterId,
+              'ai_model': _aiRemarksModel ?? 'Rule Engine',
+              'confidence_score': null,
+              'response': finalAiText,
+              'response_category': 'remarks',
+              'status': aiStatus,
+              'generated_by_ai': true,
+              'approved_by': _accountId,
+            })
+            .select('ai_response_id')
+            .maybeSingle();
 
-    if (snapshot.aiGenerated && (_lastRiskAiPrompt ?? '').trim().isNotEmpty) {
-      await client.from('ai_prompt_logs').insert({
-        'ai_response_id': aiResponseId,
-        'prompt': _lastRiskAiPrompt,
-        'model_used': snapshot.aiModel ?? 'Rule Engine',
-      });
-    }
+        if (insertedAi != null) {
+          aiResponseId = insertedAi['ai_response_id'] as int;
+        }
+      }
 
-    await client.from('audit_trail').insert({
-      'action': aiResponseUpdated ? 'UPDATE' : 'INSERT',
-      'table_name': 'ai_responses',
-      'account_id': _accountId,
-      'old_data': aiResponseUpdated
-          ? {
-              'status': wasEdited ? 'edited' : 'generated',
-              'approved_by': null,
-            }
-          : null,
-      'new_data': {
-        'ai_response_id': aiResponseId,
-        'status': aiStatus,
-        'approved_by': _aiResponseApproved ? _accountId : null,
-      },
-      'description':
-          'Saved AI risk assessment for prenatal checkup $encounterId.',
-    });
+      // Prompt log
+      if (aiResponseId != null && (_lastRiskAiPrompt ?? '').trim().isNotEmpty) {
+        await client.from('ai_prompt_logs').insert({
+          'ai_response_id': aiResponseId,
+          'prompt': _lastRiskAiPrompt,
+          'model_used': _aiRemarksModel ?? 'Rule Engine',
+        });
+      }
 
-    if (wasEdited) {
-      await client.from('ai_edit_history').insert({
-        'ai_response_id': aiResponseId,
-        'old_content': originalText,
-        'new_content': finalAiText,
-        'edited_by': _accountId,
-        'edit_reason':
-            'Midwife updated AI risk assessment before saving checkup.',
-      });
-
+      // Audit trail for AI remarks
       await client.from('audit_trail').insert({
-        'action': 'UPDATE',
-        'table_name': 'ai_edit_history',
+        'action': aiResponseUpdated ? 'UPDATE' : 'INSERT',
+        'table_name': 'ai_responses',
         'account_id': _accountId,
-        'old_data': {'content': originalText},
-        'new_data': {'content': finalAiText, 'ai_response_id': aiResponseId},
+        'new_data': {
+          'ai_response_id': aiResponseId,
+          'status': aiStatus,
+          'remarks_source': _remarksSource,
+        },
         'description':
-            'Midwife edited AI risk assessment content before approval.',
+            'AI checkup insight ${wasEdited ? "edited by midwife and " : ""}saved for prenatal checkup $encounterId.',
       });
+
+      // If midwife edited the AI text, record the diff
+      if (wasEdited && aiResponseId != null) {
+        await client.from('ai_edit_history').insert({
+          'ai_response_id': aiResponseId,
+          'old_content': originalAiText,
+          'new_content': finalAiText,
+          'edited_by': _accountId,
+          'edit_reason':
+              'Midwife edited AI-generated checkup remarks before saving.',
+        });
+
+        await client.from('audit_trail').insert({
+          'action': 'UPDATE',
+          'table_name': 'ai_edit_history',
+          'account_id': _accountId,
+          'old_data': {'content': originalAiText},
+          'new_data': {'content': finalAiText, 'ai_response_id': aiResponseId},
+          'description':
+              'Midwife edited AI checkup remarks content before submission.',
+        });
+      }
     }
 
+    // ── pregnancy_risk_assessments row ───────────────────────────────────────
     final riskInsert = await client
         .from('pregnancy_risk_assessments')
         .insert({
           'pregnancy_id': widget.pregnancyId,
           'ai_response_id': aiResponseId,
           'risk_level': finalRiskLevel,
-          'assessed_by_ai':
-              !wasEdited && !riskManuallyEdited && snapshot.aiGenerated,
+          'assessed_by_ai': hasAiRemarks && !wasEdited && !riskManuallyEdited,
         })
         .select('pregnancy_risk_id')
         .maybeSingle();
 
-    if (riskInsert == null) return;
+    if (riskInsert != null) {
+      final pregnancyRiskId = riskInsert['pregnancy_risk_id'] as int;
 
-    final pregnancyRiskId = riskInsert['pregnancy_risk_id'] as int;
-
-    if (finalRiskFactors.isNotEmpty) {
-      final factorRows = finalRiskFactors
-          .map(
-            (f) => {
-              'pregnancy_risk_id': pregnancyRiskId,
-              'factor': f.factor,
-              'risk_influence': f.influence,
-              'source_table': f.sourceTable ?? 'prenatal_checkups',
-              'source_id': f.sourceId ?? encounterId,
-            },
-          )
-          .toList();
-      await client.from('pregnancy_risk_factors').insert(factorRows);
+      if (finalRiskFactors.isNotEmpty) {
+        final factorRows = finalRiskFactors
+            .map(
+              (f) => {
+                'pregnancy_risk_id': pregnancyRiskId,
+                'factor': f.factor,
+                'risk_influence': f.influence,
+                'source_table': f.sourceTable ?? 'prenatal_checkups',
+                'source_id': f.sourceId ?? encounterId,
+              },
+            )
+            .toList();
+        await client.from('pregnancy_risk_factors').insert(factorRows);
+      }
     }
 
     await client
@@ -2683,17 +2797,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
   Future<void> _submit() async {
     if (!_validateCurrentStep()) return;
-
-    if (_isEditingAiAssessment) {
-      _showMessage('Save or discard your risk assessment edits first.');
-      return;
-    }
-
-    if (!_aiResponseApproved && !_aiAnalysisSkipped) {
-      _showMessage(
-          'Approve the AI response or skip AI analysis before saving.');
-      return;
-    }
 
     final weight = double.tryParse(_weightCtrl.text.trim());
     final systolic = int.tryParse(_sysCtrl.text.trim());
@@ -2877,8 +2980,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       'Pregnancy Symptoms',
       'Supplements & TD',
       'Schedule & Remarks',
-      'Summary',
-      'Risk Assessment',
+      'Summary & Risk Level',
     ];
     const subtitles = [
       'Date, weight, and blood pressure',
@@ -2886,8 +2988,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       'Record symptoms and identify serious warning signs',
       'Supplements and TD vaccine',
       'Next visit and remarks',
-      'Review before saving',
-      'Review and edit AI risk analysis before final save',
+      'Review details and set pregnancy risk level before saving',
     ];
 
     return Padding(
@@ -2931,9 +3032,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       case 4:
         return _buildStep4();
       case 5:
-        return _buildStep5();
       default:
-        return _buildStep6();
+        return _buildStep5();
     }
   }
 
@@ -3234,14 +3334,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
   Widget? _buildWeightGainInsight(
       double? heightCmVal, Map<String, dynamic>? pregnancyData) {
-    if (_aogWeeks == null || _aogWeeks! < 13.0)
-      return null; // Only 2nd Trimester (week 13) and up
+    if (_aogWeeks == null) return null;
 
     final t = _weightCtrl.text.trim();
     if (t.isEmpty) return null;
     final currentWeight = double.tryParse(t);
-    if (currentWeight == null || currentWeight < 30 || currentWeight > 200)
+    if (currentWeight == null || currentWeight < 30 || currentWeight > 200) {
       return null;
+    }
 
     final mother = _motherRiskContext?['mother'] as Map<String, dynamic>?;
     final previousCheckups =
@@ -3255,8 +3355,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     final rawMotherW = mother?['weight'];
     final motherWeight =
         rawMotherW != null ? double.tryParse(rawMotherW.toString()) : null;
-
-    final baselineWeight = prePregnancyWeight ?? motherWeight;
 
     final rawMotherH = mother?['height'];
     final heightCm = heightCmVal ??
@@ -3274,11 +3372,45 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         .compareTo(DateTime.parse(b['checkup_datetime'])));
 
     try {
+      // Get earliest checkup weight if available from history
+      double? earliestCheckupWeight;
+      if (previousCheckups.isNotEmpty) {
+        final sortedPrev = List<Map<String, dynamic>>.from(
+            previousCheckups.map((e) => Map<String, dynamic>.from(e as Map)));
+        sortedPrev.sort((a, b) {
+          final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '');
+          final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '');
+          if (da == null || db == null) return 0;
+          return da.compareTo(db);
+        });
+        earliestCheckupWeight = double.tryParse(
+            sortedPrev.first['checkup_weight']?.toString() ?? '');
+      }
+
+      // Lock session initial weight so typing current weight never shifts the baseline
+      double? baselinePreWeight = prePregnancyWeight ?? motherWeight ?? widget.motherWeight ?? earliestCheckupWeight;
+      if (baselinePreWeight == null) {
+        _initialSessionWeight ??= currentWeight;
+        baselinePreWeight = _initialSessionWeight;
+      }
+
+      double? effectivePrePreg = baselinePreWeight;
+      if (effectivePrePreg == null && heightCm != null && heightCm > 0) {
+        final est = WeightGainEngine.estimatePrePregnancyBMI(
+          currentWeightKg: currentWeight,
+          heightCm: heightCm,
+          aogWeeks: _aogWeeks!.toInt(),
+          knownPrePregnancyWeight: baselinePreWeight,
+          fetalCount: _fetalCount ?? 1,
+        );
+        effectivePrePreg = est['estimatedWeight'] as double?;
+      }
+
       final result = WeightGainEngine.evaluate(
         currentWeight: currentWeight,
         aogWeeks: _aogWeeks!,
         allCheckups: checkupList,
-        prePregnancyWeight: prePregnancyWeight,
+        prePregnancyWeight: effectivePrePreg,
         heightCm: heightCm,
         fetalCount: _fetalCount ?? 1,
       );
@@ -3291,210 +3423,110 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       IconData icon;
       String statusText;
 
-      if (prePregnancyWeight == null) {
-        bgColor = AppColors.textSecondary.withValues(alpha: 0.1);
-        textColor = AppColors.textSecondary;
-        icon = Icons.info_outline;
-        statusText = "Analysis limited";
-      } else if (isLow) {
-        bgColor = AppColors.warning.withValues(alpha: 0.1);
+      if (isLow) {
+        bgColor = AppColors.warning.withValues(alpha: 0.08);
         textColor = AppColors.warning;
-        icon = Icons.trending_down;
-        statusText = "Below expected range";
+        icon = Icons.trending_down_rounded;
+        statusText = "Below expected weight gain";
       } else if (isHigh) {
-        bgColor = AppColors.error.withValues(alpha: 0.1);
+        bgColor = AppColors.error.withValues(alpha: 0.08);
         textColor = AppColors.error;
-        icon = Icons.trending_up;
-        statusText = "Above expected range";
+        icon = Icons.trending_up_rounded;
+        statusText = "Above expected weight gain";
       } else {
-        bgColor = AppColors.success.withValues(alpha: 0.1);
+        bgColor = AppColors.success.withValues(alpha: 0.08);
         textColor = AppColors.success;
-        icon = Icons.trending_flat;
-        statusText = "Within expected range";
+        icon = Icons.trending_flat_rounded;
+        statusText = "Within expected weight gain";
       }
 
-      String detailsText = '';
-      if (prePregnancyWeight == null) {
-        detailsText = result.message;
-      } else if (result.mode == WeightGainMode.full &&
-          result.expectedGain != null &&
-          result.baselineWeight != null) {
-        final activeGuidelines = (_fetalCount ?? 1) >= 2
-            ? WeightGainEngine.iomTwinGuidelines
-            : WeightGainEngine.iomGuidelines;
-        final guidelines =
-            activeGuidelines[result.bmiCategory] ?? activeGuidelines['Normal']!;
+      final activeGuidelines = (_fetalCount ?? 1) >= 2
+          ? WeightGainEngine.iomTwinGuidelines
+          : WeightGainEngine.iomGuidelines;
+      final guidelines =
+          activeGuidelines[result.bmiCategory] ?? activeGuidelines['Normal']!;
 
-        final firstTrimesterGain = guidelines['first_trimester']!;
-        final weeklyRate = guidelines['weekly_rate']!;
-        final totalMin = guidelines['total_min']!;
-        final totalMax = guidelines['total_max']!;
+      final firstTrimesterGain = guidelines['first_trimester']!;
+      final weeklyRate = guidelines['weekly_rate']!;
+      final totalMin = guidelines['total_min']!;
+      final totalMax = guidelines['total_max']!;
 
-        double expectedGainMin;
-        double expectedGainMax;
+      double expectedGainMin;
+      double expectedGainMax;
 
-        if (_aogWeeks! <= 13) {
-          final fraction = _aogWeeks! / 13.0;
-          final expectedGainMid = firstTrimesterGain * fraction;
-          expectedGainMin = expectedGainMid * 0.7;
-          expectedGainMax = expectedGainMid * 1.3;
-        } else {
-          final firstTrimesterMin = firstTrimesterGain * 0.7;
-          final firstTrimesterMax = firstTrimesterGain * 1.3;
-
-          if (_aogWeeks! <= 40) {
-            final progressFraction = (_aogWeeks! - 13) / 27.0;
-            expectedGainMin = firstTrimesterMin +
-                (totalMin - firstTrimesterMin) * progressFraction;
-            expectedGainMax = firstTrimesterMax +
-                (totalMax - firstTrimesterMax) * progressFraction;
-          } else {
-            final weeksAfterForty = _aogWeeks! - 40;
-            final weeklyMin = guidelines['weekly_min'] ?? (weeklyRate * 0.8);
-            final weeklyMax = guidelines['weekly_max'] ?? (weeklyRate * 1.2);
-            expectedGainMin = totalMin + (weeksAfterForty * weeklyMin);
-            expectedGainMax = totalMax + (weeksAfterForty * weeklyMax);
-          }
-        }
-
-        final expectedWeightMin = result.baselineWeight! + expectedGainMin;
-        final expectedWeightMax = result.baselineWeight! + expectedGainMax;
-
-        final actualGain = result.actualGain ?? 0.0;
-        final actualStr =
-            "${actualGain >= 0 ? '+' : ''}${actualGain.toStringAsFixed(1)} kg";
-        final gainRangeStr =
-            "${expectedGainMin.toStringAsFixed(1)} - ${expectedGainMax.toStringAsFixed(1)} kg";
-        final weightRangeStr =
-            "${expectedWeightMin.toStringAsFixed(1)} - ${expectedWeightMax.toStringAsFixed(1)} kg";
-
-        if (isLow) {
-          detailsText =
-              "Weight gain is slightly lower than the expected range (current gain is $actualStr, recommended gain is $gainRangeStr).\n"
-              "Based on your pre-pregnancy weight of ${result.baselineWeight!.toStringAsFixed(1)} kg (${result.bmiCategory}), "
-              "the recommended weight range for Week ${_aogWeeks!.toInt()} is $weightRangeStr kg.";
-        } else if (isHigh) {
-          detailsText =
-              "Weight gain exceeds the expected range (current gain is $actualStr, recommended gain is $gainRangeStr).\n"
-              "Based on your pre-pregnancy weight of ${result.baselineWeight!.toStringAsFixed(1)} kg (${result.bmiCategory}), "
-              "the recommended weight range for Week ${_aogWeeks!.toInt()} is $weightRangeStr kg.";
-        } else {
-          detailsText =
-              "Weight gain is within the commonly expected range (current gain is $actualStr, recommended gain is $gainRangeStr).\n"
-              "Based on your pre-pregnancy weight of ${result.baselineWeight!.toStringAsFixed(1)} kg (${result.bmiCategory}), "
-              "the recommended weight range for Week ${_aogWeeks!.toInt()} is $weightRangeStr kg.";
-        }
-      } else if (result.weeklyGain != null) {
-        final activeGuidelines = (_fetalCount ?? 1) >= 2
-            ? WeightGainEngine.iomTwinGuidelines
-            : WeightGainEngine.iomGuidelines;
-        final guidelines =
-            activeGuidelines[result.bmiCategory] ?? activeGuidelines['Normal']!;
-        final weeklyMin = guidelines['weekly_min']!;
-        final weeklyMax = guidelines['weekly_max']!;
-
-        final weeklyStr =
-            "${result.weeklyGain! >= 0 ? '+' : ''}${result.weeklyGain!.toStringAsFixed(2)} kg/wk";
-        final rangeStr =
-            "${weeklyMin.toStringAsFixed(2)} - ${weeklyMax.toStringAsFixed(2)} kg/wk";
-
-        // Try to get previous checkup weight and week to compute expectation since last entry
-        final sortedPrev = List<Map<String, dynamic>>.from(
-            previousCheckups.map((e) => Map<String, dynamic>.from(e as Map)));
-        sortedPrev.sort((a, b) {
-          final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '');
-          final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '');
-          if (da == null || db == null) return 0;
-          return da.compareTo(db);
-        });
-
-        double? prevWeight;
-        double? prevWeek;
-        if (sortedPrev.isNotEmpty) {
-          prevWeight = double.tryParse(
-              sortedPrev.last['checkup_weight']?.toString() ?? '');
-          prevWeek = double.tryParse(
-              sortedPrev.last['age_of_gestation']?.toString() ?? '');
-        }
-
-        if (prevWeight != null && prevWeek != null) {
-          final weekDiff = _aogWeeks! - prevWeek;
-          if (weekDiff > 0) {
-            final expectedGainMin = weeklyMin * weekDiff;
-            final expectedGainMax = weeklyMax * weekDiff;
-            final expectedWeightMin = prevWeight + expectedGainMin;
-            final expectedWeightMax = prevWeight + expectedGainMax;
-
-            final weightRangeStr =
-                "${expectedWeightMin.toStringAsFixed(1)} - ${expectedWeightMax.toStringAsFixed(1)} kg";
-            final gainRangeStr =
-                "${expectedGainMin.toStringAsFixed(1)} - ${expectedGainMax.toStringAsFixed(1)} kg";
-
-            if (isLow) {
-              detailsText =
-                  "Weight gain is slightly lower than the expected range.\n"
-                  "From your last entry at Week ${prevWeek.toStringAsFixed(1)} (${prevWeight.toStringAsFixed(1)} kg), "
-                  "the recommended weight gain from your last entry is $gainRangeStr (expected weight range: $weightRangeStr).";
-            } else if (isHigh) {
-              detailsText = "Weight gain exceeds the expected range.\n"
-                  "From your last entry at Week ${prevWeek.toStringAsFixed(1)} (${prevWeight.toStringAsFixed(1)} kg), "
-                  "the recommended weight gain from your last entry is $gainRangeStr (expected weight range: $weightRangeStr).";
-            } else {
-              detailsText =
-                  "Weight gain is within the commonly expected range.\n"
-                  "From your last entry at Week ${prevWeek.toStringAsFixed(1)} (${prevWeight.toStringAsFixed(1)} kg), "
-                  "the recommended weight gain from your last entry is $gainRangeStr (expected weight range: $weightRangeStr).";
-            }
-          }
-        }
-
-        if (detailsText.isEmpty) {
-          if (isLow) {
-            detailsText =
-                "Weekly rate of $weeklyStr is lower than the expected rate of $rangeStr.";
-          } else if (isHigh) {
-            detailsText =
-                "Weekly rate of $weeklyStr exceeds the expected rate of $rangeStr.";
-          } else {
-            detailsText =
-                "Weekly rate of $weeklyStr is within the expected rate of $rangeStr.";
-          }
-        }
+      if (_aogWeeks! <= 13) {
+        final fraction = _aogWeeks! / 13.0;
+        final expectedGainMid = firstTrimesterGain * fraction;
+        // In first trimester (weeks 1-13), zero weight gain (0 kg) is normal
+        expectedGainMin = 0.0;
+        expectedGainMax = (expectedGainMid * 1.4).clamp(1.0, firstTrimesterGain * 1.3);
       } else {
-        detailsText = result.message;
+        final firstTrimesterMin = firstTrimesterGain * 0.7;
+        final firstTrimesterMax = firstTrimesterGain * 1.3;
+
+        if (_aogWeeks! <= 40) {
+          final progressFraction = (_aogWeeks! - 13) / 27.0;
+          expectedGainMin = firstTrimesterMin +
+              (totalMin - firstTrimesterMin) * progressFraction;
+          expectedGainMax = firstTrimesterMax +
+              (totalMax - firstTrimesterMax) * progressFraction;
+        } else {
+          final weeksAfterForty = _aogWeeks! - 40;
+          final weeklyMin = guidelines['weekly_min'] ?? (weeklyRate * 0.8);
+          final weeklyMax = guidelines['weekly_max'] ?? (weeklyRate * 1.2);
+          expectedGainMin = totalMin + (weeksAfterForty * weeklyMin);
+          expectedGainMax = totalMax + (weeksAfterForty * weeklyMax);
+        }
       }
+
+      final baselineW = result.baselineWeight ?? effectivePrePreg ?? baselinePreWeight ?? currentWeight;
+      final expectedWeightMin = baselineW + expectedGainMin;
+      final expectedWeightMax = baselineW + expectedGainMax;
+
+      final actualGain = result.actualGain ?? (currentWeight - baselineW);
+      final actualStr =
+          "${actualGain >= 0 ? '+' : ''}${actualGain.toStringAsFixed(1)} kg";
+      final gainRangeStr =
+          "${expectedGainMin.toStringAsFixed(1)} – ${expectedGainMax.toStringAsFixed(1)} kg";
+      final weightRangeStr =
+          "${expectedWeightMin.toStringAsFixed(1)} – ${expectedWeightMax.toStringAsFixed(1)} kg";
+
+      final detailsText =
+          "Based on pre-pregnancy BMI (${result.bmiCategory}): "
+          "recommended target weight for Week ${_aogWeeks!.toInt()} is $weightRangeStr "
+          "(ideal gain: $gainRangeStr; current gain: $actualStr).";
 
       return Container(
         margin: const EdgeInsets.only(top: 8),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
           color: bgColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: textColor.withValues(alpha: 0.3)),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: textColor.withValues(alpha: 0.25)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: textColor, size: 20),
+            Icon(icon, color: textColor, size: 18),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "IOM Weight Gain: $statusText",
+                    statusText,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      fontSize: 12,
                       color: textColor,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     detailsText,
                     style: TextStyle(
-                      fontSize: 12,
-                      height: 1.3,
+                      fontSize: 11,
+                      height: 1.35,
                       color: textColor.withValues(alpha: 0.9),
                     ),
                   ),
@@ -4076,10 +4108,115 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     );
   }
 
+  // ── AI Remarks Generation (Option C) ──────────────────────────────────────
+  Future<void> _generateAiRemarks() async {
+    setState(() => _generatingAiRemarks = true);
+    try {
+      final draft = _buildRuleBasedRiskSnapshot();
+      final prompt = _buildAiPrompt(draft);
+      _lastRiskAiPrompt = prompt;
+
+      final aiText = await _groqService.generateTextInsight(
+        prompt: prompt,
+        temperature: 0.1,
+        maxOutputTokens: 2600,
+      );
+
+      if (!mounted) return;
+
+      // Parse bilingual response
+      final parsed = _parseBilingualText(aiText);
+      final englishText = parsed['english'] ?? aiText;
+      final filipinoText = parsed['filipino'] ?? '';
+
+      setState(() {
+        _aiRemarksEnglish = englishText;
+        _aiRemarksFilipino = filipinoText;
+        _aiOriginalRemarksEn = englishText;
+        _aiOriginalRemarksFil = filipinoText;
+        _aiRemarksModel = 'Groq';
+        _remarksSource = 'ai_generated_approved';
+        _remarksCtrl.text = _remarksLanguage == 'english' ? englishText : filipinoText;
+        // Sync risk snapshot for persistence
+        _riskSnapshot = draft.copyWith(
+          aiAssessment: aiText,
+          aiGenerated: true,
+          aiModel: 'Groq',
+        );
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // Fallback to rule-based text
+      final draft = _buildRuleBasedRiskSnapshot();
+      final en = _buildRuleBasedAssessmentText(draft);
+      final fil = _buildRuleBasedAssessmentTextFilipino(draft);
+      setState(() {
+        _aiRemarksEnglish = en;
+        _aiRemarksFilipino = fil;
+        _aiOriginalRemarksEn = en;
+        _aiOriginalRemarksFil = fil;
+        _aiRemarksModel = 'Rule Engine';
+        _remarksSource = 'ai_generated_approved';
+        _remarksCtrl.text = _remarksLanguage == 'english' ? en : fil;
+        _riskSnapshot = draft;
+      });
+      _showMessage(
+        'AI unavailable. Showing rule-based insight instead.',
+        type: AppSnackType.info,
+      );
+    } finally {
+      if (mounted) setState(() => _generatingAiRemarks = false);
+    }
+  }
+
+  void _onRemarksChanged() {
+    final text = _remarksCtrl.text.trim();
+    if (text.isEmpty) {
+      // Reset AI state when midwife deletes everything
+      setState(() {
+        _remarksSource = 'midwife_authored';
+        _aiRemarksEnglish = '';
+        _aiRemarksFilipino = '';
+        _aiOriginalRemarksEn = null;
+        _aiOriginalRemarksFil = null;
+      });
+      return;
+    }
+
+    if (_remarksSource != 'midwife_authored') {
+      setState(() => _remarksSource = 'ai_generated_edited');
+      // Save edits strictly to the active language version so English & Tagalog remain distinct
+      if (_remarksLanguage == 'english') {
+        _aiRemarksEnglish = _remarksCtrl.text;
+      } else {
+        _aiRemarksFilipino = _remarksCtrl.text;
+      }
+    }
+  }
+
+  void _switchRemarksLanguage(String lang) {
+    if (lang == _remarksLanguage) return;
+    if (_remarksSource != 'midwife_authored') {
+      if (_remarksLanguage == 'english') {
+        _aiRemarksEnglish = _remarksCtrl.text;
+      } else {
+        _aiRemarksFilipino = _remarksCtrl.text;
+      }
+    }
+    setState(() {
+      _remarksLanguage = lang;
+      if (_remarksSource != 'midwife_authored') {
+        _remarksCtrl.text = lang == 'english' ? _aiRemarksEnglish : _aiRemarksFilipino;
+      }
+    });
+  }
+
   Widget _buildStep4() {
     if (_nextSchedule == null) {
       _nextSchedule = _calculateRecommendedNextSchedule();
     }
+    final bool hasAiRemarks = _remarksSource != 'midwife_authored';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -4128,80 +4265,362 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         const SizedBox(height: 12),
         _sectionCard(
           title: 'Remarks',
-          child: TextField(
-            controller: _remarksCtrl,
-            maxLines: 4,
-            maxLength: 500,
-            decoration: const InputDecoration(
-              hintText: 'Clinical notes, observations (optional)',
-              border: OutlineInputBorder(
-                borderSide: BorderSide(color: AppColors.borderPrimary),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: AppColors.borderPrimary),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: AppColors.brandPrimary),
-              ),
-              contentPadding: EdgeInsets.all(12),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStep5() {
-    final bpText =
-        '${_sysCtrl.text.trim().isEmpty ? '-' : _sysCtrl.text.trim()}/'
-        '${_diaCtrl.text.trim().isEmpty ? '-' : _diaCtrl.text.trim()} mmHg';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: AppColors.brandPrimary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-                color: AppColors.brandPrimary.withValues(alpha: 0.3)),
-          ),
-          child: const Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.info_outline, size: 16, color: AppColors.brandText),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Review all entered values below before proceeding.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.brandText,
-                    fontWeight: FontWeight.w600,
+              // ── AI badge + bilingual toggle row ──────────────────────────
+              if (hasAiRemarks) ...[
+                Row(
+                  children: [
+                    // AI-Assisted badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.brandPrimary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.brandPrimary.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.smart_toy_outlined, size: 13, color: AppColors.brandPrimary),
+                          const SizedBox(width: 4),
+                          Text(
+                            _remarksSource == 'ai_generated_edited'
+                                ? 'AI-Assisted (Edited)'
+                                : 'AI-Assisted',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.brandPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    // Bilingual toggle
+                    Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: AppColors.bgSecondary,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _langToggleChip('English', 'english'),
+                          _langToggleChip('Tagalog', 'filipino'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+              ],
+
+              // ── Remarks text field ──────────────────────────────────────
+              TextField(
+                controller: _remarksCtrl,
+                onChanged: (_) => _onRemarksChanged(),
+                maxLines: 5,
+                maxLength: 1000,
+                style: const TextStyle(fontSize: 13, height: 1.5),
+                decoration: InputDecoration(
+                  hintText: hasAiRemarks
+                      ? 'AI-generated insight (editable)...'
+                      : 'Clinical notes, observations (optional)',
+                  hintStyle: TextStyle(
+                    color: AppColors.textSecondary.withValues(alpha: 0.5),
+                  ),
+                  border: const OutlineInputBorder(
+                    borderSide: BorderSide(color: AppColors.borderPrimary),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: hasAiRemarks
+                          ? AppColors.brandPrimary.withValues(alpha: 0.3)
+                          : AppColors.borderPrimary,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: AppColors.brandPrimary),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+
+              // ── Helper text for AI ──────────────────────────────────────
+              if (hasAiRemarks) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: const [
+                    Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
+                    SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'You can edit freely. The original AI text is saved for audit.',
+                        style: TextStyle(fontSize: 10.5, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
+              const SizedBox(height: 12),
+
+              // ── Generate AI Insight button ──────────────────────────────
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _generatingAiRemarks ? null : _generateAiRemarks,
+                  icon: _generatingAiRemarks
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.brandPrimary,
+                          ),
+                        )
+                      : const Icon(Icons.auto_awesome_rounded, size: 16),
+                  label: Text(
+                    _generatingAiRemarks
+                        ? 'Generating...'
+                        : hasAiRemarks
+                            ? 'Regenerate AI Insight'
+                            : 'Generate AI Checkup Insight',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.brandPrimary,
+                    side: BorderSide(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.35),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _langToggleChip(String label, String lang) {
+    final isActive = _remarksLanguage == lang;
+    return GestureDetector(
+      onTap: () => _switchRemarksLanguage(lang),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.brandPrimary : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: isActive ? Colors.white : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<String> _getDetectedRiskFactors() {
+    final factors = <String>[];
+
+    final sys = int.tryParse(_sysCtrl.text.trim());
+    final dia = int.tryParse(_diaCtrl.text.trim());
+    if (sys != null && dia != null) {
+      if (sys >= 160 || dia >= 110) {
+        factors.add('Severe Hypertension (≥160/110 mmHg)');
+      } else if (sys >= 140 || dia >= 90) {
+        factors.add('Hypertension in Pregnancy (≥140/90 mmHg)');
+      } else if (sys < 90 || dia < 60) {
+        factors.add('Low Blood Pressure (<90/60 mmHg)');
+      }
+    }
+
+    final currentWeight = double.tryParse(_weightCtrl.text.trim());
+    if (currentWeight != null && _aogWeeks != null) {
+      try {
+        final motherData = _motherRiskContext?['mother'] as Map<String, dynamic>?;
+        final pregnancy = _motherRiskContext?['pregnancy'] as Map<String, dynamic>?;
+        final prePregnancyWeight = pregnancy?['pre_pregnancy_weight'] != null
+            ? double.tryParse(pregnancy!['pre_pregnancy_weight'].toString())
+            : null;
+        final heightCm = motherData?['height'] != null
+            ? double.tryParse(motherData!['height'].toString())
+            : null;
+        final result = WeightGainEngine.evaluate(
+          currentWeight: currentWeight,
+          aogWeeks: _aogWeeks!,
+          allCheckups: const [],
+          prePregnancyWeight: prePregnancyWeight,
+          heightCm: heightCm,
+          fetalCount: _fetalCount ?? 1,
+        );
+        if (result.status == WeightGainStatus.low) {
+          factors.add('Weight Gain: Inadequate Gain');
+        } else if (result.status == WeightGainStatus.high) {
+          factors.add('Weight Gain: Excessive Gain');
+        }
+      } catch (_) {}
+    }
+
+    if (_edema == 'moderate' || _edema == 'severe') {
+      factors.add('${_edema[0].toUpperCase()}${_edema.substring(1)} Edema');
+    }
+    for (final s in _symptoms) {
+      if (s.riskCategory == 'danger') {
+        factors.add('Urgent Symptom: ${s.name}');
+      } else if (s.riskCategory == 'warning') {
+        factors.add('Monitored Symptom: ${s.name}');
+      }
+    }
+
+    final medicalConditions = _motherRiskContext?['medical_conditions'] as List<dynamic>?;
+    if (medicalConditions != null) {
+      for (final mc in medicalConditions) {
+        final name = mc['condition_name'] ?? mc['name'];
+        if (name != null && name.toString().isNotEmpty) {
+          factors.add('Medical History: $name');
+        }
+      }
+    }
+
+    return factors;
+  }
+
+  Widget _buildStep5() {
+    final bpText =
+        '${_sysCtrl.text.trim().isEmpty ? '-' : _sysCtrl.text.trim()}/'
+        '${_diaCtrl.text.trim().isEmpty ? '-' : _diaCtrl.text.trim()} mmHg';
+    final detectedFactors = _getDetectedRiskFactors();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildClickableSummarySection(
+          'PREGNANCY RISK ASSESSMENT',
+          [
+            Row(
+              children: [
+                const SizedBox(
+                  width: 125,
+                  child: Text(
+                    'Risk Override',
+                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                ),
+                Expanded(
+                  child: Row(
+                    children: [
+                      _riskSegmentOption('low', 'Low Risk', AppColors.success),
+                      const SizedBox(width: 8),
+                      _riskSegmentOption('high', 'High Risk', AppColors.error),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(
+                  width: 125,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Detected Factors',
+                      style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: detectedFactors.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: Text(
+                            'No critical risk factors',
+                            style: TextStyle(fontSize: 13, color: AppColors.brandText),
+                          ),
+                        )
+                      : Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: detectedFactors.map((factor) {
+                            final isHigh = factor.toLowerCase().contains('severe') ||
+                                factor.toLowerCase().contains('hypertension') ||
+                                factor.toLowerCase().contains('urgent');
+                            final chipColor = isHigh ? AppColors.error : AppColors.warning;
+
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: chipColor.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: chipColor.withValues(alpha: 0.25)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isHigh ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
+                                    size: 13,
+                                    color: chipColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    factor,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: chipColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                ),
+              ],
+            ),
+          ],
+          onTap: () {},
+        ),
+        const SizedBox(height: 12),
         _buildClickableSummarySection(
           'VITALS',
           [
             _summaryRow('Checkup Date',
                 DateFormat('MMM d, yyyy h:mm a').format(_checkupDateTime)),
             if (_aogWeeks != null)
-              _summaryRow(
-                'AOG',
-                '${_aogWeeks!.toInt()} weeks',
-                valueColor: AppColors.brandPrimary,
-              ),
+              _summaryRow('AOG', '${_aogWeeks!.toInt()} weeks'),
             _summaryRow(
-                'Weight',
-                _weightCtrl.text.trim().isEmpty
-                    ? 'Not recorded'
-                    : '${_weightCtrl.text.trim()} kg'),
-            _summaryRow('Blood Pressure', bpText),
-            if (_bpStatus != _BpStatus.unknown) _bpBadge(),
+              'Weight',
+              _weightCtrl.text.trim().isEmpty
+                  ? 'Not recorded'
+                  : '${_weightCtrl.text.trim()} kg',
+              badge: _weightGainStatusPill(),
+            ),
+            _summaryRow(
+              'Blood Pressure',
+              bpText,
+              badge: _bpStatusPill(),
+            ),
           ],
           onTap: () => _jumpToStep(0),
         ),
@@ -4213,13 +4632,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               _fetalBeatCtrl.text.trim().isEmpty
                   ? 'Not recorded'
                   : '${_fetalBeatCtrl.text.trim()} bpm',
-              valueColor: () {
-                final v = int.tryParse(_fetalBeatCtrl.text.trim());
-                if (v == null) return null;
-                return (v >= 110 && v <= 160)
-                    ? AppColors.success
-                    : AppColors.error;
-              }(),
             ),
             _summaryRow('Heart Tone', _fetalTone ?? 'Not recorded'),
           ],
@@ -4229,57 +4641,17 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           'SYMPTOMS & EDEMA',
           [
             _summaryRow(
-                'Edema Level',
-                _edema == 'none'
-                    ? 'None'
-                    : '${_edema[0].toUpperCase()}${_edema.substring(1)}'),
-            const SizedBox(height: 4),
-            if (_symptoms.isEmpty)
-              _summaryRow('Symptoms', 'None recorded')
-            else ...[
-              const Text(
-                'Symptoms:',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 6),
-              ..._symptoms.map((s) => Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 4),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            color: _riskColor(s.riskCategory),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            '${s.name} -- ${_riskLabel(s.riskCategory)}',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: _riskColor(s.riskCategory),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )),
-            ],
-            if (_severeSymptomCount > 0) ...[
-              const SizedBox(height: 6),
-              _summaryRow(
-                'Severe Flagged',
-                '$_severeSymptomCount: ${_severeSymptomNames.join(", ")}',
-                valueColor: AppColors.error,
-              ),
-            ],
+              'Edema Level',
+              _edema == 'none'
+                  ? 'None'
+                  : '${_edema[0].toUpperCase()}${_edema.substring(1)}',
+            ),
+            _summaryRow(
+              'Symptoms',
+              _symptoms.isEmpty
+                  ? 'None recorded'
+                  : _symptoms.map((s) => s.name).join(', '),
+            ),
           ],
           onTap: () => _jumpToStep(2),
         ),
@@ -4304,7 +4676,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   (_availableTdDoses.isEmpty
                       ? 'Complete (all doses given)'
                       : 'None given today'),
-              valueColor: _availableTdDoses.isEmpty ? AppColors.success : null,
             ),
           ],
           onTap: () => _jumpToStep(3),
@@ -4317,7 +4688,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               _nextSchedule == null
                   ? 'Not set'
                   : DateFormat('MMMM d, yyyy').format(_nextSchedule!),
-              valueColor: _nextSchedule != null ? AppColors.brandPrimary : null,
             ),
             _summaryRow(
               'Remarks',
@@ -4325,793 +4695,41 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   ? 'None'
                   : _remarksCtrl.text.trim(),
             ),
+            if (_remarksSource != 'midwife_authored') ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.smart_toy_outlined, size: 11, color: AppColors.brandPrimary),
+                        const SizedBox(width: 3),
+                        Text(
+                          _remarksSource == 'ai_generated_edited'
+                              ? 'AI-Assisted (Edited by Midwife)'
+                              : 'AI-Assisted',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.brandPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
           onTap: () => _jumpToStep(4),
         ),
-      ],
-    );
-  }
-
-  Widget _buildAssessmentPhaseChip() {
-    if (_loadingRiskPreview) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          SizedBox(
-            width: 10,
-            height: 10,
-            child: CircularProgressIndicator(strokeWidth: 1.5),
-          ),
-          SizedBox(width: 6),
-          Text(
-            'System assessment ready \u2022 AI analysis loading\u2026',
-            style: TextStyle(
-              fontSize: 11,
-              color: AppColors.textSecondary,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      );
-    }
-    if (_riskSnapshot?.aiGenerated == true) {
-      return const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.smart_toy_outlined, size: 13, color: AppColors.success),
-          SizedBox(width: 4),
-          Text(
-            'AI-Enhanced Assessment',
-            style: TextStyle(
-              fontSize: 11,
-              color: AppColors.success,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      );
-    }
-    return const Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.psychology_alt_outlined,
-            size: 13, color: AppColors.textSecondary),
-        SizedBox(width: 4),
-        Text(
-          'System Assessment Only',
-          style: TextStyle(
-            fontSize: 11,
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStep6() {
-    final activeInsight = _selectedLanguage == 'filipino'
-        ? _aiFilipinoCtrl.text.trim()
-        : _aiEnglishCtrl.text.trim();
-
-    final content = activeInsight.isEmpty
-        ? (_selectedLanguage == 'filipino'
-            ? 'Kamusta mommy? Ang pangangalaga sa inyong kalusugan ay magsisimula sa sandaling makuha ang AI assessment...'
-            : 'The care insight will appear here once generated...')
-        : activeInsight;
-
-    final lineCount = '\n'.allMatches(content).length + 1;
-    final editorLines = (lineCount + 2).clamp(5, 18);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // A. Mother-Facing Info Banner
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: AppColors.brandPrimary.withAlpha(12),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.brandPrimary.withAlpha(35)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Icon(
-                Icons.info_outline,
-                color: AppColors.brandPrimary,
-                size: 20,
-              ),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'This Care Insight is what the mother will see on her mobile app. It is written in a warm, reassuring tone to guide and support her.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.inputText,
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Main Card
-        Container(
-          width: double.infinity,
-          clipBehavior: Clip.hardEdge,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.borderPrimary),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.brandPrimary.withValues(alpha: 0.08),
-                  border: const Border(
-                      bottom: BorderSide(color: AppColors.borderPrimary)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.auto_awesome,
-                        color: AppColors.brandPrimary, size: 20),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'Care Insight for Mother',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.brandPrimary,
-                        ),
-                      ),
-                    ),
-                    if (_loadingRiskPreview)
-                      const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: AppColors.brandPrimary),
-                      )
-                    else ...[
-                      if (_activeRiskTab == 'insight' &&
-                          !_isEditingAiAssessment &&
-                          !_aiResponseApproved &&
-                          !_aiAnalysisSkipped) ...[
-                        TextButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _backupFilipino = _aiFilipinoCtrl.text;
-                              _backupEnglish = _aiEnglishCtrl.text;
-                              _isEditingAiAssessment = true;
-                              _aiResponseApproved = false;
-                              _aiAnalysisSkipped = false;
-                            });
-                          },
-                          icon: const Icon(Icons.edit_outlined,
-                              size: 14, color: AppColors.brandPrimary),
-                          label: const Text(
-                            'Edit',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.brandPrimary,
-                            ),
-                          ),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      GestureDetector(
-                        onTap: () => _refreshRiskPreview(force: true),
-                        child: const Icon(Icons.refresh_rounded,
-                            size: 18, color: AppColors.brandPrimary),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              // Body
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Error banner
-                    if (_riskPreviewError != null)
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        margin: const EdgeInsets.only(bottom: 14),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          _riskPreviewError!,
-                          style: const TextStyle(
-                              fontSize: 12, color: AppColors.error),
-                        ),
-                      ),
-
-                    // Tab Switcher
-                    Align(
-                      alignment: Alignment.center,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.bgPrimary,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                              color: AppColors.borderPrimary, width: 1.5),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _activeRiskTab = 'pregnancy';
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: _activeRiskTab == 'pregnancy'
-                                      ? AppColors.brandPrimary
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  'Pregnancy Risk',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: _activeRiskTab == 'pregnancy'
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                    color: _activeRiskTab == 'pregnancy'
-                                        ? Colors.white
-                                        : AppColors.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _activeRiskTab = 'insight';
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: _activeRiskTab == 'insight'
-                                      ? AppColors.brandPrimary
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  'Care Insight',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: _activeRiskTab == 'insight'
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                    color: _activeRiskTab == 'insight'
-                                        ? Colors.white
-                                        : AppColors.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    if (_activeRiskTab == 'pregnancy') ...[
-                      // Pregnancy Risk Override
-                      Row(
-                        children: [
-                          const Text(
-                            'Pregnancy Risk Override',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.textSecondary),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: AppDropdownField<String>(
-                              value: _pregnancyRiskLevel,
-                              options: const ['low', 'high'],
-                              displayStringForOption: (val) =>
-                                  val == 'low' ? 'Low Risk' : 'High Risk',
-                              onSelected: (val) {
-                                setState(() {
-                                  _pregnancyRiskLevel = val;
-                                });
-                              },
-                              hintText: 'Select Pregnancy Risk',
-                              leadingIcon: Icons.flag_rounded,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Risk Factors (always read-only)
-                      if (_editableRiskFactors.isNotEmpty) ...[
-                        const Text(
-                          'Based on',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textSecondary),
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: _editableRiskFactors.map((f) {
-                            final isHigh = f.influence == 'high';
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: isHigh
-                                    ? AppColors.error.withValues(alpha: 0.06)
-                                    : AppColors.brandPrimary
-                                        .withValues(alpha: 0.06),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: isHigh
-                                      ? AppColors.error.withValues(alpha: 0.15)
-                                      : AppColors.brandPrimary
-                                          .withValues(alpha: 0.15),
-                                ),
-                              ),
-                              child: Text(
-                                f.factor,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isHigh
-                                      ? AppColors.error
-                                      : AppColors.textPrimary,
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 14),
-                      ],
-                    ] else ...[
-                      // Checkup Assessment (Within Expected Monitoring Range or Requires Closer Monitoring)
-                      Row(
-                        children: [
-                          const Text(
-                            'Checkup Assessment',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.textSecondary),
-                          ),
-                          const SizedBox(width: 10),
-                          if (_isEditingAiAssessment)
-                            Expanded(
-                              child: AppDropdownField<String>(
-                                value: _editableRiskLevel,
-                                options: const ['low', 'high'],
-                                displayStringForOption: (val) => val == 'low'
-                                    ? 'Within Expected Monitoring Range'
-                                    : 'Requires Closer Monitoring',
-                                onSelected: (val) {
-                                  setState(() {
-                                    _editableRiskLevel = val;
-                                    _aiResponseApproved = false;
-                                  });
-                                },
-                                hintText: 'Select Assessment',
-                                leadingIcon: Icons.monitor_heart_outlined,
-                              ),
-                            )
-                          else
-                            Flexible(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: _editableRiskLevel == 'high'
-                                      ? AppColors.error.withValues(alpha: 0.1)
-                                      : AppColors.success
-                                          .withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  _editableRiskLevel == 'high'
-                                      ? 'Requires Closer Monitoring'
-                                      : 'Within Expected Monitoring Range',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: _editableRiskLevel == 'high'
-                                        ? AppColors.error
-                                        : AppColors.success,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-
-                      const Divider(color: AppColors.borderPrimary, height: 1),
-                      const SizedBox(height: 14),
-
-                      // B. Bilingual Translation Switcher Toggle
-                      Align(
-                        alignment: Alignment.center,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: AppColors.bgPrimary,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                                color: AppColors.borderPrimary, width: 1.5),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _selectedLanguage = 'filipino';
-                                  });
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: _selectedLanguage == 'filipino'
-                                        ? AppColors.brandPrimary
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    'Filipino (Conversational)',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight:
-                                          _selectedLanguage == 'filipino'
-                                              ? FontWeight.w600
-                                              : FontWeight.w500,
-                                      color: _selectedLanguage == 'filipino'
-                                          ? Colors.white
-                                          : AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _selectedLanguage = 'english';
-                                  });
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: _selectedLanguage == 'english'
-                                        ? AppColors.brandPrimary
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    'English',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: _selectedLanguage == 'english'
-                                          ? FontWeight.w600
-                                          : FontWeight.w500,
-                                      color: _selectedLanguage == 'english'
-                                          ? Colors.white
-                                          : AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // C. AI Insight Text (Color is AppColors.inputText)
-                      if (!_isEditingAiAssessment)
-                        Text(
-                          content,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: activeInsight.isEmpty
-                                ? AppColors.textSecondary
-                                : AppColors.inputText,
-                            height: 1.65,
-                            fontStyle: activeInsight.isEmpty
-                                ? FontStyle.italic
-                                : FontStyle.normal,
-                          ),
-                        )
-                      else
-                        Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.faintWhite,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.borderPrimary),
-                          ),
-                          child: TextField(
-                            controller: _selectedLanguage == 'filipino'
-                                ? _aiFilipinoCtrl
-                                : _aiEnglishCtrl,
-                            minLines: editorLines,
-                            maxLines: editorLines,
-                            decoration: InputDecoration(
-                              hintText: _selectedLanguage == 'filipino'
-                                  ? 'Isulat ang care message para sa ina (Filipino)...'
-                                  : 'Write the care message for the mother (English)...',
-                              hintStyle: const TextStyle(
-                                  color: AppColors.textSecondary, fontSize: 13),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.all(14),
-                            ),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.inputText,
-                              height: 1.65,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // E. Redesigned Action Buttons (Friction-Free Override Flow)
-        if (_activeRiskTab == 'insight') ...[
-          if (_isEditingAiAssessment) ...[
-            // Case 3: In Edit Mode
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      setState(() {
-                        // Revert controllers to backup
-                        _aiFilipinoCtrl.text = _backupFilipino;
-                        _aiEnglishCtrl.text = _backupEnglish;
-                        _isEditingAiAssessment = false;
-                      });
-                    },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.borderPrimary),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: FilledButton(
-                    onPressed: () {
-                      final nextFilText = _aiFilipinoCtrl.text.trim();
-                      final nextEngText = _aiEnglishCtrl.text.trim();
-                      if (nextFilText.isEmpty || nextEngText.isEmpty) {
-                        _showMessage(
-                            'Both Filipino and English insights are required.');
-                        return;
-                      }
-                      setState(() {
-                        // Save changes to primary _aiAssessmentCtrl combined text
-                        _aiAssessmentCtrl.text =
-                            '=== FILIPINO ===\n$nextFilText\n\n=== ENGLISH ===\n$nextEngText';
-                        _aiAssessmentEdited = _aiAssessmentCtrl.text.trim() !=
-                            (_aiOriginalAssessment ?? '').trim();
-                        _aiResponseApproved = false;
-                        _isEditingAiAssessment = false;
-                      });
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.brandPrimary,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: const Text('Save Changes'),
-                  ),
-                ),
-              ],
-            ),
-          ] else if (_aiResponseApproved) ...[
-            // Case 2: When Care Insight IS approved
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: AppColors.success.withValues(alpha: 0.35)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle_rounded,
-                      color: AppColors.success, size: 24),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Care insight approved! This insight is ready and will be saved when you submit the checkup.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.success,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _aiResponseApproved = false;
-                      });
-                    },
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(
-                        color: AppColors.brandPrimary,
-                        fontWeight: FontWeight.w600,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ] else if (_aiAnalysisSkipped) ...[
-            // Case 2b: When AI analysis IS skipped
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16),
-                border:
-                    Border.all(color: Colors.orange.withValues(alpha: 0.35)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      color: Colors.orange, size: 24),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'AI analysis skipped! Standard rules are active. The care insight will be hidden from the mother.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.orange,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _aiAnalysisSkipped = false;
-                      });
-                    },
-                    child: const Text(
-                      'Enable AI',
-                      style: TextStyle(
-                        color: AppColors.brandPrimary,
-                        fontWeight: FontWeight.w600,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ] else ...[
-            // Case 1: When Care Insight is NOT approved
-            Column(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: (content.isEmpty || activeInsight.isEmpty)
-                        ? null
-                        : () {
-                            setState(() {
-                              _aiResponseApproved = true;
-                              _aiAnalysisSkipped = false;
-                            });
-                            _showMessage(
-                                'Insight approved! You can now save the checkup.');
-                          },
-                    icon: const Icon(Icons.check_circle_outline_rounded,
-                        size: 18),
-                    label: const Text('Approve Care Insight'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.brandPrimary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(28)),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _aiAnalysisSkipped = true;
-                        _aiResponseApproved = false;
-                        final ruleSnapshot = _buildRuleBasedRiskSnapshot();
-                        _syncEditableRiskState(
-                            ruleSnapshot, ruleSnapshot.aiAssessment);
-                        _riskSnapshot = ruleSnapshot;
-                      });
-                    },
-                    icon: const Icon(Icons.settings_backup_restore_rounded,
-                        size: 16),
-                    label: const Text('Skip AI & Use Standard Rules'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.borderPrimary),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
       ],
     );
   }

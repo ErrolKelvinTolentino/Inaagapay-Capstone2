@@ -206,11 +206,11 @@ class WeightGainEngine {
     double expectedGainMax;
 
     if (aogWeeks <= 13) {
-      // First trimester: linear interpolation
+      // First trimester (weeks 1-13): minimal or zero weight gain is normal
       final fraction = aogWeeks / 13.0;
       expectedGainMid = firstTrimesterGain * fraction;
-      expectedGainMin = expectedGainMid * 0.7; // Allow 30% margin below
-      expectedGainMax = expectedGainMid * 1.3; // Allow 30% margin above
+      expectedGainMin = 0.0; // 0 kg gain in 1st trimester is normal
+      expectedGainMax = (expectedGainMid * 1.4).clamp(1.0, firstTrimesterGain * 1.3);
     } else {
       // Second/third trimester
       final weeksAfterFirst = aogWeeks - 13;
