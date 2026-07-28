@@ -289,12 +289,16 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     _loadMotherRiskContext();
     _loadFetalCount();
     _loadLatestCheckupWeight();
+    _loadTakenTdDoses();
     _weightCtrl.addListener(_validateWeightInline);
     _sysCtrl.addListener(_validateBpInline);
     _diaCtrl.addListener(_validateBpInline);
     _fetalBeatCtrl.addListener(_validateFetalBeatInline);
     _ferrousQtyCtrl.addListener(_validateFerrousInline);
     _calciumQtyCtrl.addListener(_validateCalciumInline);
+    if (_nextSchedule == null) {
+      _nextSchedule = _calculateRecommendedNextSchedule();
+    }
   }
 
   void _validateWeightInline() {
@@ -333,12 +337,15 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   void _validateFetalBeatInline() {
     final t = _fetalBeatCtrl.text.trim();
     if (t.isEmpty) {
+      if (_fetalTone != null) {
+        _fetalTone = null;
+      }
       setState(() => _fetalBeatError = null);
       return;
     }
     final v = int.tryParse(t);
     setState(() => _fetalBeatError =
-        (v == null || v < 90 || v > 200) ? '90 – 200 bpm' : null);
+        (v == null || v <= 0 || v > 250) ? 'Enter valid bpm (1 – 250)' : null);
   }
 
   void _validateFerrousInline() {
@@ -613,6 +620,10 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           _heightCtrl.text = '$motherHeight cm';
         } else {
           _heightCtrl.text = 'Not recorded in profile';
+        }
+
+        if (_nextSchedule == null) {
+          _nextSchedule = _calculateRecommendedNextSchedule();
         }
       });
     } catch (e, st) {
@@ -1470,13 +1481,119 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     super.dispose();
   }
 
+  List<String> _dbTakenTdDoses = [];
+
+  Future<void> _loadTakenTdDoses() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('clinical_encounters')
+          .select('prenatal_checkups!inner(td_vaccine_dose)')
+          .eq('mother_id', widget.motherId);
+      if (res != null && mounted) {
+        final doses = <String>[];
+        for (final row in (res as List)) {
+          final pc = row['prenatal_checkups'];
+          if (pc != null) {
+            final dose = pc['td_vaccine_dose']?.toString();
+            if (dose != null && dose.isNotEmpty && dose != '-') {
+              doses.add(dose);
+            }
+          }
+        }
+        if (mounted) {
+          setState(() {
+            _dbTakenTdDoses = doses;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  Set<String> get _allTakenTdDoses {
+    final set = <String>{};
+    for (final d in widget.takenTdDoses) {
+      if (d.isNotEmpty && d != '-') set.add(d.trim());
+    }
+    for (final d in _dbTakenTdDoses) {
+      if (d.isNotEmpty && d != '-') set.add(d.trim());
+    }
+    return set;
+  }
+
+  int? _parseTdNumber(String doseStr) {
+    final match = RegExp(r'\d+').firstMatch(doseStr);
+    if (match != null) {
+      return int.tryParse(match.group(0)!);
+    }
+    return null;
+  }
+
   List<String> get _availableTdDoses {
-    final taken = widget.takenTdDoses
-        .map((d) => d.replaceAll(RegExp(r'\s+'), '').toUpperCase())
-        .toSet();
-    return _tdOptions
-        .where((d) => !taken.contains(d.replaceAll(' ', '').toUpperCase()))
-        .toList();
+    final takenSet = _allTakenTdDoses;
+    int maxTakenDoseNum = 0;
+    for (final dose in takenSet) {
+      final num = _parseTdNumber(dose);
+      if (num != null && num > maxTakenDoseNum) {
+        maxTakenDoseNum = num;
+      }
+    }
+
+    if (maxTakenDoseNum > 0) {
+      return _tdOptions.where((opt) {
+        final optNum = _parseTdNumber(opt) ?? 0;
+        return optNum > maxTakenDoseNum;
+      }).toList();
+    } else {
+      return List.from(_tdOptions);
+    }
+  }
+
+  DateTime _calculateRecommendedNextSchedule() {
+    final baseDate = _normalizedDate(_checkupDateTime);
+    final weeks = _aogWeeks ?? 0;
+    final isHighRisk = _pregnancyRiskLevel.toLowerCase() == 'high';
+
+    int addDays;
+    if (weeks > 40) {
+      // Post-term mode: every 3 days with fetal surveillance
+      addDays = 3;
+    } else if (isHighRisk) {
+      // High-risk mode: every 1-2 weeks regardless of trimester
+      addDays = weeks >= 28 ? 7 : 14;
+    } else {
+      // Standard mode:
+      // Month 1-6 (weeks < 28): every 4 weeks (28 days)
+      // Month 7-8 (weeks 28 - 35.6): every 2 weeks (14 days)
+      // Month 9 (weeks 36 - 40): every 1 week (7 days)
+      if (weeks < 28) {
+        addDays = 28;
+      } else if (weeks < 36) {
+        addDays = 14;
+      } else {
+        addDays = 7;
+      }
+    }
+
+    return baseDate.add(Duration(days: addDays));
+  }
+
+  String _scheduleRecommendationReason() {
+    final weeks = _aogWeeks ?? 0;
+    final isHighRisk = _pregnancyRiskLevel.toLowerCase() == 'high';
+
+    if (weeks > 40) {
+      return 'Post-term monitoring (+3 days)';
+    } else if (isHighRisk) {
+      return weeks >= 28 ? 'High-risk weekly monitoring (+1 week)' : 'High-risk bi-weekly monitoring (+2 weeks)';
+    } else {
+      if (weeks < 28) {
+        return 'Standard Month 1–6 schedule (+4 weeks / 28 days)';
+      } else if (weeks < 36) {
+        return 'Standard Month 7–8 schedule (+2 weeks / 14 days)';
+      } else {
+        return 'Standard Month 9 schedule (+1 week / 7 days)';
+      }
+    }
   }
 
   DateTime? _effectiveLmp([Map<String, dynamic>? pregnancy]) {
@@ -1701,10 +1818,13 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   }
 
   Widget _bpClinicalGuidanceCard() {
+    if (_sysError != null || _diaError != null) {
+      return const SizedBox.shrink();
+    }
     final sys = int.tryParse(_sysCtrl.text.trim());
     final dia = int.tryParse(_diaCtrl.text.trim());
 
-    if (sys == null || dia == null || sys <= 0 || dia <= 0 || sys <= dia) {
+    if (sys == null || dia == null || sys < 70 || sys > 250 || dia < 40 || dia > 150 || sys <= dia) {
       return const SizedBox.shrink();
     }
 
@@ -1776,11 +1896,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   String _riskLabel(String riskCategory) {
     switch (riskCategory) {
       case 'danger':
-        return 'Severe';
+        return 'Needs Urgent Attention';
       case 'warning':
-        return 'Warning';
+        return 'Needs Closer Monitoring';
       default:
-        return 'Normal';
+        return 'Standard / Expected';
     }
   }
 
@@ -1857,10 +1977,16 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
     if (_step == 1) {
       final fetalBeatText = _fetalBeatCtrl.text.trim();
-      if (fetalBeatText.isNotEmpty) {
+      final hasRate = fetalBeatText.isNotEmpty;
+
+      if (hasRate) {
         final fetalBeat = int.tryParse(fetalBeatText);
-        if (fetalBeat == null || fetalBeat < 90 || fetalBeat > 200) {
-          _showMessage('Fetal heartbeat must be between 90 and 200 bpm.');
+        if (fetalBeat == null || fetalBeat <= 0 || fetalBeat > 250) {
+          _showMessage('Please enter a valid fetal heart rate in bpm.');
+          return false;
+        }
+        if (_fetalTone == null || _fetalTone!.isEmpty) {
+          _showMessage('Fetal Heart Tone is required when Fetal Heart Rate is entered.');
           return false;
         }
       }
@@ -2040,113 +2166,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     notesCtrl.dispose();
   }
 
-  Future<void> _editSymptomNotesDialog(int index) async {
-    final entry = _symptoms[index];
-    final notesCtrl = TextEditingController(text: entry.notes ?? '');
 
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.close, color: AppColors.brandText),
-                      onPressed: () => Navigator.pop(context, false),
-                    ),
-                    const Expanded(
-                      child: Center(
-                        child: Text(
-                          'Edit Symptom',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color: AppColors.brandText,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 48),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  entry.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border:
-                        Border.all(color: AppColors.borderPrimary, width: 1.5),
-                  ),
-                  child: TextField(
-                    controller: notesCtrl,
-                    maxLines: 2,
-                    maxLength: 200,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Notes (optional)',
-                      hintStyle: TextStyle(
-                          color: AppColors.textSecondary, fontSize: 14),
-                      counterText: '',
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.brandPrimary,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24)),
-                    ),
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Save Changes',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (saved == true) {
-      setState(() {
-        _symptoms[index] = _SymptomEntry(
-          symptomTypeId: entry.symptomTypeId,
-          name: entry.name,
-          riskCategory: entry.riskCategory,
-          notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
-        );
-      });
-    }
-
-    notesCtrl.dispose();
-  }
 
   Future<void> _confirmClearAllSymptoms() async {
     if (_symptoms.isEmpty) return;
@@ -2925,52 +2945,131 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionCard(
-          title: 'Date & Time (auto-locked to now)',
-          child: Row(
-            children: [
-              const Icon(Icons.lock_clock,
-                  size: 20, color: AppColors.textSecondary),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      DateFormat('MMMM d, yyyy').format(_checkupDateTime),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
-                    ),
-                    Text(
-                      DateFormat('h:mm a').format(_checkupDateTime),
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
               ),
-              if (_aogWeeks != null)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.bgSecondary,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.brandPrimary),
-                  ),
-                  child: Text(
-                    '${_aogWeeks!.toInt()} wks AOG',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.brandText,
+            ],
+            border: Border.all(color: AppColors.borderPrimary.withValues(alpha: 0.6)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'VISIT DATE & TIME',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                      color: AppColors.textSecondary,
                     ),
                   ),
-                ),
+                  Row(
+                    children: const [
+                      Icon(Icons.lock_outline_rounded, size: 12, color: AppColors.textSecondary),
+                      SizedBox(width: 3),
+                      Text(
+                        'Auto-locked',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.calendar_today_rounded,
+                      color: AppColors.brandPrimary,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          DateFormat('MMMM d, yyyy').format(_checkupDateTime),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: AppColors.brandText,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          DateFormat('h:mm a').format(_checkupDateTime),
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_aogWeeks != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.brandPrimary.withValues(alpha: 0.12),
+                            AppColors.brandPrimary.withValues(alpha: 0.05),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.brandPrimary.withValues(alpha: 0.4),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.child_care_rounded,
+                            size: 16,
+                            color: AppColors.brandPrimary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${_aogWeeks!.toInt()} wks AOG',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.brandPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -3109,6 +3208,23 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   ),
                 ),
               _bpClinicalGuidanceCard(),
+              const SizedBox(height: 8),
+              const Row(
+                children: [
+                  Icon(Icons.info_outline, size: 13, color: AppColors.textSecondary),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Source: World Health Organization (WHO) & DOH Clinical Practice Guidelines for Maternal Care.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -3394,6 +3510,9 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   }
 
   Widget _buildStep1() {
+    final hasRate = _fetalBeatCtrl.text.trim().isNotEmpty;
+    final hasTone = _fetalTone != null && _fetalTone!.isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3420,6 +3539,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 errorText: _fetalBeatError,
+                isRequired: hasTone,
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 6),
               Row(
@@ -3444,17 +3565,19 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        _sectionCard(
-          title: 'Fetal Heart Tone',
-          child: AppDropdownField<String>(
-            hintText: 'Select tone',
-            value: _fetalTone,
-            options: _fetalTones,
-            displayStringForOption: (t) => t,
-            onSelected: (value) => setState(() => _fetalTone = value),
+        if (hasRate) ...[
+          const SizedBox(height: 12),
+          _sectionCard(
+            title: 'Fetal Heart Tone',
+            child: AppDropdownField<String>(
+              hintText: 'Select tone *',
+              value: _fetalTone,
+              options: _fetalTones,
+              displayStringForOption: (t) => t,
+              onSelected: (value) => setState(() => _fetalTone = value),
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -3466,6 +3589,25 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             color: (color ?? AppColors.brandPrimary).withValues(alpha: 0.1),
             shape: BoxShape.circle),
         child: Icon(icon, size: 18, color: color ?? AppColors.brandPrimary),
+      );
+
+  Widget _emptyState(IconData icon, String message) => Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon,
+                  size: 38,
+                  color: AppColors.textSecondary.withValues(alpha: 0.4)),
+              const SizedBox(height: 8),
+              Text(message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 13)),
+            ],
+          ),
+        ),
       );
 
   Widget _itemCard(
@@ -3512,34 +3654,12 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         ),
       );
 
-  Widget _buildStep2() {
+  Widget _buildStep2() => _stepSymptoms();
+
+  Widget _stepSymptoms() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: AppColors.warning.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
-            border:
-                Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Icon(Icons.privacy_tip_outlined,
-                  size: 16, color: AppColors.warning),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Tap symptoms to record quickly. Categories are color-coded by risk.',
-                  style: TextStyle(fontSize: 13, color: AppColors.textPrimary),
-                ),
-              ),
-            ],
-          ),
-        ),
         _sectionCard(
           title: 'Edema Level',
           child: AppDropdownField<String>(
@@ -3565,152 +3685,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         ),
         const SizedBox(height: 12),
         _sectionCard(
-          title: 'Symptom Picker',
-          child: _loadingSymptomTypes
-              ? const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20),
-                  child: Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : _symptomTypes.isEmpty
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'No symptom types available.',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                        const SizedBox(height: 8),
-                        OutlinedButton.icon(
-                          onPressed: _loadSymptomTypes,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Reload Symptoms'),
-                        ),
-                      ],
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppInputField(
-                          hintText: 'Search symptom name',
-                          controller: _symptomSearchCtrl,
-                          leadingIcon: Icons.search,
-                          trailingIcon: _symptomSearchCtrl.text.isEmpty
-                              ? null
-                              : Icons.clear,
-                          onTrailingTap: _symptomSearchCtrl.text.isEmpty
-                              ? null
-                              : () {
-                                  _symptomSearchCtrl.clear();
-                                  setState(() {});
-                                },
-                          onChanged: (_) => setState(() {}),
-                        ),
-                        const SizedBox(height: 12),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              FilterChip(
-                                label: const Text('All'),
-                                selected: _symptomRiskFilter == 'all',
-                                backgroundColor: Colors.white,
-                                selectedColor: AppColors.brandPrimary,
-                                checkmarkColor: Colors.white,
-                                labelStyle: TextStyle(
-                                  color: _symptomRiskFilter == 'all'
-                                      ? Colors.white
-                                      : AppColors.brandPrimary,
-                                ),
-                                side: const BorderSide(
-                                    color: AppColors.brandPrimary),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20)),
-                                onSelected: (_) {
-                                  setState(() => _symptomRiskFilter = 'all');
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              FilterChip(
-                                label: const Text('Normal'),
-                                selected: _symptomRiskFilter == 'normal',
-                                backgroundColor: Colors.white,
-                                selectedColor: AppColors.success,
-                                checkmarkColor: Colors.white,
-                                labelStyle: TextStyle(
-                                  color: _symptomRiskFilter == 'normal'
-                                      ? Colors.white
-                                      : AppColors.success,
-                                ),
-                                side:
-                                    const BorderSide(color: AppColors.success),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20)),
-                                onSelected: (_) {
-                                  setState(() => _symptomRiskFilter = 'normal');
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              FilterChip(
-                                label: const Text('Warning'),
-                                selected: _symptomRiskFilter == 'warning',
-                                backgroundColor: Colors.white,
-                                selectedColor: AppColors.warning,
-                                checkmarkColor: Colors.white,
-                                labelStyle: TextStyle(
-                                  color: _symptomRiskFilter == 'warning'
-                                      ? Colors.white
-                                      : AppColors.warning,
-                                ),
-                                side:
-                                    const BorderSide(color: AppColors.warning),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20)),
-                                onSelected: (_) {
-                                  setState(
-                                      () => _symptomRiskFilter = 'warning');
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              FilterChip(
-                                label: const Text('Severe'),
-                                selected: _symptomRiskFilter == 'danger',
-                                backgroundColor: Colors.white,
-                                selectedColor: AppColors.error,
-                                checkmarkColor: Colors.white,
-                                labelStyle: TextStyle(
-                                  color: _symptomRiskFilter == 'danger'
-                                      ? Colors.white
-                                      : AppColors.error,
-                                ),
-                                side: const BorderSide(color: AppColors.error),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20)),
-                                onSelected: (_) {
-                                  setState(() => _symptomRiskFilter = 'danger');
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildSymptomGroup(
-                          title: 'NORMAL SYMPTOMS',
-                          riskCategory: 'normal',
-                        ),
-                        _buildSymptomGroup(
-                          title: 'WARNING SIGNS',
-                          riskCategory: 'warning',
-                        ),
-                        _buildSymptomGroup(
-                          title: 'SEVERE SIGNS',
-                          riskCategory: 'danger',
-                        ),
-                      ],
-                    ),
-        ),
-        _sectionCard(
           title: 'Recorded Symptoms',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3727,53 +3701,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   ),
                 ),
               if (_symptoms.isEmpty)
-                Row(
-                  children: const [
-                    Icon(Icons.healing_outlined,
-                        size: 18, color: AppColors.textSecondary),
-                    SizedBox(width: 8),
-                    Text(
-                      'No symptoms recorded yet.',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ],
+                _emptyState(
+                  Icons.healing_outlined,
+                  'No symptoms recorded yet.\nClick the + button to add one.',
                 )
               else ...[
-                if (_severeSymptomCount > 0)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: AppColors.error.withValues(alpha: 0.35)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '⚠️ $_severeSymptomCount severe ${_severeSymptomCount == 1 ? 'symptom' : 'symptoms'} detected. Consider urgent follow-up.',
-                          style: const TextStyle(
-                            color: AppColors.error,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _severeSymptomNames.join(', '),
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ..._symptoms.asMap().entries.map((entry) {
                   final index = entry.key;
                   final item = entry.value;
@@ -3784,7 +3716,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                     title: item.name,
                     subtitle:
                         '${_riskLabel(item.riskCategory)}${(item.notes?.isNotEmpty == true) ? ' - ${item.notes}' : ''}',
-                    onEdit: () => _editSymptomNotesDialog(index),
+                    onEdit: () => _showAddSymptomDialog(editIndex: index),
                     onDelete: () => setState(() => _symptoms.removeAt(index)),
                   );
                 }),
@@ -3793,6 +3725,274 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _showAddSymptomDialog({int? editIndex}) async {
+    _SymptomEntry? existing = editIndex != null && editIndex < _symptoms.length ? _symptoms[editIndex] : null;
+
+    SymptomType? selectedType;
+    if (existing != null) {
+      final matchIndex = _symptomTypes.indexWhere(
+        (st) => st.id == existing.symptomTypeId || st.name.toLowerCase() == existing.name.toLowerCase(),
+      );
+      if (matchIndex != -1) {
+        selectedType = _symptomTypes[matchIndex];
+      } else {
+        selectedType = SymptomType(
+          id: existing.symptomTypeId,
+          name: existing.name,
+          riskCategory: existing.riskCategory,
+        );
+      }
+    } else if (_symptomTypes.isNotEmpty) {
+      selectedType = _symptomTypes.first;
+    }
+
+    final customNameCtrl = TextEditingController(text: existing?.name ?? '');
+    final notesCtrl = TextEditingController(text: existing?.notes ?? '');
+    String selectedRisk = selectedType?.riskCategory ?? existing?.riskCategory ?? 'normal';
+
+    final List<Map<String, String>> commonSymptoms = [
+      {'name': 'Nausea / Morning Sickness', 'risk': 'normal'},
+      {'name': 'Fatigue / Tiredness', 'risk': 'normal'},
+      {'name': 'Mild Headache', 'risk': 'normal'},
+      {'name': 'Backache', 'risk': 'normal'},
+      {'name': 'Dizziness', 'risk': 'warning'},
+      {'name': 'Swelling / Edema', 'risk': 'warning'},
+      {'name': 'Heartburn', 'risk': 'normal'},
+      {'name': 'Vaginal Bleeding', 'risk': 'danger'},
+      {'name': 'Severe Abdominal Pain', 'risk': 'danger'},
+      {'name': 'High Fever', 'risk': 'danger'},
+      {'name': 'Decreased Fetal Movement', 'risk': 'danger'},
+    ];
+
+    await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          child: Container(
+            width: MediaQuery.of(ctx).size.width * 0.9,
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: StatefulBuilder(
+              builder: (dialogCtx, setDialogState) {
+                final isCustom = _symptomTypes.isEmpty;
+                final symptomName = isCustom ? customNameCtrl.text.trim() : (selectedType?.name ?? customNameCtrl.text.trim());
+                final isValid = symptomName.isNotEmpty;
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.close, color: AppColors.brandText),
+                          onPressed: () => Navigator.pop(dialogCtx, false),
+                        ),
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              editIndex != null ? 'Edit Symptom' : 'Add Symptom',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: AppColors.brandText,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 48),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Common Pregnancy Symptoms',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: commonSymptoms.map((sym) {
+                                final name = sym['name']!;
+                                final risk = sym['risk']!;
+                                final isSelected = symptomName.toLowerCase() == name.toLowerCase();
+
+                                Color chipColor;
+                                if (risk == 'danger') {
+                                  chipColor = AppColors.error;
+                                } else if (risk == 'warning') {
+                                  chipColor = AppColors.warning;
+                                } else {
+                                  chipColor = AppColors.brandPrimary;
+                                }
+
+                                return ActionChip(
+                                  label: Text(
+                                    name,
+                                    style: TextStyle(
+                                      color: isSelected ? Colors.white : chipColor,
+                                      fontSize: 12,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                  ),
+                                  backgroundColor: isSelected ? chipColor : Colors.white,
+                                  side: BorderSide(color: chipColor),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  onPressed: () {
+                                    setDialogState(() {
+                                      if (_symptomTypes.isNotEmpty) {
+                                        final matchIndex = _symptomTypes.indexWhere(
+                                          (st) => st.name.toLowerCase() == name.toLowerCase(),
+                                        );
+                                        if (matchIndex != -1) {
+                                          selectedType = _symptomTypes[matchIndex];
+                                        }
+                                      }
+                                      customNameCtrl.text = name;
+                                      selectedRisk = risk;
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 16),
+                            if (!isCustom) ...[
+                              const Text(
+                                'Select Symptom',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              AppDropdownField<SymptomType>(
+                                hintText: 'Select pregnancy symptom',
+                                value: selectedType,
+                                options: _symptomTypes,
+                                displayStringForOption: (st) => st.name,
+                                onSelected: (st) {
+                                  if (st != null) {
+                                    setDialogState(() {
+                                      selectedType = st;
+                                      customNameCtrl.text = st.name;
+                                      selectedRisk = st.riskCategory;
+                                    });
+                                  }
+                                },
+                              ),
+                              const SizedBox(height: 14),
+                            ] else ...[
+                              AppInputField(
+                                hintText: 'Symptom Name',
+                                controller: customNameCtrl,
+                                isRequired: true,
+                                onChanged: (_) => setDialogState(() {}),
+                              ),
+                              const SizedBox(height: 14),
+                            ],
+                            const Text(
+                              'Risk Level',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            AppDropdownField<String>(
+                              hintText: 'Select risk level',
+                              value: selectedRisk,
+                              options: const ['normal', 'warning', 'danger'],
+                              displayStringForOption: (val) {
+                                switch (val) {
+                                  case 'danger':
+                                    return 'Needs Urgent Attention';
+                                  case 'warning':
+                                    return 'Needs Closer Monitoring';
+                                  default:
+                                    return 'Standard / Expected';
+                                }
+                              },
+                              onSelected: (val) {
+                                if (val != null) {
+                                  setDialogState(() => selectedRisk = val);
+                                }
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            AppInputField(
+                              hintText: 'Notes / details (optional)',
+                              controller: notesCtrl,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isValid ? AppColors.brandPrimary : Colors.grey.shade300,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(28),
+                          ),
+                          elevation: 0,
+                        ),
+                        onPressed: isValid
+                            ? () {
+                                final entry = _SymptomEntry(
+                                  symptomTypeId: selectedType?.id ?? 0,
+                                  name: symptomName,
+                                  riskCategory: selectedRisk,
+                                  notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
+                                );
+                                setState(() {
+                                  if (editIndex != null && editIndex < _symptoms.length) {
+                                    _symptoms[editIndex] = entry;
+                                  } else {
+                                    _symptoms.add(entry);
+                                  }
+                                });
+                                Navigator.pop(dialogCtx, true);
+                              }
+                            : null,
+                        child: Text(
+                          editIndex != null ? 'Save Changes' : 'Add Symptom',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -3847,11 +4047,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                       displayStringForOption: (t) => t,
                       onSelected: (value) => setState(() => _tdDose = value),
                     ),
-                    if (widget.takenTdDoses.isNotEmpty) ...[
+                    if (_allTakenTdDoses.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Wrap(
                         spacing: 6,
-                        children: widget.takenTdDoses
+                        children: _allTakenTdDoses
                             .map((d) => Chip(
                                   label: Text(d,
                                       style: const TextStyle(fontSize: 12)),
@@ -3877,6 +4077,9 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   }
 
   Widget _buildStep4() {
+    if (_nextSchedule == null) {
+      _nextSchedule = _calculateRecommendedNextSchedule();
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3890,7 +4093,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                 controller: TextEditingController(
                   text: _nextSchedule == null
                       ? ''
-                      : DateFormat('MMMM d, yyyy').format(_nextSchedule!),
+                      : DateFormat('MMMM d, yyyy (EEEE)').format(_nextSchedule!),
                 ),
                 readOnly: true,
                 onTap: _pickNextSchedule,
@@ -3899,6 +4102,25 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                 onTrailingTap: _nextSchedule != null
                     ? () => setState(() => _nextSchedule = null)
                     : null,
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.auto_awesome, size: 13, color: AppColors.brandPrimary),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      _nextSchedule != null
+                          ? 'Auto-suggested based on ${_scheduleRecommendationReason()}. Tap field to edit.'
+                          : 'No next visit scheduled. Tap above to pick a custom date.',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -4958,6 +5180,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       },
       child: Scaffold(
         backgroundColor: AppColors.bgPrimary,
+        floatingActionButton: _step == 2
+            ? FloatingActionButton(
+                onPressed: _showAddSymptomDialog,
+                backgroundColor: AppColors.brandPrimary,
+                shape: const CircleBorder(),
+                child: const Icon(Icons.add, color: Colors.white),
+              )
+            : null,
         body: SafeArea(
           child: Column(
             children: [
