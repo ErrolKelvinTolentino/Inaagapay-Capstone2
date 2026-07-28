@@ -257,13 +257,10 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   double? _initialSessionWeight;   // Locked baseline weight for session calculation
 
   static const List<String> _fetalTones = [
-    'Normal',
-    'Tachycardia',
-    'Bradycardia',
+    'Regular',
     'Irregular',
-    'Muffled',
+    'Faint',
     'Absent',
-    'Other',
   ];
 
   static const List<String> _tdOptions = [
@@ -2503,19 +2500,51 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     }
   }
 
+  int? _resolveSymptomTypeId(_SymptomEntry entry) {
+    if (entry.symptomTypeId > 0) return entry.symptomTypeId;
+
+    final nameLower = entry.name.trim().toLowerCase();
+    for (final st in _symptomTypes) {
+      if (st.name.trim().toLowerCase() == nameLower) {
+        return st.id;
+      }
+    }
+
+    for (final st in _symptomTypes) {
+      if (st.name.toLowerCase().contains('other')) {
+        return st.id;
+      }
+    }
+
+    if (_symptomTypes.isNotEmpty) {
+      return _symptomTypes.first.id;
+    }
+
+    return null;
+  }
+
   Future<void> _insertSymptomRecords(int encounterId) async {
     if (_symptoms.isEmpty) return;
-    final payload = _symptoms
-        .map(
-          (entry) => {
-            'pregnancy_id': widget.pregnancyId,
-            'encounter_id': encounterId,
-            'symptom_type_id': entry.symptomTypeId,
-            'notes': entry.notes,
-          },
-        )
-        .toList();
-    await Supabase.instance.client.from('pregnancy_symptoms').insert(payload);
+
+    final payload = <Map<String, dynamic>>[];
+    for (final entry in _symptoms) {
+      final typeId = _resolveSymptomTypeId(entry);
+      if (typeId != null && typeId > 0) {
+        final noteText = entry.notes != null
+            ? '${entry.name}: ${entry.notes}'
+            : entry.name;
+        payload.add({
+          'pregnancy_id': widget.pregnancyId,
+          'encounter_id': encounterId,
+          'symptom_type_id': typeId,
+          'notes': noteText,
+        });
+      }
+    }
+
+    if (payload.isNotEmpty) {
+      await Supabase.instance.client.from('pregnancy_symptoms').insert(payload);
+    }
   }
 
   Future<void> _persistRiskAssessment(int encounterId) async {
@@ -2795,7 +2824,17 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     return double.tryParse(v.toString());
   }
 
-  Future<void> _submit() async {
+  String? _normalizeFetalTone(String? tone) {
+    if (tone == null || tone.isEmpty) return null;
+    final lower = tone.trim().toLowerCase();
+    if (lower == 'regular' || lower == 'normal') return 'regular';
+    if (lower == 'irregular') return 'irregular';
+    if (lower == 'faint' || lower == 'muffled') return 'faint';
+    if (lower == 'absent') return 'absent';
+    return 'regular';
+  }
+
+  Future<void> _submitCheckup() async {
     if (!_validateCurrentStep()) return;
 
     final weight = double.tryParse(_weightCtrl.text.trim());
@@ -2863,7 +2902,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             'blood_pressure_systolic': systolic,
             'blood_pressure_diastolic': diastolic,
             'fetal_heart_beat': fetalBeat,
-            'fetal_heart_tone': _fetalTone,
+            'fetal_heart_tone': _normalizeFetalTone(_fetalTone),
             'td_vaccine_dose': _tdDose,
             'edema': _edema == 'none' ? null : _edema,
             'next_schedule': _nextSchedule?.toIso8601String().split('T')[0],
@@ -3993,8 +4032,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                         ),
                         onPressed: isValid
                             ? () {
+                                final typeId = selectedType?.id ??
+                                    (_symptomTypes.isNotEmpty ? _symptomTypes.first.id : 1);
                                 final entry = _SymptomEntry(
-                                  symptomTypeId: selectedType?.id ?? 0,
+                                  symptomTypeId: typeId,
                                   name: symptomName,
                                   riskCategory: selectedRisk,
                                   notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
@@ -4866,7 +4907,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                         ? MainButton(
                             label: 'Save Checkup',
                             rightIcon: Icons.check_rounded,
-                            onPressed: _submitting ? null : _submit,
+                            onPressed: _submitting ? null : _submitCheckup,
                           )
                         : MainButton(
                             label: 'Next',
