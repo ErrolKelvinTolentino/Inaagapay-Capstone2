@@ -137,14 +137,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   // Profile picture
   String? _profilePictureUrl;
 
-  // Latest growth data
-  Map<String, dynamic>? _latestGrowthData;
-  bool _loadingGrowth = true;
 
-  // Weight gain dashboard data
-  WeightGainResult? _weightGainResult;
-  List<Map<String, dynamic>> _weightCheckups = [];
-  bool _loadingWeightGain = true;
 
   @override
   void initState() {
@@ -157,8 +150,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     });
     _profileFuture = MotherProfileService.fetchMotherProfile(widget.motherId);
     _loadProfilePicture();
-    _loadLatestGrowthData();
-    _loadWeightGainData();
   }
 
   @override
@@ -180,462 +171,460 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     }
   }
 
-  Future<void> _loadLatestGrowthData() async {
-    setState(() => _loadingGrowth = true);
-
-    try {
-      final pregnanciesResponse = await SupabaseService.client
-          .from('pregnancies')
-          .select('pregnancy_id, pre_pregnancy_weight')
-          .eq('mother_id', widget.motherId)
-          .eq('status', 'ongoing')
-          .maybeSingle();
-
-      if (pregnanciesResponse == null) {
-        if (mounted) {
-          setState(() {
-            _latestGrowthData = null;
-            _loadingGrowth = false;
-          });
-        }
-        return;
-      }
-
-      final pregnancyId = pregnanciesResponse['pregnancy_id'] as int;
-      final prePregnancyWeight =
-          pregnanciesResponse['pre_pregnancy_weight'] != null
-              ? (pregnanciesResponse['pre_pregnancy_weight'] as num).toDouble()
-              : null;
-
-      final checkupResponse = await SupabaseService.client
-          .from('prenatal_checkups')
-          .select('''
-            prenatal_checkup_id,
-            checkup_datetime,
-            age_of_gestation,
-            checkup_weight,
-            blood_pressure_systolic,
-            blood_pressure_diastolic,
-            fetal_heart_beat,
-            edema
-          ''')
-          .eq('pregnancy_id', pregnancyId)
-          .order('checkup_datetime', ascending: false)
-          .limit(1)
-          .maybeSingle();
-
-      if (!mounted) return;
-
-      if (checkupResponse != null) {
-        final weight = checkupResponse['checkup_weight'] as num?;
-        final height = await _getMotherHeight();
-        if (!mounted) return;
-
-        // Use pre-pregnancy weight for BMI when available (IOM 2009)
-        final bmiWeight = prePregnancyWeight ?? weight?.toDouble();
-        double? bmi;
-        String? bmiStatus;
-        String bmiSource = 'BMI Unavailable';
-
-        if (bmiWeight != null && height != null && height > 0) {
-          final heightM = height / 100;
-          bmi = bmiWeight / (heightM * heightM);
-          bmiStatus = getBMIStatus(bmi);
-          bmiSource = prePregnancyWeight != null
-              ? 'Pre-Pregnancy BMI'
-              : 'Estimated BMI (current weight)';
-        }
-
-        setState(() {
-          _latestGrowthData = {
-            'date': checkupResponse['checkup_datetime'],
-            'aog': checkupResponse['age_of_gestation']?.toString() ?? 'N/A',
-            'weight': weight?.toDouble() ?? 0,
-            'height': height ?? 0,
-            'bmi': bmi,
-            'bmi_status': bmiStatus,
-            'bmi_source': bmiSource,
-            'pre_pregnancy_weight': prePregnancyWeight,
-          };
-          _loadingGrowth = false;
-        });
-      } else {
-        setState(() {
-          _latestGrowthData = null;
-          _loadingGrowth = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading growth data: $e');
-      if (mounted) {
-        setState(() {
-          _latestGrowthData = null;
-          _loadingGrowth = false;
-        });
-      }
-    }
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // WEIGHT GAIN DASHBOARD — load, display, chart, log
-  // ══════════════════════════════════════════════════════════════════════════
-
-  Future<void> _loadWeightGainData() async {
-    setState(() => _loadingWeightGain = true);
-
-    try {
-      // 1. Get the ongoing pregnancy
-      final pregnancyRow = await SupabaseService.client
-          .from('pregnancies')
-          .select('pregnancy_id, pre_pregnancy_weight, last_menstrual_period')
-          .eq('mother_id', widget.motherId)
-          .eq('status', 'ongoing')
-          .maybeSingle();
-
-      if (pregnancyRow == null) {
-        if (mounted) setState(() => _loadingWeightGain = false);
-        return;
-      }
-
-      final pregnancyId = pregnancyRow['pregnancy_id'] as int;
-      final prePregnancyWeight = pregnancyRow['pre_pregnancy_weight'] != null
-          ? (pregnancyRow['pre_pregnancy_weight'] as num).toDouble()
-          : null;
-
-      // 2. Get all checkups for this pregnancy (ascending)
-      final checkupsRaw = await SupabaseService.client
-          .from('prenatal_checkups')
-          .select(
-              'prenatal_checkup_id, checkup_datetime, age_of_gestation, checkup_weight')
-          .eq('pregnancy_id', pregnancyId);
-
-      // Fetch maternal vitals (quick logs and mother self logs)
-      final vitalsRaw = await SupabaseService.client
-          .from('maternal_vitals')
-          .select(
-              'vital_id, recorded_at, age_of_gestation, weight_kg')
-          .eq('pregnancy_id', pregnancyId);
-
-      final checkupsList = (checkupsRaw as List).cast<Map<String, dynamic>>();
-      final vitalsList = (vitalsRaw as List).cast<Map<String, dynamic>>();
-
-      final mergedCheckups = [
-        ...checkupsList.map((c) => {
-          'prenatal_checkup_id': c['prenatal_checkup_id'],
-          'checkup_datetime': c['checkup_datetime'],
-          'age_of_gestation': c['age_of_gestation'] != null ? (c['age_of_gestation'] as num).toDouble() : null,
-          'checkup_weight': c['checkup_weight'] != null ? (c['checkup_weight'] as num).toDouble() : null,
-        }),
-        ...vitalsList.where((v) => v['weight_kg'] != null).map((v) => {
-          'prenatal_checkup_id': v['vital_id'],
-          'checkup_datetime': v['recorded_at'],
-          'age_of_gestation': v['age_of_gestation'] != null ? (v['age_of_gestation'] as num).toDouble() : null,
-          'checkup_weight': v['weight_kg'] != null ? (v['weight_kg'] as num).toDouble() : null,
-        }),
-      ];
-
-      // Sort chronological ascending
-      mergedCheckups.sort((a, b) {
-        final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '');
-        final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '');
-        if (da == null || db == null) return 0;
-        return da.compareTo(db);
-      });
-
-      if (mergedCheckups.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _weightCheckups = [];
-            _weightGainResult = null;
-            _loadingWeightGain = false;
-          });
-        }
-        return;
-      }
-
-      // 3. Get mother height
-      final heightCm = await _getMotherHeight();
-
-      // 4. Current weight & AOG from latest checkup
-      final latest = mergedCheckups.last;
-      final currentWeight = (latest['checkup_weight'] as num?)?.toDouble();
-      final aogWeeks = (latest['age_of_gestation'] as num?)?.toDouble();
-
-      // Fallback: compute AOG from LMP if not stored
-      double effectiveAog = aogWeeks ?? 0;
-      if (effectiveAog == 0 && pregnancyRow['last_menstrual_period'] != null) {
-        final lmp = DateTime.tryParse(pregnancyRow['last_menstrual_period']);
-        if (lmp != null) {
-          effectiveAog = DateTime.now().difference(lmp).inDays / 7.0;
-        }
-      }
-
-      if (currentWeight == null || currentWeight <= 0) {
-        if (mounted) {
-          setState(() {
-            _weightCheckups = mergedCheckups;
-            _weightGainResult = null;
-            _loadingWeightGain = false;
-          });
-        }
-        return;
-      }
-
-      // 5. Evaluate
-      final result = WeightGainEngine.evaluate(
-        currentWeight: currentWeight,
-        aogWeeks: effectiveAog,
-        allCheckups: mergedCheckups,
-        prePregnancyWeight: prePregnancyWeight,
-        heightCm: heightCm,
-      );
-
-      if (mounted) {
-        setState(() {
-          _weightCheckups = mergedCheckups;
-          _weightGainResult = result;
-          _loadingWeightGain = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading weight gain data: $e');
-      if (mounted) {
-        setState(() {
-          _weightGainResult = null;
-          _loadingWeightGain = false;
-        });
-      }
-    }
-  }
-
   /// Weight gain dashboard card.
-  Widget _buildWeightGainDashboard(WeightGainResult result) {
-    // Status color
+  Widget _buildWeightGainDashboard(
+      WeightGainResult result, List<Map<String, dynamic>> checkups, int fetalCount) {
+    // Status color & label
     Color statusColor;
+    String statusText;
     switch (result.status) {
       case WeightGainStatus.normal:
         statusColor = AppColors.success;
+        statusText = 'within ideal weight gain';
         break;
       case WeightGainStatus.low:
         statusColor = AppColors.warning;
+        statusText = 'below ideal weight gain';
         break;
       case WeightGainStatus.high:
         statusColor = AppColors.error;
+        statusText = 'above ideal weight gain';
         break;
       case WeightGainStatus.insufficient:
         statusColor = AppColors.textSecondary;
+        statusText = 'insufficient data';
         break;
     }
 
+    // Filter checkups for chart spots
+    final validCheckups = checkups.where((c) {
+      final w = c['checkup_weight'];
+      final a = c['age_of_gestation'];
+      return w != null && a != null && (w as num) > 0 && (a as num) > 0;
+    }).toList();
+
+    validCheckups.sort((a, b) =>
+        (a['age_of_gestation'] as num).compareTo(b['age_of_gestation'] as num));
+
+    final List<FlSpot> actualSpots = [];
+    if (result.mode == WeightGainMode.full && result.baselineWeight != null) {
+      actualSpots.add(FlSpot(0, result.baselineWeight!));
+    }
+
+    for (final c in validCheckups) {
+      final w = (c['age_of_gestation'] as num).toDouble();
+      final weight = (c['checkup_weight'] as num).toDouble();
+      if (actualSpots.isNotEmpty && (w - actualSpots.last.x).abs() < 0.1) {
+        continue;
+      }
+      actualSpots.add(FlSpot(w, weight));
+    }
+
+    actualSpots.sort((a, b) => a.x.compareTo(b.x));
+
+    final List<FlSpot> minSpots = [];
+    final List<FlSpot> maxSpots = [];
+    double minY = 40.0;
+    double maxY = 100.0;
+    double minX = 0.0;
+    double maxX = 40.0;
+
+    if (actualSpots.isNotEmpty) {
+      final maxAog = actualSpots.last.x;
+      final endWeek = maxAog > 40 ? maxAog : 40.0;
+      final startWeek = result.baselineWeek ?? 0.0;
+
+      if (result.baselineWeight != null && result.baselineWeek != null) {
+        for (double w = startWeek; w <= endWeek; w += 2) {
+          final range = _getRecommendedRangeAt(
+            aogWeeks: w,
+            bmiCategory: result.bmiCategory,
+            baselineWeight: result.baselineWeight!,
+            baselineWeek: result.baselineWeek!,
+            fetalCount: fetalCount,
+          );
+          minSpots.add(FlSpot(w, range['min']!));
+          maxSpots.add(FlSpot(w, range['max']!));
+        }
+        final endRange = _getRecommendedRangeAt(
+          aogWeeks: endWeek,
+          bmiCategory: result.bmiCategory,
+          baselineWeight: result.baselineWeight!,
+          baselineWeek: result.baselineWeek!,
+          fetalCount: fetalCount,
+        );
+        if (minSpots.isEmpty || minSpots.last.x != endWeek) {
+          minSpots.add(FlSpot(endWeek, endRange['min']!));
+          maxSpots.add(FlSpot(endWeek, endRange['max']!));
+        }
+      }
+
+      final allSpots = [...actualSpots, ...minSpots, ...maxSpots];
+      if (allSpots.isNotEmpty) {
+        minY = allSpots.map((s) => s.y).reduce((a, b) => a < b ? a : b) - 2;
+        maxY = allSpots.map((s) => s.y).reduce((a, b) => a > b ? a : b) + 2;
+      }
+      minX = startWeek;
+      maxX = endWeek;
+    }
+
+    // Recommended weekly gain and expected weight range calculation
+    final activeGuidelines = fetalCount >= 2
+        ? WeightGainEngine.iomTwinGuidelines
+        : WeightGainEngine.iomGuidelines;
+    final guidelines = activeGuidelines[result.bmiCategory] ?? activeGuidelines['Normal']!;
+    final weeklyRate = guidelines['weekly_rate']!;
+
+    final double? baseline = result.baselineWeight;
+    final double? expMin = result.expectedGainMin;
+    final double? expMax = result.expectedGainMax;
+    final bool hasExpectedWeight = baseline != null && expMin != null && expMax != null;
+    
+    final String expectedWeightText = hasExpectedWeight
+        ? '${(baseline + expMin).toStringAsFixed(1)} kg - ${(baseline + expMax).toStringAsFixed(1)} kg'
+        : 'N/A';
+
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.cardColorOf(context),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.08),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
+          // Header Row: Title & Pill
+          Row(
+            children: [
+              const Icon(Icons.monitor_weight_outlined, color: AppColors.brandPrimary, size: 20),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'WEIGHT GAIN ANALYSIS',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: Color(0xFF5A5A5A),
+                  ),
+                ),
               ),
-            ),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.monitor_weight_outlined,
-                        color: statusColor, size: 22),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Weight Gain Analysis',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.25)),
+                ),
+                child: Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // Line Chart / Placeholder
+          if (actualSpots.length < 2)
+            Container(
+              height: 120,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.show_chart_rounded, size: 28, color: Colors.grey),
+                    SizedBox(height: 6),
+                    Text(
+                      'Chart requires at least two weights to display progression.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),
-                // Status badge
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: statusColor.withValues(alpha: 0.3)),
-                  ),
-                  child: Text(
-                    result.statusDisplayLabel,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: statusColor,
+              ),
+            )
+          else
+            SizedBox(
+              height: 180,
+              child: LineChart(
+                LineChartData(
+                  minX: minX,
+                  maxX: maxX,
+                  minY: minY,
+                  maxY: maxY,
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: true,
+                    horizontalInterval: ((maxY - minY) / 5).clamp(1.0, 10.0),
+                    verticalInterval: 4.0,
+                    getDrawingHorizontalLine: (value) => FlLine(
+                      color: Colors.grey.shade100,
+                      strokeWidth: 1,
+                    ),
+                    getDrawingVerticalLine: (value) => FlLine(
+                      color: Colors.grey.shade100,
+                      strokeWidth: 1,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Weight info rows
-                _weightInfoRow(
-                  'Current Weight',
-                  '${result.currentWeight.toStringAsFixed(1)} kg',
-                ),
-                if (result.baselineWeight != null)
-                  _weightInfoRow(
-                    result.mode == WeightGainMode.full
-                        ? 'Pre-Pregnancy Weight'
-                        : 'Baseline Weight',
-                    '${result.baselineWeight!.toStringAsFixed(1)} kg',
-                  ),
-                if (result.actualGain != null)
-                  _weightInfoRow(
-                    'Actual Gain',
-                    '${result.actualGain! >= 0 ? '+' : ''}${result.actualGain!.toStringAsFixed(1)} kg',
-                  ),
-                if (result.expectedGainMin != null && result.expectedGainMax != null)
-                  _weightInfoRow(
-                    'Expected Gain',
-                    '${result.expectedGainMin!.toStringAsFixed(1)} - ${result.expectedGainMax!.toStringAsFixed(1)} kg',
-                  )
-                else if (result.expectedGain != null)
-                  _weightInfoRow(
-                    'Expected Gain',
-                    '${result.expectedGain!.toStringAsFixed(1)} kg',
-                  ),
-                if (result.weeklyGain != null)
-                  _weightInfoRow(
-                    'Weekly Gain Rate',
-                    '${result.weeklyGain!.toStringAsFixed(3)} kg/wk',
-                  ),
-
-                const SizedBox(height: 12),
-                // Flags
-                if (result.hasFlags) ...[
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: result.flags.map((flag) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          flag.replaceAll('_', ' ').toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.error,
+                  titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 24,
+                        interval: 4.0,
+                        getTitlesWidget: (value, meta) => Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'W${value.toInt()}',
+                            style: TextStyle(fontSize: 9, color: AppColors.textSecondaryOf(context)),
                           ),
                         ),
-                      );
-                    }).toList(),
+                      ),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 36,
+                        interval: ((maxY - minY) / 5).clamp(1.0, 10.0),
+                        getTitlesWidget: (value, meta) => Text(
+                          '${value.toInt()} kg',
+                          style: TextStyle(fontSize: 9, color: AppColors.textSecondaryOf(context)),
+                        ),
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                ],
-
-                // Engine message
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Text(
-                    result.message,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      height: 1.5,
-                      color: AppColors.textSecondary,
+                  borderData: FlBorderData(show: false),
+                  lineBarsData: [
+                    // Actual spots - Solid Pink
+                    LineChartBarData(
+                      spots: actualSpots,
+                      isCurved: true,
+                      color: AppColors.brandPrimary,
+                      barWidth: 3,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                          radius: 4,
+                          color: Colors.white,
+                          strokeWidth: 2,
+                          strokeColor: AppColors.brandPrimary,
+                        ),
+                      ),
+                    ),
+                    // Recommended Min - Gray broken
+                    if (minSpots.isNotEmpty)
+                      LineChartBarData(
+                        spots: minSpots,
+                        isCurved: true,
+                        color: Colors.grey.shade400,
+                        barWidth: 1.5,
+                        dashArray: [5, 5],
+                        dotData: const FlDotData(show: false),
+                      ),
+                    // Recommended Max - Gray broken
+                    if (maxSpots.isNotEmpty)
+                      LineChartBarData(
+                        spots: maxSpots,
+                        isCurved: true,
+                        color: Colors.grey.shade400,
+                        barWidth: 1.5,
+                        dashArray: [5, 5],
+                        dotData: const FlDotData(show: false),
+                      ),
+                  ],
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((spot) {
+                          String prefix = '';
+                          if (spot.barIndex == 0) {
+                            prefix = 'Actual: ';
+                          } else if (spot.barIndex == 1) {
+                            prefix = 'IOM Min: ';
+                          } else if (spot.barIndex == 2) {
+                            prefix = 'IOM Max: ';
+                          }
+                          return LineTooltipItem(
+                            '${prefix}Week ${spot.x.toInt()}\n${spot.y.toStringAsFixed(1)} kg',
+                            const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                            ),
+                          );
+                        }).toList();
+                      },
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    title: const Text(
-                      'Clinical Disclaimer & References',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.brandPrimary,
+              ),
+            ),
+          const SizedBox(height: 12),
+
+          // Legend row
+          if (actualSpots.length >= 2) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 14,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: AppColors.brandPrimary,
+                    borderRadius: BorderRadius.circular(1.5),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Text(
+                  'Actual Weight',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                ),
+                const SizedBox(width: 20),
+                Row(
+                  children: List.generate(
+                    3,
+                    (index) => Container(
+                      width: 4,
+                      height: 1.5,
+                      margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                      color: Colors.grey.shade400,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Expected Bounds (${result.bmiCategory})',
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Info Metrics
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Recommended weekly gain',
+                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${weeklyRate.toStringAsFixed(2)} kg',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    tilePadding: EdgeInsets.zero,
-                    childrenPadding: const EdgeInsets.only(top: 4, bottom: 8),
-                    dense: true,
-                    children: [
-                      Text(
-                        'Disclaimer: This analysis is based on the Institute of Medicine (IOM) 2009 Guidelines. It is for monitoring and educational support only and does not substitute for professional medical advice, clinical assessment, or diagnosis.',
-                        style: TextStyle(
-                          fontSize: 11,
-                          height: 1.4,
-                          color: Colors.grey.shade600,
-                        ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Total expected weight',
+                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      expectedWeightText,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'References:\n• Institute of Medicine (IOM) & National Research Council (NRC). (2009). Weight Gain During Pregnancy: Reexamining the Guidelines. Washington, DC: The National Academies Press.',
-                        style: TextStyle(
-                          fontSize: 11,
-                          height: 1.4,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Mini Explanation Box
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade100),
+            ),
+            child: Text(
+              result.message,
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          
+          // Expansion Tile for Disclaimer
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              title: const Text(
+                'Clinical Disclaimer & References',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.brandPrimary,
+                ),
+              ),
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(top: 2, bottom: 4),
+              dense: true,
+              children: [
+                Text(
+                  'Disclaimer: This analysis is based on the Institute of Medicine (IOM) 2009 Guidelines. It is for monitoring and educational support only and does not substitute for professional medical advice, clinical assessment, or diagnosis.',
+                  style: TextStyle(
+                    fontSize: 10,
+                    height: 1.4,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'References:\n• Institute of Medicine (IOM) & National Research Council (NRC). (2009). Weight Gain During Pregnancy: Reexamining the Guidelines. Washington, DC: The National Academies Press.',
+                  style: TextStyle(
+                    fontSize: 10,
+                    height: 1.4,
+                    color: Colors.grey.shade600,
                   ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _weightInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 13, color: AppColors.textSecondary)),
-          Text(value,
-              style:
-                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -787,278 +776,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     };
   }
 
-  /// Weight trend chart — plots checkup weights over gestational weeks against guidelines.
-  Widget _buildWeightTrendChart(
-      List<Map<String, dynamic>> checkups, WeightGainResult result, int fetalCount) {
-    // Filter checkups that have both weight and AOG
-    final validCheckups = checkups.where((c) {
-      final w = c['checkup_weight'];
-      final a = c['age_of_gestation'];
-      return w != null && a != null && (w as num) > 0 && (a as num) > 0;
-    }).toList();
-
-    // Chronological sort
-    validCheckups.sort((a, b) =>
-        (a['age_of_gestation'] as num).compareTo(b['age_of_gestation'] as num));
-
-    // Construct actual weight spots
-    final List<FlSpot> actualSpots = [];
-
-    // Add pre-pregnancy weight if available (week 0)
-    if (result.mode == WeightGainMode.full && result.baselineWeight != null) {
-      actualSpots.add(FlSpot(0, result.baselineWeight!));
-    }
-
-    // Add checkup weights
-    for (final c in validCheckups) {
-      final w = (c['age_of_gestation'] as num).toDouble();
-      final weight = (c['checkup_weight'] as num).toDouble();
-      if (actualSpots.isNotEmpty && (w - actualSpots.last.x).abs() < 0.1) {
-        continue;
-      }
-      actualSpots.add(FlSpot(w, weight));
-    }
-
-    actualSpots.sort((a, b) => a.x.compareTo(b.x));
-
-    if (actualSpots.length < 2) return const SizedBox.shrink();
-
-    final maxAog = actualSpots.last.x;
-    final endWeek = maxAog > 40 ? maxAog : 40.0;
-    final startWeek = result.baselineWeek ?? 0.0;
-
-    final List<FlSpot> minSpots = [];
-    final List<FlSpot> maxSpots = [];
-
-    if (result.baselineWeight != null && result.baselineWeek != null) {
-      for (double w = startWeek; w <= endWeek; w += 2) {
-        final range = _getRecommendedRangeAt(
-          aogWeeks: w,
-          bmiCategory: result.bmiCategory,
-          baselineWeight: result.baselineWeight!,
-          baselineWeek: result.baselineWeek!,
-          fetalCount: fetalCount,
-        );
-        minSpots.add(FlSpot(w, range['min']!));
-        maxSpots.add(FlSpot(w, range['max']!));
-      }
-      // Ensure endWeek is included
-      final endRange = _getRecommendedRangeAt(
-        aogWeeks: endWeek,
-        bmiCategory: result.bmiCategory,
-        baselineWeight: result.baselineWeight!,
-        baselineWeek: result.baselineWeek!,
-        fetalCount: fetalCount,
-      );
-      if (minSpots.isEmpty || minSpots.last.x != endWeek) {
-        minSpots.add(FlSpot(endWeek, endRange['min']!));
-        maxSpots.add(FlSpot(endWeek, endRange['max']!));
-      }
-    }
-
-    final allSpots = [...actualSpots, ...minSpots, ...maxSpots];
-    final minY = allSpots.map((s) => s.y).reduce((a, b) => a < b ? a : b) - 2;
-    final maxY = allSpots.map((s) => s.y).reduce((a, b) => a > b ? a : b) + 2;
-    final minX = startWeek;
-    final maxX = endWeek;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.cardColorOf(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.show_chart,
-                  size: 20, color: AppColors.brandPrimary),
-              const SizedBox(width: 8),
-              const Text(
-                'Weight Gain Progression Chart',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Total maternal weight (kg) plotted against recommended bounds',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 12),
-          
-          // Legend row
-          Row(
-            children: [
-              Container(
-                width: 14,
-                height: 3,
-                color: AppColors.brandPrimary,
-              ),
-              const SizedBox(width: 4),
-              const Text(
-                'Actual Weight',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 16),
-              Row(
-                children: List.generate(
-                  3,
-                  (index) => Container(
-                    width: 4,
-                    height: 1.5,
-                    margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                    color: Colors.grey.shade400,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'IOM Recommended Bounds (${result.bmiCategory})',
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          SizedBox(
-            height: 200,
-            child: LineChart(
-              LineChartData(
-                minX: minX,
-                maxX: maxX,
-                minY: minY,
-                maxY: maxY,
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: true,
-                  horizontalInterval: ((maxY - minY) / 5).clamp(1.0, 10.0),
-                  verticalInterval: 4.0,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: Colors.grey.shade200,
-                    strokeWidth: 1,
-                  ),
-                  getDrawingVerticalLine: (value) => FlLine(
-                    color: Colors.grey.shade200,
-                    strokeWidth: 1,
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 28,
-                      interval: 4.0,
-                      getTitlesWidget: (value, meta) => Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          'W${value.toInt()}',
-                          style: TextStyle(
-                              fontSize: 10, color: AppColors.textSecondary),
-                        ),
-                      ),
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 40,
-                      interval: ((maxY - minY) / 5).clamp(1.0, 10.0),
-                      getTitlesWidget: (value, meta) => Text(
-                        '${value.toInt()} kg',
-                        style: TextStyle(
-                            fontSize: 10, color: AppColors.textSecondary),
-                      ),
-                    ),
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                lineBarsData: [
-                  // Actual spots
-                  LineChartBarData(
-                    spots: actualSpots,
-                    isCurved: true,
-                    color: AppColors.brandPrimary,
-                    barWidth: 3,
-                    dotData: FlDotData(
-                      show: true,
-                      getDotPainter: (spot, percent, barData, index) =>
-                          FlDotCirclePainter(
-                        radius: 4,
-                        color: Colors.white,
-                        strokeWidth: 2,
-                        strokeColor: AppColors.brandPrimary,
-                      ),
-                    ),
-                  ),
-                  // Recommended Min
-                  if (minSpots.isNotEmpty)
-                    LineChartBarData(
-                      spots: minSpots,
-                      isCurved: true,
-                      color: Colors.grey.shade400,
-                      barWidth: 1.5,
-                      dashArray: [5, 5],
-                      dotData: const FlDotData(show: false),
-                    ),
-                  // Recommended Max
-                  if (maxSpots.isNotEmpty)
-                    LineChartBarData(
-                      spots: maxSpots,
-                      isCurved: true,
-                      color: Colors.grey.shade400,
-                      barWidth: 1.5,
-                      dashArray: [5, 5],
-                      dotData: const FlDotData(show: false),
-                    ),
-                ],
-                lineTouchData: LineTouchData(
-                  touchTooltipData: LineTouchTooltipData(
-                    getTooltipItems: (touchedSpots) {
-                      return touchedSpots.map((spot) {
-                        String prefix = '';
-                        if (spot.barIndex == 0) {
-                          prefix = 'Actual: ';
-                        } else if (spot.barIndex == 1) {
-                          prefix = 'IOM Min: ';
-                        } else if (spot.barIndex == 2) {
-                          prefix = 'IOM Max: ';
-                        }
-                        return LineTooltipItem(
-                          '${prefix}Week ${spot.x.toInt()}\n${spot.y.toStringAsFixed(1)} kg',
-                          const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        );
-                      }).toList();
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<double?> _getMotherHeight() async {
     try {
       final response = await SupabaseService.client
@@ -1088,8 +805,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
     });
     await _loadProfilePicture();
-    await _loadLatestGrowthData();
-    await _loadWeightGainData();
   }
 
   Future<void> _logout() async {
@@ -6102,6 +5817,152 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         lmp != null ? (now.difference(lmp).inDays / 7).floor() : null;
     final daysToEdd = edd?.difference(now).inDays;
 
+    // ── Build checkupList for WeightGainEngine ────────────────────────────
+    final checkupList = <Map<String, dynamic>>[];
+    for (final c in checkups) {
+      final w = c['checkup_weight'];
+      if (w != null) {
+        checkupList.add({
+          'prenatal_checkup_id': c['encounter_id'] ?? -1,
+          'checkup_datetime': c['checkup_datetime'],
+          'age_of_gestation': c['age_of_gestation'] != null ? (c['age_of_gestation'] as num).toDouble() : 0.0,
+          'checkup_weight': (w as num).toDouble(),
+        });
+      }
+    }
+    for (final v in vitals) {
+      final w = v['weight_kg'];
+      if (w != null) {
+        checkupList.add({
+          'prenatal_checkup_id': v['vital_id'] ?? -1,
+          'checkup_datetime': v['recorded_at'],
+          'age_of_gestation': v['age_of_gestation'] != null ? (v['age_of_gestation'] as num).toDouble() : 0.0,
+          'checkup_weight': (w as num).toDouble(),
+        });
+      }
+    }
+
+    // Sort chronological ascending
+    checkupList.sort((a, b) {
+      final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '');
+      final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '');
+      if (da == null || db == null) return 0;
+      return da.compareTo(db);
+    });
+
+    final prePregnancyWeight = pregnancy['pre_pregnancy_weight'] != null
+        ? (pregnancy['pre_pregnancy_weight'] as num).toDouble()
+        : null;
+    final height = profile['height'] != null
+        ? (profile['height'] as num).toDouble()
+        : null;
+
+    WeightGainResult? weightGainResult;
+    final fetalCount = int.tryParse(pregnancy['fetal_count']?.toString() ?? '') ?? 1;
+
+    if (checkupList.isEmpty) {
+      if (prePregnancyWeight != null) {
+        double effectiveAog = 0;
+        if (pregnancy['last_menstrual_period'] != null) {
+          final lmpVal = DateTime.tryParse(pregnancy['last_menstrual_period']);
+          if (lmpVal != null) {
+            effectiveAog = DateTime.now().difference(lmpVal).inDays / 7.0;
+          }
+        }
+        weightGainResult = WeightGainEngine.evaluate(
+          currentWeight: prePregnancyWeight,
+          aogWeeks: effectiveAog,
+          allCheckups: [],
+          prePregnancyWeight: prePregnancyWeight,
+          heightCm: height,
+          fetalCount: fetalCount,
+        );
+      }
+    } else {
+      final latest = checkupList.last;
+      final currentWeight = (latest['checkup_weight'] as num?)?.toDouble();
+      final aogWeeks = (latest['age_of_gestation'] as num?)?.toDouble();
+
+      double effectiveAog = aogWeeks ?? 0;
+      if (effectiveAog == 0 && pregnancy['last_menstrual_period'] != null) {
+        final lmpVal = DateTime.tryParse(pregnancy['last_menstrual_period']);
+        if (lmpVal != null) {
+          effectiveAog = DateTime.now().difference(lmpVal).inDays / 7.0;
+        }
+      }
+
+      if (currentWeight != null && currentWeight > 0) {
+        weightGainResult = WeightGainEngine.evaluate(
+          currentWeight: currentWeight,
+          aogWeeks: effectiveAog,
+          allCheckups: checkupList,
+          prePregnancyWeight: prePregnancyWeight,
+          heightCm: height,
+          fetalCount: fetalCount,
+        );
+      }
+    }
+
+    Map<String, dynamic>? latestGrowthData;
+
+    if (checkupList.isNotEmpty) {
+      final latest = checkupList.last;
+      final weight = (latest['checkup_weight'] as num?)?.toDouble();
+      final aog = latest['age_of_gestation'];
+
+      final bmiWeight = prePregnancyWeight ?? weight;
+      double? bmi;
+      String? bmiStatus;
+      String bmiSource = 'BMI Unavailable';
+
+      if (bmiWeight != null && height != null && height > 0) {
+        final heightM = height / 100;
+        bmi = bmiWeight / (heightM * heightM);
+        bmiStatus = getBMIStatus(bmi);
+        bmiSource = prePregnancyWeight != null
+            ? 'Pre-Pregnancy BMI'
+            : 'Estimated BMI (current weight)';
+      }
+
+      latestGrowthData = {
+        'date': latest['checkup_datetime'],
+        'aog': aog?.toString() ?? 'N/A',
+        'weight': weight ?? 0,
+        'height': height ?? 0,
+        'bmi': bmi,
+        'bmi_status': bmiStatus,
+        'bmi_source': bmiSource,
+        'pre_pregnancy_weight': prePregnancyWeight,
+      };
+    } else if (prePregnancyWeight != null) {
+      double? aogWeeks;
+      if (pregnancy['last_menstrual_period'] != null) {
+        final lmpVal = DateTime.tryParse(pregnancy['last_menstrual_period']);
+        if (lmpVal != null) {
+          aogWeeks = DateTime.now().difference(lmpVal).inDays / 7.0;
+        }
+      }
+
+      double? bmi;
+      String? bmiStatus;
+      if (height != null && height > 0) {
+        final heightM = height / 100;
+        bmi = prePregnancyWeight / (heightM * heightM);
+        bmiStatus = getBMIStatus(bmi);
+      }
+
+      latestGrowthData = {
+        'date': DateTime.now().toIso8601String(),
+        'aog': aogWeeks != null ? aogWeeks.toStringAsFixed(1) : 'N/A',
+        'weight': prePregnancyWeight,
+        'height': height ?? 0,
+        'bmi': bmi,
+        'bmi_status': bmiStatus ?? 'Normal',
+        'bmi_source': 'Pre-Pregnancy BMI',
+        'pre_pregnancy_weight': prePregnancyWeight,
+      };
+    }
+
     return RefreshIndicator(
       onRefresh: _refresh,
       color: AppColors.brandPrimary,
@@ -6126,45 +5987,20 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             const SizedBox(height: 16),
 
             ProfileGrowthCard(
-              isLoading: _loadingGrowth,
-              growthData: _latestGrowthData,
+              isLoading: false,
+              growthData: latestGrowthData,
             ),
             const SizedBox(height: 16),
 
             // ── Weight Gain Dashboard ──────────────────────────────────
-            if (_loadingWeightGain) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: const Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ] else if (_weightGainResult != null) ...[
-              _buildWeightGainDashboard(_weightGainResult!),
-              const SizedBox(height: 12),
-            ],
-
-            // Weight trend chart
-            if (!_loadingWeightGain && _weightGainResult != null) ...[
-              _buildWeightTrendChart(
-                _weightCheckups,
-                _weightGainResult!,
-                int.tryParse(pregnancy['fetal_count']?.toString() ?? '') ?? 1,
+            if (weightGainResult != null) ...[
+              _buildWeightGainDashboard(
+                weightGainResult,
+                checkupList,
+                fetalCount,
               ),
               const SizedBox(height: 12),
             ],
-
             // ── Prenatal Checkups ──
             _buildPreviewRecordSection(
               title: 'PRENATAL CHECKUPS',

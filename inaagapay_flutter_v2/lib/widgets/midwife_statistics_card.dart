@@ -26,6 +26,13 @@ class MidwifeStatisticsCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.borderPrimary),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -67,7 +74,8 @@ class MidwifeStatisticsCard extends StatelessWidget {
                 child: _TrimesterCard(
                   value: firstTrimester,
                   title: '1st\nTrimester',
-                  backgroundColor: const Color(0xFFFFF0F5),
+                  backgroundColor: AppColors.warning.withValues(alpha: 0.08),
+                  textColor: AppColors.warning,
                 ),
               ),
               const SizedBox(width: 12),
@@ -75,7 +83,8 @@ class MidwifeStatisticsCard extends StatelessWidget {
                 child: _TrimesterCard(
                   value: secondTrimester,
                   title: '2nd\nTrimester',
-                  backgroundColor: const Color(0xFFFFF0F5),
+                  backgroundColor: AppColors.brandPrimary.withValues(alpha: 0.08),
+                  textColor: AppColors.brandPrimary,
                 ),
               ),
               const SizedBox(width: 12),
@@ -83,7 +92,8 @@ class MidwifeStatisticsCard extends StatelessWidget {
                 child: _TrimesterCard(
                   value: thirdTrimester,
                   title: '3rd\nTrimester',
-                  backgroundColor: const Color(0xFFFFF0F5),
+                  backgroundColor: AppColors.success.withValues(alpha: 0.08),
+                  textColor: AppColors.success,
                 ),
               ),
             ],
@@ -98,11 +108,13 @@ class _TrimesterCard extends StatelessWidget {
   final int value;
   final String title;
   final Color? backgroundColor;
+  final Color textColor;
 
   const _TrimesterCard({
     required this.value,
     required this.title,
     this.backgroundColor,
+    required this.textColor,
   });
 
   @override
@@ -121,10 +133,10 @@ class _TrimesterCard extends StatelessWidget {
         children: [
           Text(
             value.toString(),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: AppColors.brandPrimary,
+              color: textColor,
             ),
           ),
           const SizedBox(height: 6),

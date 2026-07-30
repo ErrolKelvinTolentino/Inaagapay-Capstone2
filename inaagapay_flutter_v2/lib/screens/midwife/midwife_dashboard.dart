@@ -449,6 +449,10 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                   midwife_notes,
                   age_of_gestation_weeks,
                   age_of_gestation_days,
+                  recorded_by:midwives (
+                    midwife_id,
+                    account:accounts (first_name, last_name)
+                  ),
                   checkup:prenatal_checkups (
                     prenatal_checkup_id,
                     td_vaccine_dose,
@@ -496,6 +500,10 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                   midwife_notes,
                   age_of_gestation_weeks,
                   age_of_gestation_days,
+                  recorded_by:midwives (
+                    midwife_id,
+                    account:accounts (first_name, last_name)
+                  ),
                   checkup:prenatal_checkups (
                     encounter_id,
                     td_vaccine_dose,
@@ -550,7 +558,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
               final double aog = ((enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0) +
                   ((enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0) / 7.0;
               recentCheckups.add({
-                'prenatal_checkup_id': innerCheckup['encounter_id'],
+                'prenatal_checkup_id': innerCheckup['encounter_id'] ?? innerCheckup['prenatal_checkup_id'],
                 'checkup_datetime': enc['encounter_datetime'],
                 'remarks': enc['midwife_notes'],
                 'age_of_gestation': aog,
@@ -563,6 +571,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 'fetal_heart_tone': innerCheckup['fetal_heart_tone'],
                 'fetal_heart_beat': innerCheckup['fetal_heart_beat'],
                 'next_schedule': innerCheckup['next_schedule'],
+                'midwife': enc['recorded_by'],
               });
             }
           }
@@ -593,6 +602,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 'fetal_heart_tone': innerCheckup['fetal_heart_tone'],
                 'fetal_heart_beat': innerCheckup['fetal_heart_beat'],
                 'next_schedule': innerCheckup['next_schedule'],
+                'midwife': enc['recorded_by'],
               });
             }
           }
@@ -949,11 +959,21 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
         if (!mounted) return;
 
+        String midwifeName = '—';
+        if (record['midwife'] != null) {
+          final mw = record['midwife'] as Map<String, dynamic>;
+          final acc = mw['account'] as Map<String, dynamic>?;
+          if (acc != null) {
+            midwifeName = '${acc['first_name'] ?? ''} ${acc['last_name'] ?? ''}'.trim();
+          }
+        }
+
         _showRecordDetails(
           title: 'Prenatal Checkup',
           subtitle: date,
           icon: Icons.medical_services,
           rows: [
+            MapEntry('Conducted by', midwifeName),
             MapEntry('Fetal Count', fetalCount.toString()),
             MapEntry('Age of Gestation', aog),
             MapEntry('Weight (kg)', weight),
@@ -1444,34 +1464,48 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     }
   }
 
-  Widget _buildStatCard(
-      {required int value, required String label, required IconData iconData}) {
+  Widget _buildStatCard({
+    required int value,
+    required String label,
+    required IconData iconData,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
       decoration: BoxDecoration(
         color: AppColors.cardColorOf(context),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
+        border: Border.all(
+          color: AppColors.borderOf(context),
+          width: 1,
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            iconData,
-            color: AppColors.brandPrimary,
-            size: 28,
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.brandPrimary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              iconData,
+              color: AppColors.brandPrimary,
+              size: 24,
+            ),
           ),
           const SizedBox(height: 12),
           Text(
             value.toString(),
             style: const TextStyle(
-              fontSize: 26,
+              fontSize: 24,
               fontWeight: FontWeight.bold,
               color: AppColors.brandPrimary,
             ),
@@ -1484,6 +1518,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
               fontSize: 11,
               color: AppColors.textSecondary,
               height: 1.2,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -1570,72 +1605,119 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                         children: [
                           const SizedBox(height: 16),
 
-                          // Hero Card with Search
+                          // Cozy & Professional Welcome Header Card
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 24, horizontal: 16),
+                            padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
-                              color: AppColors.cardColorOf(context),
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  AppColors.cardColorOf(context),
+                                  AppColors.bgSecondaryOf(context),
+                                ],
+                              ),
                               borderRadius: BorderRadius.circular(24),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.04),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
+                                  color: AppColors.brandPrimary.withValues(alpha: 0.05),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 8),
                                 ),
                               ],
                             ),
                             child: Column(
                               children: [
-                                Container(
-                                  height: 110,
-                                  width: 110,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Color(0xFFFFF0F5),
-                                  ),
-                                  child: ClipOval(
-                                    child: Image.asset(
-                                      'assets/images/midwife.png',
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error,
-                                              stackTrace) =>
-                                          const Icon(Icons.person,
-                                              size: 60,
-                                              color: AppColors.brandPrimary),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _getWelcomeMessage(),
+                                            style: const TextStyle(
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF5A5A5A),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons.location_on_rounded,
+                                                  size: 14,
+                                                  color: AppColors.brandPrimary,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  _bhcName,
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: AppColors.brandPrimary,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
+                                    const SizedBox(width: 12),
+                                    Container(
+                                      height: 64,
+                                      width: 64,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: AppColors.brandPrimary.withValues(alpha: 0.2),
+                                          width: 3,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AppColors.brandPrimary.withValues(alpha: 0.15),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ClipOval(
+                                        child: Image.asset(
+                                          'assets/images/midwife.png',
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) =>
+                                              const Icon(
+                                            Icons.person,
+                                            size: 36,
+                                            color: AppColors.brandPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  _getWelcomeMessage(),
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.brandPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  _bhcName,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 20),
 
                                 // Global Search Bar
                                 AppInputField(
                                   controller: _searchController,
-                                  hintText:
-                                      'Search mothers, children, check-ups, records...',
+                                  hintText: 'Search mothers, children, check-ups...',
                                   leadingIcon: Icons.search,
-                                  trailingIcon:
-                                      _searchController.text.isNotEmpty
-                                          ? Icons.clear
-                                          : null,
+                                  trailingIcon: _searchController.text.isNotEmpty
+                                      ? Icons.clear
+                                      : null,
                                   onTrailingTap: _clearSearch,
                                 ),
                               ],
@@ -1758,23 +1840,26 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                             children: [
                               Expanded(
                                 child: _buildStatCard(
-                                    value: _registeredChildren,
-                                    label: 'Registered\nChildren',
-                                    iconData: Icons.child_care),
+                                  value: _registeredChildren,
+                                  label: 'Registered\nChildren',
+                                  iconData: Icons.child_care,
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: _buildStatCard(
-                                    value: _registeredMothers,
-                                    label: 'Registered\nMothers',
-                                    iconData: Icons.pregnant_woman),
+                                  value: _registeredMothers,
+                                  label: 'Registered\nMothers',
+                                  iconData: Icons.pregnant_woman,
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: _buildStatCard(
-                                    value: _rhuVisitsThisWeek,
-                                    label: 'RHU Visits\nThis week',
-                                    iconData: Icons.medical_services),
+                                  value: _rhuVisitsThisWeek,
+                                  label: 'RHU Visits\nThis week',
+                                  iconData: Icons.medical_services,
+                                ),
                               ),
                             ],
                           ),
@@ -1796,23 +1881,26 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                             children: [
                               Expanded(
                                 child: _buildStatCard(
-                                    value: _ferrousGiven,
-                                    label: 'Ferrous FA\ngiven',
-                                    iconData: Icons.medication),
+                                  value: _ferrousGiven,
+                                  label: 'Ferrous FA\ngiven',
+                                  iconData: Icons.medication,
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: _buildStatCard(
-                                    value: _calciumGiven,
-                                    label: 'Calcium\ngiven',
-                                    iconData: Icons.local_pharmacy),
+                                  value: _calciumGiven,
+                                  label: 'Calcium\ngiven',
+                                  iconData: Icons.local_pharmacy,
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: _buildStatCard(
-                                    value: _tdDosesGiven,
-                                    label: 'TD Vaccine\ndoses given',
-                                    iconData: Icons.vaccines),
+                                  value: _tdDosesGiven,
+                                  label: 'TD Vaccine\ndoses given',
+                                  iconData: Icons.vaccines,
+                                ),
                               ),
                             ],
                           ),

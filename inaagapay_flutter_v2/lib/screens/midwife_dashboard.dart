@@ -152,17 +152,20 @@ class MidwifeDashboard extends StatelessWidget {
                   MidwifeHistoryCard(
                     visits: const [
                       MidwifeVisitItem(
-                        fullName: 'First Name Last Name',
+                        name: 'First Name Last Name',
+                        displayId: 'INA-001',
                         visitType: 'Prenatal Check-up',
                         timeLabel: 'Today',
                       ),
                       MidwifeVisitItem(
-                        fullName: 'First Name Last Name',
+                        name: 'First Name Last Name',
+                        displayId: 'INA-002',
                         visitType: 'Prenatal Check-up',
                         timeLabel: 'Yesterday',
                       ),
                       MidwifeVisitItem(
-                        fullName: 'First Name Last Name',
+                        name: 'First Name Last Name',
+                        displayId: 'INA-003',
                         visitType: 'Prenatal Check-up',
                         timeLabel: '2 days ago',
                       ),

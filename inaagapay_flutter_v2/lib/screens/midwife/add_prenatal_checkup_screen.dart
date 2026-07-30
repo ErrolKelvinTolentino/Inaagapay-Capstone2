@@ -234,6 +234,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   bool _loadingSymptomTypes = false;
   String _symptomRiskFilter = 'all';
   int? _midwifeId;
+  String? _midwifeName;
   int? _accountId;
   bool _loadingRiskPreview = false;
   String? _riskPreviewError;
@@ -438,12 +439,21 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     try {
       final result = await Supabase.instance.client
           .from('midwives')
-          .select('midwife_id')
+          .select('midwife_id, account:accounts(first_name, last_name)')
           .eq('account_id', accountId)
-          .maybeSingle(); // ← FIXED: Changed from .single()
+          .maybeSingle();
 
       if (result != null && mounted) {
-        setState(() => _midwifeId = result['midwife_id'] as int);
+        final mwId = result['midwife_id'] as int;
+        String? mwName;
+        final acc = result['account'] as Map<String, dynamic>?;
+        if (acc != null) {
+          mwName = '${acc['first_name'] ?? ''} ${acc['last_name'] ?? ''}'.trim();
+        }
+        setState(() {
+          _midwifeId = mwId;
+          _midwifeName = mwName;
+        });
       }
     } catch (_) {}
   }
@@ -4646,6 +4656,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         _buildClickableSummarySection(
           'VITALS',
           [
+            _summaryRow('Midwife', _midwifeName ?? 'Loading...'),
             _summaryRow('Checkup Date',
                 DateFormat('MMM d, yyyy h:mm a').format(_checkupDateTime)),
             if (_aogWeeks != null)
