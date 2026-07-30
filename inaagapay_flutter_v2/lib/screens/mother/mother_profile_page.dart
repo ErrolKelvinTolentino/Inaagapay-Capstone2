@@ -174,6 +174,9 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   /// Weight gain dashboard card.
   Widget _buildWeightGainDashboard(
       WeightGainResult result, List<Map<String, dynamic>> checkups, int fetalCount) {
+    final alertIdx = result.message.indexOf('ALERT:');
+    final hasAlert = alertIdx != -1;
+    final alertText = hasAlert ? result.message.substring(alertIdx).trim() : '';
     // Status color & label
     Color statusColor;
     String statusText;
@@ -568,26 +571,35 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               ),
             ],
           ),
-          const SizedBox(height: 14),
-
-          // Mini Explanation Box
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade100),
-            ),
-            child: Text(
-              result.message,
-              style: const TextStyle(
-                fontSize: 12,
-                height: 1.4,
-                color: AppColors.textSecondary,
+          // Mini Explanation Alert Box (Only show when there is an ALERT)
+          if (hasAlert) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      alertText,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.error,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
+          ],
           
           // Expansion Tile for Disclaimer
           Theme(
@@ -5472,16 +5484,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 color: AppColors.textSecondary,
               ),
             ),
-          if (edd != null) const SizedBox(height: 4),
-          if (edd != null)
-            Text(
-              'Expected Due Date: ${_formatDate(edd.toIso8601String())}',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
+
           // Progress bar
           if (gestWeeks != null) ...[
             const SizedBox(height: 16),
@@ -5608,6 +5611,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     required int? daysToEdd,
     required int checkupCount,
   }) {
+    final lmp = DateTime.tryParse(pregnancy['last_menstrual_period'] ?? '');
+    final now = DateTime.now();
     final rawFc = pregnancy['fetal_count']?.toString() ?? '';
     String fetalLabel = 'Singleton';
     String fetalSubtext = 'Single baby';
@@ -5630,7 +5635,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
     final lmpStr = _formatDate(pregnancy['last_menstrual_period']);
     final eddStr = _formatDate(pregnancy['expected_date_of_delivery']);
-    final aogStr = gestWeeks != null ? '$gestWeeks Weeks' : 'Unknown';
+    final days = lmp != null ? (now.difference(lmp).inDays % 7) : 0;
+    final aogStr = gestWeeks != null
+        ? '$gestWeeks Week${gestWeeks == 1 ? "" : "s"}${days > 0 ? " $days Day${days == 1 ? "" : "s"}" : ""}'
+        : 'Unknown';
     final weeksToGo = gestWeeks != null ? (40 - gestWeeks) : null;
     final aogSubtext = weeksToGo != null && weeksToGo > 0
         ? '$weeksToGo wks remaining'
@@ -5697,23 +5705,30 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     String? subtext,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.bgPrimary,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.borderPrimary),
+        color: color.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.08),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            child: Icon(icon, color: color, size: 18),
+            child: Icon(icon, color: color, size: 20),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -5723,34 +5738,34 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   label.toUpperCase(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
-                    letterSpacing: 0.3,
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    color: color.withValues(alpha: 0.8),
+                    letterSpacing: 0.5,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 13,
+                    fontSize: 14,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
                   ),
                 ),
                 if (subtext != null && subtext.isNotEmpty) ...[
-                  const SizedBox(height: 1),
+                  const SizedBox(height: 2),
                   Text(
                     subtext,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 10,
-                      color: AppColors.textSecondary.withValues(alpha: 0.8),
-                      fontWeight: FontWeight.w500,
+                      color: color.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],

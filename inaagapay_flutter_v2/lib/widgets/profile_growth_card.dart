@@ -60,8 +60,6 @@ class ProfileGrowthCard extends StatelessWidget {
     }
 
     final data = growthData!;
-    final bmiStatusStr = data['bmi_status'] as String? ?? 'Normal';
-    final bmiStatusColor = getBMIStatusColor(bmiStatusStr);
 
     return _buildShell(
       child: Column(
@@ -98,7 +96,7 @@ class ProfileGrowthCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      '${data['aog']} weeks',
+                      _formatAog(data['aog']),
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -138,88 +136,20 @@ class ProfileGrowthCard extends StatelessWidget {
               ),
             ],
           ),
-
-          // BMI row (placed on another row, pill-like classification badge)
-          if (data['bmi'] != null) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: bmiStatusColor.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(12),
-                border:
-                    Border.all(color: bmiStatusColor.withValues(alpha: 0.15)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.calculate_outlined,
-                      size: 16, color: bmiStatusColor),
-                  const SizedBox(width: 8),
-                  RichText(
-                    text: TextSpan(
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                      children: [
-                        const TextSpan(text: 'BMI: '),
-                        TextSpan(
-                          text: (data['bmi'] as double).toStringAsFixed(1),
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: bmiStatusColor,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      bmiStatusStr,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ] else ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calculate_outlined,
-                      size: 16, color: AppColors.textSecondary),
-                  const SizedBox(width: 8),
-                  Text(
-                    'BMI: Not computed',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textSecondary.withValues(alpha: 0.8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
+  }
+
+  String _formatAog(dynamic aogValue) {
+    if (aogValue == null || aogValue.toString() == 'N/A') return 'N/A';
+    final double? aogDouble = double.tryParse(aogValue.toString());
+    if (aogDouble == null || aogDouble <= 0) return 'N/A';
+
+    final int weeks = aogDouble.floor();
+    final int days = ((aogDouble - weeks) * 7).round();
+
+    return '$weeks Week${weeks == 1 ? "" : "s"} $days Day${days == 1 ? "" : "s"}';
   }
 
   Widget _buildShell({required Widget child}) {
