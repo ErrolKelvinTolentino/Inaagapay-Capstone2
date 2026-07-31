@@ -324,17 +324,25 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
       _registeredMothers = mothersData.length;
       _motherIds = mothersData.map<int>((m) => m['mother_id'] as int).toList();
 
+      // Sort mothers assigned to this BHC by mother_id to determine chronological index
+      final sortedMothersList = List<Map<String, dynamic>>.from(mothersData);
+      sortedMothersList.sort((a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
+
       // Load all mothers for search
       _allMothers = [];
-      for (var mother in mothersData) {
+      for (int i = 0; i < sortedMothersList.length; i++) {
+        final mother = sortedMothersList[i];
         final account = mother['accounts'];
         if (account != null) {
+          final mId = mother['mother_id'] as int;
+          final displayId = 'INA-${(i + 1).toString().padLeft(3, '0')}';
           _allMothers.add({
-            'mother_id': mother['mother_id'],
+            'mother_id': mId,
             'first_name': account['first_name'] ?? '',
             'last_name': account['last_name'] ?? '',
             'phone_number': account['phone_number'] ?? '',
             'email_address': account['email_address'] ?? '',
+            'bhc_patient_id': displayId,
           });
         }
       }
