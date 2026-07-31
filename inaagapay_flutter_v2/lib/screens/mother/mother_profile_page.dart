@@ -173,7 +173,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
   /// Weight gain dashboard card.
   Widget _buildWeightGainDashboard(
-      WeightGainResult result, List<Map<String, dynamic>> checkups, int fetalCount) {
+      WeightGainResult result, List<Map<String, dynamic>> checkups, int fetalCount, {bool isEstimated = false}) {
     final alertIdx = result.message.indexOf('ALERT:');
     final hasAlert = alertIdx != -1;
     final alertText = hasAlert ? result.message.substring(alertIdx).trim() : '';
@@ -601,6 +601,26 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             ),
           ],
           
+          if (isEstimated) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.info_outline_rounded, color: Colors.blue.shade600, size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Pre-pregnancy weight (W0) was estimated using backtracking as it wasn\'t provided.',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.blue.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
           // Expansion Tile for Disclaimer
           Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -736,8 +756,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     if (aogWeeks <= 13) {
       final fraction = aogWeeks / 13.0;
       final expectedGainMid = firstTrimesterGain * fraction;
-      expectedGainMin = expectedGainMid * 0.7;
-      expectedGainMax = expectedGainMid * 1.3;
+      expectedGainMin = 0.0;
+      expectedGainMax = (expectedGainMid * 1.4).clamp(1.0, firstTrimesterGain * 1.3);
     } else {
       final firstTrimesterMin = firstTrimesterGain * 0.7;
       final firstTrimesterMax = firstTrimesterGain * 1.3;
@@ -762,8 +782,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       if (baselineWeek <= 13) {
         final fraction = baselineWeek / 13.0;
         final baselineExpectedMid = firstTrimesterGain * fraction;
-        baselineExpectedMin = baselineExpectedMid * 0.7;
-        baselineExpectedMax = baselineExpectedMid * 1.3;
+        baselineExpectedMin = 0.0;
+        baselineExpectedMax = (baselineExpectedMid * 1.4).clamp(1.0, firstTrimesterGain * 1.3);
       } else {
         final firstTrimesterMin = firstTrimesterGain * 0.7;
         final firstTrimesterMax = firstTrimesterGain * 1.3;
@@ -5833,44 +5853,79 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     final daysToEdd = edd?.difference(now).inDays;
 
     // ── Build checkupList for WeightGainEngine ────────────────────────────
-    final checkupList = <Map<String, dynamic>>[];
+    final rawList = <Map<String, dynamic>>[];
     for (final c in checkups) {
       final w = c['checkup_weight'];
       if (w != null) {
-        checkupList.add({
+        rawList.add({
           'prenatal_checkup_id': c['encounter_id'] ?? -1,
           'checkup_datetime': c['checkup_datetime'],
           'age_of_gestation': c['age_of_gestation'] != null ? (c['age_of_gestation'] as num).toDouble() : 0.0,
           'checkup_weight': (w as num).toDouble(),
+          'is_checkup': true,
         });
       }
     }
     for (final v in vitals) {
       final w = v['weight_kg'];
       if (w != null) {
-        checkupList.add({
+        rawList.add({
           'prenatal_checkup_id': v['vital_id'] ?? -1,
           'checkup_datetime': v['recorded_at'],
           'age_of_gestation': v['age_of_gestation'] != null ? (v['age_of_gestation'] as num).toDouble() : 0.0,
           'checkup_weight': (w as num).toDouble(),
+          'is_checkup': false,
         });
       }
     }
 
     // Sort chronological ascending
-    checkupList.sort((a, b) {
+    rawList.sort((a, b) {
       final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '');
       final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '');
       if (da == null || db == null) return 0;
       return da.compareTo(db);
     });
 
-    final prePregnancyWeight = pregnancy['pre_pregnancy_weight'] != null
+    // Deduplicate by AOG/date (prefer official prenatal checkup over self-reported vitals)
+    final checkupList = <Map<String, dynamic>>[];
+    for (final item in rawList) {
+      if (checkupList.isEmpty) {
+        checkupList.add(item);
+      } else {
+        final last = checkupList.last;
+        final double diff = (item['age_of_gestation'] - last['age_of_gestation']).abs();
+        if (diff < 0.2) {
+          if (item['is_checkup'] == true && last['is_checkup'] == false) {
+            checkupList[checkupList.length - 1] = item;
+          }
+        } else {
+          checkupList.add(item);
+        }
+      }
+    }
+
+    double? prePregnancyWeight = pregnancy['pre_pregnancy_weight'] != null
         ? (pregnancy['pre_pregnancy_weight'] as num).toDouble()
         : null;
     final height = profile['height'] != null
         ? (profile['height'] as num).toDouble()
         : null;
+
+    // Dynamic pre-pregnancy weight backtracking if missing in DB but checkups/vitals exist
+    if (prePregnancyWeight == null && checkupList.isNotEmpty && height != null && height > 0) {
+      final earliest = checkupList.first;
+      final earliestWeight = earliest['checkup_weight'];
+      final earliestAog = earliest['age_of_gestation'];
+      final fetalCount = int.tryParse(pregnancy['fetal_count']?.toString() ?? '') ?? 1;
+      final estResult = WeightGainEngine.estimatePrePregnancyBMI(
+        currentWeightKg: earliestWeight,
+        heightCm: height,
+        aogWeeks: earliestAog,
+        fetalCount: fetalCount,
+      );
+      prePregnancyWeight = (estResult['estimatedWeight'] as num?)?.toDouble();
+    }
 
     WeightGainResult? weightGainResult;
     final fetalCount = int.tryParse(pregnancy['fetal_count']?.toString() ?? '') ?? 1;
@@ -6013,6 +6068,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 weightGainResult,
                 checkupList,
                 fetalCount,
+                isEstimated: pregnancy['pre_pregnancy_weight'] == null,
               ),
               const SizedBox(height: 12),
             ],
@@ -6833,6 +6889,65 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   }
 
   void _showQuickActionsMenu(BuildContext context, Map<String, dynamic> pregnancy, Map<String, dynamic> profile) {
+    double? latestWeight;
+    final checkupsList = (pregnancy['checkups'] as List?) ?? [];
+    final vitalsList = (pregnancy['maternal_vitals'] as List?) ?? [];
+    final allWeightReadings = <Map<String, dynamic>>[];
+    for (final c in checkupsList) {
+      final w = c['checkup_weight'];
+      if (w != null) {
+        allWeightReadings.add({
+          'weight': (w as num).toDouble(),
+          'date': DateTime.tryParse(c['checkup_datetime']?.toString() ?? ''),
+          'is_checkup': true,
+        });
+      }
+    }
+    for (final v in vitalsList) {
+      final w = v['weight_kg'];
+      if (w != null) {
+        allWeightReadings.add({
+          'weight': (w as num).toDouble(),
+          'date': DateTime.tryParse(v['recorded_at']?.toString() ?? ''),
+          'is_checkup': false,
+        });
+      }
+    }
+
+    allWeightReadings.sort((a, b) {
+      final da = a['date'] as DateTime?;
+      final db = b['date'] as DateTime?;
+      if (da == null || db == null) return 0;
+      return da.compareTo(db);
+    });
+
+    final deduplicatedReadings = <Map<String, dynamic>>[];
+    for (final item in allWeightReadings) {
+      if (deduplicatedReadings.isEmpty) {
+        deduplicatedReadings.add(item);
+      } else {
+        final last = deduplicatedReadings.last;
+        final da = item['date'] as DateTime?;
+        final db = last['date'] as DateTime?;
+        if (da != null && db != null) {
+          final diffHours = da.difference(db).inHours.abs();
+          if (diffHours < 33) {
+            if (item['is_checkup'] == true && last['is_checkup'] == false) {
+              deduplicatedReadings[deduplicatedReadings.length - 1] = item;
+            }
+          } else {
+            deduplicatedReadings.add(item);
+          }
+        } else {
+          deduplicatedReadings.add(item);
+        }
+      }
+    }
+
+    if (deduplicatedReadings.isNotEmpty) {
+      latestWeight = deduplicatedReadings.last['weight'] as double?;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -6904,7 +7019,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                           pregnancyId: pregnancyId as int,
                           lmp: DateTime.tryParse(
                               pregnancy['last_menstrual_period'] ?? ''),
-                          motherWeight: _toDouble(profile['weight']),
+                          motherWeight: latestWeight ?? _toDouble(profile['weight']),
                         ),
                       ),
                     );

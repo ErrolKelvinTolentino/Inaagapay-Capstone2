@@ -399,7 +399,8 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
 
   Future<void> _loadLatestCheckupWeight() async {
     try {
-      final res = await Supabase.instance.client
+      // 1. Fetch latest prenatal checkup weight
+      final checkupRes = await Supabase.instance.client
           .from('clinical_encounters')
           .select('''
             encounter_datetime,
@@ -413,22 +414,59 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           .limit(1)
           .maybeSingle();
 
-      if (res != null) {
-        final checkupList = res['checkup'] as List?;
-        final innerCheckup = checkupList != null && checkupList.isNotEmpty
-            ? checkupList.first as Map<String, dynamic>
-            : null;
-        if (innerCheckup != null && innerCheckup['checkup_weight'] != null && mounted) {
-          final latestWeight = double.tryParse(innerCheckup['checkup_weight'].toString());
-          if (latestWeight != null) {
-            setState(() {
-              _weightCtrl.text = latestWeight.toStringAsFixed(1);
-            });
-          }
+      double? checkupWeight;
+      DateTime? checkupDate;
+
+      if (checkupRes != null) {
+        checkupDate = DateTime.tryParse(checkupRes['encounter_datetime']?.toString() ?? '');
+        dynamic checkupData = checkupRes['checkup'];
+        Map<String, dynamic>? innerCheckup;
+        if (checkupData is List && checkupData.isNotEmpty) {
+          innerCheckup = checkupData.first as Map<String, dynamic>?;
+        } else if (checkupData is Map) {
+          innerCheckup = Map<String, dynamic>.from(checkupData);
+        }
+        if (innerCheckup != null && innerCheckup['checkup_weight'] != null) {
+          checkupWeight = double.tryParse(innerCheckup['checkup_weight'].toString());
         }
       }
-    } catch (_) {
-      // Non-critical: fall back to widget.motherWeight which is already set
+
+      // 2. Fetch latest maternal vital weight
+      final vitalRes = await Supabase.instance.client
+          .from('maternal_vitals')
+          .select('recorded_at, weight_kg')
+          .eq('pregnancy_id', widget.pregnancyId)
+          .order('recorded_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      double? vitalWeight;
+      DateTime? vitalDate;
+
+      if (vitalRes != null && vitalRes['weight_kg'] != null) {
+        vitalDate = DateTime.tryParse(vitalRes['recorded_at']?.toString() ?? '');
+        vitalWeight = double.tryParse(vitalRes['weight_kg'].toString());
+      }
+
+      // 3. Determine the absolute latest weight
+      double? latestWeight;
+      if (checkupWeight != null && vitalWeight != null && checkupDate != null && vitalDate != null) {
+        if (checkupDate.isAfter(vitalDate)) {
+          latestWeight = checkupWeight;
+        } else {
+          latestWeight = vitalWeight;
+        }
+      } else {
+        latestWeight = checkupWeight ?? vitalWeight;
+      }
+
+      if (latestWeight != null && mounted) {
+        setState(() {
+          _weightCtrl.text = latestWeight!.toStringAsFixed(1);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading latest weight: $e');
     }
   }
 
@@ -1182,23 +1220,28 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
               sortedPrev.first['checkup_weight']?.toString() ?? '');
         }
 
-        double? baselinePreWeight = prePregnancyWeight ?? motherWeight ?? widget.motherWeight ?? earliestCheckupWeight;
+        // Support dynamic pre-pregnancy weight backtracking if missing in DB
+        double? baselinePreWeight = prePregnancyWeight;
+        if (baselinePreWeight == null && heightCm != null && heightCm > 0) {
+          final referenceWeight = motherWeight ?? widget.motherWeight ?? earliestCheckupWeight ?? currentWeight;
+          final est = WeightGainEngine.estimatePrePregnancyBMI(
+            currentWeightKg: referenceWeight,
+            heightCm: heightCm,
+            aogWeeks: _aogWeeks!.toInt(),
+            fetalCount: _fetalCount ?? 1,
+          );
+          baselinePreWeight = (est['estimatedWeight'] as num?)?.toDouble();
+        }
+
+        // Secondary fallback if estimation failed or height is missing
+        baselinePreWeight ??= motherWeight ?? widget.motherWeight ?? earliestCheckupWeight;
+
         if (baselinePreWeight == null) {
           _initialSessionWeight ??= currentWeight;
           baselinePreWeight = _initialSessionWeight;
         }
 
         double? effectivePrePreg = baselinePreWeight;
-        if (effectivePrePreg == null && heightCm != null && heightCm > 0) {
-          final est = WeightGainEngine.estimatePrePregnancyBMI(
-            currentWeightKg: currentWeight,
-            heightCm: heightCm,
-            aogWeeks: _aogWeeks!.toInt(),
-            knownPrePregnancyWeight: baselinePreWeight,
-            fetalCount: _fetalCount ?? 1,
-          );
-          effectivePrePreg = est['estimatedWeight'] as double?;
-        }
 
         final checkupList = previousCheckups
             .map((e) => Map<String, dynamic>.from(e as Map))
@@ -3436,24 +3479,28 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             sortedPrev.first['checkup_weight']?.toString() ?? '');
       }
 
-      // Lock session initial weight so typing current weight never shifts the baseline
-      double? baselinePreWeight = prePregnancyWeight ?? motherWeight ?? widget.motherWeight ?? earliestCheckupWeight;
+      // Support dynamic pre-pregnancy weight backtracking if missing in DB
+      double? baselinePreWeight = prePregnancyWeight;
+      if (baselinePreWeight == null && heightCm != null && heightCm > 0) {
+        final referenceWeight = motherWeight ?? widget.motherWeight ?? earliestCheckupWeight ?? currentWeight;
+        final est = WeightGainEngine.estimatePrePregnancyBMI(
+          currentWeightKg: referenceWeight,
+          heightCm: heightCm,
+          aogWeeks: _aogWeeks!.toInt(),
+          fetalCount: _fetalCount ?? 1,
+        );
+        baselinePreWeight = (est['estimatedWeight'] as num?)?.toDouble();
+      }
+
+      // Secondary fallback if estimation failed or height is missing
+      baselinePreWeight ??= motherWeight ?? widget.motherWeight ?? earliestCheckupWeight;
+
       if (baselinePreWeight == null) {
         _initialSessionWeight ??= currentWeight;
         baselinePreWeight = _initialSessionWeight;
       }
 
       double? effectivePrePreg = baselinePreWeight;
-      if (effectivePrePreg == null && heightCm != null && heightCm > 0) {
-        final est = WeightGainEngine.estimatePrePregnancyBMI(
-          currentWeightKg: currentWeight,
-          heightCm: heightCm,
-          aogWeeks: _aogWeeks!.toInt(),
-          knownPrePregnancyWeight: baselinePreWeight,
-          fetalCount: _fetalCount ?? 1,
-        );
-        effectivePrePreg = est['estimatedWeight'] as double?;
-      }
 
       final result = WeightGainEngine.evaluate(
         currentWeight: currentWeight,

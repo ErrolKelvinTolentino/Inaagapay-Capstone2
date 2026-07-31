@@ -35,6 +35,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
   double? _heightCm;
   int _fetalCount = 1;
   bool _isUnlinked = false;
+  bool _isPrePregnancyWeightEstimated = false;
 
   @override
   void initState() {
@@ -154,8 +155,8 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
     if (aogWeeks <= 13) {
       final fraction = aogWeeks / 13.0;
       final expectedGainMid = firstTrimesterGain * fraction;
-      expectedGainMin = expectedGainMid * 0.7;
-      expectedGainMax = expectedGainMid * 1.3;
+      expectedGainMin = 0.0;
+      expectedGainMax = (expectedGainMid * 1.4).clamp(1.0, firstTrimesterGain * 1.3);
     } else {
       final firstTrimesterMin = firstTrimesterGain * 0.7;
       final firstTrimesterMax = firstTrimesterGain * 1.3;
@@ -180,8 +181,8 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
       if (baselineWeek <= 13) {
         final fraction = baselineWeek / 13.0;
         final baselineExpectedMid = firstTrimesterGain * fraction;
-        baselineExpectedMin = baselineExpectedMid * 0.7;
-        baselineExpectedMax = baselineExpectedMid * 1.3;
+        baselineExpectedMin = 0.0;
+        baselineExpectedMax = (baselineExpectedMid * 1.4).clamp(1.0, firstTrimesterGain * 1.3);
       } else {
         final firstTrimesterMin = firstTrimesterGain * 0.7;
         final firstTrimesterMax = firstTrimesterGain * 1.3;
@@ -221,6 +222,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
         _prePregnancyWeight = pregRow['pre_pregnancy_weight'] != null
             ? _toDouble(pregRow['pre_pregnancy_weight'])
             : null;
+        _isPrePregnancyWeightEstimated = pregRow['pre_pregnancy_weight'] == null;
         _fetalCount = pregRow['fetal_count'] != null
             ? _toInt(pregRow['fetal_count']) ?? 1
             : 1;
@@ -302,13 +304,47 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                 'checkup_weight': v['weight_kg'],
                 'age_of_gestation': v['age_of_gestation'],
                 'checkup_datetime': (v['date'] as DateTime).toIso8601String(),
+                'is_checkup': v['source'] == 'prenatal_checkup',
               })
           .toList()
           .reversed // Convert descending list back to chronological ascending order
           .toList();
 
-      if (weightReadingsAsc.isNotEmpty) {
-        final latest = weightReadingsAsc.last;
+      // Deduplicate by AOG/date (prefer official prenatal checkup over self-reported vitals)
+      final deduplicatedReadings = <Map<String, dynamic>>[];
+      for (final item in weightReadingsAsc) {
+        if (deduplicatedReadings.isEmpty) {
+          deduplicatedReadings.add(item);
+        } else {
+          final last = deduplicatedReadings.last;
+          final double diff = (((item['age_of_gestation'] ?? 0) as num).toDouble() - ((last['age_of_gestation'] ?? 0) as num).toDouble()).abs();
+          if (diff < 0.2) {
+            if (item['is_checkup'] == true && last['is_checkup'] == false) {
+              deduplicatedReadings[deduplicatedReadings.length - 1] = item;
+            }
+          } else {
+            deduplicatedReadings.add(item);
+          }
+        }
+      }
+
+      double? prePregnancyWeight = _prePregnancyWeight;
+      if (prePregnancyWeight == null && deduplicatedReadings.isNotEmpty && _heightCm != null && _heightCm! > 0) {
+        final earliest = deduplicatedReadings.first;
+        final earliestWeight = (earliest['checkup_weight'] as num).toDouble();
+        final earliestAog = (earliest['age_of_gestation'] as num?)?.toDouble() ?? 0.0;
+        final estResult = WeightGainEngine.estimatePrePregnancyBMI(
+          currentWeightKg: earliestWeight,
+          heightCm: _heightCm!,
+          aogWeeks: earliestAog.toInt(),
+          fetalCount: _fetalCount,
+        );
+        prePregnancyWeight = (estResult['estimatedWeight'] as num?)?.toDouble();
+        _prePregnancyWeight = prePregnancyWeight; // Cache locally
+      }
+
+      if (deduplicatedReadings.isNotEmpty) {
+        final latest = deduplicatedReadings.last;
         final currentWeight = (latest['checkup_weight'] as num).toDouble();
 
         // Effective AOG calculation fallback
@@ -323,15 +359,14 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
         _weightGainResult = WeightGainEngine.evaluate(
           currentWeight: currentWeight,
           aogWeeks: effectiveAog,
-          allCheckups: weightReadingsAsc,
-          prePregnancyWeight: _prePregnancyWeight,
+          allCheckups: deduplicatedReadings,
+          prePregnancyWeight: prePregnancyWeight,
           heightCm: _heightCm,
           fetalCount: _fetalCount,
         );
       } else {
         _weightGainResult = null;
-      }
-    } catch (e) {
+      }    } catch (e) {
       debugPrint('Error loading vitals: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -1169,6 +1204,28 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                     ),
                   ),
                 ),
+                if (_isPrePregnancyWeightEstimated) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, color: Colors.blue.shade600, size: 14),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _t(
+                            'Pre-pregnancy weight (W0) was estimated using backtracking as it wasn\'t provided.',
+                            'Ang timbang bago mabuntis (W0) ay tinantya gamit ang backtracking dahil walang naitalang baseline.',
+                          ),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.blue.shade800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Theme(
                   data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
