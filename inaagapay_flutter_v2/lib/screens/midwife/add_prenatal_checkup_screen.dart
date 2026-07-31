@@ -607,7 +607,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
             last_menstrual_period,
             expected_date_of_delivery,
             pre_pregnancy_weight,
-            fetal_count,
             created_at
           ''').eq('pregnancy_id', widget.pregnancyId).maybeSingle();
 
@@ -712,11 +711,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
             pregnancy?['pregnancy_risk_level']?.toString().toLowerCase();
         if (pregLevel != null) {
           _pregnancyRiskLevel = pregLevel;
-        }
-
-        final fc = pregnancy?['fetal_count'];
-        if (fc != null) {
-          _fetalCount = int.tryParse(fc.toString()) ?? 1;
         }
 
         final motherHeight = mother?['height']?.toString();
