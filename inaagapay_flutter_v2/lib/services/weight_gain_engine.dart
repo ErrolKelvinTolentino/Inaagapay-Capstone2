@@ -255,15 +255,14 @@ class WeightGainEngine {
     );
 
     // Escalate status if critical flags present
-    // Note: Mild weight loss in first trimester (morning sickness) is common,
-    // so only escalate to HIGH outside first trimester or for significant loss.
-    if (flags.contains('weight_loss') && aogWeeks > 13) {
-      status = WeightGainStatus.high; // Post-first-trimester weight loss is alarming
-    } else if (flags.contains('weight_loss') && aogWeeks <= 13) {
-      // First trimester weight loss is common; keep as LOW unless severe
+    // Weight loss between checkups is concerning — but it means the mother is
+    // gaining LESS than expected, not MORE.  Escalate normal → low, never → high.
+    if (flags.contains('weight_loss')) {
       if (status == WeightGainStatus.normal) {
         status = WeightGainStatus.low;
       }
+      // If already low, keep it low — weight loss while underweight is still a
+      // "below expected" concern, not "above expected".
     }
 
     // Confidence: HIGH if we have complete data
@@ -377,9 +376,8 @@ class WeightGainEngine {
       fetalCount: fetalCount,
     );
 
-    if (flags.contains('weight_loss') && aogWeeks > 13) {
-      status = WeightGainStatus.high;
-    } else if (flags.contains('weight_loss') && aogWeeks <= 13) {
+    // Weight loss escalation: same logic as full mode — never flip low → high.
+    if (flags.contains('weight_loss')) {
       if (status == WeightGainStatus.normal) {
         status = WeightGainStatus.low;
       }

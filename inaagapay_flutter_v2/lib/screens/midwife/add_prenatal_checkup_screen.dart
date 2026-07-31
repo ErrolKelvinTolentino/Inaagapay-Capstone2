@@ -516,6 +516,69 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           )
           .toList();
 
+      // Ensure default symptoms are seeded in database if missing
+      final defaultSymptoms = [
+        {'symptom_name': 'Vaginal Bleeding', 'risk_category': 'danger'},
+        {'symptom_name': 'Convulsions', 'risk_category': 'danger'},
+        {'symptom_name': 'Severe Headache', 'risk_category': 'danger'},
+        {'symptom_name': 'Blurred Vision', 'risk_category': 'danger'},
+        {'symptom_name': 'Severe Abdominal Pain', 'risk_category': 'danger'},
+        {'symptom_name': 'Leaking Vaginal Fluid', 'risk_category': 'danger'},
+        {'symptom_name': 'No Fetal Movement', 'risk_category': 'danger'},
+        {'symptom_name': 'Difficulty Breathing', 'risk_category': 'danger'},
+        {'symptom_name': 'High Fever', 'risk_category': 'danger'},
+        {'symptom_name': 'Severe Swelling of Face or Hands', 'risk_category': 'danger'},
+        {'symptom_name': 'Reduced Fetal Movement', 'risk_category': 'danger'},
+        {'symptom_name': 'Persistent Vomiting', 'risk_category': 'warning'},
+        {'symptom_name': 'Painful Urination', 'risk_category': 'warning'},
+        {'symptom_name': 'Pelvic Pain', 'risk_category': 'warning'},
+        {'symptom_name': 'Severe Itching', 'risk_category': 'warning'},
+        {'symptom_name': 'Dizziness', 'risk_category': 'warning'},
+        {'symptom_name': 'Chest Pain', 'risk_category': 'warning'},
+        {'symptom_name': 'Moderate Swelling', 'risk_category': 'warning'},
+        {'symptom_name': 'Back Pain', 'risk_category': 'normal'},
+        {'symptom_name': 'Nausea', 'risk_category': 'normal'},
+        {'symptom_name': 'Vomiting', 'risk_category': 'normal'},
+        {'symptom_name': 'Fatigue', 'risk_category': 'normal'},
+        {'symptom_name': 'Frequent Urination', 'risk_category': 'normal'},
+        {'symptom_name': 'Heartburn', 'risk_category': 'normal'},
+        {'symptom_name': 'Constipation', 'risk_category': 'normal'},
+        {'symptom_name': 'Skin Rash', 'risk_category': 'normal'},
+        {'symptom_name': 'Other', 'risk_category': 'normal'},
+      ];
+
+      final existingNames = parsed.map((st) => st.name.trim().toLowerCase()).toSet();
+      final toInsert = defaultSymptoms.where((ds) {
+        final name = ds['symptom_name']!.trim().toLowerCase();
+        return !existingNames.contains(name);
+      }).toList();
+
+      if (toInsert.isNotEmpty) {
+        try {
+          await Supabase.instance.client.from('symptom_types').insert(toInsert);
+          final retryRows = await Supabase.instance.client
+              .from('symptom_types')
+              .select('symptom_type_id, symptom_name, risk_category, description')
+              .order('risk_category')
+              .order('symptom_name');
+          final retryParsed = (retryRows as List)
+              .map(
+                (row) => SymptomType(
+                  id: row['symptom_type_id'] as int,
+                  name: row['symptom_name'] as String,
+                  riskCategory: row['risk_category'] as String,
+                  description: row['description'] as String?,
+                ),
+              )
+              .toList();
+          if (!mounted) return;
+          setState(() => _symptomTypes = retryParsed);
+          return;
+        } catch (e) {
+          debugPrint('Failed to seed missing symptom types: $e');
+        }
+      }
+
       if (!mounted) return;
       setState(() => _symptomTypes = parsed);
     } catch (_) {
@@ -537,17 +600,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
             blood_type
           ''').eq('mother_id', widget.motherId).maybeSingle();
 
-      if (mounted && mother != null) {
-        final motherHeight = mother['height']?.toString();
-        setState(() {
-          if (motherHeight != null && motherHeight.isNotEmpty && motherHeight != 'null') {
-            _heightCtrl.text = '$motherHeight cm';
-          } else {
-            _heightCtrl.text = 'Not recorded in profile';
-          }
-        });
-      }
-
       final pregnancy = await client.from('pregnancies').select('''
             pregnancy_id,
             status,
@@ -555,6 +607,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
             last_menstrual_period,
             expected_date_of_delivery,
             pre_pregnancy_weight,
+            fetal_count,
             created_at
           ''').eq('pregnancy_id', widget.pregnancyId).maybeSingle();
 
@@ -621,10 +674,15 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           .limit(6);
 
       final previousCheckups = (rawCheckups as List).map((enc) {
-        final innerCheckup = enc['checkup'] as List?;
-        final checkupData = innerCheckup != null && innerCheckup.isNotEmpty
-            ? innerCheckup.first as Map<String, dynamic>
-            : null;
+        final rawCheckup = enc['checkup'];
+        Map<String, dynamic>? checkupData;
+        if (rawCheckup is List) {
+          if (rawCheckup.isNotEmpty) {
+            checkupData = rawCheckup.first as Map<String, dynamic>?;
+          }
+        } else if (rawCheckup is Map) {
+          checkupData = Map<String, dynamic>.from(rawCheckup);
+        }
         final weeks = (enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0;
         final days = (enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0;
         return {
@@ -654,6 +712,11 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
             pregnancy?['pregnancy_risk_level']?.toString().toLowerCase();
         if (pregLevel != null) {
           _pregnancyRiskLevel = pregLevel;
+        }
+
+        final fc = pregnancy?['fetal_count'];
+        if (fc != null) {
+          _fetalCount = int.tryParse(fc.toString()) ?? 1;
         }
 
         final motherHeight = mother?['height']?.toString();
@@ -2809,10 +2872,15 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           .order('encounter_datetime', ascending: true);
 
       final checkupList = (rawEncounters as List).map((enc) {
-        final innerCheckup = enc['checkup'] as List?;
-        final checkupData = innerCheckup != null && innerCheckup.isNotEmpty
-            ? innerCheckup.first as Map<String, dynamic>
-            : null;
+        final rawCheckup = enc['checkup'];
+        Map<String, dynamic>? checkupData;
+        if (rawCheckup is List) {
+          if (rawCheckup.isNotEmpty) {
+            checkupData = rawCheckup.first as Map<String, dynamic>?;
+          }
+        } else if (rawCheckup is Map) {
+          checkupData = Map<String, dynamic>.from(rawCheckup);
+        }
         final weeks = (enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0;
         final days = (enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0;
         return {
@@ -3268,7 +3336,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         const SizedBox(height: 12),
         _sectionCard(
           title: 'Height',
-          child: _motherRiskContext == null && _heightCtrl.text.isEmpty
+          child: _motherRiskContext == null
               ? Container(
                   height: 48,
                   alignment: Alignment.centerLeft,
@@ -4177,28 +4245,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                       displayStringForOption: (t) => t,
                       onSelected: (value) => setState(() => _tdDose = value),
                     ),
-                    if (_allTakenTdDoses.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        children: _allTakenTdDoses
-                            .map((d) => Chip(
-                                  label: Text(d,
-                                      style: const TextStyle(fontSize: 12)),
-                                  backgroundColor: AppColors.bgSecondary,
-                                  side: const BorderSide(
-                                      color: AppColors.borderPrimary),
-                                  visualDensity: VisualDensity.compact,
-                                ))
-                            .toList(),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Already given doses shown above.',
-                        style: TextStyle(
-                            fontSize: 12, color: AppColors.textSecondary),
-                      ),
-                    ],
                   ],
                 ),
         ),
