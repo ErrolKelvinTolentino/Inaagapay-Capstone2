@@ -421,11 +421,9 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         final sevenDaysAgoDate = sevenDaysAgo.toIso8601String().split('T')[0];
 
         final nowTime = DateTime.now();
-        final currentWeekday = nowTime.weekday;
-        final sunday = currentWeekday == 7 ? nowTime : nowTime.subtract(Duration(days: currentWeekday));
-        final sundayStart = DateTime(sunday.year, sunday.month, sunday.day, 0, 0, 0);
-        final saturday = sundayStart.add(const Duration(days: 6));
-        final saturdayEnd = DateTime(saturday.year, saturday.month, saturday.day, 23, 59, 59);
+        final todayStart = DateTime(nowTime.year, nowTime.month, nowTime.day, 0, 0, 0);
+        final chartStart = todayStart.subtract(const Duration(days: 6));
+        final chartEnd = DateTime(nowTime.year, nowTime.month, nowTime.day, 23, 59, 59);
 
         List<dynamic> recentCheckups = [];
         List<dynamic> recentUltrasounds = [];
@@ -494,8 +492,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                   .from('clinical_encounters')
                   .select('encounter_datetime')
                   .eq('encounter_type', 'checkup')
-                  .gte('encounter_datetime', sundayStart.toIso8601String())
-                  .lte('encounter_datetime', saturdayEnd.toIso8601String())
+                  .gte('encounter_datetime', chartStart.toIso8601String())
+                  .lte('encounter_datetime', chartEnd.toIso8601String())
                   .inFilter('pregnancy_id', pregnancyIds)
             else
               Future.value([]),
@@ -681,14 +679,15 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           ));
         }
 
-        // Process BHC Chart checkup counts (Sunday to Saturday of current week)
+        // Process BHC Chart checkup counts (last 7 rolling days)
         _bhcVisitValues = List.filled(7, 0.0);
         final List<String> dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         _bhcVisitDays = [];
         for (int i = 0; i < 7; i++) {
-          final dayDate = sundayStart.add(Duration(days: i));
+          final dayDate = chartStart.add(Duration(days: i));
           final formattedDate = DateFormat('MMM dd').format(dayDate);
-          _bhcVisitDays.add('${dayLabels[i]}\n$formattedDate');
+          final labelIndex = dayDate.weekday % 7;
+          _bhcVisitDays.add('${dayLabels[labelIndex]}\n$formattedDate');
         }
 
         for (final checkup in chartCheckups) {
@@ -696,8 +695,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           if (dt != null) {
             final localDt = dt.toLocal();
             final localDateOnly = DateTime(localDt.year, localDt.month, localDt.day);
-            final sundayStartOnly = DateTime(sundayStart.year, sundayStart.month, sundayStart.day);
-            final diffDays = localDateOnly.difference(sundayStartOnly).inDays;
+            final chartStartOnly = DateTime(chartStart.year, chartStart.month, chartStart.day);
+            final diffDays = localDateOnly.difference(chartStartOnly).inDays;
             if (diffDays >= 0 && diffDays < 7) {
               _bhcVisitValues[diffDays] += 1;
             }

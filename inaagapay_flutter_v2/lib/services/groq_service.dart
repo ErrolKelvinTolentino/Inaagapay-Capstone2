@@ -13,9 +13,9 @@ import '../models/ocr_result.dart';
 class GroqService {
   // ── Model Configuration ─────────────────────────────────────────────────
 
-  static const String _visionModel = 'llama-3.2-90b-vision-preview';
+  static const String _visionModel = 'qwen/qwen3.6-27b';
   static const List<String> _visionModelFallbacks = [
-    'llama-3.2-90b-vision-preview',
+    'qwen/qwen3.6-27b',
     'llama-3.2-11b-vision-instruct',
     'meta-llama/llama-3.2-11b-vision-instruct',
   ];
@@ -151,7 +151,7 @@ Output JSON schema:
   "institution_name": "diagnostic center or hospital name in header, e.g. austria diagnostic center",
   "sonologist_name": "physician or sonologist name at bottom/header, e.g. DR. RAHMI Detu-Yu, MD",
   "fetal_count": integer (1 for SINGLETON, 2 for TWINS),
-  "sonologist_remarks": "complete IMPRESSION text or summary findings"
+  "sonologist_remarks": "Extract ONLY the final IMPRESSION or REMARKS summary sentence if present (e.g. 'Single live intrauterine pregnancy 16 weeks AOG'). DO NOT extract individual biometry measurements like AFI, placental position, fetal weight, NST, etc."
 }
 
 Guide for extraction from Philippine Ultrasound Reports:
@@ -160,7 +160,7 @@ Guide for extraction from Philippine Ultrasound Reports:
 - Look for "Average Ultrasound Age" or "AOG" or "AOG: 16W0D" or "16 weeks and 0 days" -> ega_weeks: 16, ega_days: 0.
 - Look for "Number of Fetus: SINGLETON" -> fetal_count: 1.
 - Look at the bottom signature for sonologist_name (e.g. "DR. RAHMI Detu-Yu, MD").
-- Look for "IMPRESSION:" section and extract all bullet points into sonologist_remarks.
+- For sonologist_remarks: Look for "IMPRESSION:" heading and extract ONLY the summary impression text (e.g. "Single live intrauterine pregnancy 16 weeks AOG"). Do NOT copy individual biometry findings (AFI, Placenta, Weight).
 
 RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE MARKDOWN CODE BLOCKS.
 ''';
@@ -189,24 +189,38 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE MARKDOWN CODE BLOCKS.
       }
 
       // Fallback regex parsing if fields are missing
-      if (data['ultrasound_date'] == null) {
-        final dateMatch = RegExp(r'(?:Date|DATE)[\s:]*([A-Z]+ \d{1,2}, \d{4})', caseSensitive: false).firstMatch(rawOutput);
+      if (data['ultrasound_date'] == null || data['ultrasound_date'].toString().isEmpty) {
+        final dateMatch = RegExp(r'(?:Date|DATE)[\s:]*([A-Z]+\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})', caseSensitive: false).firstMatch(rawOutput);
         if (dateMatch != null) {
-          final dtStr = dateMatch.group(1)!;
+          final dtStr = dateMatch.group(1)!.trim();
           try {
-            final dt = DateFormat('MMMM d, yyyy').parse(dtStr);
+            final dt = DateTime.tryParse(dtStr) ?? DateFormat('MMMM d, yyyy').parse(dtStr.replaceAll(',', ''));
             data['ultrasound_date'] = DateFormat('yyyy-MM-dd').format(dt);
           } catch (_) {}
         }
       }
 
       if (data['ega_weeks'] == null) {
-        final aogMatch = RegExp(r'(\d{1,2})\s*(?:weeks|W|\s*w)\s*(?:and)?\s*(\d{1,2})?\s*(?:days|D|\s*d)?', caseSensitive: false).firstMatch(rawOutput);
+        final aogMatch = RegExp(r'(\d{1,2})\s*(?:weeks|W|WOD)\s*(?:and)?\s*(\d{1,2})?\s*(?:days|D|DOD)?', caseSensitive: false).firstMatch(rawOutput);
         if (aogMatch != null) {
           data['ega_weeks'] = int.tryParse(aogMatch.group(1)!);
           if (aogMatch.group(2) != null) {
             data['ega_days'] = int.tryParse(aogMatch.group(2)!);
           }
+        }
+      }
+
+      if (data['institution_name'] == null || data['institution_name'].toString().isEmpty) {
+        if (rawOutput.toLowerCase().contains('austria diagnostic')) {
+          data['institution_name'] = 'Austria Diagnostic Center';
+          data['location_facility'] = 'Santa Maria, Mexico, Pampanga';
+        }
+      }
+
+      if (data['sonologist_name'] == null || data['sonologist_name'].toString().isEmpty) {
+        final docMatch = RegExp(r'(?:DR\.|DOCTOR|SONOLOGIST)[\sA-Z\.-]+', caseSensitive: false).firstMatch(rawOutput);
+        if (docMatch != null) {
+          data['sonologist_name'] = docMatch.group(0)!.trim();
         }
       }
 
@@ -1286,6 +1300,67 @@ Rules:
     }
   }
 
+  Future<String> _sendGeminiVisionRequest({
+    required List<XFile> imageFiles,
+    required String prompt,
+  }) async {
+    final geminiApiKey = dotenv.env['GEMINI_API_KEY'] ?? dotenv.env['GOOGLE_API_KEY'] ?? '';
+    if (geminiApiKey.isEmpty) {
+      throw Exception('GEMINI_API_KEY is missing in .env');
+    }
+
+    final preparedImage = await _prepareImageForGroq(imageFiles.first);
+    final base64Image = base64Encode(preparedImage.bytes);
+
+    const geminiModels = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+    Object? lastErr;
+    for (final m in geminiModels) {
+      try {
+        final url = Uri.parse(
+            'https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent?key=$geminiApiKey');
+
+        final response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'contents': [
+              {
+                'parts': [
+                  {'text': prompt},
+                  {
+                    'inline_data': {
+                      'mime_type': preparedImage.mimeType,
+                      'data': base64Image,
+                    }
+                  }
+                ]
+              }
+            ],
+            'generationConfig': {
+              'temperature': 0.1,
+              'maxOutputTokens': 2048,
+            }
+          }),
+        ).timeout(const Duration(seconds: 45));
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final candidates = data['candidates'] as List?;
+          if (candidates != null && candidates.isNotEmpty) {
+            final parts = candidates.first['content']?['parts'] as List?;
+            if (parts != null && parts.isNotEmpty) {
+              return parts.first['text']?.toString() ?? '';
+            }
+          }
+        }
+        lastErr = Exception('Gemini ($m) response status ${response.statusCode}: ${response.body}');
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr ?? Exception('Gemini Vision request failed.');
+  }
+
   Future<String> _sendVisionRequest({
     required List<XFile> imageFiles,
     required String apiKey,
@@ -1310,7 +1385,7 @@ Rules:
     Object? lastException;
     for (final modelName in _visionModelFallbacks) {
       try {
-        _log('📸 Attempting vision request with model: $modelName');
+        _log('📸 Attempting vision request via Groq model: $modelName');
         return await _sendChatCompletion(
           messages: [
             {'role': 'user', 'content': content}
@@ -1321,7 +1396,7 @@ Rules:
           maxOutputTokens: maxTokens,
         );
       } catch (e) {
-        _log('⚠️ Vision request failed for $modelName: $e');
+        _log('⚠️ Groq Vision request failed for $modelName: $e');
         lastException = e;
         if (e.toString().contains('decommissioned') ||
             e.toString().contains('400') ||
@@ -1331,6 +1406,21 @@ Rules:
         rethrow;
       }
     }
+
+    final geminiKey = dotenv.env['GEMINI_API_KEY'] ?? dotenv.env['GOOGLE_API_KEY'];
+    if (geminiKey != null && geminiKey.trim().isNotEmpty) {
+      try {
+        _log('📸 Attempting vision request via Gemini fallback...');
+        return await _sendGeminiVisionRequest(
+          imageFiles: imageFiles,
+          prompt: prompt,
+        );
+      } catch (e) {
+        _log('⚠️ Gemini Vision failed ($e)');
+        lastException = e;
+      }
+    }
+
     throw lastException ?? Exception('All vision models failed.');
   }
 
@@ -1373,42 +1463,26 @@ Rules:
 
   Future<_PreparedGroqImage> _prepareImageForGroq(XFile imageFile) async {
     final rawBytes = await imageFile.readAsBytes();
-    String extension = 'jpg';
-    try {
-      if (!kIsWeb && imageFile.path.isNotEmpty) {
-        extension = imageFile.path.split('.').last.toLowerCase();
-      } else if (imageFile.name.isNotEmpty) {
-        extension = imageFile.name.split('.').last.toLowerCase();
-      }
-    } catch (_) {}
-
-    String mimeType;
+    String mimeType = 'image/jpeg';
     Uint8List bytes;
 
-    if (extension == 'jpg' || extension == 'jpeg') {
-      mimeType = 'image/jpeg';
-      bytes = Uint8List.fromList(rawBytes);
-    } else if (extension == 'png') {
-      mimeType = 'image/png';
-      bytes = Uint8List.fromList(rawBytes);
-    } else if (extension == 'webp') {
-      mimeType = 'image/webp';
-      bytes = Uint8List.fromList(rawBytes);
-    } else {
-      final decoded = img.decodeImage(rawBytes);
-      if (decoded == null) {
-        throw Exception(
-            'Unsupported image format. Please upload JPG, PNG, WEBP, or a convertible image.');
+    // Resize high-res photos to max 1280px for fast OCR payload
+    final decoded = img.decodeImage(rawBytes);
+    if (decoded != null) {
+      img.Image processed = decoded;
+      if (processed.width > 1280 || processed.height > 1280) {
+        if (processed.width > processed.height) {
+          processed = img.copyResize(processed, width: 1280);
+        } else {
+          processed = img.copyResize(processed, height: 1280);
+        }
       }
-      bytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 88));
-      mimeType = 'image/jpeg';
+      bytes = Uint8List.fromList(img.encodeJpg(processed, quality: 82));
+    } else {
+      bytes = Uint8List.fromList(rawBytes);
     }
 
     final limited = await _ensureBase64WithinLimit(bytes);
-    if (mimeType != 'image/jpeg' &&
-        base64Encode(bytes).length > _maxBase64Size) {
-      mimeType = 'image/jpeg';
-    }
     return _PreparedGroqImage(bytes: limited, mimeType: mimeType);
   }
 
