@@ -9,7 +9,7 @@ import '../../services/mother_profile_service.dart';
 import '../../services/auth_storage.dart';
 import '../../services/push_notification_service.dart';
 import '../../services/supabase_service.dart';
-import '../midwife/ultrasound_analyzer_screen.dart';
+import '../midwife/add_ultrasound_page.dart';
 import '../midwife/lab_test_analyzer_screen.dart';
 import '../midwife/add_prenatal_checkup_screen.dart';
 import '../../widgets/headline.dart';
@@ -722,9 +722,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => UltrasoundAnalyzerScreen(
+        builder: (context) => AddUltrasoundPage(
           motherId: widget.motherId,
-          pregnancyId: pregnancy['pregnancy_id'],
         ),
       ),
     ).then((_) => _refresh());

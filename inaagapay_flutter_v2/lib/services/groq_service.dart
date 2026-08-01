@@ -6,17 +6,22 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
+import 'package:intl/intl.dart';
 import '../models/groq_response.dart';
 import '../models/ocr_result.dart';
 
 class GroqService {
   // ── Model Configuration ─────────────────────────────────────────────────
 
-  static const String _visionModel =
-      'meta-llama/llama-4-scout-17b-16e-instruct';
-  static const String _reasoningModel = 'openai/gpt-oss-120b';
-  static const String _firstFallbackReasoningModel = 'openai/gpt-oss-20b';
-  static const String _secondFallbackReasoningModel = 'qwen/qwen3-32b';
+  static const String _visionModel = 'llama-3.2-90b-vision-preview';
+  static const List<String> _visionModelFallbacks = [
+    'llama-3.2-90b-vision-preview',
+    'llama-3.2-11b-vision-instruct',
+    'meta-llama/llama-3.2-11b-vision-instruct',
+  ];
+  static const String _reasoningModel = 'llama-3.3-70b-versatile';
+  static const String _firstFallbackReasoningModel = 'llama-3.1-8b-instant';
+  static const String _secondFallbackReasoningModel = 'llama-3.1-70b-versatile';
 
   static const String childGrowthSystemPrompt =
       'You are a caring, knowledgeable midwife assistant in the Philippines who genuinely cares about every mother and child. '
@@ -126,6 +131,140 @@ class GroqService {
 
     _log('✅ Analysis complete');
     return result;
+  }
+
+  /// Fast, targeted OCR summary extraction for ultrasound records
+  Future<Map<String, dynamic>> extractUltrasoundSummaryOCR(List<XFile> imageFiles) async {
+    if (imageFiles.isEmpty) return {};
+    try {
+      final apiKey = _getApiKey();
+      const prompt = '''
+You are an expert medical OCR assistant specializing in Philippine Diagnostic & Ultrasound Reports.
+Scan this ultrasound document image carefully and extract all key summary information into a single valid JSON object.
+
+Output JSON schema:
+{
+  "ultrasound_date": "YYYY-MM-DD",
+  "ega_weeks": integer (e.g. 16 for 16W0D or 16 weeks),
+  "ega_days": integer (0 to 6),
+  "location_facility": "facility or location name, e.g. Santa Maria, Mexico, Pampanga or clinic name",
+  "institution_name": "diagnostic center or hospital name in header, e.g. austria diagnostic center",
+  "sonologist_name": "physician or sonologist name at bottom/header, e.g. DR. RAHMI Detu-Yu, MD",
+  "fetal_count": integer (1 for SINGLETON, 2 for TWINS),
+  "sonologist_remarks": "complete IMPRESSION text or summary findings"
+}
+
+Guide for extraction from Philippine Ultrasound Reports:
+- Look at the top header logo/title for institution_name (e.g. "austria diagnostic center") and location_facility (e.g. "Mexico, Pampanga").
+- Look for Date fields (e.g. "Date: AUGUST 01, 2026") -> convert to "2026-08-01".
+- Look for "Average Ultrasound Age" or "AOG" or "AOG: 16W0D" or "16 weeks and 0 days" -> ega_weeks: 16, ega_days: 0.
+- Look for "Number of Fetus: SINGLETON" -> fetal_count: 1.
+- Look at the bottom signature for sonologist_name (e.g. "DR. RAHMI Detu-Yu, MD").
+- Look for "IMPRESSION:" section and extract all bullet points into sonologist_remarks.
+
+RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE MARKDOWN CODE BLOCKS.
+''';
+
+      final String rawOutput = await _sendVisionRequest(
+        imageFiles: [imageFiles.first],
+        apiKey: apiKey,
+        prompt: prompt,
+        maxTokens: 2048,
+      );
+
+      _log('📄 Raw Ultrasound OCR Vision output: $rawOutput');
+
+      // Clean JSON string
+      String cleaned = rawOutput.trim();
+      final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(cleaned);
+      if (jsonMatch != null) {
+        cleaned = jsonMatch.group(0)!;
+      }
+
+      Map<String, dynamic> data = {};
+      try {
+        data = Map<String, dynamic>.from(jsonDecode(cleaned) as Map);
+      } catch (e) {
+        _log('⚠️ JSON parse failed, applying regex extraction on raw text...');
+      }
+
+      // Fallback regex parsing if fields are missing
+      if (data['ultrasound_date'] == null) {
+        final dateMatch = RegExp(r'(?:Date|DATE)[\s:]*([A-Z]+ \d{1,2}, \d{4})', caseSensitive: false).firstMatch(rawOutput);
+        if (dateMatch != null) {
+          final dtStr = dateMatch.group(1)!;
+          try {
+            final dt = DateFormat('MMMM d, yyyy').parse(dtStr);
+            data['ultrasound_date'] = DateFormat('yyyy-MM-dd').format(dt);
+          } catch (_) {}
+        }
+      }
+
+      if (data['ega_weeks'] == null) {
+        final aogMatch = RegExp(r'(\d{1,2})\s*(?:weeks|W|\s*w)\s*(?:and)?\s*(\d{1,2})?\s*(?:days|D|\s*d)?', caseSensitive: false).firstMatch(rawOutput);
+        if (aogMatch != null) {
+          data['ega_weeks'] = int.tryParse(aogMatch.group(1)!);
+          if (aogMatch.group(2) != null) {
+            data['ega_days'] = int.tryParse(aogMatch.group(2)!);
+          }
+        }
+      }
+
+      if (data['fetal_count'] == null) {
+        if (rawOutput.toUpperCase().contains('SINGLETON')) {
+          data['fetal_count'] = 1;
+        } else if (rawOutput.toUpperCase().contains('TWIN')) {
+          data['fetal_count'] = 2;
+        }
+      }
+
+      return data;
+    } catch (e) {
+      _log('⚠️ Error extracting ultrasound summary OCR: $e');
+      return {};
+    }
+  }
+
+  /// Fast 1-2 sentence mother-friendly growth insight comparing Ultrasound EGA vs Registered AOG on Ultrasound Date
+  Future<String?> generateUltrasoundGrowthInsight({
+    required DateTime ultrasoundDate,
+    required int egaWeeks,
+    required int egaDays,
+    required double registeredAogWeeksOnScanDate,
+    required int registeredAogDaysOnScanDate,
+    String? sonologistRemarks,
+    int fetalCount = 1,
+  }) async {
+    try {
+      final apiKey = _getApiKey();
+      final regWeeks = registeredAogWeeksOnScanDate.floor();
+      final regDays = registeredAogDaysOnScanDate % 7;
+      final diffDays = (egaWeeks * 7 + egaDays) - (regWeeks * 7 + regDays);
+
+      final prompt = '''
+You are a caring midwife assistant in the Philippines explaining ultrasound results to a mother.
+Ultrasound Date: ${ultrasoundDate.year}-${ultrasoundDate.month.toString().padLeft(2, '0')}-${ultrasoundDate.day.toString().padLeft(2, '0')}
+- Ultrasound Fetal Gestational Age (EGA): $egaWeeks weeks $egaDays days
+- Registered Gestational Age on Scan Date: $regWeeks weeks $regDays days
+- Difference: ${diffDays.abs()} days (${diffDays >= 0 ? 'larger/further along' : 'smaller/younger'} than registered age)
+- Fetal Count: $fetalCount
+${sonologistRemarks != null && sonologistRemarks.trim().isNotEmpty ? '- Sonologist Remarks: $sonologistRemarks' : ''}
+
+CRITICAL RULES:
+- Write a 1-2 sentence warm, reassuring summary for the mother in mild conversational Tagalog/Taglish.
+- Explain whether the baby's size on the scan date matches her expected gestational age for that date.
+- Keep it simple, clear, reassuring, and non-alarmist. Never use scary medical terms.
+''';
+
+      final response = await _sendReasoningRequest(
+        apiKey: apiKey,
+        prompt: prompt,
+      );
+      return response.description;
+    } catch (e) {
+      _log('⚠️ Error generating growth insight: $e');
+      return null;
+    }
   }
 
   Future<GroqResponse> analyzeLabTestImages(
@@ -1168,15 +1307,31 @@ Rules:
       });
     }
 
-    return _sendChatCompletion(
-      messages: [
-        {'role': 'user', 'content': content}
-      ],
-      apiKey: apiKey,
-      model: _visionModel,
-      temperature: 0.1,
-      maxOutputTokens: maxTokens,
-    );
+    Object? lastException;
+    for (final modelName in _visionModelFallbacks) {
+      try {
+        _log('📸 Attempting vision request with model: $modelName');
+        return await _sendChatCompletion(
+          messages: [
+            {'role': 'user', 'content': content}
+          ],
+          apiKey: apiKey,
+          model: modelName,
+          temperature: 0.1,
+          maxOutputTokens: maxTokens,
+        );
+      } catch (e) {
+        _log('⚠️ Vision request failed for $modelName: $e');
+        lastException = e;
+        if (e.toString().contains('decommissioned') ||
+            e.toString().contains('400') ||
+            e.toString().contains('404')) {
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw lastException ?? Exception('All vision models failed.');
   }
 
   Future<GroqResponse> _sendReasoningRequest({
@@ -1218,7 +1373,15 @@ Rules:
 
   Future<_PreparedGroqImage> _prepareImageForGroq(XFile imageFile) async {
     final rawBytes = await imageFile.readAsBytes();
-    final extension = imageFile.path.split('.').last.toLowerCase();
+    String extension = 'jpg';
+    try {
+      if (!kIsWeb && imageFile.path.isNotEmpty) {
+        extension = imageFile.path.split('.').last.toLowerCase();
+      } else if (imageFile.name.isNotEmpty) {
+        extension = imageFile.name.split('.').last.toLowerCase();
+      }
+    } catch (_) {}
+
     String mimeType;
     Uint8List bytes;
 
@@ -1303,7 +1466,8 @@ Rules:
     bool forceJsonMode = false,
     bool allowModelFallback = true,
   }) async {
-    final bool useJsonMode = forceJsonMode || _detectJsonMode(messages);
+    final bool isVisionModel = model.toLowerCase().contains('vision');
+    final bool useJsonMode = (forceJsonMode || _detectJsonMode(messages)) && !isVisionModel;
 
     final requestBody = <String, dynamic>{
       'model': model,
