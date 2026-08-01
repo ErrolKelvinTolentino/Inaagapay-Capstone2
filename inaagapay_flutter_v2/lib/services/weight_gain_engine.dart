@@ -98,6 +98,109 @@ class WeightGainEngine {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // PUBLIC HELPERS — EXPECTED GAIN / RANGE CALCULATIONS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Computes the expected weight **gain** (min, mid, max) at a given
+  /// gestational week, based on BMI category and IOM 2009 guidelines.
+  ///
+  /// Returns {'min': double, 'mid': double, 'max': double}.
+  /// This is the single source of truth for expected gain — all screens
+  /// must call this instead of replicating the formula.
+  static Map<String, double> getExpectedGainAt({
+    required double aogWeeks,
+    required String bmiCategory,
+    int fetalCount = 1,
+  }) {
+    final activeGuidelines = _guidelinesForFetalCount(fetalCount);
+    final guidelines = activeGuidelines[bmiCategory] ?? activeGuidelines['Normal']!;
+
+    final firstTrimesterGain = guidelines['first_trimester']!;
+    final weeklyRate = guidelines['weekly_rate']!;
+    final totalMin = guidelines['total_min']!;
+    final totalMax = guidelines['total_max']!;
+
+    double expectedGainMid;
+    double expectedGainMin;
+    double expectedGainMax;
+
+    if (aogWeeks <= 13) {
+      // First trimester (weeks 1-13): minimal or zero weight gain is normal
+      final fraction = aogWeeks / 13.0;
+      expectedGainMid = firstTrimesterGain * fraction;
+      expectedGainMin = 0.0; // 0 kg gain in 1st trimester is normal
+      expectedGainMax = (expectedGainMid * 1.4).clamp(1.0, firstTrimesterGain * 1.3);
+    } else {
+      // Second/third trimester
+      final weeksAfterFirst = aogWeeks - 13;
+      expectedGainMid = firstTrimesterGain + (weeksAfterFirst * weeklyRate);
+
+      final firstTrimesterMin = firstTrimesterGain * 0.7;
+      final firstTrimesterMax = firstTrimesterGain * 1.3;
+
+      if (aogWeeks <= 40) {
+        final progressFraction = (aogWeeks - 13) / 27.0;
+        expectedGainMin = firstTrimesterMin + (totalMin - firstTrimesterMin) * progressFraction;
+        expectedGainMax = firstTrimesterMax + (totalMax - firstTrimesterMax) * progressFraction;
+      } else {
+        // Post-term: extrapolate using weekly rate min/max
+        final weeksAfterForty = aogWeeks - 40;
+        final weeklyMin = guidelines['weekly_min'] ?? (weeklyRate * 0.8);
+        final weeklyMax = guidelines['weekly_max'] ?? (weeklyRate * 1.2);
+        expectedGainMin = totalMin + (weeksAfterForty * weeklyMin);
+        expectedGainMax = totalMax + (weeksAfterForty * weeklyMax);
+      }
+    }
+
+    return {'min': expectedGainMin, 'mid': expectedGainMid, 'max': expectedGainMax};
+  }
+
+  /// Computes the expected weight **range** (absolute weight values, not gain)
+  /// at a given gestational week, accounting for a baseline weight and
+  /// baseline week (for mothers who registered mid-pregnancy).
+  ///
+  /// Returns {'min': double, 'max': double} — the expected weight range in kg.
+  /// Used for chart plotting and UI display.
+  static Map<String, double> getExpectedRangeAt({
+    required double aogWeeks,
+    required String bmiCategory,
+    required double baselineWeight,
+    required double baselineWeek,
+    int fetalCount = 1,
+  }) {
+    if (aogWeeks <= baselineWeek) {
+      return {'min': baselineWeight, 'max': baselineWeight};
+    }
+
+    // Get expected gain at target week
+    final gainAtTarget = getExpectedGainAt(
+      aogWeeks: aogWeeks,
+      bmiCategory: bmiCategory,
+      fetalCount: fetalCount,
+    );
+
+    double relativeGainMin = gainAtTarget['min']!;
+    double relativeGainMax = gainAtTarget['max']!;
+
+    // If baseline is not at week 0, subtract the expected gain at the baseline
+    // week so the curve is relative to the first recorded weight.
+    if (baselineWeek > 0) {
+      final gainAtBaseline = getExpectedGainAt(
+        aogWeeks: baselineWeek,
+        bmiCategory: bmiCategory,
+        fetalCount: fetalCount,
+      );
+      relativeGainMin = gainAtTarget['min']! - gainAtBaseline['min']!;
+      relativeGainMax = gainAtTarget['max']! - gainAtBaseline['max']!;
+    }
+
+    return {
+      'min': baselineWeight + relativeGainMin,
+      'max': baselineWeight + relativeGainMax,
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // PUBLIC API
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -192,46 +295,15 @@ class WeightGainEngine {
     required List<Map<String, dynamic>> allCheckups,
     required int fetalCount,
   }) {
-    final activeGuidelines = _guidelinesForFetalCount(fetalCount);
-    final guidelines = activeGuidelines[bmiCategory] ?? activeGuidelines['Normal']!;
-
-    final firstTrimesterGain = guidelines['first_trimester']!;
-    final weeklyRate = guidelines['weekly_rate']!;
-    final totalMin = guidelines['total_min']!;
-    final totalMax = guidelines['total_max']!;
-
-    // Calculate expected gain at this gestational age
-    double expectedGainMid;
-    double expectedGainMin;
-    double expectedGainMax;
-
-    if (aogWeeks <= 13) {
-      // First trimester (weeks 1-13): minimal or zero weight gain is normal
-      final fraction = aogWeeks / 13.0;
-      expectedGainMid = firstTrimesterGain * fraction;
-      expectedGainMin = 0.0; // 0 kg gain in 1st trimester is normal
-      expectedGainMax = (expectedGainMid * 1.4).clamp(1.0, firstTrimesterGain * 1.3);
-    } else {
-      // Second/third trimester
-      final weeksAfterFirst = aogWeeks - 13;
-      expectedGainMid = firstTrimesterGain + (weeksAfterFirst * weeklyRate);
-
-      final firstTrimesterMin = firstTrimesterGain * 0.7;
-      final firstTrimesterMax = firstTrimesterGain * 1.3;
-
-      if (aogWeeks <= 40) {
-        final progressFraction = (aogWeeks - 13) / 27.0;
-        expectedGainMin = firstTrimesterMin + (totalMin - firstTrimesterMin) * progressFraction;
-        expectedGainMax = firstTrimesterMax + (totalMax - firstTrimesterMax) * progressFraction;
-      } else {
-        // Post-term: extrapolate using weekly rate min/max
-        final weeksAfterForty = aogWeeks - 40;
-        final weeklyMin = guidelines['weekly_min'] ?? (weeklyRate * 0.8);
-        final weeklyMax = guidelines['weekly_max'] ?? (weeklyRate * 1.2);
-        expectedGainMin = totalMin + (weeksAfterForty * weeklyMin);
-        expectedGainMax = totalMax + (weeksAfterForty * weeklyMax);
-      }
-    }
+    // Delegate expected gain calculation to the centralized method
+    final gainRange = getExpectedGainAt(
+      aogWeeks: aogWeeks,
+      bmiCategory: bmiCategory,
+      fetalCount: fetalCount,
+    );
+    final expectedGainMin = gainRange['min']!;
+    final expectedGainMid = gainRange['mid']!;
+    final expectedGainMax = gainRange['max']!;
 
     final actualGain = currentWeight - prePregnancyWeight;
 

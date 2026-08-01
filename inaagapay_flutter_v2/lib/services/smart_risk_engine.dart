@@ -1,5 +1,6 @@
 // lib/services/smart_risk_engine.dart
 import '../models/smart_risk_models.dart';
+import 'weight_gain_engine.dart';
 
 class SmartRiskEngine {
   /// Builds a history of observable facts from checkups and past pregnancies.
@@ -139,11 +140,16 @@ class SmartRiskEngine {
         final weightDiff = curWeight - prevWeight;
         final weeklyGain = weightDiff / weekDiff;
 
-        if (weightDiff < -0.1) {
+        // Use IOM 2009 bounds from engine: widest weekly range across all BMI categories
+        // Underweight weekly_max (0.58), Obese weekly_min (0.17)
+        final iomWidestWeeklyMax = WeightGainEngine.iomGuidelines['Underweight']!['weekly_max']!;
+        final iomLowestWeeklyMin = WeightGainEngine.iomGuidelines['Obese']!['weekly_min']!;
+
+        if (weightDiff < -0.5) {
           items.add('⚠️ Weight loss detected (${weightDiff.toStringAsFixed(1)} kg) — requires clinical attention');
-        } else if (weeklyGain > 1.0 && curWeek > 13) {
+        } else if (weeklyGain > iomWidestWeeklyMax * 2 && curWeek > 13) {
           items.add('Rapid weight gain (${weeklyGain.toStringAsFixed(2)} kg/week) — rule out fluid retention');
-        } else if (weeklyGain < 0.15 && curWeek > 13 && weekDiff >= 2) {
+        } else if (weeklyGain < iomLowestWeeklyMin && curWeek > 13 && weekDiff >= 2) {
           items.add('Low weight gain rate (${weeklyGain.toStringAsFixed(2)} kg/week) — monitor nutrition');
         }
       }

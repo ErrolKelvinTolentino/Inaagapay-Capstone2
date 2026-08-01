@@ -606,23 +606,12 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     if (weeks <= 12) {
       return 'Based on her Pre-Pregnancy BMI category ($category), the recommended total weight gain for Week $weeks is 0.5 - 2.0 kg.';
     }
-    final double minRate;
-    final double maxRate;
-    if (bmi < 18.5) {
-      minRate = 0.44;
-      maxRate = 0.58;
-    } else if (bmi < 25) {
-      minRate = 0.35;
-      maxRate = 0.50;
-    } else if (bmi < 30) {
-      minRate = 0.23;
-      maxRate = 0.33;
-    } else {
-      minRate = 0.17;
-      maxRate = 0.27;
-    }
-    final minGain = 0.5 + (weeks - 12) * minRate;
-    final maxGain = 2.0 + (weeks - 12) * maxRate;
+    final gainRange = WeightGainEngine.getExpectedGainAt(
+      aogWeeks: weeks.toDouble(),
+      bmiCategory: category,
+    );
+    final minGain = gainRange['min']!;
+    final maxGain = gainRange['max']!;
     return 'Based on her Pre-Pregnancy BMI category ($category), the recommended total weight gain for Week $weeks is ${minGain.toStringAsFixed(1)} - ${maxGain.toStringAsFixed(1)} kg.';
   }
 
