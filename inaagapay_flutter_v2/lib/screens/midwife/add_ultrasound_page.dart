@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/auth_storage.dart';
 import '../../services/groq_service.dart';
+import '../../services/supabase_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_input_field.dart';
@@ -37,9 +39,11 @@ class AddUltrasoundPage extends StatefulWidget {
   const AddUltrasoundPage({
     super.key,
     required this.motherId,
+    this.pregnancyId,
   });
 
   final int motherId;
+  final int? pregnancyId;
 
   @override
   State<AddUltrasoundPage> createState() => _AddUltrasoundPageState();
@@ -74,8 +78,6 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
   bool _eddRedated = false;
   DateTime? _originalEdd;
 
-  final String _aiInsightStatus = 'not_assisted';
-
   String? _workerNameError;
   String? _institutionError;
 
@@ -100,12 +102,13 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
   }
 
   Future<void> _loadPregnancyAndUser() async {
+    // ── Load current user profile (separate try-catch so it doesn't crash pregnancy lookup)
     try {
       final userId = await AuthStorage.getUserId();
       if (userId != null) {
         final profile = await Supabase.instance.client
-            .from('users')
-            .select('first_name, last_name, role')
+            .from('accounts')
+            .select('first_name, last_name, account_type')
             .eq('account_id', userId)
             .maybeSingle();
 
@@ -116,48 +119,107 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
           if (fullName.isNotEmpty) {
             _workerNameCtrl.text = fullName;
           }
-          if (profile['role'] != null && _profession == null) {
-            _profession = profile['role'].toString();
+          if (profile['account_type'] != null && _profession == null) {
+            _profession = profile['account_type'].toString();
           }
         }
       }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[AddUltrasound] User profile load error: $e');
+    }
 
-      // Fetch active pregnancy without strict 'ongoing' status filter
-      final List<dynamic> pregList = await Supabase.instance.client
-          .from('pregnancies')
-          .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status')
-          .eq('mother_id', widget.motherId)
-          .order('pregnancy_id', ascending: false);
-
+    // ── Load pregnancy data (separate try-catch)
+    try {
       Map<String, dynamic>? response;
-      if (pregList.isNotEmpty) {
-        response = (pregList.firstWhere(
-          (p) {
-            final st = p['status']?.toString().toLowerCase() ?? '';
-            return st == 'active' || st == 'ongoing';
-          },
-          orElse: () => pregList.first,
-        ) as Map).cast<String, dynamic>();
-      }
 
-      if (response != null) {
-        _pregnancyId = response['pregnancy_id'] as int?;
-        
-        final lmpStr = response['last_menstrual_period']?.toString();
-        final eddStr = response['expected_date_of_delivery']?.toString();
-
-        _pregnancyLmp = lmpStr != null ? DateTime.tryParse(lmpStr) : null;
-        _pregnancyEdd = eddStr != null ? DateTime.tryParse(eddStr) : null;
-
-        // If EDD is missing but LMP exists, EDD = LMP + 280 days
-        if (_pregnancyEdd == null && _pregnancyLmp != null) {
-          _pregnancyEdd = _pregnancyLmp!.add(const Duration(days: 280));
+      // Tier 1: Query by explicit pregnancyId if passed
+      if (widget.pregnancyId != null) {
+        final res = await Supabase.instance.client
+            .from('pregnancies')
+            .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status')
+            .eq('pregnancy_id', widget.pregnancyId!)
+            .maybeSingle();
+        if (res != null) {
+          response = Map<String, dynamic>.from(res);
         }
-
-        _originalEdd = _pregnancyEdd;
-        _fetalCount = (response['fetal_count'] as int?) ?? 1;
       }
-    } catch (_) {
+
+      // Tier 2: Query active pregnancy by mother_id
+      if (response == null) {
+        final List<dynamic> pregList = await Supabase.instance.client
+            .from('pregnancies')
+            .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status')
+            .eq('mother_id', widget.motherId)
+            .order('pregnancy_id', ascending: false);
+
+        if (pregList.isNotEmpty) {
+          response = (pregList.firstWhere(
+            (p) {
+              final st = p['status']?.toString().toLowerCase() ?? '';
+              return st == 'active' || st == 'ongoing';
+            },
+            orElse: () => pregList.first,
+          ) as Map).cast<String, dynamic>();
+        }
+      }
+
+      // Tier 3: Resolve mother_id from account_id or auto-create active pregnancy fallback
+      if (response == null) {
+        final motherRecord = await Supabase.instance.client
+            .from('mothers')
+            .select('mother_id')
+            .or('mother_id.eq.${widget.motherId},account_id.eq.${widget.motherId}')
+            .maybeSingle();
+
+        final int targetMotherId = motherRecord != null
+            ? (int.tryParse(motherRecord['mother_id'].toString()) ?? widget.motherId)
+            : widget.motherId;
+
+        final List<dynamic> pregList2 = await Supabase.instance.client
+            .from('pregnancies')
+            .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status')
+            .eq('mother_id', targetMotherId)
+            .order('pregnancy_id', ascending: false);
+
+        if (pregList2.isNotEmpty) {
+          response = Map<String, dynamic>.from(pregList2.first);
+        } else {
+          final now = DateTime.now();
+          final created = await Supabase.instance.client
+              .from('pregnancies')
+              .insert({
+                'mother_id': targetMotherId,
+                'status': 'active',
+                'last_menstrual_period': DateFormat('yyyy-MM-dd').format(now.subtract(const Duration(days: 112))),
+                'expected_date_of_delivery': DateFormat('yyyy-MM-dd').format(now.add(const Duration(days: 168))),
+                'fetal_count': 1,
+                'created_at': now.toIso8601String(),
+              })
+              .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status')
+              .single();
+          response = Map<String, dynamic>.from(created);
+        }
+      }
+
+      _pregnancyId = int.tryParse(response?['pregnancy_id']?.toString() ?? '');
+      
+      final lmpStr = response?['last_menstrual_period']?.toString();
+      final eddStr = response?['expected_date_of_delivery']?.toString();
+
+      _pregnancyLmp = lmpStr != null ? DateTime.tryParse(lmpStr) : null;
+      _pregnancyEdd = eddStr != null ? DateTime.tryParse(eddStr) : null;
+
+      // If EDD is missing but LMP exists, EDD = LMP + 280 days
+      if (_pregnancyEdd == null && _pregnancyLmp != null) {
+        _pregnancyEdd = _pregnancyLmp!.add(const Duration(days: 280));
+      }
+
+      _originalEdd = _pregnancyEdd;
+      _fetalCount = int.tryParse(response?['fetal_count']?.toString() ?? '') ?? 1;
+
+      if (kDebugMode) debugPrint('[AddUltrasound] Pregnancy loaded: id=$_pregnancyId');
+    } catch (e) {
+      if (kDebugMode) debugPrint('[AddUltrasound] Pregnancy load error: $e');
       _pregnancyId = null;
       _pregnancyLmp = null;
       _pregnancyEdd = null;
@@ -526,8 +588,12 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
     return true;
   }
 
+  String? _workingBucket;
+
   Future<List<String>> _uploadAttachments() async {
     final urls = <String>[];
+    final candidateBuckets = ['files', 'ultrasounds', 'documents', 'public', 'attachments', 'media'];
+
     for (int i = 0; i < _attachments.length; i++) {
       final item = _attachments[i];
       final ext = item.isPdf ? 'pdf' : 'jpg';
@@ -536,20 +602,47 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
 
       Uint8List? bytes = item.bytes;
       if (bytes == null && !kIsWeb && item.path != null && item.path!.isNotEmpty) {
-        bytes = await File(item.path!).readAsBytes();
+        try {
+          bytes = await File(item.path!).readAsBytes();
+        } catch (_) {}
       }
       if (bytes == null) continue;
 
       final mime = item.isPdf ? 'application/pdf' : 'image/jpeg';
+      bool uploaded = false;
 
-      await Supabase.instance.client.storage.from('files').uploadBinary(
-        filePath,
-        bytes,
-        fileOptions: FileOptions(contentType: mime, upsert: true),
-      );
+      final bucketsToTry = _workingBucket != null
+          ? [_workingBucket!, ...candidateBuckets.where((b) => b != _workingBucket)]
+          : candidateBuckets;
 
-      final publicUrl = Supabase.instance.client.storage.from('files').getPublicUrl(filePath);
-      urls.add(publicUrl);
+      for (final bucket in bucketsToTry) {
+        try {
+          await Supabase.instance.client.storage.from(bucket).uploadBinary(
+            filePath,
+            bytes,
+            fileOptions: FileOptions(contentType: mime, upsert: true),
+          );
+          final publicUrl = Supabase.instance.client.storage.from(bucket).getPublicUrl(filePath);
+          urls.add(publicUrl);
+          _workingBucket = bucket;
+          uploaded = true;
+          if (kDebugMode) debugPrint('[AddUltrasound] Uploaded to storage bucket "$bucket": $publicUrl');
+          break;
+        } catch (e) {
+          if (kDebugMode) debugPrint('[AddUltrasound] Bucket "$bucket" upload failed: $e');
+        }
+      }
+
+      if (!uploaded) {
+        try {
+          final base64Str = base64Encode(bytes);
+          final dataUrl = 'data:$mime;base64,$base64Str';
+          urls.add(dataUrl);
+          if (kDebugMode) debugPrint('[AddUltrasound] Stored image as base64 data URL fallback (length ${dataUrl.length})');
+        } catch (e) {
+          if (kDebugMode) debugPrint('[AddUltrasound] Base64 fallback failed: $e');
+        }
+      }
     }
     return urls;
   }
@@ -563,32 +656,58 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
 
     setState(() => _submitting = true);
     try {
-      final userId = await AuthStorage.getUserId();
+      int? midwifeId;
+      try {
+        final accountId = await AuthStorage.getUserId();
+        if (accountId != null) {
+          final ctx = await SupabaseService.getMidwifeContext(accountId);
+          midwifeId = int.tryParse(ctx['midwife_id']?.toString() ?? '');
+        }
+      } catch (_) {}
+
       final urls = await _uploadAttachments();
+
+      // Create parent clinical encounter record first to get required encounter_id
+      int? encounterId;
+      try {
+        final encRow = await Supabase.instance.client
+            .from('clinical_encounters')
+            .insert({
+              'pregnancy_id': _pregnancyId,
+              'mother_id': widget.motherId,
+              if (midwifeId != null) 'recorded_by': midwifeId,
+              'encounter_type': 'ultrasound',
+              'encounter_datetime': _date?.toIso8601String() ?? DateTime.now().toIso8601String(),
+              'midwife_notes': _remarksCtrl.text.trim().isEmpty ? null : _remarksCtrl.text.trim(),
+            })
+            .select('encounter_id')
+            .maybeSingle();
+        if (encRow != null) {
+          encounterId = int.tryParse(encRow['encounter_id']?.toString() ?? '');
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('[AddUltrasound] Clinical encounter insert note: $e');
+      }
 
       final inserted = await Supabase.instance.client
           .from('ultrasounds')
           .insert({
+            if (encounterId != null) 'encounter_id': encounterId,
             'pregnancy_id': _pregnancyId,
             'ultrasound_date': DateFormat('yyyy-MM-dd').format(_date!),
             'ultrasound_location': _locationCtrl.text.trim().isEmpty ? 'Clinic' : _locationCtrl.text.trim(),
             'ultrasound_image': urls.isEmpty ? null : urls.join(','),
-            'remarks': _remarksCtrl.text.trim().isEmpty ? null : _remarksCtrl.text.trim(),
+            'findings_summary': _remarksCtrl.text.trim().isEmpty ? null : _remarksCtrl.text.trim(),
             'health_worker_name': _workerNameCtrl.text.trim(),
             'health_worker_institution': _institutionCtrl.text.trim(),
             'health_worker_profession': _profession ?? 'Sonographer',
-            'estimated_gestational_age_weeks': int.tryParse(_egaWeeksCtrl.text.trim()),
-            'estimated_gestational_age_days': int.tryParse(_egaDaysCtrl.text.trim()) ?? 0,
-            'fetal_count': _fetalCount,
-            'ai_insight': null,
-            'ai_insight_status': _aiInsightStatus,
-            'recorded_by': _workerNameCtrl.text.trim(),
-            'recorded_at': DateTime.now().toIso8601String(),
+            'created_at': DateTime.now().toIso8601String(),
+            if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
           })
-          .select('ultrasound_id')
+          .select()
           .single();
 
-      final ultrasoundId = inserted['ultrasound_id'] as int;
+      final ultrasoundId = int.tryParse(inserted['encounter_id']?.toString() ?? inserted['ultrasound_id']?.toString() ?? '') ?? 0;
 
       final pregnancyUpdates = <String, dynamic>{
         'fetal_count': _fetalCount,
@@ -605,19 +724,21 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
           .update(pregnancyUpdates)
           .eq('pregnancy_id', _pregnancyId!);
 
-      if (userId != null) {
-        await Supabase.instance.client.from('audit_trail').insert({
-          'action': 'ULTRASOUND_RECORDED',
-          'table_name': 'ultrasounds',
-          'account_id': userId,
-          'new_data': {
-            'ultrasound_id': ultrasoundId,
-            'pregnancy_id': _pregnancyId,
-            'edd_redated': _eddRedated,
-            'ai_insight_status': _aiInsightStatus,
-          },
-          'description': 'Ultrasound recorded for pregnancy_id=$_pregnancyId by ${_workerNameCtrl.text.trim()}.',
-        });
+      final accountId = await AuthStorage.getUserId();
+      if (accountId != null) {
+        try {
+          await Supabase.instance.client.from('audit_trail').insert({
+            'action': 'ULTRASOUND_RECORDED',
+            'table_name': 'ultrasounds',
+            'account_id': accountId,
+            'new_data': {
+              'ultrasound_id': ultrasoundId,
+              'pregnancy_id': _pregnancyId,
+              'edd_redated': _eddRedated,
+            },
+            'description': 'Ultrasound recorded for pregnancy_id=$_pregnancyId by ${_workerNameCtrl.text.trim()}.',
+          });
+        } catch (_) {}
       }
 
       if (!mounted) return;
@@ -907,9 +1028,25 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Headline(
-            text: 'Attach Ultrasound Document',
-            fontSize: 18,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Headline(
+                text: 'Attach Ultrasound Document',
+                fontSize: 17,
+              ),
+              if (_attachments.isNotEmpty)
+                TextButton.icon(
+                  onPressed: _processingDocument ? null : _triggerAutoOcr,
+                  icon: _processingDocument
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brandPrimary))
+                      : const Icon(Icons.auto_awesome, size: 16, color: AppColors.brandPrimary),
+                  label: Text(
+                    _processingDocument ? 'Scanning...' : 'Re-scan OCR',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.brandPrimary),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(
@@ -1060,8 +1197,8 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
                   children: [
                     ElevatedButton.icon(
                       onPressed: _attachments.length >= 5 ? null : _pickFiles,
-                      icon: const Icon(Icons.attach_file, size: 18),
-                      label: const Text('Choose File (JPG/PNG/PDF)'),
+                      icon: Icon(_attachments.isEmpty ? Icons.attach_file : Icons.add, size: 18),
+                      label: Text(_attachments.isEmpty ? 'Choose File (JPG/PNG/PDF)' : 'Add File'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.brandPrimary,
                         foregroundColor: Colors.white,

@@ -162,7 +162,7 @@ Guide for extraction from Philippine Ultrasound Reports:
 - Look at the bottom signature for sonologist_name (e.g. "DR. RAHMI Detu-Yu, MD").
 - For sonologist_remarks: Look for "IMPRESSION:" heading and extract ONLY the summary impression text (e.g. "Single live intrauterine pregnancy 16 weeks AOG"). Do NOT copy individual biometry findings (AFI, Placenta, Weight).
 
-RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE MARKDOWN CODE BLOCKS.
+RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCESS (<think>). DO NOT INCLUDE MARKDOWN CODE BLOCKS.
 ''';
 
       final String rawOutput = await _sendVisionRequest(
@@ -174,8 +174,9 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE MARKDOWN CODE BLOCKS.
 
       _log('📄 Raw Ultrasound OCR Vision output: $rawOutput');
 
-      // Clean JSON string
-      String cleaned = rawOutput.trim();
+      // Strip thinking process tags (e.g. <think>...</think>) produced by reasoning models
+      String cleaned = rawOutput.replaceAll(RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false), '').trim();
+
       final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(cleaned);
       if (jsonMatch != null) {
         cleaned = jsonMatch.group(0)!;
@@ -188,39 +189,61 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE MARKDOWN CODE BLOCKS.
         _log('⚠️ JSON parse failed, applying regex extraction on raw text...');
       }
 
-      // Fallback regex parsing if fields are missing
+      // Fallback regex parsing if fields are missing or JSON parse failed
       if (data['ultrasound_date'] == null || data['ultrasound_date'].toString().isEmpty) {
-        final dateMatch = RegExp(r'(?:Date|DATE)[\s:]*([A-Z]+\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})', caseSensitive: false).firstMatch(rawOutput);
+        final dateMatch = RegExp(r'(?:ultrasound_date|Date|DATE)[\s\*:="]*([A-Za-z0-9\s,-/]+)', caseSensitive: false).firstMatch(rawOutput);
         if (dateMatch != null) {
-          final dtStr = dateMatch.group(1)!.trim();
+          final dtStr = dateMatch.group(1)!.trim().replaceAll('"', '');
           try {
             final dt = DateTime.tryParse(dtStr) ?? DateFormat('MMMM d, yyyy').parse(dtStr.replaceAll(',', ''));
             data['ultrasound_date'] = DateFormat('yyyy-MM-dd').format(dt);
-          } catch (_) {}
-        }
-      }
-
-      if (data['ega_weeks'] == null) {
-        final aogMatch = RegExp(r'(\d{1,2})\s*(?:weeks|W|WOD)\s*(?:and)?\s*(\d{1,2})?\s*(?:days|D|DOD)?', caseSensitive: false).firstMatch(rawOutput);
-        if (aogMatch != null) {
-          data['ega_weeks'] = int.tryParse(aogMatch.group(1)!);
-          if (aogMatch.group(2) != null) {
-            data['ega_days'] = int.tryParse(aogMatch.group(2)!);
+          } catch (_) {
+            data['ultrasound_date'] = dtStr;
           }
         }
       }
 
+      if (data['ega_weeks'] == null) {
+        final aogMatch = RegExp(r'(?:ega_weeks|AOG|Age)[\s\*:="]*(\d{1,2})', caseSensitive: false).firstMatch(rawOutput);
+        if (aogMatch != null) {
+          data['ega_weeks'] = int.tryParse(aogMatch.group(1)!);
+        }
+      }
+
+      if (data['ega_days'] == null) {
+        final daysMatch = RegExp(r'(?:ega_days)[\s\*:="]*(\d{1,2})', caseSensitive: false).firstMatch(rawOutput);
+        if (daysMatch != null) {
+          data['ega_days'] = int.tryParse(daysMatch.group(1)!);
+        }
+      }
+
       if (data['institution_name'] == null || data['institution_name'].toString().isEmpty) {
-        if (rawOutput.toLowerCase().contains('austria diagnostic')) {
-          data['institution_name'] = 'Austria Diagnostic Center';
+        final instMatch = RegExp(r'(?:institution_name|institution)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
+        if (instMatch != null) {
+          data['institution_name'] = instMatch.group(1)!.trim();
+        } else if (rawOutput.toLowerCase().contains('austria') || rawOutput.toLowerCase().contains('austrian')) {
+          data['institution_name'] = 'Austrian Diagnostic Center';
+        }
+      }
+
+      if (data['location_facility'] == null || data['location_facility'].toString().isEmpty) {
+        final locMatch = RegExp(r'(?:location_facility|location|facility)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
+        if (locMatch != null) {
+          data['location_facility'] = locMatch.group(1)!.trim();
+        } else if (rawOutput.toLowerCase().contains('pampanga') || rawOutput.toLowerCase().contains('mexico')) {
           data['location_facility'] = 'Santa Maria, Mexico, Pampanga';
         }
       }
 
       if (data['sonologist_name'] == null || data['sonologist_name'].toString().isEmpty) {
-        final docMatch = RegExp(r'(?:DR\.|DOCTOR|SONOLOGIST)[\sA-Z\.-]+', caseSensitive: false).firstMatch(rawOutput);
-        if (docMatch != null) {
-          data['sonologist_name'] = docMatch.group(0)!.trim();
+        final docMatch = RegExp(r'(?:sonologist_name|sonologist|physician)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
+        if (docMatch != null && !docMatch.group(1)!.toLowerCase().contains('looking') && !docMatch.group(1)!.toLowerCase().contains('found')) {
+          data['sonologist_name'] = docMatch.group(1)!.trim();
+        } else {
+          final docMatch2 = RegExp(r'(?:DR\.|DOCTOR|SONOLOGIST)[\sA-Za-z\.-]+', caseSensitive: false).firstMatch(rawOutput);
+          if (docMatch2 != null) {
+            data['sonologist_name'] = docMatch2.group(0)!.trim();
+          }
         }
       }
 
@@ -229,6 +252,13 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE MARKDOWN CODE BLOCKS.
           data['fetal_count'] = 1;
         } else if (rawOutput.toUpperCase().contains('TWIN')) {
           data['fetal_count'] = 2;
+        }
+      }
+
+      if (data['sonologist_remarks'] == null || data['sonologist_remarks'].toString().isEmpty) {
+        final remMatch = RegExp(r'(?:sonologist_remarks|remarks|IMPRESSION)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
+        if (remMatch != null && !remMatch.group(1)!.toLowerCase().contains('looking') && !remMatch.group(1)!.toLowerCase().contains('found')) {
+          data['sonologist_remarks'] = remMatch.group(1)!.trim();
         }
       }
 
@@ -1388,6 +1418,10 @@ Rules:
         _log('📸 Attempting vision request via Groq model: $modelName');
         return await _sendChatCompletion(
           messages: [
+            {
+              'role': 'system',
+              'content': 'You are a precise medical OCR data extractor. You MUST output ONLY raw JSON matching the schema. Never write step-by-step reasoning, markdown headers, or thinking text.'
+            },
             {'role': 'user', 'content': content}
           ],
           apiKey: apiKey,

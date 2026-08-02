@@ -724,6 +724,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       MaterialPageRoute(
         builder: (context) => AddUltrasoundPage(
           motherId: widget.motherId,
+          pregnancyId: pregnancy['pregnancy_id'] as int?,
         ),
       ),
     ).then((_) => _refresh());

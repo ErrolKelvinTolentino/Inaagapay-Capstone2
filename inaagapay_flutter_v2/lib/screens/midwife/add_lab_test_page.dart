@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -893,26 +894,43 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
     final urls = <String>[];
     final paths = <String>[];
 
+    final candidateBuckets = ['files', 'ultrasounds', 'documents', 'public', 'attachments', 'media'];
+
     for (final image in images) {
       final bytes = await image.readAsBytes();
       final fileName =
           'lab_${DateTime.now().millisecondsSinceEpoch}_${paths.length}.jpg';
       final filePath = 'lab-tests/${widget.motherId}/$fileName';
+      bool uploaded = false;
 
-      await Supabase.instance.client.storage.from('files').uploadBinary(
-            filePath,
-            bytes,
-            fileOptions:
-                const FileOptions(contentType: 'image/jpeg', upsert: true),
-          );
-
-      final publicUrl =
-          Supabase.instance.client.storage.from('files').getPublicUrl(
+      for (final bucket in candidateBuckets) {
+        try {
+          await Supabase.instance.client.storage.from(bucket).uploadBinary(
                 filePath,
+                bytes,
+                fileOptions:
+                    const FileOptions(contentType: 'image/jpeg', upsert: true),
               );
 
-      urls.add(publicUrl);
-      paths.add(filePath);
+          final publicUrl =
+              Supabase.instance.client.storage.from(bucket).getPublicUrl(
+                    filePath,
+                  );
+
+          urls.add(publicUrl);
+          paths.add(filePath);
+          uploaded = true;
+          break;
+        } catch (_) {}
+      }
+
+      if (!uploaded) {
+        try {
+          final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+          urls.add(dataUrl);
+          paths.add(filePath);
+        } catch (_) {}
+      }
     }
 
     return {
