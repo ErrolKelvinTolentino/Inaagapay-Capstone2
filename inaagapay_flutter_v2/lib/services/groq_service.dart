@@ -278,6 +278,137 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
     }
   }
 
+  /// Fast, targeted OCR summary extraction for lab test reports
+  Future<Map<String, dynamic>> extractLabTestSummaryOCR(List<XFile> imageFiles) async {
+    if (imageFiles.isEmpty) return {};
+    try {
+      final apiKey = _getApiKey();
+      const prompt = '''
+You are a precise document OCR data extractor for laboratory test reports. Perform text recognition on the provided lab test image and return ONLY a raw JSON object matching this exact schema:
+
+{
+  "lab_test_type": "Complete Blood Count (CBC)",
+  "lab_test_date": "YYYY-MM-DD",
+  "institution_name": "Hi-Precision Diagnostics",
+  "location_facility": "Hi-Precision Diagnostics, San Fernando, Pampanga",
+  "health_worker_name": "Maria Santos, RMT",
+  "health_worker_profession": "Medical Technologist",
+  "remarks": "Hemoglobin: 12.5 g/dL (Normal), WBC: 7.2 (Normal), Blood Type: O Positive"
+}
+
+Guidance:
+- For lab_test_type: Identify the primary test title on the report header. Categories include:
+  "Complete Blood Count (CBC)", "Urinalysis", "Fasting Blood Sugar (FBS)", "OGTT (Oral Glucose Tolerance Test)",
+  "Blood Typing", "HBsAg (Hepatitis B)", "VDRL / Syphilis Test", "HIV Test", "Stool Exam", or "Other".
+- For institution_name: Extract ONLY the laboratory, clinic, or hospital name (e.g. Flabs, Hi-Precision Diagnostics).
+- For location_facility: Extract the facility name or address.
+- For health_worker_name: Look for the Pathologist, Medical Technologist, Doctor, or Examiner signature printed at the bottom or header.
+- For remarks: Extract a clean summary of the main lab values, blood type, or impression lines visible on the document. Do NOT interpret or diagnose.
+
+CRITICAL: Extract ONLY actual text printed on the document image. DO NOT write conversational explanations or reasoning notes.
+
+RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCESS (<think>). DO NOT INCLUDE MARKDOWN CODE BLOCKS.
+''';
+
+      final String rawOutput = await _sendVisionRequest(
+        imageFiles: [imageFiles.first],
+        apiKey: apiKey,
+        prompt: prompt,
+        maxTokens: 2048,
+      );
+
+      _log('📄 Raw Lab Test OCR Vision output: $rawOutput');
+
+      String cleaned = rawOutput.replaceAll(RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false), '').trim();
+
+      // Find valid JSON string containing target keys
+      Map<String, dynamic> data = {};
+      final jsonMatches = RegExp(r'\{[\s\S]*?\}').allMatches(cleaned);
+
+      for (final match in jsonMatches) {
+        final matchStr = match.group(0)!;
+        if (matchStr.contains('"lab_test_type"') || matchStr.contains('"institution_name"') || matchStr.contains('"remarks"')) {
+          try {
+            data = Map<String, dynamic>.from(jsonDecode(matchStr) as Map);
+            _log('✅ Successfully parsed JSON block from Vision OCR');
+            break;
+          } catch (_) {}
+        }
+      }
+
+      if (data['lab_test_date'] == null || data['lab_test_date'].toString().isEmpty) {
+        final dateMatch = RegExp(r'(?:lab_test_date|Date|DATE)[\s\*:="]*"?([A-Za-z0-9\s,-/]+)"?', caseSensitive: false).firstMatch(rawOutput);
+        if (dateMatch != null) {
+          final dtStr = dateMatch.group(1)!.trim().replaceAll('"', '');
+          final parsedDt = _parseFlexibleDate(dtStr);
+          if (parsedDt != null) {
+            data['lab_test_date'] = DateFormat('yyyy-MM-dd').format(parsedDt);
+          } else {
+            data['lab_test_date'] = dtStr;
+          }
+        }
+      }
+
+      if (data['lab_test_type'] == null || data['lab_test_type'].toString().isEmpty) {
+        final typeMatch = RegExp(r'(?:lab_test_type|test_type|Test|TEST)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
+        if (typeMatch != null && _cleanExtractedText(typeMatch.group(1)) != null) {
+          data['lab_test_type'] = typeMatch.group(1)!.trim();
+        }
+      }
+
+      if (data['institution_name'] == null || data['institution_name'].toString().isEmpty || _cleanExtractedText(data['institution_name']) == null) {
+        final instMatch = RegExp(r'(?:institution_name|institution|laboratory|hospital|facility)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
+        if (instMatch != null && _cleanExtractedText(instMatch.group(1)) != null) {
+          data['institution_name'] = instMatch.group(1)!.trim();
+        } else {
+          final headerMatch = RegExp(r'([A-Za-z\s]+(?:diagnostic center|diagnostic|center|clinic|hospital|laboratory|lab|medical center))', caseSensitive: false).firstMatch(rawOutput);
+          if (headerMatch != null) {
+            data['institution_name'] = headerMatch.group(1)!.trim();
+          }
+        }
+      }
+
+      if (data['location_facility'] == null || data['location_facility'].toString().isEmpty || _cleanExtractedText(data['location_facility']) == null) {
+        final locMatch = RegExp(r'(?:location_facility|location|branch|address)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
+        if (locMatch != null && _cleanExtractedText(locMatch.group(1)) != null) {
+          data['location_facility'] = locMatch.group(1)!.trim();
+        } else if (_cleanExtractedText(data['institution_name']) != null) {
+          data['location_facility'] = data['institution_name'];
+        }
+      }
+
+      if (data['health_worker_name'] == null || data['health_worker_name'].toString().isEmpty || _cleanExtractedText(data['health_worker_name']) == null) {
+        final workerMatch = RegExp(r'(?:health_worker_name|pathologist|medtech|technologist|doctor|examiner|physician)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
+        if (workerMatch != null && _cleanExtractedText(workerMatch.group(1)) != null) {
+          data['health_worker_name'] = workerMatch.group(1)!.trim();
+        } else {
+          final docMatch = RegExp(r'(?:DR\.|DOCTOR)[\sA-Za-z\.-]+', caseSensitive: false).firstMatch(rawOutput);
+          if (docMatch != null) {
+            data['health_worker_name'] = docMatch.group(0)!.trim();
+          }
+        }
+      }
+
+      if (data['remarks'] == null || data['remarks'].toString().isEmpty || _cleanExtractedText(data['remarks']) == null) {
+        final remMatch = RegExp(r'(?:remarks|findings|results|summary|impression)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
+        if (remMatch != null && _cleanExtractedText(remMatch.group(1)) != null) {
+          data['remarks'] = remMatch.group(1)!.trim();
+        }
+      }
+
+      data['lab_test_type'] = _cleanExtractedText(data['lab_test_type']);
+      data['institution_name'] = _cleanExtractedText(data['institution_name']);
+      data['location_facility'] = _cleanExtractedText(data['location_facility']);
+      data['health_worker_name'] = _cleanExtractedText(data['health_worker_name']);
+      data['remarks'] = _cleanExtractedText(data['remarks']);
+
+      return data;
+    } catch (e) {
+      _log('⚠️ Error extracting lab test summary OCR: $e');
+      return {};
+    }
+  }
+
   DateTime? _parseFlexibleDate(String? input) {
     if (input == null || input.trim().isEmpty) return null;
     final clean = input.trim();
@@ -322,6 +453,17 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
         lower.startsWith('name:') ||
         lower.startsWith('location:') ||
         lower.startsWith('name and location:') ||
+        lower.contains('the user') ||
+        lower.contains('user wants') ||
+        lower.contains('report image') ||
+        lower.contains('into a specific') ||
+        lower.contains('json format') ||
+        lower.contains('at the bottom') ||
+        lower.contains('there are') ||
+        lower.contains('signatures') ||
+        lower.contains('need to') ||
+        lower.contains('summarize') ||
+        lower.contains('extract data') ||
         lower.contains('top of the document') ||
         lower.contains('i see a logo') ||
         lower.contains('top header') ||
