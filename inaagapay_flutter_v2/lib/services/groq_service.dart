@@ -284,9 +284,10 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
     try {
       final apiKey = _getApiKey();
       const prompt = '''
-You are a precise document OCR data extractor for laboratory test reports. Perform text recognition on the provided lab test image and return ONLY a raw JSON object matching this exact schema:
+You are a precise document OCR data extractor for laboratory test reports. Perform text recognition on the provided image and return ONLY a raw JSON object matching this exact schema:
 
 {
+  "is_lab_test": true,
   "lab_test_type": "Complete Blood Count (CBC)",
   "lab_test_date": "YYYY-MM-DD",
   "institution_name": "Hi-Precision Diagnostics",
@@ -297,6 +298,7 @@ You are a precise document OCR data extractor for laboratory test reports. Perfo
 }
 
 Guidance:
+- For is_lab_test: Set to true ONLY if the document is a Blood, Urine, Stool, or Clinical Pathology Laboratory Test (e.g. CBC, Urinalysis, Fasting Blood Sugar, OGTT, Blood Type, Hepatitis B, HIV, Syphilis). Set to false if the document is an Ultrasound report, X-Ray, Radiology scan, prescription, photo, or non-lab document.
 - For lab_test_type: Identify the primary test title on the report header. Categories include:
   "Complete Blood Count (CBC)", "Urinalysis", "Fasting Blood Sugar (FBS)", "OGTT (Oral Glucose Tolerance Test)",
   "Blood Typing", "HBsAg (Hepatitis B)", "VDRL / Syphilis Test", "HIV Test", "Stool Exam", or "Other".
@@ -327,13 +329,24 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
 
       for (final match in jsonMatches) {
         final matchStr = match.group(0)!;
-        if (matchStr.contains('"lab_test_type"') || matchStr.contains('"institution_name"') || matchStr.contains('"remarks"')) {
+        if (matchStr.contains('"lab_test_type"') || matchStr.contains('"institution_name"') || matchStr.contains('"remarks"') || matchStr.contains('"is_lab_test"')) {
           try {
             data = Map<String, dynamic>.from(jsonDecode(matchStr) as Map);
             _log('✅ Successfully parsed JSON block from Vision OCR');
             break;
           } catch (_) {}
         }
+      }
+
+      // Check for ultrasound/radiology keywords to prevent misclassifying ultrasounds as lab tests
+      final lowerRaw = rawOutput.toLowerCase();
+      if (lowerRaw.contains('ultrasound') ||
+          lowerRaw.contains('radiology') ||
+          lowerRaw.contains('biophysical profile') ||
+          lowerRaw.contains('sonogram') ||
+          lowerRaw.contains('echography') ||
+          lowerRaw.contains('obstetric ultrasound')) {
+        data['is_lab_test'] = false;
       }
 
       if (data['lab_test_date'] == null || data['lab_test_date'].toString().isEmpty) {

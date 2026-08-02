@@ -315,65 +315,82 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
         if (xfile.name != 'dummy') {
           final data = await _groqService.extractLabTestSummaryOCR([xfile]);
           if (data.isNotEmpty && mounted) {
-            setState(() {
-              if (data['lab_test_date'] != null) {
-                final rawDateStr = data['lab_test_date'].toString().trim();
-                DateTime? dt = DateTime.tryParse(rawDateStr);
-                if (dt != null) {
-                  _date = dt;
-                  _dateCtrl.text = DateFormat('MMM d, yyyy').format(dt);
+            if (data['is_lab_test'] == false) {
+              _showMessage(
+                'Attached document appears to be an ultrasound or non-lab report. Please attach a laboratory report or enter details manually.',
+                type: AppSnackType.warning,
+              );
+              setState(() {
+                _ocrExtracted = false;
+                _dateCtrl.clear();
+                _date = null;
+                _locationCtrl.clear();
+                _institutionCtrl.clear();
+                _remarksCtrl.clear();
+                _customLabTypeCtrl.clear();
+                _selectedLabType = 'Complete Blood Count (CBC)';
+              });
+            } else {
+              setState(() {
+                if (data['lab_test_date'] != null) {
+                  final rawDateStr = data['lab_test_date'].toString().trim();
+                  DateTime? dt = DateTime.tryParse(rawDateStr);
+                  if (dt != null) {
+                    _date = dt;
+                    _dateCtrl.text = DateFormat('MMM d, yyyy').format(dt);
+                  }
                 }
-              }
 
-              if (_isValidFieldValue(data['lab_test_type'])) {
-                final detectedType = data['lab_test_type'].toString().trim();
-                final matchedOption = _labTestTypes.firstWhere(
-                  (opt) => opt.toLowerCase().contains(detectedType.toLowerCase()) || detectedType.toLowerCase().contains(opt.toLowerCase()),
-                  orElse: () => 'Other',
-                );
-                if (matchedOption != 'Other') {
-                  _selectedLabType = matchedOption;
-                  _customLabTypeCtrl.clear();
-                } else if (_isValidFieldValue(detectedType) && !detectedType.toLowerCase().contains('json')) {
-                  _selectedLabType = 'Other';
-                  _customLabTypeCtrl.text = detectedType;
-                } else {
-                  _selectedLabType = 'Complete Blood Count (CBC)';
-                  _customLabTypeCtrl.clear();
+                if (_isValidFieldValue(data['lab_test_type'])) {
+                  final detectedType = data['lab_test_type'].toString().trim();
+                  final matchedOption = _labTestTypes.firstWhere(
+                    (opt) => opt.toLowerCase().contains(detectedType.toLowerCase()) || detectedType.toLowerCase().contains(opt.toLowerCase()),
+                    orElse: () => 'Other',
+                  );
+                  if (matchedOption != 'Other') {
+                    _selectedLabType = matchedOption;
+                    _customLabTypeCtrl.clear();
+                  } else if (_isValidFieldValue(detectedType) && !detectedType.toLowerCase().contains('json')) {
+                    _selectedLabType = 'Other';
+                    _customLabTypeCtrl.text = detectedType;
+                  } else {
+                    _selectedLabType = 'Complete Blood Count (CBC)';
+                    _customLabTypeCtrl.clear();
+                  }
                 }
-              }
 
-              if (_isValidFieldValue(data['institution_name'])) {
-                _institutionCtrl.text = data['institution_name'].toString().trim();
-              }
-              if (_isValidFieldValue(data['location_facility'])) {
-                _locationCtrl.text = data['location_facility'].toString().trim();
-              }
+                if (_isValidFieldValue(data['institution_name'])) {
+                  _institutionCtrl.text = data['institution_name'].toString().trim();
+                }
+                if (_isValidFieldValue(data['location_facility'])) {
+                  _locationCtrl.text = data['location_facility'].toString().trim();
+                }
 
-              if (_locationCtrl.text.isEmpty && _isValidFieldValue(_institutionCtrl.text)) {
-                _locationCtrl.text = _institutionCtrl.text;
-              }
-              if (_institutionCtrl.text.isEmpty && _isValidFieldValue(_locationCtrl.text)) {
-                _institutionCtrl.text = _locationCtrl.text;
-              }
+                if (_locationCtrl.text.isEmpty && _isValidFieldValue(_institutionCtrl.text)) {
+                  _locationCtrl.text = _institutionCtrl.text;
+                }
+                if (_institutionCtrl.text.isEmpty && _isValidFieldValue(_locationCtrl.text)) {
+                  _institutionCtrl.text = _locationCtrl.text;
+                }
 
-              if (_isValidFieldValue(data['health_worker_name'])) {
-                _workerNameCtrl.text = data['health_worker_name'].toString().trim();
-              }
-              if (_isValidFieldValue(data['health_worker_profession'])) {
-                final prof = data['health_worker_profession'].toString().trim();
-                final matchedProf = _professions.firstWhere(
-                  (p) => p.toLowerCase().contains(prof.toLowerCase()),
-                  orElse: () => _profession ?? 'Medical Technologist',
-                );
-                _profession = matchedProf;
-              }
-              if (_isValidFieldValue(data['remarks'])) {
-                _remarksCtrl.text = data['remarks'].toString().trim();
-              }
+                if (_isValidFieldValue(data['health_worker_name'])) {
+                  _workerNameCtrl.text = data['health_worker_name'].toString().trim();
+                }
+                if (_isValidFieldValue(data['health_worker_profession'])) {
+                  final prof = data['health_worker_profession'].toString().trim();
+                  final matchedProf = _professions.firstWhere(
+                    (p) => p.toLowerCase().contains(prof.toLowerCase()),
+                    orElse: () => _profession ?? 'Medical Technologist',
+                  );
+                  _profession = matchedProf;
+                }
+                if (_isValidFieldValue(data['remarks'])) {
+                  _remarksCtrl.text = data['remarks'].toString().trim();
+                }
 
-              _ocrExtracted = true;
-            });
+                _ocrExtracted = true;
+              });
+            }
           }
         }
       }
@@ -401,6 +418,13 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
         lower.startsWith('read the') ||
         lower.startsWith('the section') ||
         lower.startsWith('the impression') ||
+        lower.startsWith('`:') ||
+        lower.startsWith('`') ||
+        lower.startsWith(':') ||
+        lower.contains('this is an ultrasound') ||
+        lower.contains('ultrasound report') ||
+        lower.contains('radiology') ||
+        lower.contains('test reports') ||
         lower.contains('the user') ||
         lower.contains('user wants') ||
         lower.contains('report image') ||
