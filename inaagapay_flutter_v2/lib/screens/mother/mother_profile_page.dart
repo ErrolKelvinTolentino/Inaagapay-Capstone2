@@ -5503,10 +5503,12 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   }) {
     final lmp = DateTime.tryParse(pregnancy['last_menstrual_period'] ?? '');
     final now = DateTime.now();
+    final ultrasoundsList = (pregnancy['ultrasounds'] as List?) ?? [];
+    final hasUltrasounds = ultrasoundsList.isNotEmpty;
     final rawFc = pregnancy['fetal_count']?.toString() ?? '';
-    String fetalLabel = 'Singleton';
-    String fetalSubtext = 'Single baby';
-    if (rawFc.toLowerCase() == 'unknown') {
+    String fetalLabel = 'Unknown';
+    String fetalSubtext = 'Not specified';
+    if (!hasUltrasounds || rawFc.toLowerCase() == 'unknown' || rawFc.isEmpty) {
       fetalLabel = 'Unknown';
       fetalSubtext = 'Not specified';
     } else {

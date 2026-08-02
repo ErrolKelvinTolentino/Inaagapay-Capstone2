@@ -369,7 +369,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
       // Check if there are any saved ultrasound records for this pregnancy
       final ultrasoundRes = await Supabase.instance.client
           .from('ultrasounds')
-          .select('ultrasound_id')
+          .select('*')
           .eq('pregnancy_id', widget.pregnancyId)
           .limit(1);
 
@@ -709,7 +709,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
         };
         final pregLevel =
             pregnancy?['pregnancy_risk_level']?.toString().toLowerCase();
-        if (pregLevel != null) {
+        if (pregLevel != null && pregLevel.isNotEmpty) {
           _pregnancyRiskLevel = pregLevel;
         }
 
@@ -720,9 +720,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           _heightCtrl.text = 'Not recorded in profile';
         }
 
-        if (_nextSchedule == null) {
-          _nextSchedule = _calculateRecommendedNextSchedule();
-        }
+        _nextSchedule = _calculateRecommendedNextSchedule();
       });
     } catch (e, st) {
       debugPrint('Error loading mother risk context: $e\n$st');
@@ -1851,7 +1849,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   Widget _riskSegmentOption(String levelKey, String label, Color color) {
     final isSelected = _pregnancyRiskLevel == levelKey;
     return GestureDetector(
-      onTap: () => setState(() => _pregnancyRiskLevel = levelKey),
+      onTap: () => setState(() {
+        _pregnancyRiskLevel = levelKey;
+        _nextSchedule = _calculateRecommendedNextSchedule();
+      }),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
