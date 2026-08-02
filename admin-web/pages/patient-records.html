@@ -32,6 +32,11 @@
             alt="InaAgapay"
             class="header-logo"
           />
+          <img
+            src="../images/inaagapay_name.png"
+            alt="InaAgapay"
+            class="header-logo-label"
+          />
         </div>
         <div class="header-right">
           <span class="header-badge">Admin Portal</span>
@@ -48,8 +53,9 @@
         <ul class="sidebar-nav">
           <li><a href="dashboard.html"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
           <li><a href="accounts.html"><i class="fa-solid fa-users"></i> Account Management</a></li>
-          <li><a href="account-create.html"><i class="fa-solid fa-user-plus"></i> Account Creation</a></li>
           <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
+          <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
+          <li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li>
         </ul>
         <div class="sidebar-divider"></div>
         <span class="sidebar-section-label">Patient Management</span>
@@ -75,7 +81,10 @@
             <h1 class="page-title">Patient Records</h1>
             <p class="page-subtitle">View and manage all patient medical records</p>
           </div>
-          <div class="page-actions" style="display: flex; gap: 10px; align-items: center;">
+          <div class="page-actions" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" id="toggle-privacy-btn" title="Toggle Data Privacy Act Sensitive Field Masking">
+              <i class="fa-solid fa-user-shield" style="color:var(--brand-primary);"></i> Privacy Masking: OFF
+            </button>
             <button class="btn btn-primary btn-sm" id="export-pdf-btn">
               <i class="fa-solid fa-file-pdf"></i> Download PDF Report
             </button>
@@ -400,7 +409,7 @@
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    <script src="ai-groq.js"></script>
+    <script src="common-security.js"></script>
     <script>
       (function () {
         const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
@@ -418,21 +427,59 @@
           return;
         }
 
+        if (window.verifyAdminSessionWithDB) { window.verifyAdminSessionWithDB(db); }
+
         document.getElementById("header-user-name").textContent = 
           [session.first_name, session.last_name].filter(Boolean).join(" ") || "Admin";
         document.getElementById("header-avatar").textContent = 
           ((session.first_name?.[0] ?? "") + (session.last_name?.[0] ?? "")).toUpperCase() || "A";
         
-        document.getElementById("logout-btn").addEventListener("click", () => {
-          if (confirm("Logout?")) {
-            localStorage.removeItem(SESSION_KEY);
-            window.location.href = "../index.html";
+        // --- Data Privacy Act (DPA 2012) Masking State ---
+        let isPrivacyMasked = false;
+
+        function maskPhone(phone) {
+          if (!phone) return '—';
+          if (!isPrivacyMasked) return esc(phone);
+          const str = String(phone).trim();
+          if (str.length >= 7) {
+            return str.substring(0, 4) + "-***-" + str.substring(str.length - 4);
           }
-        });
-        
-        document.getElementById("sidebar-toggle").addEventListener("click", () =>
-          document.querySelector(".app-sidebar").classList.toggle("open")
-        );
+          return '***-***';
+        }
+
+        function maskEmail(email) {
+          if (!email) return '—';
+          if (!isPrivacyMasked) return esc(email);
+          const parts = String(email).split('@');
+          if (parts.length === 2) {
+            return parts[0].charAt(0) + '***@' + parts[1];
+          }
+          return '***@***';
+        }
+
+        const privacyBtn = document.getElementById("toggle-privacy-btn");
+        if (privacyBtn) {
+          privacyBtn.addEventListener("click", () => {
+            isPrivacyMasked = !isPrivacyMasked;
+            privacyBtn.innerHTML = isPrivacyMasked 
+              ? `<i class="fa-solid fa-user-shield" style="color:var(--success);"></i> Privacy Masking: ON` 
+              : `<i class="fa-solid fa-user-shield" style="color:var(--brand-primary);"></i> Privacy Masking: OFF`;
+            
+            showToast(isPrivacyMasked ? "DPA Masking ON: Sensitive PII hidden" : "DPA Masking OFF: Full view active", isPrivacyMasked ? "success" : "warning");
+
+            // Audit Log Privacy Action
+            try {
+              db.from("audit_trail").insert({
+                account_id: session.account_id,
+                action: isPrivacyMasked ? "privacy_mask_enabled" : "privacy_mask_disabled",
+                table_name: "mothers",
+                description: `${isPrivacyMasked ? "Enabled" : "Disabled"} Data Privacy Act masking on patient records screen`,
+              }).then(() => {});
+            } catch(e) {}
+
+            renderCurrentTab();
+          });
+        }
 
         // ---------- Helper functions ----------
         function computeAge(birthdate) {
@@ -503,7 +550,7 @@
             const initials = name.charAt(0) || "?";
             return `<tr>
               <td><div class="mother-info"><div class="avatar-modern">${esc(initials)}</div><span style="font-weight:600;">${esc(name)}</span></div></td>
-              <td>${esc(m.accounts?.email_address || "—")}</td>
+              <td>${maskEmail(m.accounts?.email_address)}</td>
               <td>${esc(m.barangay || "—")}</td>
               <td><span class="badge badge-admin">${esc(m.bhc?.bhc_name || "—")}</span></td>
               <td>${fmtDate(m.birthdate)}</div>
@@ -722,33 +769,116 @@
           }).join("");
         }
 
-        // ---------- Preload all data in parallel ----------
+        // ---------- Preload all data in parallel with Resilient DB Fallbacks ----------
         async function preloadAllData() {
           try {
-            const [ mothersRes, pregnanciesRes, checkupsRes, ultrasoundsRes, labTestsRes, childrenRes, bhcRes ] = await Promise.all([
-              db.from("mothers").select(`*, accounts!mothers_account_id_fkey(first_name,last_name,email_address,phone_number), bhc!mothers_assigned_bhc_id_fkey(bhc_name)`),
-              db.from("pregnancies").select(`*, mothers(mother_id, account_id, accounts!mothers_account_id_fkey(first_name,last_name,email_address))`).order("created_at", { ascending: false }),
-              db.from("prenatal_checkups").select(`*, pregnancies(pregnancy_id, mother_id, mothers(mother_id, accounts!mothers_account_id_fkey(first_name,last_name)))`).order("checkup_datetime", { ascending: false }),
-              db.from("ultrasounds").select(`*, pregnancies(pregnancy_id, mother_id, mothers(mother_id, accounts!mothers_account_id_fkey(first_name,last_name)))`).order("ultrasound_date", { ascending: false }),
-              db.from("lab_tests").select(`*, pregnancies(pregnancy_id, mother_id, mothers(mother_id, accounts!mothers_account_id_fkey(first_name,last_name)))`).order("lab_test_date", { ascending: false }),
-              db.from("children").select(`*, mothers(mother_id, accounts!mothers_account_id_fkey(first_name,last_name)), birth_details(birthdate,birth_weight,birthplace_city_municipality)`).order("added_at", { ascending: false }),
-              db.from("bhc").select("bhc_id, bhc_name").order("bhc_name")
-            ]);
-            if (mothersRes.error) throw mothersRes.error;
-            if (pregnanciesRes.error) throw pregnanciesRes.error;
-            if (checkupsRes.error) throw checkupsRes.error;
-            if (ultrasoundsRes.error) throw ultrasoundsRes.error;
-            if (labTestsRes.error) throw labTestsRes.error;
-            if (childrenRes.error) throw childrenRes.error;
-            
-            cachedMothers = mothersRes.data || [];
-            cachedPregnancies = pregnanciesRes.data || [];
-            cachedCheckups = checkupsRes.data || [];
-            cachedUltrasounds = ultrasoundsRes.data || [];
-            cachedLabTests = labTestsRes.data || [];
-            cachedChildren = childrenRes.data || [];
-            bhcs = bhcRes.data || [];
-            
+            let mothersData = [], pregnanciesData = [], checkupsData = [], ultrasoundsData = [], labTestsData = [], childrenData = [], bhcData = [];
+
+            // 1. Try BHC
+            try {
+              const { data: bData } = await db.from("bhc").select("bhc_id, bhc_name").order("bhc_name");
+              if (bData && bData.length) bhcData = bData;
+              else {
+                const { data: fData } = await db.from("health_facilities").select("facility_id, name").order("name");
+                bhcData = (fData || []).map(f => ({ bhc_id: f.facility_id, bhc_name: f.name }));
+              }
+            } catch (e) { console.warn("BHC query fallback:", e); }
+            bhcs = bhcData;
+
+            // 2. Try Accounts & Base Tables
+            let accountsMap = {};
+            try {
+              const { data: accs } = await db.from("accounts").select("account_id, first_name, last_name, email_address, phone_number");
+              (accs || []).forEach(a => { accountsMap[a.account_id] = a; });
+            } catch (e) { console.warn("Accounts query warning:", e); }
+
+            // 3. Load Mothers
+            try {
+              const { data: mData, error: mErr } = await db.from("mothers").select(`*, accounts(first_name,last_name,email_address,phone_number), bhc(bhc_name)`);
+              if (!mErr && mData) {
+                mothersData = mData;
+              } else {
+                const { data: baseMothers } = await db.from("mothers").select("*");
+                mothersData = (baseMothers || []).map(m => ({
+                  ...m,
+                  accounts: accountsMap[m.account_id] || null,
+                  bhc: bhcs.find(b => b.bhc_id === m.assigned_bhc_id) || null
+                }));
+              }
+            } catch (e) { console.warn("Mothers query fallback:", e); }
+
+            // 4. Load Pregnancies
+            try {
+              const { data: pData, error: pErr } = await db.from("pregnancies").select(`*, mothers(mother_id, account_id, accounts(first_name,last_name,email_address))`).order("created_at", { ascending: false });
+              if (!pErr && pData) pregnanciesData = pData;
+              else {
+                const { data: baseP } = await db.from("pregnancies").select("*").order("created_at", { ascending: false });
+                pregnanciesData = (baseP || []).map(p => {
+                  const m = mothersData.find(x => x.mother_id === p.mother_id);
+                  return { ...p, mothers: m || null };
+                });
+              }
+            } catch (e) { console.warn("Pregnancies query fallback:", e); }
+
+            // 5. Load Prenatal Checkups
+            try {
+              const { data: cData, error: cErr } = await db.from("prenatal_checkups").select(`*, pregnancies(pregnancy_id, mother_id, mothers(mother_id, accounts(first_name,last_name)))`).order("checkup_datetime", { ascending: false });
+              if (!cErr && cData) checkupsData = cData;
+              else {
+                const { data: baseC } = await db.from("prenatal_checkups").select("*");
+                checkupsData = (baseC || []).map(c => {
+                  const p = pregnanciesData.find(x => x.pregnancy_id === c.pregnancy_id);
+                  return { ...c, pregnancies: p || null };
+                });
+              }
+            } catch (e) { console.warn("Checkups query fallback:", e); }
+
+            // 6. Load Ultrasounds
+            try {
+              const { data: uData, error: uErr } = await db.from("ultrasounds").select(`*, pregnancies(pregnancy_id, mother_id, mothers(mother_id, accounts(first_name,last_name)))`).order("ultrasound_date", { ascending: false });
+              if (!uErr && uData) ultrasoundsData = uData;
+              else {
+                const { data: baseU } = await db.from("ultrasounds").select("*");
+                ultrasoundsData = (baseU || []).map(u => {
+                  const p = pregnanciesData.find(x => x.pregnancy_id === u.pregnancy_id);
+                  return { ...u, pregnancies: p || null };
+                });
+              }
+            } catch (e) { console.warn("Ultrasounds query fallback:", e); }
+
+            // 7. Load Lab Tests
+            try {
+              const { data: lData, error: lErr } = await db.from("lab_tests").select(`*, pregnancies(pregnancy_id, mother_id, mothers(mother_id, accounts(first_name,last_name)))`).order("lab_test_date", { ascending: false });
+              if (!lErr && lData) labTestsData = lData;
+              else {
+                const { data: baseL } = await db.from("lab_tests").select("*");
+                labTestsData = (baseL || []).map(l => {
+                  const p = pregnanciesData.find(x => x.pregnancy_id === l.pregnancy_id);
+                  return { ...l, pregnancies: p || null };
+                });
+              }
+            } catch (e) { console.warn("Lab tests query fallback:", e); }
+
+            // 8. Load Children
+            try {
+              const { data: chData, error: chErr } = await db.from("children").select(`*, mothers(mother_id, accounts(first_name,last_name)), birth_details(birthdate,birth_weight,birthplace_city_municipality)`).order("added_at", { ascending: false });
+              if (!chErr && chData) childrenData = chData;
+              else {
+                const { data: baseCh } = await db.from("children").select("*");
+                childrenData = (baseCh || []).map(ch => {
+                  const m = mothersData.find(x => x.mother_id === ch.mother_id);
+                  return { ...ch, mothers: m || null };
+                });
+              }
+            } catch (e) { console.warn("Children query fallback:", e); }
+
+            cachedMothers = mothersData;
+            cachedPregnancies = pregnanciesData;
+            cachedCheckups = checkupsData;
+            cachedUltrasounds = ultrasoundsData;
+            cachedLabTests = labTestsData;
+            cachedChildren = childrenData;
+
             // Populate BHC dropdown
             const bhcSelect = document.getElementById("filter-bhc-mothers");
             if (bhcSelect && bhcs.length) {

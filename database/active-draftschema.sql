@@ -49,7 +49,7 @@ CREATE TABLE public.accounts (
         created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
         updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
         is_temporary_password boolean DEFAULT false,
-        created_by character varying DEFAULT 'self' CHECK (created_by = ANY (ARRAY ['self', 'midwife']))
+        created_by character varying DEFAULT 'self'
 );
 -- Password History
 CREATE TABLE public.password_history (
@@ -494,6 +494,7 @@ CREATE TABLE public.inventory_items (
 CREATE TABLE public.inventory_batches (
     batch_id BIGSERIAL PRIMARY KEY,
     item_id bigint NOT NULL REFERENCES public.inventory_items(item_id) ON DELETE CASCADE,
+    facility_id bigint REFERENCES public.health_facilities(facility_id) ON DELETE SET NULL,
     batch_number character varying NOT NULL,
     quantity_received integer NOT NULL,
     quantity_remaining integer NOT NULL,
@@ -515,6 +516,7 @@ CREATE TABLE public.inventory_batches (
 CREATE TABLE public.inventory_transactions (
     transaction_id BIGSERIAL PRIMARY KEY,
     batch_id bigint NOT NULL REFERENCES public.inventory_batches(batch_id) ON DELETE CASCADE,
+    facility_id bigint REFERENCES public.health_facilities(facility_id) ON DELETE SET NULL,
     transaction_type character varying NOT NULL CHECK (
         transaction_type = ANY (
             ARRAY ['receipt', 'dispense', 'adjustment', 'expiry_disposal']
@@ -567,6 +569,15 @@ CREATE TABLE public.notifications (
         )
     ),
     is_read boolean DEFAULT false,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+);
+-- Email Queue
+CREATE TABLE public.email_queue (
+    queue_id BIGSERIAL PRIMARY KEY,
+    recipient character varying(255) NOT NULL,
+    subject character varying(255) NOT NULL,
+    html_content text NOT NULL,
+    status character varying(20) DEFAULT 'pending',
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 -- Device Tokens
@@ -925,6 +936,8 @@ CREATE INDEX idx_immunization_records_date ON immunization_records(vaccination_d
 CREATE INDEX idx_inventory_batches_item ON inventory_batches(item_id);
 CREATE INDEX idx_inventory_batches_expiry ON inventory_batches(expiration_date);
 CREATE INDEX idx_inventory_batches_status ON inventory_batches(status);
+CREATE INDEX idx_inventory_batches_facility ON inventory_batches(facility_id);
+CREATE INDEX idx_inventory_transactions_facility ON inventory_transactions(facility_id);
 CREATE INDEX idx_schedules_mother ON schedules(mother_id);
 CREATE INDEX idx_schedules_date ON schedules(schedule_date, schedule_time);
 CREATE INDEX idx_schedules_status ON schedules(status);
@@ -972,6 +985,7 @@ ALTER TABLE public.inventory_batches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.email_queue DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.device_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_responses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_edit_history ENABLE ROW LEVEL SECURITY;

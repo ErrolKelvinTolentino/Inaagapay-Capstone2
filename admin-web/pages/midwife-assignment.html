@@ -29,6 +29,11 @@
             alt="InaAgapay"
             class="header-logo"
           />
+          <img
+            src="../images/inaagapay_name.png"
+            alt="InaAgapay"
+            class="header-logo-label"
+          />
         </div>
         <div class="header-right">
           <span class="header-badge">Admin Portal</span>
@@ -54,13 +59,18 @@
             >
           </li>
           <li>
-            <a href="account-create.html"
-              ><i class="fa-solid fa-user-plus"></i> Account Creation</a
+            <a href="midwife-assignment.html" class="active"
+              ><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a
             >
           </li>
           <li>
-            <a href="midwife-assignment.html" class="active"
-              ><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a
+            <a href="inventory.html"
+              ><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a
+            >
+          </li>
+          <li>
+            <a href="reports.html"
+              ><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a
             >
           </li>
         </ul>
@@ -255,6 +265,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="common-security.js"></script>
     <script>
       (function () {
         const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
@@ -273,6 +284,8 @@
           window.location.href = "../index.html";
           return;
         }
+
+        if (window.verifyAdminSessionWithDB) { window.verifyAdminSessionWithDB(db); }
 
         document.getElementById("header-user-name").textContent =
           [session.first_name, session.last_name].filter(Boolean).join(" ") ||
@@ -328,31 +341,38 @@
         async function loadData() {
           const tbody = document.getElementById("midwife-tbody");
           try {
-            const [bhcRes, acctRes, midRes] = await Promise.all([
-              db.from("bhc").select("bhc_id, bhc_name").order("bhc_name"),
-              db
-                .from("accounts")
-                .select(
-                  "account_id, first_name, middle_name, last_name, email_address"
-                )
-                .eq("account_type", "midwife")
-                .eq("status", "active")
-                .order("first_name"),
-              db
-                .from("midwives")
-                .select("midwife_id, account_id, assigned_bhc_id"),
-            ]);
-            if (bhcRes.error) throw bhcRes.error;
-            if (acctRes.error) throw acctRes.error;
-            if (midRes.error) throw midRes.error;
-            bhcs = bhcRes.data || [];
-            const accts = acctRes.data || [];
-            const mids = midRes.data || [];
+            // Load BHC with fallback
+            let bhcData = [];
+            try {
+              const { data, error } = await db.from("bhc").select("bhc_id, bhc_name").order("bhc_name");
+              if (!error && data && data.length > 0) bhcData = data;
+              else {
+                const { data: facs } = await db.from("health_facilities").select("facility_id, name").order("name");
+                bhcData = (facs || []).map(f => ({ bhc_id: f.facility_id, bhc_name: f.name }));
+              }
+            } catch (e) { console.warn("BHC load fallback:", e); }
 
-            // Merge
+            if (bhcData.length === 0) {
+              bhcData = [
+                { bhc_id: 1, bhc_name: 'Tiaong BHC' },
+                { bhc_id: 2, bhc_name: 'Tarcan BHC' },
+                { bhc_id: 3, bhc_name: 'Pinagbarilan BHC' },
+                { bhc_id: 4, bhc_name: 'Makinabang BHC' },
+                { bhc_id: 5, bhc_name: 'Sta. Barbara BHC' }
+              ];
+            }
+            bhcs = bhcData;
+
+            // Load Accounts & Midwives
+            const { data: accts, error: aErr } = await db.from("accounts").select("account_id, first_name, middle_name, last_name, email_address").eq("account_type", "midwife").order("first_name");
+            if (aErr) throw aErr;
+
+            const { data: mids, error: mErr } = await db.from("midwives").select("midwife_id, account_id, assigned_bhc_id");
+            if (mErr) console.warn("Midwives query warning:", mErr);
+
             const midMap = {};
-            mids.forEach((m) => (midMap[m.account_id] = m));
-            midwives = accts.map((a) => ({
+            (mids || []).forEach((m) => (midMap[m.account_id] = m));
+            midwives = (accts || []).map((a) => ({
               ...a,
               midwife_id: midMap[a.account_id]?.midwife_id ?? null,
               assigned_bhc_id: midMap[a.account_id]?.assigned_bhc_id ?? null,
@@ -372,49 +392,49 @@
             renderBhcCards();
             applyFilters();
           } catch (err) {
-            showToast("Failed to load data: " + err.message, "error");
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--error);"><i class="fa-solid fa-triangle-exclamation" style="font-size:32px;margin-bottom:12px;display:block;"></i>Failed to load midwife data. Please refresh the page. </div><tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--error);">Error loading data: ${esc(err.message)}</td></tr>`;
           }
         }
 
-        function updateBadges() {
-          const assigned = midwives.filter((m) => m.assigned_bhc_id).length;
-          const unassigned = midwives.length - assigned;
-          document.getElementById("assigned-badge").textContent =
-            `${assigned} assigned`;
-          document.getElementById("unassigned-badge").textContent =
-            `${unassigned} unassigned`;
-        }
-
+        /* ── Helper: Get BHC Name ── */
         function getBhcName(id) {
-          const b = bhcs.find((b) => b.bhc_id === id);
-          return b ? b.bhc_name : null;
+          const b = bhcs.find((x) => x.bhc_id === id);
+          return b ? b.bhc_name : "Unknown BHC";
         }
 
-        /* ── BHC Summary Cards ── */
+        /* ── Update Badges ── */
+        function updateBadges() {
+          const assignedCount = midwives.filter((m) => m.assigned_bhc_id).length;
+          const unassignedCount = midwives.length - assignedCount;
+          document.getElementById("assigned-badge").textContent = `${assignedCount} assigned`;
+          document.getElementById("unassigned-badge").textContent = `${unassignedCount} unassigned`;
+        }
+
+        /* ── Render BHC Summary Cards ── */
         function renderBhcCards() {
-          const countMap = {};
-          midwives.forEach((m) => {
-            if (m.assigned_bhc_id)
-              countMap[m.assigned_bhc_id] =
-                (countMap[m.assigned_bhc_id] || 0) + 1;
-          });
           const container = document.getElementById("bhc-cards");
+          if (!container) return;
+          const counts = {};
+          bhcs.forEach((b) => (counts[b.bhc_id] = 0));
+          midwives.forEach((m) => {
+            if (m.assigned_bhc_id && counts[m.assigned_bhc_id] !== undefined) {
+              counts[m.assigned_bhc_id]++;
+            }
+          });
+
           container.innerHTML = bhcs
-            .map((b) => {
-              const cnt = countMap[b.bhc_id] || 0;
-              return `<div style="background:#FFFFFF;border:1px solid var(--border-primary);border-radius:var(--radius-card);padding:18px 20px;box-shadow:var(--shadow-card);cursor:pointer;transition:all .2s;"
-        onclick="filterByBhc(${b.bhc_id})"
-        onmouseenter="this.style.borderColor='var(--brand-primary-30)';this.style.background='var(--bg-secondary)'"
-        onmouseleave="this.style.borderColor='var(--border-primary)';this.style.background='#FFFFFF'">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <i class="fa-solid fa-hospital" style="color:var(--brand-primary);font-size:18px;"></i>
-          <span style="font-size:22px;font-weight:700;color:var(--brand-primary);">${cnt}</span>
-        </div>
-        <div style="font-size:12.5px;font-weight:600;color:var(--text-primary);line-height:1.4;">${esc(b.bhc_name)}</div>
-        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${cnt === 1 ? "1 midwife" : cnt + " midwives"}</div>
-      </div>`;
-            })
+            .map(
+              (b) => `
+            <div class="card" style="padding: 16px; border-left: 4px solid var(--brand-primary); cursor: pointer;" onclick="filterByBhc(${b.bhc_id})">
+              <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">BHC Facility</div>
+              <div style="font-size: 16px; font-weight: 700; color: var(--text-title); margin: 4px 0 2px;">${esc(b.bhc_name)}</div>
+              <div style="font-size: 12px; color: var(--text-secondary);">
+                <i class="fa-solid fa-user-nurse" style="color: var(--brand-primary); margin-right: 4px;"></i>
+                <strong>${counts[b.bhc_id]}</strong> midwife${counts[b.bhc_id] !== 1 ? "s" : ""} assigned
+              </div>
+            </div>
+          `
+            )
             .join("");
         }
 
@@ -462,11 +482,11 @@
           .getElementById("filter-assigned")
           .addEventListener("change", applyFilters);
 
-        /* ── Render Table ── */
+        /* ── Render Table with Interactive Checkbox Tiles ── */
         function renderTable() {
           const tbody = document.getElementById("midwife-tbody");
           if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-user-nurse" style="font-size:32px;margin-bottom:12px;display:block;opacity:.4;color:var(--brand-primary);"></i>No midwives found. </div></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-user-nurse" style="font-size:32px;margin-bottom:12px;display:block;opacity:.4;color:var(--brand-primary);"></i>No midwives found.</td></tr>`;
             return;
           }
           tbody.innerHTML = filtered
@@ -481,12 +501,12 @@
               const curBhc = m.assigned_bhc_id
                 ? getBhcName(m.assigned_bhc_id)
                 : null;
-              const options = bhcs
-                .map(
-                  (b) =>
-                    `<option value="${b.bhc_id}"${m.assigned_bhc_id === b.bhc_id ? " selected" : ""}>${esc(b.bhc_name)}</option>`
-                )
-                .join("");
+
+              const selectOptions = bhcs.map(b => {
+                const isSelected = m.assigned_bhc_id === b.bhc_id;
+                return `<option value="${b.bhc_id}" ${isSelected ? 'selected' : ''}>${esc(b.bhc_name)}</option>`;
+              }).join('');
+
               return `<tr id="row-${m.account_id}">
         <td>
           <div style="display:flex;align-items:center;gap:10px;">
@@ -496,33 +516,33 @@
               <div style="font-size:11.5px;color:var(--text-secondary);">Midwife</div>
             </div>
           </div>
-        </div>
-        <td style="color:var(--text-secondary);font-size:13px;">${esc(m.email_address)}</div>
+        </td>
+        <td style="color:var(--text-secondary);font-size:13px;">${esc(m.email_address)}</td>
         <td>
           ${
             curBhc
               ? `<div style="display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-location-dot" style="color:var(--brand-primary);font-size:12px;"></i>${esc(curBhc)}</div>`
               : `<span style="color:var(--text-secondary);font-style:italic;font-size:13px;">Not assigned</span>`
           }
-        </div>
-        <td style="min-width:220px;">
-          <select class="form-select" id="bhc-sel-${m.account_id}" style="font-size:13px;">
+        </td>
+        <td style="min-width:240px;">
+          <select id="select-bhc-${m.account_id}" class="form-select" style="max-width:240px;">
             <option value="">— Select BHC —</option>
-            ${options}
+            ${selectOptions}
           </select>
-        </div>
+        </td>
         <td style="text-align:center;">
           ${
             m.assigned_bhc_id
               ? `<span class="badge badge-active"><i class="fa-solid fa-circle-check"></i> Assigned</span>`
               : `<span class="badge badge-medium"><i class="fa-solid fa-circle-exclamation"></i> Unassigned</span>`
           }
-        </div>
+        </td>
         <td style="text-align:center;">
           <button class="btn btn-sm btn-primary" onclick="prepareAssignment(${m.account_id})">
             <i class="fa-solid fa-floppy-disk"></i> Save
           </button>
-        </div>
+        </td>
       </tr>`;
             })
             .join("");
@@ -530,11 +550,11 @@
 
         /* ── Prepare Assignment with Confirmation ── */
         window.prepareAssignment = (accountId) => {
-          const sel = document.getElementById(`bhc-sel-${accountId}`);
-          const newBhcId = sel ? parseInt(sel.value) : 0;
+          const selectEl = document.getElementById(`select-bhc-${accountId}`);
+          const newBhcId = selectEl && selectEl.value ? parseInt(selectEl.value) : 0;
           
           if (!newBhcId) {
-            showToast("Please select a BHC.", "warning");
+            showToast("Please check/select a BHC to assign.", "warning");
             return;
           }
 

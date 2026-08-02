@@ -97,9 +97,12 @@ class _ChangeTemporaryPasswordScreenState
           ),
         );
 
+        final role = await AuthStorage.getUserRole();
+        final targetRoute = (role == 'midwife') ? '/midwife-dashboard' : '/mother-dashboard';
+
         Navigator.pushNamedAndRemoveUntil(
           context,
-          '/mother-dashboard',
+          targetRoute,
           (route) => false,
         );
       } else {
@@ -125,9 +128,12 @@ class _ChangeTemporaryPasswordScreenState
     
     if (!mounted) return;
     
+    final role = await AuthStorage.getUserRole();
+    final targetRoute = (role == 'midwife') ? '/midwife-dashboard' : '/mother-dashboard';
+
     Navigator.pushNamedAndRemoveUntil(
       context,
-      '/mother-dashboard',
+      targetRoute,
       (route) => false,
     );
   }

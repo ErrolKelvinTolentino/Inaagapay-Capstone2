@@ -1455,8 +1455,8 @@ table.data-table tbody tr:hover td {
   color: var(--warning);
 }
 
-/* ── Responsive ───────────────────────────────────── */
-@media (max-width: 900px) {
+/* ── Comprehensive Mobile & Tablet Responsive Enhancements ── */
+@media (max-width: 992px) {
   .app-layout {
     grid-template-columns: 1fr;
     grid-template-areas:
@@ -1469,9 +1469,12 @@ table.data-table tbody tr:hover td {
     position: fixed;
     top: var(--header-h);
     left: 0;
-    z-index: 200;
+    width: 280px;
+    height: calc(100vh - var(--header-h));
+    z-index: 250;
     transform: translateX(-100%);
-    box-shadow: var(--shadow-menu);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .app-sidebar.open {
@@ -1479,26 +1482,212 @@ table.data-table tbody tr:hover td {
   }
 
   .header-sidebar-toggle {
-    display: flex;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 22px;
+    border-radius: var(--radius-sm);
   }
 
   .app-main {
-    padding: 20px 18px;
+    padding: 16px 14px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .page-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .stats-grid,
+  .inventory-kpi-grid,
+  .audit-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .filter-group {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .filter-group select,
+  .filter-group input {
+    width: 100% !important;
+  }
+
+  .search-box {
+    width: 100%;
+  }
+
+  .charts-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius-card-sm);
+  }
+
+  .data-table {
+    min-width: 650px;
+  }
+
+  .inventory-tabs,
+  .tabs-container,
+  .tab-group {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+
+  .inventory-tab-btn,
+  .tab-btn {
+    flex-shrink: 0;
+  }
+
+  .modal {
+    width: 92vw;
+    max-width: 520px;
+    max-height: 88vh;
+    overflow-y: auto;
+    margin: 12px auto;
+    padding: 16px 18px;
+    border-radius: var(--radius-card-sm);
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 576px) {
+  .header-user-name {
+    display: none;
+  }
+
+  .header-badge {
+    font-size: 10px;
+    padding: 3px 8px;
+  }
+
+  .page-title {
+    font-size: 18px;
+  }
+
+  .page-subtitle {
+    font-size: 12px;
+  }
+
+  .stats-grid,
+  .inventory-kpi-grid,
+  .audit-stats-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .stat-card {
+    padding: 14px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+
+  .stat-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 18px;
+  }
+
   .form-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    gap: 12px;
   }
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
+
+  .btn {
+    width: 100%;
+    justify-content: center;
   }
-  .charts-grid {
-    grid-template-columns: 1fr;
+
+  .page-actions .btn {
+    width: auto;
+    flex: 1;
   }
-  .stats-grid {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+
+  #toast-container {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
   }
+
+  .toast {
+    min-width: unset;
+    width: 100%;
+  }
+
+  /* Mobile Backdrop Overlay */
+  .sidebar-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 240;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .sidebar-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* ── Network Status Banner & Security Alerts ── */
+.network-status-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 8px 16px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: transform 0.3s ease;
+}
+
+.network-status-banner.offline {
+  background: #f43f5e;
+  color: #ffffff;
+}
+
+.network-status-banner.online {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.masked-data {
+  letter-spacing: 2px;
+  font-family: monospace;
+  color: var(--text-secondary);
 }

@@ -121,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
           final createdBy = response['user']['created_by'] as String? ?? 'self';
           await AuthStorage.saveTemporaryPasswordChanged(!needsPasswordChange);
           
-          if (createdBy == 'midwife') {
+          if (createdBy != 'self' && createdBy != response['user']['id']?.toString()) {
             await AuthStorage.saveProfileComplete(true);
             
             if (needsPasswordChange) {
@@ -162,11 +162,20 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         } else if (response['user']['role'] == 'midwife') {
           if (!mounted) return;
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/midwife-dashboard',
-            (route) => false,
-          );
+          final needsPasswordChange = response['user']['needs_password_change'] == true;
+          if (needsPasswordChange) {
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/change-temporary-password',
+              (route) => false,
+            );
+          } else {
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/midwife-dashboard',
+              (route) => false,
+            );
+          }
         } else if (response['user']['role'] == 'admin') {
           if (!mounted) return;
           await showDialog(

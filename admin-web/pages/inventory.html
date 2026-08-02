@@ -1,0 +1,1765 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventory Management — InaAgapay Admin</title>
+    <link rel="icon" type="image/png" href="../images/logo_icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="../styles/main.css" />
+    <style>
+      .inventory-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .inventory-tabs {
+        display: flex;
+        gap: 8px;
+        border-bottom: 2px solid var(--border-primary);
+        margin-bottom: 20px;
+        padding-bottom: 2px;
+      }
+      .inventory-tab-btn {
+        background: transparent;
+        border: none;
+        padding: 10px 18px;
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        border-radius: var(--radius-md) var(--radius-md) 0 0;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .inventory-tab-btn:hover {
+        color: var(--brand-primary);
+        background: rgba(255, 104, 165, 0.05);
+      }
+      .inventory-tab-btn.active {
+        color: var(--brand-primary);
+        border-bottom: 3px solid var(--brand-primary);
+        background: rgba(255, 104, 165, 0.08);
+      }
+      .batch-urgency-expired {
+        background: rgba(220, 38, 38, 0.12);
+        color: #dc2626;
+        border: 1px solid rgba(220, 38, 38, 0.3);
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 11.5px;
+      }
+      .batch-urgency-warning {
+        background: rgba(217, 119, 6, 0.12);
+        color: #d97706;
+        border: 1px solid rgba(217, 119, 6, 0.3);
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 11.5px;
+      }
+      .batch-urgency-good {
+        background: rgba(16, 185, 129, 0.12);
+        color: #059669;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 11.5px;
+      }
+      .type-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: capitalize;
+      }
+      .type-pill.vaccine { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
+      .type-pill.supplement { background: rgba(16, 185, 129, 0.12); color: #059669; }
+      .type-pill.medical_device { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
+      .type-pill.contraceptive { background: rgba(236, 72, 153, 0.12); color: #db2777; }
+    </style>
+  </head>
+  <body>
+    <div class="app-layout">
+      <!-- ── Header ── -->
+      <header class="app-header">
+        <div class="header-brand">
+          <button class="header-sidebar-toggle" id="sidebar-toggle">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <img src="../images/logo_icon.png" alt="InaAgapay" class="header-logo" />
+          <img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" />
+        </div>
+        <div class="header-right">
+          <span class="header-badge">Admin Portal</span>
+          <div class="header-user">
+            <div class="header-avatar" id="header-avatar">A</div>
+            <span class="header-user-name" id="header-user-name">Admin</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- ── Sidebar ── -->
+      <aside class="app-sidebar">
+        <span class="sidebar-section-label">Main Menu</span>
+        <ul class="sidebar-nav">
+          <li><a href="dashboard.html"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
+          <li><a href="accounts.html"><i class="fa-solid fa-users"></i> Account Management</a></li>
+          <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
+          <li><a href="inventory.html" class="active"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
+          <li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">Patient Management</span>
+        <ul class="sidebar-nav">
+          <li><a href="patient-records.html"><i class="fa-solid fa-folder-open"></i> Patient Records</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">System</span>
+        <ul class="sidebar-nav">
+          <li><a href="audit-trail.html"><i class="fa-solid fa-clipboard-list"></i> Audit Trail</a></li>
+          <li><a href="backup.html"><i class="fa-solid fa-database"></i> Backup &amp; Restore</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-footer-nav">
+          <button class="sidebar-logout" id="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+        </div>
+      </aside>
+
+      <!-- ── Main ── -->
+      <main class="app-main">
+        <div class="page-header">
+          <div class="page-title-block">
+            <h1 class="page-title">BHC Inventory Management</h1>
+            <p class="page-subtitle" style="margin-bottom: 12px;">Track vaccines, supplements, contraceptives, and medical supplies across health centers</p>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 13.5px; font-weight: 600; color: var(--text-secondary);"><i class="fa-solid fa-hospital" style="color: var(--brand-primary)"></i> View Stocks At:</span>
+              <select class="form-select" id="global-bhc-filter" style="width: auto; min-width: 280px; padding: 6px 12px; font-size: 13.5px; border-radius: 6px; font-weight: 600; border-color: var(--brand-primary); cursor: pointer;">
+                <option value="all">🌐 All Facilities (Combined View)</option>
+                <option value="central">🏢 Central Warehouse / Main Office</option>
+              </select>
+            </div>
+          </div>
+          <div class="page-actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" id="open-item-modal-btn"><i class="fa-solid fa-plus"></i> Add Item Catalog</button>
+            <button class="btn btn-primary btn-sm" id="open-batch-modal-btn"><i class="fa-solid fa-box-archive"></i> Receive Stock Batch</button>
+            <button class="btn btn-outline-pink btn-sm" id="open-dispense-modal-btn"><i class="fa-solid fa-hand-holding-medical"></i> Dispense / Adjust Stock</button>
+            <button class="btn btn-sm" id="open-issue-modal-btn" style="background: #8b5cf6; border-color: #8b5cf6; color: white;"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock to BHC</button>
+          </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="inventory-kpi-grid">
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class="fa-solid fa-boxes-stacked"></i></div>
+            <div class="stat-info">
+              <div class="stat-value" id="kpi-total-items">—</div>
+              <div class="stat-label">Total Unique Items</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon amber"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div class="stat-info">
+              <div class="stat-value" id="kpi-low-stock">—</div>
+              <div class="stat-label">Low Stock Alerts</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon pink"><i class="fa-solid fa-clock-rotate-left"></i></div>
+            <div class="stat-info">
+              <div class="stat-value" id="kpi-expiring-batches">—</div>
+              <div class="stat-label">Expiring / Expired Batches</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="fa-solid fa-arrow-right-arrow-left"></i></div>
+            <div class="stat-info">
+              <div class="stat-value" id="kpi-total-movements">—</div>
+              <div class="stat-label">Total Movements</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="inventory-tabs">
+          <button class="inventory-tab-btn active" data-tab="catalog"><i class="fa-solid fa-list-check"></i> Stock Overview Catalog</button>
+          <button class="inventory-tab-btn" data-tab="batches"><i class="fa-solid fa-boxes-packing"></i> Active Batches &amp; Expiry</button>
+          <button class="inventory-tab-btn" data-tab="transactions"><i class="fa-solid fa-receipt"></i> Stock Movement History</button>
+          <button class="inventory-tab-btn" data-tab="analytics" id="tab-btn-analytics"><i class="fa-solid fa-chart-line"></i> BHC Reports &amp; Analytics</button>
+        </div>
+
+        <!-- Tab 1: Catalog -->
+        <div id="tab-catalog" class="tab-content">
+          <div class="card">
+            <div class="toolbar">
+              <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input class="form-control" type="search" id="catalog-search" placeholder="Search items by name..." />
+              </div>
+              <div class="filter-group">
+                <select class="form-select" id="catalog-filter-type" style="width: auto">
+                  <option value="">All Item Types</option>
+                  <option value="vaccine">Vaccines</option>
+                  <option value="supplement">Supplements</option>
+                  <option value="contraceptive">Contraceptives</option>
+                  <option value="medical_device">Medical Supplies</option>
+                </select>
+                <select class="form-select" id="catalog-filter-stock" style="width: auto">
+                  <option value="">All Stock Levels</option>
+                  <option value="low">Low Stock Only</option>
+                  <option value="out">Out of Stock Only</option>
+                  <option value="normal">Normal Stock Only</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-wrap" style="border: none; border-radius: 0">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Item Name</th>
+                    <th>Category Type</th>
+                    <th>Unit of Measure</th>
+                    <th style="text-align: right">Min. Threshold</th>
+                    <th style="text-align: right">Current Stock</th>
+                    <th style="text-align: center">Stock Health</th>
+                    <th style="text-align: center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="catalog-tbody">
+                  <tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px"></div>Loading inventory items...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Batches -->
+        <div id="tab-batches" class="tab-content" style="display: none;">
+          <div class="card">
+            <div class="toolbar">
+              <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input class="form-control" type="search" id="batches-search" placeholder="Search batch number or item name..." />
+              </div>
+              <div class="filter-group">
+                <select class="form-select" id="batches-filter-status" style="width: auto">
+                  <option value="">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="expired">Expired</option>
+                  <option value="discarded">Discarded</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-wrap" style="border: none; border-radius: 0">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Batch #</th>
+                    <th>Item Name</th>
+                    <th>Location</th>
+                    <th>Received Date</th>
+                    <th>Expiration Date</th>
+                    <th style="text-align: right">Received Qty</th>
+                    <th style="text-align: right">Remaining Qty</th>
+                    <th>Manufacturer</th>
+                    <th style="text-align: center">Status / Expiry</th>
+                    <th style="text-align: center">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="batches-tbody">
+                  <tr><td colspan="9" style="text-align:center;padding:48px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px"></div>Loading batches...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Transactions -->
+        <div id="tab-transactions" class="tab-content" style="display: none;">
+          <div class="card">
+            <div class="toolbar">
+              <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input class="form-control" type="search" id="tx-search" placeholder="Search by batch, item, or performed by..." />
+              </div>
+              <div class="filter-group">
+                <select class="form-select" id="tx-filter-type" style="width: auto">
+                  <option value="">All Movement Types</option>
+                  <option value="receipt">Stock Receipt (+)</option>
+                  <option value="dispense">Dispensed (-)</option>
+                  <option value="adjustment">Stock Adjustment</option>
+                  <option value="expiry_disposal">Expiry Disposal (-)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-wrap" style="border: none; border-radius: 0">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Date &amp; Time</th>
+                    <th>Location</th>
+                    <th>Movement Type</th>
+                    <th>Item &amp; Batch #</th>
+                    <th style="text-align: right">Quantity</th>
+                    <th>Performed By</th>
+                    <th>Reference / Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="tx-tbody">
+                  <tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px"></div>Loading transaction history...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: BHC Reports & Analytics -->
+        <div id="tab-analytics" class="tab-content" style="display: none;">
+          <div class="card" style="margin-bottom: 20px; padding: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+              <h3 style="font-size: 16px; font-weight: 700; margin: 0; color: var(--brand-text);"><i class="fa-solid fa-chart-line" style="color: var(--brand-primary); margin-right: 8px;"></i> BHC Inventory Monthly Reporting &amp; Analytics</h3>
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">Select BHC:</span>
+                  <select class="form-select" id="analytics-bhc-select" style="width: auto; min-width: 200px;">
+                  </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">Month:</span>
+                  <input type="month" id="analytics-month" class="form-control" style="width: auto; padding: 5px 10px;" />
+                </div>
+                <button class="btn btn-primary btn-sm" id="btn-load-analytics"><i class="fa-solid fa-arrows-rotate"></i> Load Report</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Analytics KPI Dashboard -->
+          <div class="inventory-kpi-grid" id="analytics-kpi-grid">
+            <div class="stat-card">
+              <div class="stat-icon blue"><i class="fa-solid fa-file-import"></i></div>
+              <div class="stat-info">
+                <div class="stat-value" id="analytics-kpi-received">0</div>
+                <div class="stat-label">Total Received (This Month)</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon pink"><i class="fa-solid fa-hand-holding-medical"></i></div>
+              <div class="stat-info">
+                <div class="stat-value" id="analytics-kpi-consumed">0</div>
+                <div class="stat-label">Total Dispensed (This Month)</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon green"><i class="fa-solid fa-box-open"></i></div>
+              <div class="stat-info">
+                <div class="stat-value" id="analytics-kpi-ending">0</div>
+                <div class="stat-label">Ending Stock Level</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon amber"><i class="fa-solid fa-fire"></i></div>
+              <div class="stat-info">
+                <div class="stat-value" id="analytics-kpi-peak-item" style="font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; max-width: 180px;">—</div>
+                <div class="stat-label">Peak Usage Item</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Layout Grid -->
+          <div style="display: grid; grid-template-columns: 3fr 2fr; gap: 20px; margin-bottom: 24px;">
+            <!-- Left Side: Table View -->
+            <div class="card" style="padding: 0;">
+              <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
+                <h4 style="margin: 0; font-size: 14.5px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-table"></i> Monthly Inventory Reconciliation Ledger</h4>
+                <button class="btn btn-outline-pink btn-sm" id="export-analytics-csv"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+              </div>
+              <div class="table-wrap" style="border: none; border-radius: 0;">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Item Name</th>
+                      <th>Category</th>
+                      <th style="text-align: right;">Carryover Stock<br><span style="font-size: 9.5px; font-weight: normal; color: var(--text-secondary);">(Left from last month)</span></th>
+                      <th style="text-align: right;">Received<br><span style="font-size: 9.5px; font-weight: normal; color: var(--text-secondary);">(This month)</span></th>
+                      <th style="text-align: right;">Dispensed<br><span style="font-size: 9.5px; font-weight: normal; color: var(--text-secondary);">(This month)</span></th>
+                      <th style="text-align: right;">Ending Stock<br><span style="font-size: 9.5px; font-weight: normal; color: var(--text-secondary);">(End of month)</span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="analytics-tbody">
+                    <tr><td colspan="6" style="text-align: center; padding: 48px; color: var(--text-secondary);">Select a BHC and month, then click Load Report.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Right Side: Analytics Charts -->
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+              <!-- Chart 1: Daily Usage Pattern -->
+              <div class="card" style="padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                  <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-chart-area"></i> Peak Consumption Days</h4>
+                  <select class="form-select" id="chart-item-selector" style="width: auto; max-width: 180px; padding: 2px 6px; font-size: 12px; height: auto;">
+                  </select>
+                </div>
+                <div style="position: relative; height: 180px; width: 100%;">
+                  <canvas id="analytics-chart-daily"></canvas>
+                </div>
+              </div>
+
+              <!-- Chart 2: Time-of-Day Dispensing Profile -->
+              <div class="card" style="padding: 20px;">
+                <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--brand-text); margin-bottom: 12px;"><i class="fa-solid fa-clock"></i> Dispensing Time-of-Day Profile</h4>
+                <div style="position: relative; height: 180px; width: 100%;">
+                  <canvas id="analytics-chart-hourly"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer class="app-footer">
+        <span>&copy; 2026 InaAgapay &mdash; Maternal &amp; Child Health Information System</span>
+        <span style="color: var(--border-primary)">|</span>
+        <span>Admin Portal v2.0</span>
+      </footer>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <!-- Modal 1: Add New Catalog Item -->
+    <div class="modal-overlay" id="modal-item">
+      <div class="modal" style="max-width: 480px;">
+        <div class="modal-header">
+          <h2 class="modal-title"><i class="fa-solid fa-plus" style="color:var(--brand-primary);margin-right:8px;"></i> Add Inventory Item Catalog</h2>
+          <button class="modal-close" onclick="closeModal('modal-item')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <form id="form-item">
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="item-name">Item Name <span class="req">*</span></label>
+              <input class="form-control" type="text" id="item-name" placeholder="e.g. BCG Vaccine, Ferrous Sulfate, Depo-Provera" required />
+            </div>
+            <div class="form-row" style="margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label" for="item-type">Category Type <span class="req">*</span></label>
+                <select class="form-select" id="item-type" required>
+                  <option value="vaccine">Vaccine</option>
+                  <option value="supplement">Supplement</option>
+                  <option value="contraceptive">Contraceptive</option>
+                  <option value="medical_device">Medical Supply</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="item-uom">Unit of Measure <span class="req">*</span></label>
+                <input class="form-control" type="text" id="item-uom" placeholder="e.g. vials, tablets, doses, boxes" required />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="item-threshold">Minimum Stock Alert Threshold</label>
+              <input class="form-control" type="number" id="item-threshold" value="50" min="1" required />
+              <span class="form-hint">Alerts when total available stock falls below this number.</span>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('modal-item')">Cancel</button>
+          <button class="btn btn-primary" id="save-item-btn"><i class="fa-solid fa-floppy-disk"></i> Save Item Catalog</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 2: Receive Stock Batch -->
+    <div class="modal-overlay" id="modal-batch">
+      <div class="modal" style="max-width: 520px;">
+        <div class="modal-header">
+          <h2 class="modal-title"><i class="fa-solid fa-box-archive" style="color:var(--brand-primary);margin-right:8px;"></i> Receive Stock Batch</h2>
+          <button class="modal-close" onclick="closeModal('modal-batch')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <form id="form-batch">
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="batch-item-id">Select Inventory Item <span class="req">*</span></label>
+              <select class="form-select" id="batch-item-id" required>
+                <option value="">— Select Item —</option>
+              </select>
+            </div>
+            <div class="form-row" style="margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label" for="batch-number">Batch / Lot Number <span class="req">*</span></label>
+                <input class="form-control" type="text" id="batch-number" placeholder="e.g. BATCH-2026-09A" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="batch-qty">Quantity Received <span class="req">*</span></label>
+                <input class="form-control" type="number" id="batch-qty" min="1" placeholder="e.g. 500" required />
+              </div>
+            </div>
+            <div class="form-row" style="margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label" for="batch-received-date">Received Date <span class="req">*</span></label>
+                <input class="form-control" type="date" id="batch-received-date" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="batch-expiration-date">Expiration Date <span class="req">*</span></label>
+                <input class="form-control" type="date" id="batch-expiration-date" required />
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="batch-facility-id">Receiving Facility / Location</label>
+              <select class="form-select" id="batch-facility-id" style="width: 100%;">
+                <option value="central">Central Warehouse / Main Office</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="batch-manufacturer">Manufacturer / Supplier</label>
+              <input class="form-control" type="text" id="batch-manufacturer" placeholder="e.g. DOH Central / Pfizer / GSK" />
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('modal-batch')">Cancel</button>
+          <button class="btn btn-primary" id="save-batch-btn"><i class="fa-solid fa-plus"></i> Record Batch Receipt</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 3: Dispense / Adjust Stock -->
+    <div class="modal-overlay" id="modal-dispense">
+      <div class="modal" style="max-width: 500px;">
+        <div class="modal-header">
+          <h2 class="modal-title"><i class="fa-solid fa-hand-holding-medical" style="color:var(--brand-primary);margin-right:8px;"></i> Dispense or Adjust Stock</h2>
+          <button class="modal-close" onclick="closeModal('modal-dispense')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <form id="form-dispense">
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="dispense-batch-id">Select Batch <span class="req">*</span></label>
+              <select class="form-select" id="dispense-batch-id" required>
+                <option value="">— Select Active Batch —</option>
+              </select>
+            </div>
+            <div class="form-row" style="margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label" for="dispense-type">Transaction Type <span class="req">*</span></label>
+                <select class="form-select" id="dispense-type" required>
+                  <option value="dispense">Dispense (-) [Patient Visit / Vaccination]</option>
+                  <option value="adjustment">Stock Adjustment (Audit Correction)</option>
+                  <option value="expiry_disposal">Expiry Disposal (-) [Waste / Damaged]</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="dispense-qty">Quantity <span class="req">*</span></label>
+                <input class="form-control" type="number" id="dispense-qty" min="1" placeholder="e.g. 10" required />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="dispense-reference">Reference / Notes</label>
+              <input class="form-control" type="text" id="dispense-reference" placeholder="e.g. Daily immunization clinic distribution" />
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('modal-dispense')">Cancel</button>
+          <button class="btn btn-primary" id="save-dispense-btn"><i class="fa-solid fa-check"></i> Process Stock Movement</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 4: Issue Stock to BHC -->
+    <div class="modal-overlay" id="modal-issue">
+      <div class="modal" style="max-width: 500px;">
+        <div class="modal-header">
+          <h2 class="modal-title"><i class="fa-solid fa-truck-ramp-box" style="color:#8b5cf6;margin-right:8px;"></i> Issue Stock to BHC</h2>
+          <button class="modal-close" onclick="closeModal('modal-issue')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <div id="issue-form-alert" class="alert alert-error" style="display: none; margin-bottom: 14px; padding: 10px; border-radius: 6px;"></div>
+          <form id="form-issue" onsubmit="return false;">
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="issue-source-batch">Select Source Batch (Central Warehouse) <span class="req">*</span></label>
+              <select class="form-select" id="issue-source-batch" required style="width:100%;">
+                <option value="">— Select Central Batch —</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="issue-target-bhc">Destination Barangay Health Center (BHC) <span class="req">*</span></label>
+              <select class="form-select" id="issue-target-bhc" required style="width:100%;">
+                <option value="">— Select Target BHC —</option>
+              </select>
+            </div>
+            <div class="form-row" style="display:flex; gap:12px; margin-bottom: 14px;">
+              <div class="form-group" style="flex:1;">
+                <label class="form-label" for="issue-qty">Quantity to Issue <span class="req">*</span></label>
+                <input class="form-control" type="number" id="issue-qty" min="1" placeholder="e.g. 20" required style="width:100%;" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="issue-reference">Reference / Remarks</label>
+              <input class="form-control" type="text" id="issue-reference" placeholder="e.g. Monthly allocation for BHC" style="width:100%;" />
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('modal-issue')">Cancel</button>
+          <button class="btn btn-primary" id="save-issue-btn" style="background:#8b5cf6; border-color:#8b5cf6;"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="common-security.js"></script>
+    <script>
+      (function () {
+        const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
+        const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
+        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        const SESSION_KEY = "inaagapay_admin_session";
+        const session = (() => { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } })();
+        if (!session || session.account_type !== "admin") { window.location.href = "../index.html"; return; }
+
+        if (window.verifyAdminSessionWithDB) { window.verifyAdminSessionWithDB(db); }
+
+        // State
+        let items = [];
+        let batches = [];
+        let transactions = [];
+        let accountMap = {};
+
+        function esc(str) { const d = document.createElement("div"); d.textContent = str ?? ""; return d.innerHTML; }
+        function showToast(msg, type = "info") {
+          const icons = { success: "fa-circle-check", error: "fa-circle-xmark", warning: "fa-triangle-exclamation", info: "fa-circle-info" };
+          const c = document.getElementById("toast-container");
+          const t = document.createElement("div");
+          t.className = `toast ${type}`;
+          t.innerHTML = `<i class="fa-solid ${icons[type]}"></i><span class="toast-text">${esc(msg)}</span><button class="toast-close" onclick="this.closest('.toast').remove()"><i class="fa-solid fa-xmark"></i></button>`;
+          c.appendChild(t);
+          setTimeout(() => { t.style.animation = "fadeOut .3s ease forwards"; t.addEventListener("animationend", () => t.remove()); }, 4000);
+        }
+
+        // Header Init
+        document.getElementById("header-user-name").textContent = [session.first_name, session.last_name].filter(Boolean).join(" ") || session.email_address;
+        document.getElementById("header-avatar").textContent = ((session.first_name?.[0] ?? "") + (session.last_name?.[0] ?? "")).toUpperCase() || "A";
+        document.getElementById("logout-btn").addEventListener("click", () => { if (confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); window.location.href = "../index.html"; } });
+        document.getElementById("sidebar-toggle").addEventListener("click", () => document.querySelector(".app-sidebar").classList.toggle("open"));
+
+        // Tab Switching
+        document.querySelectorAll(".inventory-tab-btn").forEach(btn => {
+          btn.addEventListener("click", () => {
+            document.querySelectorAll(".inventory-tab-btn").forEach(b => b.classList.remove("active"));
+            document.querySelectorAll(".tab-content").forEach(c => c.style.display = "none");
+            btn.classList.add("active");
+            const target = btn.dataset.tab;
+            document.getElementById(`tab-${target}`).style.display = "block";
+            if (target === "analytics") {
+              loadAnalyticsReport();
+            }
+          });
+        });
+
+        window.closeModal = function(id) {
+          document.getElementById(id).classList.remove("show");
+        };
+
+        // Date helpers
+        document.getElementById("batch-received-date").value = new Date().toISOString().slice(0, 10);
+        const nextYear = new Date(); nextYear.setFullYear(nextYear.getFullYear() + 1);
+        document.getElementById("batch-expiration-date").value = nextYear.toISOString().slice(0, 10);
+        document.getElementById("analytics-month").value = new Date().toISOString().slice(0, 7);
+
+        // Load Data with Resilient Fallback
+        async function loadInventoryData() {
+          try {
+            await loadBhcs();
+            // Load Items
+            const { data: itemData, error: itemErr } = await db.from("inventory_items").select("*").order("name");
+            if (itemErr) {
+              console.warn("inventory_items query error:", itemErr);
+              items = [];
+            } else {
+              items = itemData || [];
+            }
+
+            // Load Batches
+            const { data: batchData, error: batchErr } = await db.from("inventory_batches").select("*").order("expiration_date", { ascending: true });
+            if (batchErr) {
+              console.warn("inventory_batches query error:", batchErr);
+              batches = [];
+            } else {
+              batches = batchData || [];
+            }
+
+            // Load Transactions
+            const { data: txData, error: txErr } = await db.from("inventory_transactions").select("*").order("logged_at", { ascending: false }).limit(200);
+            if (txErr) {
+              console.warn("inventory_transactions query error:", txErr);
+              transactions = [];
+            } else {
+              transactions = txData || [];
+            }
+
+            // Fetch performing users map
+            const accountIds = [...new Set(transactions.map(t => t.performed_by).filter(Boolean))];
+            if (accountIds.length > 0) {
+              const { data: accs } = await db.from("accounts").select("account_id, first_name, last_name, email_address").in("account_id", accountIds);
+              (accs || []).forEach(a => {
+                accountMap[a.account_id] = [a.first_name, a.last_name].filter(Boolean).join(" ") || a.email_address;
+              });
+            }
+
+            renderKPIs();
+            renderCatalog();
+            renderBatches();
+            renderTransactions();
+            populateDropdowns();
+          } catch (e) {
+            showToast("Failed to load inventory data: " + e.message, "error");
+          }
+        }
+
+        function calculateStockPerItem(itemId) {
+          const filter = document.getElementById("global-bhc-filter").value;
+          return batches
+            .filter(b => {
+              if (b.item_id !== itemId || b.status !== 'active') return false;
+              if (filter === "central") {
+                return b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null";
+              } else if (filter !== "all") {
+                return String(b.facility_id) === String(filter);
+              }
+              return true;
+            })
+            .reduce((sum, b) => sum + (b.quantity_remaining || 0), 0);
+        }
+
+        function renderKPIs() {
+          const bhcFilter = document.getElementById("global-bhc-filter").value;
+          document.getElementById("kpi-total-items").textContent = items.length;
+          
+          let lowCount = 0;
+          items.forEach(item => {
+            const stock = calculateStockPerItem(item.item_id);
+            if (stock <= (item.minimum_stock_threshold || 50)) lowCount++;
+          });
+          document.getElementById("kpi-low-stock").textContent = lowCount;
+
+          const now = new Date();
+          const thirtyDays = new Date(); thirtyDays.setDate(now.getDate() + 30);
+          const expiringCount = batches.filter(b => {
+            const exp = new Date(b.expiration_date);
+            const statusMatch = b.status === 'active' && (exp <= thirtyDays);
+            if (!statusMatch) return false;
+            
+            if (bhcFilter === "central") {
+              return b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null";
+            } else if (bhcFilter !== "all") {
+              return String(b.facility_id) === String(bhcFilter);
+            }
+            return true;
+          }).length;
+          document.getElementById("kpi-expiring-batches").textContent = expiringCount;
+
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const todayMovements = transactions.filter(t => {
+            const dateMatch = (t.logged_at || "").startsWith(todayStr);
+            if (!dateMatch) return false;
+            
+            if (bhcFilter === "central") {
+              return t.facility_id === null || t.facility_id === 0 || t.facility_id === undefined || String(t.facility_id) === "null";
+            } else if (bhcFilter !== "all") {
+              return String(t.facility_id) === String(bhcFilter);
+            }
+            return true;
+          }).length;
+          document.getElementById("kpi-total-movements").textContent = todayMovements;
+        }
+
+        function renderCatalog() {
+          const q = document.getElementById("catalog-search").value.trim().toLowerCase();
+          const type = document.getElementById("catalog-filter-type").value;
+          const stockFilter = document.getElementById("catalog-filter-stock").value;
+
+          const filtered = items.filter(item => {
+            if (type && item.item_type !== type) return false;
+            if (q && !item.name.toLowerCase().includes(q)) return false;
+            const currentStock = calculateStockPerItem(item.item_id);
+            const min = item.minimum_stock_threshold || 50;
+            if (stockFilter === "low" && (currentStock > min || currentStock === 0)) return false;
+            if (stockFilter === "out" && currentStock > 0) return false;
+            if (stockFilter === "normal" && currentStock <= min) return false;
+            return true;
+          });
+
+          const tbody = document.getElementById("catalog-tbody");
+          if (filtered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);">No inventory items matching criteria.</td></tr>`;
+            return;
+          }
+
+          tbody.innerHTML = filtered.map(item => {
+            const stock = calculateStockPerItem(item.item_id);
+            const min = item.minimum_stock_threshold || 50;
+            let statusBadge = `<span class="badge badge-active">In Stock</span>`;
+            if (stock === 0) statusBadge = `<span class="badge badge-inactive" style="background:rgba(220,38,38,0.15);color:#dc2626;">Out of Stock</span>`;
+            else if (stock <= min) statusBadge = `<span class="badge badge-medium">Low Stock</span>`;
+
+            return `
+              <tr>
+                <td><strong style="color:var(--text-primary);">${esc(item.name)}</strong></td>
+                <td><span class="type-pill ${item.item_type}">${esc(item.item_type.replace('_',' '))}</span></td>
+                <td>${esc(item.unit_of_measure)}</td>
+                <td style="text-align:right;">${min}</td>
+                <td style="text-align:right;font-weight:700;font-size:15px;color:${stock <= min ? '#dc2626' : 'var(--text-primary)'};">${stock}</td>
+                <td style="text-align:center;">${statusBadge}</td>
+                <td style="text-align:center;">
+                  <button class="btn btn-sm btn-secondary" onclick="quickReceive(${item.item_id})"><i class="fa-solid fa-plus"></i> Batch</button>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+        function renderBatches() {
+          const q = document.getElementById("batches-search").value.trim().toLowerCase();
+          const status = document.getElementById("batches-filter-status").value;
+          const bhcFilter = document.getElementById("global-bhc-filter").value;
+
+          const now = new Date();
+          const thirtyDays = new Date(); thirtyDays.setDate(now.getDate() + 30);
+
+          const filtered = batches.filter(b => {
+            if (status && b.status !== status) return false;
+
+            if (bhcFilter === "central") {
+              if (b.facility_id !== null && b.facility_id !== 0 && b.facility_id !== undefined && String(b.facility_id) !== "null") return false;
+            } else if (bhcFilter !== "all") {
+              if (String(b.facility_id) !== String(bhcFilter)) return false;
+            }
+
+            const item = items.find(i => i.item_id === b.item_id);
+            const itemName = item ? item.name.toLowerCase() : "";
+            if (q && !b.batch_number.toLowerCase().includes(q) && !itemName.includes(q)) return false;
+            return true;
+          });
+
+          const tbody = document.getElementById("batches-tbody");
+          if (filtered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:48px;color:var(--text-secondary);">No inventory batches found.</td></tr>`;
+            return;
+          }
+
+          tbody.innerHTML = filtered.map(b => {
+            const item = items.find(i => i.item_id === b.item_id);
+            const expDate = new Date(b.expiration_date);
+            let urgencyBadge = `<span class="batch-urgency-good">Active</span>`;
+            if (b.status === 'discarded') urgencyBadge = `<span class="badge badge-inactive">Discarded</span>`;
+            else if (expDate < now || b.status === 'expired') urgencyBadge = `<span class="batch-urgency-expired"><i class="fa-solid fa-ban"></i> Expired</span>`;
+            else if (expDate <= thirtyDays) urgencyBadge = `<span class="batch-urgency-warning"><i class="fa-solid fa-clock"></i> Expiring Soon</span>`;
+
+            let locName = "🏢 Central";
+            if (b.facility_id) {
+              const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
+              locName = bh ? `📍 ${bh.bhc_name}` : `📍 BHC #${b.facility_id}`;
+            }
+
+            return `
+              <tr>
+                <td><strong style="font-family:monospace;">${esc(b.batch_number)}</strong></td>
+                <td>${esc(item ? item.name : 'Unknown Item')}</td>
+                <td style="font-size:12.5px;font-weight:600;color:var(--text-primary);">${locName}</td>
+                <td style="font-size:12px;color:var(--text-secondary);">${b.received_date || '—'}</td>
+                <td style="font-size:12px;font-weight:600;">${b.expiration_date}</td>
+                <td style="text-align:right;">${b.quantity_received}</td>
+                <td style="text-align:right;font-weight:700;color:var(--brand-primary);">${b.quantity_remaining}</td>
+                <td>${esc(b.manufacturer || '—')}</td>
+                <td style="text-align:center;">${urgencyBadge}</td>
+                <td style="text-align:center;">
+                  ${b.status === 'active' && b.quantity_remaining > 0 ? `<button class="btn btn-sm btn-outline-pink" onclick="quickDispense(${b.batch_id})"><i class="fa-solid fa-minus"></i> Use</button>` : '—'}
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+        function renderTransactions() {
+          const q = document.getElementById("tx-search").value.trim().toLowerCase();
+          const type = document.getElementById("tx-filter-type").value;
+          const bhcFilter = document.getElementById("global-bhc-filter").value;
+
+          const filtered = transactions.filter(t => {
+            if (type && t.transaction_type !== type) return false;
+
+            if (bhcFilter === "central") {
+              if (t.facility_id !== null && t.facility_id !== 0 && t.facility_id !== undefined && String(t.facility_id) !== "null") return false;
+            } else if (bhcFilter !== "all") {
+              if (String(t.facility_id) !== String(bhcFilter)) return false;
+            }
+
+            const batch = batches.find(b => b.batch_id === t.batch_id);
+            const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
+            const user = accountMap[t.performed_by] || "";
+            const searchStr = `${batch?.batch_number || ""} ${item?.name || ""} ${user} ${t.reference_type || ""}`.toLowerCase();
+            if (q && !searchStr.includes(q)) return false;
+            return true;
+          });
+
+          const tbody = document.getElementById("tx-tbody");
+          if (filtered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);">No movement records found.</td></tr>`;
+            return;
+          }
+
+          const typeBadges = {
+            receipt: `<span class="badge badge-active"><i class="fa-solid fa-arrow-down"></i> Receipt</span>`,
+            dispense: `<span class="badge badge-medium" style="background:rgba(59,130,246,0.12);color:#2563eb;"><i class="fa-solid fa-hand-holding-medical"></i> Dispense</span>`,
+            adjustment: `<span class="badge badge-medium"><i class="fa-solid fa-sliders"></i> Adjustment</span>`,
+            expiry_disposal: `<span class="badge badge-inactive" style="background:rgba(220,38,38,0.15);color:#dc2626;"><i class="fa-solid fa-trash"></i> Disposal</span>`,
+            transfer: `<span class="badge badge-medium" style="background:rgba(139,92,246,0.12);color:#7c3aed;"><i class="fa-solid fa-arrow-right-arrow-left"></i> Transfer</span>`
+          };
+
+          tbody.innerHTML = filtered.map(t => {
+            const batch = batches.find(b => b.batch_id === t.batch_id);
+            const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
+            const dateStr = t.logged_at ? new Date(t.logged_at).toLocaleString("en-PH") : "—";
+            const qtyStr = t.quantity > 0 ? `+${t.quantity}` : `${t.quantity}`;
+
+            let locName = "🏢 Central";
+            if (t.facility_id) {
+              const bh = bhcs.find(x => String(x.bhc_id) === String(t.facility_id));
+              locName = bh ? `📍 ${bh.bhc_name}` : `📍 BHC #${t.facility_id}`;
+            }
+
+            return `
+              <tr>
+                <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap;">${dateStr}</td>
+                <td style="font-size:12.5px;font-weight:600;color:var(--text-primary);">${locName}</td>
+                <td>${typeBadges[t.transaction_type] || t.transaction_type}</td>
+                <td><strong>${esc(item?.name || "Item")}</strong> <span style="font-size:11px;color:var(--text-secondary);">(${batch?.batch_number || "Batch"})</span></td>
+                <td style="text-align:right;font-weight:700;color:${t.quantity < 0 ? '#dc2626' : '#059669'};">${qtyStr}</td>
+                <td>${esc(accountMap[t.performed_by] || "System / Admin")}</td>
+                <td style="font-size:12px;color:var(--text-secondary);">${esc(t.reference_type || "")} ${esc(t.reference_id ? '#' + t.reference_id : '')}</td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+        function populateDropdowns() {
+          const itemSel = document.getElementById("batch-item-id");
+          itemSel.innerHTML = `<option value="">— Select Item —</option>` + items.map(i => `<option value="${i.item_id}">${esc(i.name)} (${esc(i.unit_of_measure)})</option>`).join('');
+
+          // Dispense batch selection
+          const batchSel = document.getElementById("dispense-batch-id");
+          const activeBatches = batches.filter(b => b.status === 'active' && b.quantity_remaining > 0);
+          batchSel.innerHTML = `<option value="">— Select Active Batch —</option>` + activeBatches.map(b => {
+            const item = items.find(i => i.item_id === b.item_id);
+            let locText = "Central";
+            if (b.facility_id) {
+              const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
+              locText = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
+            }
+            return `<option value="${b.batch_id}">${esc(item?.name || 'Item')} — Batch ${esc(b.batch_number)} (Stock: ${b.quantity_remaining}, Location: ${locText})</option>`;
+          }).join('');
+
+          // Issue source batch selection
+          const centralActiveBatches = batches.filter(b => b.status === 'active' && b.quantity_remaining > 0 && (b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null"));
+          const issueBatchSel = document.getElementById("issue-source-batch");
+          issueBatchSel.innerHTML = `<option value="">— Select Central Batch —</option>` + centralActiveBatches.map(b => {
+            const item = items.find(i => i.item_id === b.item_id);
+            return `<option value="${b.batch_id}">${esc(item?.name || 'Item')} — Batch ${esc(b.batch_number)} (Available: ${b.quantity_remaining})</option>`;
+          }).join('');
+        }
+
+        // Open Modal Handlers
+        document.getElementById("open-item-modal-btn").addEventListener("click", () => document.getElementById("modal-item").classList.add("show"));
+        document.getElementById("open-batch-modal-btn").addEventListener("click", () => document.getElementById("modal-batch").classList.add("show"));
+        document.getElementById("open-dispense-modal-btn").addEventListener("click", () => document.getElementById("modal-dispense").classList.add("show"));
+
+        window.quickReceive = function(itemId) {
+          document.getElementById("batch-item-id").value = itemId;
+          document.getElementById("modal-batch").classList.add("show");
+        };
+
+        window.quickDispense = function(batchId) {
+          document.getElementById("dispense-batch-id").value = batchId;
+          document.getElementById("modal-dispense").classList.add("show");
+        };
+
+        // Form Submit: Add Item
+        document.getElementById("save-item-btn").addEventListener("click", async () => {
+          const name = document.getElementById("item-name").value.trim();
+          const type = document.getElementById("item-type").value;
+          const uom = document.getElementById("item-uom").value.trim();
+          const threshold = parseInt(document.getElementById("item-threshold").value) || 50;
+
+          if (!name || !uom) {
+            showToast("Item name and unit of measure are required.", "warning");
+            return;
+          }
+
+          // Client-side uniqueness check
+          if (items.some(item => item.name.toLowerCase() === name.toLowerCase())) {
+            showToast(`An item with the name "${name}" already exists in the catalog.`, "warning");
+            return;
+          }
+
+          const btn = document.getElementById("save-item-btn");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Saving...';
+
+          try {
+            const { data, error } = await db.from("inventory_items").insert({
+              name: name,
+              item_type: type,
+              unit_of_measure: uom,
+              minimum_stock_threshold: threshold
+            }).select().single();
+
+            if (error) throw error;
+
+            // Audit log
+            try {
+              await db.from("audit_trail").insert({
+                account_id: session.account_id,
+                action: "create_inventory_item",
+                table_name: "inventory_items",
+                description: `Added new inventory item catalog "${name}" (${type})`,
+                new_data: data
+              });
+            } catch (e) {}
+
+            showToast(`Inventory item "${name}" added successfully.`, "success");
+            closeModal("modal-item");
+            document.getElementById("form-item").reset();
+            loadInventoryData();
+          } catch (err) {
+            if (err.message && (err.message.includes("unique constraint") || err.message.includes("already exists"))) {
+              showToast(`An item with the name "${name}" already exists in the catalog.`, "error");
+            } else {
+              showToast("Error creating item: " + err.message, "error");
+            }
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Item Catalog';
+          }
+        });
+
+        // Form Submit: Receive Batch
+        document.getElementById("save-batch-btn").addEventListener("click", async () => {
+          const itemId = parseInt(document.getElementById("batch-item-id").value);
+          const batchNum = document.getElementById("batch-number").value.trim();
+          const qty = parseInt(document.getElementById("batch-qty").value);
+          const recDate = document.getElementById("batch-received-date").value;
+          const expDate = document.getElementById("batch-expiration-date").value;
+          const mfg = document.getElementById("batch-manufacturer").value.trim();
+          const facilityVal = document.getElementById("batch-facility-id").value;
+          const facilityId = (facilityVal === "central" || !facilityVal) ? null : parseInt(facilityVal);
+
+          if (!itemId || !batchNum || !qty || !recDate || !expDate) {
+            showToast("Please fill in all required batch details.", "warning");
+            return;
+          }
+
+          const btn = document.getElementById("save-batch-btn");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Processing...';
+
+          try {
+            const { data: newBatch, error: bErr } = await db.from("inventory_batches").insert({
+              item_id: itemId,
+              facility_id: facilityId,
+              batch_number: batchNum,
+              quantity_received: qty,
+              quantity_remaining: qty,
+              received_date: recDate,
+              expiration_date: expDate,
+              manufacturer: mfg || null,
+              status: "active"
+            }).select().single();
+
+            if (bErr) throw bErr;
+
+            // Record transaction
+            try {
+              await db.from("inventory_transactions").insert({
+                batch_id: newBatch.batch_id,
+                facility_id: facilityId,
+                transaction_type: "receipt",
+                quantity: qty,
+                reference_type: "Stock Receipt from " + (mfg || "Supplier"),
+                performed_by: session.account_id
+              });
+            } catch (e) {}
+
+            // Audit log
+            const item = items.find(i => i.item_id === itemId);
+            try {
+              await db.from("audit_trail").insert({
+                account_id: session.account_id,
+                action: "receive_inventory_batch",
+                table_name: "inventory_batches",
+                description: `Received ${qty} ${item ? item.unit_of_measure : 'units'} of "${item ? item.name : ''}" (Batch #${batchNum})`,
+                new_data: newBatch
+              });
+            } catch (e) {}
+
+            showToast(`Batch #${batchNum} recorded successfully (+${qty} stock).`, "success");
+            closeModal("modal-batch");
+            document.getElementById("form-batch").reset();
+            loadInventoryData();
+          } catch (err) {
+            showToast("Error receiving batch: " + err.message, "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-plus"></i> Record Batch Receipt';
+          }
+        });
+
+        // Form Submit: Dispense / Adjust Stock
+        document.getElementById("save-dispense-btn").addEventListener("click", async () => {
+          const batchId = parseInt(document.getElementById("dispense-batch-id").value);
+          const type = document.getElementById("dispense-type").value;
+          const qtyInput = parseInt(document.getElementById("dispense-qty").value);
+          const ref = document.getElementById("dispense-reference").value.trim();
+
+          if (!batchId || !qtyInput) {
+            showToast("Please select a batch and enter a valid quantity.", "warning");
+            return;
+          }
+
+          const batch = batches.find(b => b.batch_id === batchId);
+          if (!batch) { showToast("Selected batch not found.", "error"); return; }
+
+          if ((type === 'dispense' || type === 'expiry_disposal') && qtyInput > batch.quantity_remaining) {
+            showToast(`Cannot deduct ${qtyInput}. Remaining batch stock is only ${batch.quantity_remaining}.`, "warning");
+            return;
+          }
+
+          const btn = document.getElementById("save-dispense-btn");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Processing...';
+
+          try {
+            const deduction = (type === 'dispense' || type === 'expiry_disposal') ? -Math.abs(qtyInput) : qtyInput;
+            const newRemaining = Math.max(0, batch.quantity_remaining + deduction);
+            const newStatus = (newRemaining === 0 && type === 'expiry_disposal') ? 'discarded' : batch.status;
+
+            const { error: updateErr } = await db.from("inventory_batches")
+              .update({ quantity_remaining: newRemaining, status: newStatus })
+              .eq("batch_id", batchId);
+
+            if (updateErr) throw updateErr;
+
+            // Record transaction
+            try {
+              await db.from("inventory_transactions").insert({
+                batch_id: batchId,
+                facility_id: batch.facility_id,
+                transaction_type: type,
+                quantity: deduction,
+                reference_type: ref || type.replace('_', ' '),
+                performed_by: session.account_id
+              });
+            } catch (e) {}
+
+            // Audit log
+            const item = items.find(i => i.item_id === batch.item_id);
+            try {
+              await db.from("audit_trail").insert({
+                account_id: session.account_id,
+                action: "dispense_inventory",
+                table_name: "inventory_transactions",
+                description: `Processed ${type} (${deduction}) for "${item ? item.name : ''}" (Batch #${batch.batch_number})`,
+                old_data: { quantity_remaining: batch.quantity_remaining },
+                new_data: { quantity_remaining: newRemaining, transaction_type: type }
+              });
+            } catch (e) {}
+
+            showToast(`Stock movement recorded successfully (${deduction}).`, "success");
+            closeModal("modal-dispense");
+            document.getElementById("form-dispense").reset();
+            loadInventoryData();
+          } catch (err) {
+            showToast("Error processing stock movement: " + err.message, "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> Process Stock Movement';
+          }
+        });
+
+        // BHC loading logic
+        let bhcs = [];
+        async function loadBhcs() {
+          try {
+            let bhcData = [];
+            try {
+              const { data, error } = await db.from("bhc").select("bhc_id, bhc_name").order("bhc_name");
+              if (!error && data && data.length > 0) bhcData = data;
+              else {
+                const { data: facs } = await db.from("health_facilities").select("facility_id, name").order("name");
+                bhcData = (facs || []).map(f => ({ bhc_id: f.facility_id, bhc_name: f.name }));
+              }
+            } catch (e) { console.warn("BHC load fallback:", e); }
+
+            if (bhcData.length === 0) {
+              bhcData = [
+                { bhc_id: 1, bhc_name: 'Tiaong BHC' },
+                { bhc_id: 2, bhc_name: 'Tarcan BHC' },
+                { bhc_id: 3, bhc_name: 'Pinagbarilan BHC' },
+                { bhc_id: 4, bhc_name: 'Makinabang BHC' },
+                { bhc_id: 5, bhc_name: 'Sta. Barbara BHC' }
+              ];
+            }
+            bhcs = bhcData;
+            
+            // Populate global BHC filter dropdown if not already custom
+            const filterDropdown = document.getElementById("global-bhc-filter");
+            if (filterDropdown.options.length <= 2) {
+              bhcs.forEach(b => {
+                const opt = document.createElement("option");
+                opt.value = b.bhc_id;
+                opt.textContent = `📍 ${b.bhc_name}`;
+                filterDropdown.appendChild(opt);
+              });
+            }
+
+            // Populate Issue Target BHC dropdown
+            const issueDropdown = document.getElementById("issue-target-bhc");
+            if (issueDropdown.options.length <= 1) {
+              bhcs.forEach(b => {
+                const opt = document.createElement("option");
+                opt.value = b.bhc_id;
+                opt.textContent = b.bhc_name;
+                issueDropdown.appendChild(opt);
+              });
+            }
+
+            // Populate Receive Batch facility dropdown
+            const receiveDropdown = document.getElementById("batch-facility-id");
+            if (receiveDropdown.options.length <= 1) {
+              bhcs.forEach(b => {
+                const opt = document.createElement("option");
+                opt.value = b.bhc_id;
+                opt.textContent = b.bhc_name;
+                receiveDropdown.appendChild(opt);
+              });
+            }
+
+            // Populate Analytics BHC filter dropdown
+            const analyticsDropdown = document.getElementById("analytics-bhc-select");
+            if (analyticsDropdown && analyticsDropdown.options.length === 0) {
+              const optAll = document.createElement("option");
+              optAll.value = "all";
+              optAll.textContent = "🌐 All Facilities (Combined)";
+              analyticsDropdown.appendChild(optAll);
+              
+              const optCentral = document.createElement("option");
+              optCentral.value = "central";
+              optCentral.textContent = "🏢 Central Warehouse";
+              analyticsDropdown.appendChild(optCentral);
+
+              bhcs.forEach(b => {
+                const opt = document.createElement("option");
+                opt.value = b.bhc_id;
+                opt.textContent = `📍 ${b.bhc_name}`;
+                analyticsDropdown.appendChild(opt);
+              });
+            }
+          } catch (e) { console.error("Failed to load BHCs:", e); }
+        }
+
+        // Global BHC Filter change handler
+        document.getElementById("global-bhc-filter").addEventListener("change", () => {
+          renderKPIs();
+          renderCatalog();
+          renderBatches();
+          renderTransactions();
+        });
+
+        // Open Issue Modal Handler
+        document.getElementById("open-issue-modal-btn").addEventListener("click", () => {
+          document.getElementById("issue-form-alert").style.display = "none";
+          document.getElementById("form-issue").reset();
+          populateDropdowns();
+          document.getElementById("modal-issue").classList.add("show");
+        });
+
+        // Form Submit: Issue Stock to BHC
+        document.getElementById("save-issue-btn").addEventListener("click", async () => {
+          const sourceBatchId = parseInt(document.getElementById("issue-source-batch").value);
+          const targetBhcId = parseInt(document.getElementById("issue-target-bhc").value);
+          const qtyInput = parseInt(document.getElementById("issue-qty").value);
+          const ref = document.getElementById("issue-reference").value.trim();
+          const alertEl = document.getElementById("issue-form-alert");
+
+          alertEl.style.display = "none";
+
+          if (!sourceBatchId || !targetBhcId || !qtyInput) {
+            alertEl.textContent = "Please fill in all required fields.";
+            alertEl.style.display = "block";
+            return;
+          }
+
+          const sourceBatch = batches.find(b => b.batch_id === sourceBatchId);
+          if (!sourceBatch) {
+            alertEl.textContent = "Source batch not found.";
+            alertEl.style.display = "block";
+            return;
+          }
+
+          if (qtyInput > sourceBatch.quantity_remaining) {
+            alertEl.textContent = `Cannot issue ${qtyInput}. Available central stock is only ${sourceBatch.quantity_remaining}.`;
+            alertEl.style.display = "block";
+            return;
+          }
+
+          const btn = document.getElementById("save-issue-btn");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Issuing...';
+
+          try {
+            // 1. Deduct from Central source batch
+            const { error: updateErr } = await db.from("inventory_batches")
+              .update({ quantity_remaining: sourceBatch.quantity_remaining - qtyInput })
+              .eq("batch_id", sourceBatch.batch_id);
+
+            if (updateErr) throw updateErr;
+
+            const targetBhcName = bhcs.find(b => String(b.bhc_id) === String(targetBhcId))?.bhc_name || `BHC #${targetBhcId}`;
+
+            // 2. Log transfer transaction for Central
+            await db.from("inventory_transactions").insert({
+              batch_id: sourceBatch.batch_id,
+              facility_id: null,
+              transaction_type: "transfer",
+              quantity: -qtyInput,
+              reference_type: `Issued to ${targetBhcName}`,
+              performed_by: session.account_id
+            });
+
+            // 3. Upsert destination batch at target BHC
+            const { data: existingTargetBatch } = await db.from("inventory_batches")
+              .select("*")
+              .eq("item_id", sourceBatch.item_id)
+              .eq("batch_number", sourceBatch.batch_number)
+              .eq("facility_id", targetBhcId)
+              .eq("status", "active")
+              .maybeSingle();
+
+            let destBatchId;
+            if (existingTargetBatch) {
+              destBatchId = existingTargetBatch.batch_id;
+              const { error: targetUpdateErr } = await db.from("inventory_batches")
+                .update({
+                  quantity_received: existingTargetBatch.quantity_received + qtyInput,
+                  quantity_remaining: existingTargetBatch.quantity_remaining + qtyInput
+                })
+                .eq("batch_id", destBatchId);
+              if (targetUpdateErr) throw targetUpdateErr;
+            } else {
+              const { data: newTargetBatch, error: targetInsertErr } = await db.from("inventory_batches").insert({
+                item_id: sourceBatch.item_id,
+                facility_id: targetBhcId,
+                batch_number: sourceBatch.batch_number,
+                quantity_received: qtyInput,
+                quantity_remaining: qtyInput,
+                received_date: new Date().toISOString().slice(0, 10),
+                expiration_date: sourceBatch.expiration_date,
+                manufacturer: sourceBatch.manufacturer,
+                status: "active"
+              }).select().single();
+              if (targetInsertErr) throw targetInsertErr;
+              destBatchId = newTargetBatch.batch_id;
+            }
+
+            // 4. Log transfer transaction for destination batch
+            await db.from("inventory_transactions").insert({
+              batch_id: destBatchId,
+              facility_id: targetBhcId,
+              transaction_type: "transfer",
+              quantity: qtyInput,
+              reference_type: ref || "Received from Central Warehouse",
+              performed_by: session.account_id
+            });
+
+            // 5. Log audit trail
+            const item = items.find(i => i.item_id === sourceBatch.item_id);
+            try {
+              await db.from("audit_trail").insert({
+                account_id: session.account_id,
+                action: "issue_inventory_stock",
+                table_name: "inventory_batches",
+                description: `Issued ${qtyInput} units of "${item?.name || ''}" (Batch #${sourceBatch.batch_number}) to ${targetBhcName}`
+              });
+            } catch (e) {}
+
+            showToast(`Successfully issued ${qtyInput} stock to ${targetBhcName}.`, "success");
+            closeModal("modal-issue");
+            loadInventoryData();
+          } catch (err) {
+            alertEl.textContent = "Error issuing stock: " + err.message;
+            alertEl.style.display = "block";
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-truck-ramp-box"></i> Issue Stock';
+          }
+        });
+
+        // BHC Reports & Analytics Logic
+        let dailyChartInstance = null;
+        let hourlyChartInstance = null;
+
+        async function loadAnalyticsReport() {
+          const facilityId = document.getElementById("analytics-bhc-select").value;
+          const monthInput = document.getElementById("analytics-month").value; // "YYYY-MM"
+          if (!monthInput) return;
+
+          const [yearStr, monthStr] = monthInput.split("-");
+          const year = parseInt(yearStr);
+          const month = parseInt(monthStr);
+
+          const tbody = document.getElementById("analytics-tbody");
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px"></div>Analyzing stock ledger and consumption data...</td></tr>`;
+
+          try {
+            const startDate = new Date(year, month - 1, 1);
+            const endDate = new Date(year, month, 0, 23, 59, 59);
+
+            const startIso = startDate.toISOString();
+            const endIso = endDate.toISOString();
+
+            // Fetch transactions from start of selected month to today
+            let txQuery = db.from("inventory_transactions")
+              .select("*, inventory_batches(item_id, batch_number)")
+              .gte("logged_at", startIso)
+              .order("logged_at", { ascending: true });
+
+            if (facilityId === "central") {
+              txQuery = txQuery.or("facility_id.is.null,facility_id.eq.0");
+            } else if (facilityId !== "all") {
+              txQuery = txQuery.eq("facility_id", parseInt(facilityId));
+            }
+
+            const { data: rawTx, error: txError } = await txQuery;
+            if (txError) throw txError;
+
+            const currentMonthTx = [];
+            const afterMonthTx = [];
+
+            (rawTx || []).forEach(t => {
+              const txDate = new Date(t.logged_at);
+              if (txDate <= endDate) {
+                currentMonthTx.push(t);
+              } else {
+                afterMonthTx.push(t);
+              }
+            });
+
+            // Map current stocks
+            const currentStockMap = {};
+            items.forEach(i => {
+              currentStockMap[i.item_id] = getCurrentStock(i.item_id, facilityId);
+            });
+
+            // Backtracking transactions
+            const backtrackingTransactionsMap = {};
+            const afterMonthTransactionsMap = {};
+            
+            items.forEach(i => {
+              backtrackingTransactionsMap[i.item_id] = 0;
+              afterMonthTransactionsMap[i.item_id] = 0;
+            });
+
+            (rawTx || []).forEach(t => {
+              const itemId = t.inventory_batches?.item_id;
+              if (itemId) {
+                backtrackingTransactionsMap[itemId] += (t.quantity || 0);
+              }
+            });
+
+            afterMonthTx.forEach(t => {
+              const itemId = t.inventory_batches?.item_id;
+              if (itemId) {
+                afterMonthTransactionsMap[itemId] += (t.quantity || 0);
+              }
+            });
+
+            // Monthly stats
+            const monthlyReceived = {};
+            const monthlyDispensed = {};
+            items.forEach(i => {
+              monthlyReceived[i.item_id] = 0;
+              monthlyDispensed[i.item_id] = 0;
+            });
+
+            currentMonthTx.forEach(t => {
+              const itemId = t.inventory_batches?.item_id;
+              if (itemId) {
+                const qty = t.quantity || 0;
+                if (qty > 0) {
+                  monthlyReceived[itemId] += qty;
+                } else {
+                  monthlyDispensed[itemId] += Math.abs(qty);
+                }
+              }
+            });
+
+            // Build rows
+            const ledgerRows = items.map(item => {
+              const curStock = currentStockMap[item.item_id];
+              const carryover = Math.max(0, curStock - backtrackingTransactionsMap[item.item_id]);
+              const rec = monthlyReceived[item.item_id];
+              const disp = monthlyDispensed[item.item_id];
+              const ending = Math.max(0, curStock - afterMonthTransactionsMap[item.item_id]);
+
+              return {
+                id: item.item_id,
+                name: item.name,
+                type: item.item_type,
+                uom: item.unit_of_measure,
+                carryover,
+                received: rec,
+                dispensed: disp,
+                ending
+              };
+            });
+
+            ledgerRows.sort((a, b) => a.name.localeCompare(b.name));
+
+            // KPIs
+            let totalRec = 0;
+            let totalDisp = 0;
+            let totalEnd = 0;
+            let peakItemName = "—";
+            let peakItemQty = 0;
+
+            ledgerRows.forEach(row => {
+              totalRec += row.received;
+              totalDisp += row.dispensed;
+              totalEnd += row.ending;
+
+              if (row.dispensed > peakItemQty) {
+                peakItemQty = row.dispensed;
+                peakItemName = `${row.name} (${row.dispensed} ${row.uom})`;
+              }
+            });
+
+            document.getElementById("analytics-kpi-received").textContent = totalRec;
+            document.getElementById("analytics-kpi-consumed").textContent = totalDisp;
+            document.getElementById("analytics-kpi-ending").textContent = totalEnd;
+            document.getElementById("analytics-kpi-peak-item").textContent = peakItemName;
+            document.getElementById("analytics-kpi-peak-item").title = peakItemName;
+
+            if (ledgerRows.length === 0) {
+              tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 48px; color: var(--text-secondary);">No items in the catalog.</td></tr>`;
+            } else {
+              tbody.innerHTML = ledgerRows.map(row => `
+                <tr>
+                  <td><strong style="color:var(--text-primary);">${esc(row.name)}</strong></td>
+                  <td><span class="type-pill ${row.type}">${esc(row.type.replace('_',' '))}</span></td>
+                  <td style="text-align:right; font-weight:600; color:var(--text-secondary);">${row.carryover} <span style="font-size:11px;font-weight:normal;">${esc(row.uom)}</span></td>
+                  <td style="text-align:right; font-weight:700; color:#059669;">+${row.received}</td>
+                  <td style="text-align:right; font-weight:700; color:#dc2626;">-${row.dispensed}</td>
+                  <td style="text-align:right; font-weight:700; font-size:14px; color:var(--text-primary);">${row.ending} <span style="font-size:11px;font-weight:normal;color:var(--text-secondary);">${esc(row.uom)}</span></td>
+                </tr>
+              `).join('');
+            }
+
+            // Populate Chart Item Selector
+            const itemSelector = document.getElementById("chart-item-selector");
+            const prevSelectedVal = itemSelector.value;
+            itemSelector.innerHTML = items.map(i => `<option value="${i.item_id}">${esc(i.name)}</option>`).join('');
+            if (prevSelectedVal && items.some(i => String(i.item_id) === String(prevSelectedVal))) {
+              itemSelector.value = prevSelectedVal;
+            }
+
+            function updateAnalyticsCharts() {
+              const selectedItemId = parseInt(itemSelector.value);
+              const selectedItem = items.find(i => i.item_id === selectedItemId);
+              if (!selectedItem) return;
+
+              const itemTx = currentMonthTx.filter(t => t.inventory_batches?.item_id === selectedItemId && t.quantity < 0);
+
+              // 1. Daily Chart
+              const daysInMonth = new Date(year, month, 0).getDate();
+              const dailyUsage = Array(daysInMonth).fill(0);
+              itemTx.forEach(t => {
+                const date = new Date(t.logged_at);
+                const day = date.getDate();
+                dailyUsage[day - 1] += Math.abs(t.quantity);
+              });
+
+              const dailyLabels = Array.from({ length: daysInMonth }, (_, i) => `${i + 1}`);
+
+              if (dailyChartInstance) dailyChartInstance.destroy();
+              const ctxDaily = document.getElementById("analytics-chart-daily").getContext("2d");
+              dailyChartInstance = new Chart(ctxDaily, {
+                type: 'bar',
+                data: {
+                  labels: dailyLabels,
+                  datasets: [{
+                    label: `Dispensed (${selectedItem.unit_of_measure})`,
+                    data: dailyUsage,
+                    backgroundColor: 'rgba(255, 104, 165, 0.7)',
+                    borderColor: 'rgba(255, 104, 165, 1)',
+                    borderWidth: 1.5,
+                    borderRadius: 4
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: false }
+                  },
+                  scales: {
+                    x: { grid: { display: false } },
+                    y: { beginAtZero: true }
+                  }
+                }
+              });
+
+              // 2. Hourly Chart
+              const hourlyUsage = Array(24).fill(0);
+              itemTx.forEach(t => {
+                const date = new Date(t.logged_at);
+                const hour = date.getHours();
+                hourlyUsage[hour] += Math.abs(t.quantity);
+              });
+
+              const hourlyLabels = Array.from({ length: 24 }, (_, i) => {
+                const ampm = i >= 12 ? 'PM' : 'AM';
+                const displayHour = i % 12 === 0 ? 12 : i % 12;
+                return `${displayHour}${ampm}`;
+              });
+
+              if (hourlyChartInstance) hourlyChartInstance.destroy();
+              const ctxHourly = document.getElementById("analytics-chart-hourly").getContext("2d");
+              hourlyChartInstance = new Chart(ctxHourly, {
+                type: 'line',
+                data: {
+                  labels: hourlyLabels,
+                  datasets: [{
+                    label: `Units Dispensed`,
+                    data: hourlyUsage,
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderColor: 'rgba(59, 130, 246, 0.8)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3,
+                    pointBackgroundColor: '#2563eb'
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: false }
+                  },
+                  scales: {
+                    x: { 
+                      grid: { display: false },
+                      ticks: {
+                        callback: function(val, index) {
+                          return index % 3 === 0 ? this.getLabelForValue(val) : '';
+                        }
+                      }
+                    },
+                    y: { beginAtZero: true }
+                  }
+                }
+              });
+            }
+
+            updateAnalyticsCharts();
+            itemSelector.onchange = updateAnalyticsCharts;
+
+            // CSV Export
+            document.getElementById("export-analytics-csv").onclick = function() {
+              const headers = ["Item Name", "Category", "Carryover Stock", "Received", "Dispensed", "Ending Stock", "Unit"];
+              const rows = ledgerRows.map(r => [
+                r.name,
+                r.type,
+                r.carryover,
+                r.received,
+                r.dispensed,
+                r.ending,
+                r.uom
+              ]);
+
+              const csvContent = "data:text/csv;charset=utf-8," 
+                + [headers.join(","), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n");
+              
+              const encodedUri = encodeURI(csvContent);
+              const link = document.createElement("a");
+              link.setAttribute("href", encodedUri);
+              const bhcName = document.getElementById("analytics-bhc-select").options[document.getElementById("analytics-bhc-select").selectedIndex].text.replace(/[📍🏢]/g, '').trim();
+              link.setAttribute("download", `inventory_reconciliation_${bhcName}_${monthInput}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            };
+
+          } catch (err) {
+            console.error(err);
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 48px; color: var(--error);"><i class="fa-solid fa-circle-exclamation"></i> Error loading report: ${esc(err.message)}</td></tr>`;
+          }
+        }
+
+        function getCurrentStock(itemId, facilityId) {
+          return batches
+            .filter(b => {
+              if (b.item_id !== itemId || b.status !== 'active') return false;
+              if (facilityId === "central") {
+                return b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null";
+              } else if (facilityId !== "all") {
+                return String(b.facility_id) === String(facilityId);
+              }
+              return true;
+            })
+            .reduce((sum, b) => sum + (b.quantity_remaining || 0), 0);
+        }
+
+        document.getElementById("btn-load-analytics").addEventListener("click", loadAnalyticsReport);
+
+        // Filter Event Listeners
+        ["catalog-search", "catalog-filter-type", "catalog-filter-stock"].forEach(id => {
+          document.getElementById(id).addEventListener("input", renderCatalog);
+          document.getElementById(id).addEventListener("change", renderCatalog);
+        });
+
+        ["batches-search", "batches-filter-status"].forEach(id => {
+          document.getElementById(id).addEventListener("input", renderBatches);
+          document.getElementById(id).addEventListener("change", renderBatches);
+        });
+
+        ["tx-search", "tx-filter-type"].forEach(id => {
+          document.getElementById(id).addEventListener("input", renderTransactions);
+          document.getElementById(id).addEventListener("change", renderTransactions);
+        });
+
+        // Initial Load
+        loadInventoryData();
+      })();
+    </script>
+  </body>
+</html>

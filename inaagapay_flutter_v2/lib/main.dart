@@ -152,7 +152,7 @@ class _InaagapayAppState extends State<InaagapayApp> {
               accountResponse?['is_temporary_password'] == true &&
                   !temporaryPasswordAlreadyChanged;
 
-          if (createdBy == 'midwife') {
+          if (createdBy != 'self' && createdBy != accountId.toString()) {
             if (!profileComplete) {
               await AuthStorage.saveProfileComplete(true);
             }

@@ -30,12 +30,35 @@ class SupabaseService {
     return BCrypt.hashpw(password, BCrypt.gensalt());
   }
 
-  // Verify password against bcrypt hash
+  // Verify password against bcrypt hash with resilient prefix normalization
   static bool _verifyPassword(String password, String hash) {
+    if (hash.isEmpty) return false;
+    final trimmedPwd = password.trim();
     try {
-      return BCrypt.checkpw(password, hash);
+      // 1. Direct check with trimmed password
+      if (BCrypt.checkpw(trimmedPwd, hash)) return true;
+      // 2. Direct check with untrimmed password
+      if (BCrypt.checkpw(password, hash)) return true;
+
+      // 3. Try normalizing $2a$ vs $2b$ vs $2y$ prefixes for cross-platform compatibility
+      if (hash.startsWith(r'$2a$')) {
+        final hash2b = r'$2b$' + hash.substring(4);
+        final hash2y = r'$2y$' + hash.substring(4);
+        if (BCrypt.checkpw(trimmedPwd, hash2b) || BCrypt.checkpw(trimmedPwd, hash2y)) return true;
+      } else if (hash.startsWith(r'$2b$')) {
+        final hash2a = r'$2a$' + hash.substring(4);
+        if (BCrypt.checkpw(trimmedPwd, hash2a)) return true;
+      }
+
+      if (kDebugMode) {
+        debugPrint('=== VERIFY PASSWORD MATCH FAILED ===');
+        debugPrint('Typed password length: ${password.length}');
+        debugPrint('Hash from DB: $hash');
+      }
+      return false;
     } catch (e) {
-      return password == hash;
+      if (kDebugMode) debugPrint('BCrypt checkpw exception: $e');
+      return password == hash || trimmedPwd == hash;
     }
   }
 
@@ -223,11 +246,12 @@ class SupabaseService {
           };
         }
 
+        final int accountId = existing['account_id'] as int;
         await client.from('accounts').update({
           'password_hash': _hashPassword(password),
           'verification_code': code,
           'verification_expires': expires,
-          'created_by': 'self',
+          'created_by': accountId.toString(),
         }).eq(field, formattedContact);
       } else {
         final data = {
@@ -247,7 +271,11 @@ class SupabaseService {
           data['email_address'] = formattedContact;
         }
 
-        await client.from('accounts').insert(data);
+        final inserted = await client.from('accounts').insert(data).select('account_id').single();
+        final int accountId = inserted['account_id'] as int;
+        await client.from('accounts').update({
+          'created_by': accountId.toString(),
+        }).eq('account_id', accountId);
       }
 
       final sent = await EmailService.sendVerificationCode(
@@ -581,10 +609,10 @@ class SupabaseService {
           }
         }
 
-        if (createdBy == 'midwife') {
+        if (createdBy != 'self' && createdBy != accountResponse['account_id']?.toString()) {
           profileComplete = true;
           if (kDebugMode) {
-            debugPrint('✅ Midwife account detected - profileComplete = true');
+            debugPrint('✅ Midwife/Admin account creation detected - profileComplete = true');
           }
         } else {
           final hasFirstName = accountResponse['first_name'] != null &&
@@ -631,12 +659,12 @@ class SupabaseService {
         'id': accountResponse['account_id'],
         'role': accountResponse['account_type'],
         'created_by': createdBy,
+        'needs_password_change': accountResponse['is_temporary_password'] == true,
       };
 
       if (accountResponse['account_type'] == 'mother') {
         userData['profile_complete'] = profileComplete;
         userData['mother_id'] = motherId;
-        userData['needs_password_change'] = needsPasswordChange;
       }
 
       if (kDebugMode) {
@@ -1316,14 +1344,29 @@ class SupabaseService {
       if (motherResponse != null) {
         final accountId = motherResponse['account_id'] as int;
 
+        int? midwifeAccountId;
+        try {
+          final currentEmail = client.auth.currentUser?.email;
+          if (currentEmail != null) {
+            final midwifeAccount = await client
+                .from('accounts')
+                .select('account_id')
+                .eq('email_address', currentEmail)
+                .maybeSingle();
+            midwifeAccountId = midwifeAccount?['account_id'] as int?;
+          }
+        } catch (e) {
+          debugPrint('Error getting midwife account_id: $e');
+        }
+
         await client
             .from('accounts')
             .update({
-              'created_by': 'midwife',
+              'created_by': midwifeAccountId?.toString() ?? 'midwife',
               'updated_at': DateTime.now().toIso8601String(),
             })
             .eq('account_id', accountId)
-            .eq('created_by', 'self');
+            .or('created_by.eq.self,created_by.eq.${accountId}');
       }
 
       final obScore = ObstetricScore.calculate(
@@ -1555,7 +1598,7 @@ class SupabaseService {
         accountId = existingAccount['account_id'] as int;
 
         final isTempPass = existingAccount['is_temporary_password'] == true;
-        final createdByMidwife = existingAccount['created_by'] == 'midwife';
+        final createdByMidwife = existingAccount['created_by'] != 'self' && existingAccount['created_by'] != existingAccount['account_id']?.toString();
 
         if (createdByMidwife && isTempPass) {
           // Re-generate temporary password and send credentials
@@ -1597,6 +1640,18 @@ class SupabaseService {
           hashedPassword = _hashPassword(generatedPassword!);
         }
 
+        int? midwifeAccountId;
+        try {
+          final midwifeRecord = await client
+              .from('midwives')
+              .select('account_id')
+              .eq('midwife_id', midwifeId)
+              .maybeSingle();
+          midwifeAccountId = midwifeRecord?['account_id'] as int?;
+        } catch (e) {
+          debugPrint('Error fetching midwife account_id: $e');
+        }
+
         final accountRow = await client
             .from('accounts')
             .insert({
@@ -1611,7 +1666,7 @@ class SupabaseService {
               'is_verified': true,
               'status': 'active',
               'is_temporary_password': !isUnderageNoLogin,
-              'created_by': 'midwife',
+              'created_by': midwifeAccountId?.toString() ?? 'midwife',
               'created_at': DateTime.now().toIso8601String(),
             })
             .select('account_id')

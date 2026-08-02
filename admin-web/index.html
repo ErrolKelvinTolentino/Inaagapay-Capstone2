@@ -520,24 +520,28 @@
           alertBox.classList.add("hidden");
 
           try {
-            // Fetch admin account by email
+            // Fetch account by lowercased email
             const { data: accounts, error } = await db
               .from("accounts")
               .select(
                 "account_id, email_address, password_hash, account_type, first_name, middle_name, last_name, extension_name, phone_number, status, is_verified, is_temporary_password"
               )
-              .eq("email_address", email)
-              .eq("account_type", "admin")
+              .eq("email_address", email.toLowerCase())
               .limit(1);
 
             if (error) throw error;
 
             if (!accounts || accounts.length === 0) {
-              showError("No admin account found with that email.");
+              showError("Invalid email or password.");
               return;
             }
 
             const user = accounts[0];
+
+            if (user.account_type !== "admin") {
+              showError("Access Denied: Midwife and Mother accounts must use the INAAGAPAY Mobile App.");
+              return;
+            }
 
             if (!user.is_verified) {
               showError("Account is not verified. Contact system support.");
