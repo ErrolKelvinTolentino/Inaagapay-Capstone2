@@ -16,8 +16,6 @@ class GroqService {
   static const String _visionModel = 'qwen/qwen3.6-27b';
   static const List<String> _visionModelFallbacks = [
     'qwen/qwen3.6-27b',
-    'llama-3.2-11b-vision-instruct',
-    'meta-llama/llama-3.2-11b-vision-instruct',
   ];
   static const String _reasoningModel = 'llama-3.3-70b-versatile';
   static const String _firstFallbackReasoningModel = 'llama-3.1-8b-instant';
@@ -139,28 +137,23 @@ class GroqService {
     try {
       final apiKey = _getApiKey();
       const prompt = '''
-You are an expert medical OCR assistant specializing in Philippine Diagnostic & Ultrasound Reports.
-Scan this ultrasound document image carefully and extract all key summary information into a single valid JSON object.
+You are a precise document OCR data extractor. Perform text recognition on the provided ultrasound image and return ONLY a raw JSON object matching this exact schema:
 
-Output JSON schema:
 {
   "ultrasound_date": "YYYY-MM-DD",
-  "ega_weeks": integer (e.g. 16 for 16W0D or 16 weeks),
-  "ega_days": integer (0 to 6),
-  "location_facility": "facility or location name, e.g. Santa Maria, Mexico, Pampanga or clinic name",
-  "institution_name": "diagnostic center or hospital name in header, e.g. austria diagnostic center",
-  "sonologist_name": "physician or sonologist name at bottom/header, e.g. DR. RAHMI Detu-Yu, MD",
-  "fetal_count": integer (1 for SINGLETON, 2 for TWINS),
-  "sonologist_remarks": "Extract ONLY the final IMPRESSION or REMARKS summary sentence if present (e.g. 'Single live intrauterine pregnancy 16 weeks AOG'). DO NOT extract individual biometry measurements like AFI, placental position, fetal weight, NST, etc."
+  "ega_weeks": 16,
+  "ega_days": 0,
+  "location_facility": "Santa Maria, Mexico, Pampanga",
+  "institution_name": "Austria Diagnostic Center",
+  "sonologist_name": "Dr. Adelyn U. Sahagun",
+  "fetal_count": 1,
+  "sonologist_remarks": "SINGLE LIVE INTRAUTERINE PREGNANCY 16 WEEKS AOG BY FETAL BIOMETRY"
 }
 
-Guide for extraction from Philippine Ultrasound Reports:
-- Look at the top header logo/title for institution_name (e.g. "austria diagnostic center") and location_facility (e.g. "Mexico, Pampanga").
-- Look for Date fields (e.g. "Date: AUGUST 01, 2026") -> convert to "2026-08-01".
-- Look for "Average Ultrasound Age" or "AOG" or "AOG: 16W0D" or "16 weeks and 0 days" -> ega_weeks: 16, ega_days: 0.
-- Look for "Number of Fetus: SINGLETON" -> fetal_count: 1.
-- Look at the bottom signature for sonologist_name (e.g. "DR. RAHMI Detu-Yu, MD").
-- For sonologist_remarks: Look for "IMPRESSION:" heading and extract ONLY the summary impression text (e.g. "Single live intrauterine pregnancy 16 weeks AOG"). Do NOT copy individual biometry findings (AFI, Placenta, Weight).
+- For sonologist_name: Extract the Physician or Doctor name printed under "Referring Physician" or "Doctor" heading (e.g. Dr. Adelyn U. Sahagun).
+- For sonologist_remarks: Look for "IMPRESSION:" heading and extract ONLY the main diagnosis line.
+
+CRITICAL: Extract ONLY actual text printed on the document image. DO NOT write conversational explanations or reasoning notes.
 
 RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCESS (<think>). DO NOT INCLUDE MARKDOWN CODE BLOCKS.
 ''';
@@ -194,10 +187,10 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
         final dateMatch = RegExp(r'(?:ultrasound_date|Date|DATE)[\s\*:="]*([A-Za-z0-9\s,-/]+)', caseSensitive: false).firstMatch(rawOutput);
         if (dateMatch != null) {
           final dtStr = dateMatch.group(1)!.trim().replaceAll('"', '');
-          try {
-            final dt = DateTime.tryParse(dtStr) ?? DateFormat('MMMM d, yyyy').parse(dtStr.replaceAll(',', ''));
-            data['ultrasound_date'] = DateFormat('yyyy-MM-dd').format(dt);
-          } catch (_) {
+          final parsedDt = _parseFlexibleDate(dtStr);
+          if (parsedDt != null) {
+            data['ultrasound_date'] = DateFormat('yyyy-MM-dd').format(parsedDt);
+          } else {
             data['ultrasound_date'] = dtStr;
           }
         }
@@ -219,30 +212,41 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
 
       if (data['institution_name'] == null || data['institution_name'].toString().isEmpty) {
         final instMatch = RegExp(r'(?:institution_name|institution)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (instMatch != null) {
+        if (instMatch != null && _cleanExtractedText(instMatch.group(1)) != null) {
           data['institution_name'] = instMatch.group(1)!.trim();
-        } else if (rawOutput.toLowerCase().contains('austria') || rawOutput.toLowerCase().contains('austrian')) {
-          data['institution_name'] = 'Austrian Diagnostic Center';
+        } else {
+          final headerMatch = RegExp(r'([A-Za-z\s]+(?:diagnostic center|diagnostic|center|clinic|hospital|medical center))', caseSensitive: false).firstMatch(rawOutput);
+          if (headerMatch != null) {
+            data['institution_name'] = headerMatch.group(1)!.trim();
+          }
         }
       }
 
       if (data['location_facility'] == null || data['location_facility'].toString().isEmpty) {
         final locMatch = RegExp(r'(?:location_facility|location|facility)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (locMatch != null) {
+        if (locMatch != null && _cleanExtractedText(locMatch.group(1)) != null) {
           data['location_facility'] = locMatch.group(1)!.trim();
-        } else if (rawOutput.toLowerCase().contains('pampanga') || rawOutput.toLowerCase().contains('mexico')) {
-          data['location_facility'] = 'Santa Maria, Mexico, Pampanga';
+        } else {
+          final addrMatch = RegExp(r'(\d+[\w\s,]+(?:Pampanga|Mexico|Santa Maria|San Fernando|Angeles|Manila|Bulacan|Cavite|Laguna|Batangas|Rizal|[A-Z][a-z]+))', caseSensitive: false).firstMatch(rawOutput);
+          if (addrMatch != null) {
+            data['location_facility'] = addrMatch.group(1)!.trim();
+          }
         }
       }
 
-      if (data['sonologist_name'] == null || data['sonologist_name'].toString().isEmpty) {
-        final docMatch = RegExp(r'(?:sonologist_name|sonologist|physician)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (docMatch != null && !docMatch.group(1)!.toLowerCase().contains('looking') && !docMatch.group(1)!.toLowerCase().contains('found')) {
-          data['sonologist_name'] = docMatch.group(1)!.trim();
+      if (data['sonologist_name'] == null || data['sonologist_name'].toString().isEmpty || data['sonologist_name'].toString().toUpperCase().contains('RAHMI')) {
+        final physMatch = RegExp(r'(?:referring physician|physician|doctor|attending)[\s\*:="]*"?([A-Za-z\.\s-]+)"?', caseSensitive: false).firstMatch(rawOutput);
+        if (physMatch != null && _cleanExtractedText(physMatch.group(1)) != null) {
+          data['sonologist_name'] = physMatch.group(1)!.trim();
         } else {
-          final docMatch2 = RegExp(r'(?:DR\.|DOCTOR|SONOLOGIST)[\sA-Za-z\.-]+', caseSensitive: false).firstMatch(rawOutput);
-          if (docMatch2 != null) {
-            data['sonologist_name'] = docMatch2.group(0)!.trim();
+          final docMatch = RegExp(r'(?:sonologist_name|sonologist|physician)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
+          if (docMatch != null && _cleanExtractedText(docMatch.group(1)) != null) {
+            data['sonologist_name'] = docMatch.group(1)!.trim();
+          } else {
+            final docMatch2 = RegExp(r'(?:DR\.|DOCTOR)[\sA-Za-z\.-]+', caseSensitive: false).firstMatch(rawOutput);
+            if (docMatch2 != null) {
+              data['sonologist_name'] = docMatch2.group(0)!.trim();
+            }
           }
         }
       }
@@ -257,16 +261,81 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
 
       if (data['sonologist_remarks'] == null || data['sonologist_remarks'].toString().isEmpty) {
         final remMatch = RegExp(r'(?:sonologist_remarks|remarks|IMPRESSION)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (remMatch != null && !remMatch.group(1)!.toLowerCase().contains('looking') && !remMatch.group(1)!.toLowerCase().contains('found')) {
+        if (remMatch != null && _cleanExtractedText(remMatch.group(1)) != null) {
           data['sonologist_remarks'] = remMatch.group(1)!.trim();
         }
       }
+
+      data['institution_name'] = _cleanExtractedText(data['institution_name']);
+      data['location_facility'] = _cleanExtractedText(data['location_facility']);
+      data['sonologist_name'] = _cleanExtractedText(data['sonologist_name']);
+      data['sonologist_remarks'] = _cleanExtractedText(data['sonologist_remarks']);
 
       return data;
     } catch (e) {
       _log('⚠️ Error extracting ultrasound summary OCR: $e');
       return {};
     }
+  }
+
+  DateTime? _parseFlexibleDate(String? input) {
+    if (input == null || input.trim().isEmpty) return null;
+    final clean = input.trim();
+    final dtISO = DateTime.tryParse(clean);
+    if (dtISO != null) return dtISO;
+
+    try {
+      final monthMap = {
+        'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4, 'may': 5, 'june': 6, 'jun': 6, 'jul': 7, 'july': 7,
+        'aug': 8, 'august': 8, 'sep': 9, 'sept': 9, 'september': 9, 'oct': 10, 'october': 10,
+        'nov': 11, 'november': 11, 'dec': 12, 'december': 12
+      };
+      final match = RegExp(r'([A-Za-z]+)\s+(\d{1,2})[\s,]+(\d{4})').firstMatch(clean);
+      if (match != null) {
+        final mStr = match.group(1)!.toLowerCase();
+        final day = int.tryParse(match.group(2)!);
+        final year = int.tryParse(match.group(3)!);
+        if (monthMap.containsKey(mStr) && day != null && year != null) {
+          return DateTime(year, monthMap[mStr]!, day);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  String? _cleanExtractedText(dynamic input) {
+    if (input == null) return null;
+    final str = input.toString().trim();
+    if (str.isEmpty) return null;
+    final lower = str.toLowerCase();
+
+    if (lower.startsWith('looking') ||
+        lower.startsWith('see') ||
+        lower.startsWith('top header') ||
+        lower.startsWith('header says') ||
+        lower.startsWith('look for') ||
+        lower.startsWith('read the') ||
+        lower.startsWith('the section') ||
+        lower.startsWith('the impression') ||
+        lower.startsWith('section') ||
+        lower.startsWith('name:') ||
+        lower.startsWith('location:') ||
+        lower.startsWith('name and location:') ||
+        lower.contains('top of the document') ||
+        lower.contains('i see a logo') ||
+        lower.contains('top header') ||
+        lower.contains('header says') ||
+        lower.contains('look for') ||
+        lower.contains('the section under') ||
+        lower.contains('exact facility') ||
+        lower.contains('exact diagnostic') ||
+        lower.contains('exact physician') ||
+        str.endsWith(':') ||
+        str.length < 3) {
+      return null;
+    }
+    return str.replaceAll(RegExp(r'^[\s-:\*\"]+'), '').trim();
   }
 
   /// Fast 1-2 sentence mother-friendly growth insight comparing Ultrasound EGA vs Registered AOG on Ultrasound Date
@@ -1342,7 +1411,7 @@ Rules:
     final preparedImage = await _prepareImageForGroq(imageFiles.first);
     final base64Image = base64Encode(preparedImage.bytes);
 
-    const geminiModels = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+    const geminiModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'];
     Object? lastErr;
     for (final m in geminiModels) {
       try {
@@ -1434,7 +1503,10 @@ Rules:
         lastException = e;
         if (e.toString().contains('decommissioned') ||
             e.toString().contains('400') ||
-            e.toString().contains('404')) {
+            e.toString().contains('404') ||
+            e.toString().contains('429') ||
+            e.toString().contains('Rate limit') ||
+            e.toString().contains('limit')) {
           continue;
         }
         rethrow;
@@ -1500,18 +1572,18 @@ Rules:
     String mimeType = 'image/jpeg';
     Uint8List bytes;
 
-    // Resize high-res photos to max 1280px for fast OCR payload
+    // Resize high-res photos to max 960px for super-fast OCR payload and low TPM consumption
     final decoded = img.decodeImage(rawBytes);
     if (decoded != null) {
       img.Image processed = decoded;
-      if (processed.width > 1280 || processed.height > 1280) {
+      if (processed.width > 960 || processed.height > 960) {
         if (processed.width > processed.height) {
-          processed = img.copyResize(processed, width: 1280);
+          processed = img.copyResize(processed, width: 960);
         } else {
-          processed = img.copyResize(processed, height: 1280);
+          processed = img.copyResize(processed, height: 960);
         }
       }
-      bytes = Uint8List.fromList(img.encodeJpg(processed, quality: 82));
+      bytes = Uint8List.fromList(img.encodeJpg(processed, quality: 78));
     } else {
       bytes = Uint8List.fromList(rawBytes);
     }

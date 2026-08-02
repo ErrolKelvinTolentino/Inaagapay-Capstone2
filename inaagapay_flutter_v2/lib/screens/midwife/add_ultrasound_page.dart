@@ -16,6 +16,7 @@ import '../../widgets/app_input_field.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/headline.dart';
 import '../../widgets/secondary_header.dart';
+import '../../widgets/confirmation_dialog_box.dart';
 
 class UltrasoundAttachment {
   final String name;
@@ -391,6 +392,13 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
       _attachments.removeAt(index);
       if (_attachments.isEmpty) {
         _ocrExtracted = false;
+        _dateCtrl.clear();
+        _date = null;
+        _locationCtrl.clear();
+        _institutionCtrl.clear();
+        _egaWeeksCtrl.clear();
+        _egaDaysCtrl.clear();
+        _remarksCtrl.clear();
       }
     });
   }
@@ -430,31 +438,53 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
 
           if (data.isNotEmpty) {
             if (data['ultrasound_date'] != null) {
-              final dt = DateTime.tryParse(data['ultrasound_date'].toString());
+              final rawDateStr = data['ultrasound_date'].toString().trim();
+              DateTime? dt = DateTime.tryParse(rawDateStr);
+              if (dt == null) {
+                final monthMap = {
+                  'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+                  'apr': 4, 'april': 4, 'may': 5, 'june': 6, 'jun': 6, 'jul': 7, 'july': 7,
+                  'aug': 8, 'august': 8, 'sep': 9, 'sept': 9, 'september': 9, 'oct': 10, 'october': 10,
+                  'nov': 11, 'november': 11, 'dec': 12, 'december': 12
+                };
+                final match = RegExp(r'([A-Za-z]+)\s+(\d{1,2})[\s,]+(\d{4})').firstMatch(rawDateStr);
+                if (match != null) {
+                  final mStr = match.group(1)!.toLowerCase();
+                  final day = int.tryParse(match.group(2)!);
+                  final year = int.tryParse(match.group(3)!);
+                  if (monthMap.containsKey(mStr) && day != null && year != null) {
+                    dt = DateTime(year, monthMap[mStr]!, day);
+                  }
+                }
+              }
               if (dt != null) {
                 _date = dt;
                 _dateCtrl.text = DateFormat('MMM d, yyyy').format(dt);
               }
             }
-            if (data['ega_weeks'] != null) {
+            if (data['ega_weeks'] != null && data['ega_weeks'].toString().trim().isNotEmpty) {
               _egaWeeksCtrl.text = data['ega_weeks'].toString();
-            }
-            if (data['ega_days'] != null) {
+              _egaDaysCtrl.text = (data['ega_days'] ?? 0).toString();
+            } else if (data['ega_days'] != null) {
               _egaDaysCtrl.text = data['ega_days'].toString();
             }
-            if (data['location_facility'] != null && data['location_facility'].toString().trim().isNotEmpty) {
-              _locationCtrl.text = data['location_facility'].toString();
-            } else if (data['institution_name'] != null && data['institution_name'].toString().trim().isNotEmpty) {
-              _locationCtrl.text = data['institution_name'].toString();
+            if (_isValidFieldValue(data['institution_name'])) {
+              _institutionCtrl.text = data['institution_name'].toString().trim();
             }
-            if (data['sonologist_name'] != null && data['sonologist_name'].toString().trim().isNotEmpty) {
-              _workerNameCtrl.text = data['sonologist_name'].toString();
+            if (_isValidFieldValue(data['location_facility'])) {
+              _locationCtrl.text = data['location_facility'].toString().trim();
             }
-            if (data['institution_name'] != null && data['institution_name'].toString().trim().isNotEmpty) {
-              _institutionCtrl.text = data['institution_name'].toString();
+            if (_locationCtrl.text.isEmpty && _isValidFieldValue(_institutionCtrl.text)) {
+              _locationCtrl.text = _institutionCtrl.text;
             }
-            if (data['sonologist_remarks'] != null && data['sonologist_remarks'].toString().trim().isNotEmpty) {
-              _remarksCtrl.text = data['sonologist_remarks'].toString();
+            if (_institutionCtrl.text.isEmpty && _isValidFieldValue(_locationCtrl.text)) {
+              _institutionCtrl.text = _locationCtrl.text;
+            }
+            if (_isValidFieldValue(data['sonologist_name'])) {
+              _workerNameCtrl.text = data['sonologist_name'].toString().trim();
+            }
+            if (_isValidFieldValue(data['sonologist_remarks'])) {
+              _remarksCtrl.text = data['sonologist_remarks'].toString().trim();
             }
             if (data['fetal_count'] != null) {
               final fc = int.tryParse(data['fetal_count'].toString());
@@ -473,6 +503,36 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
     } finally {
       if (mounted) setState(() => _processingDocument = false);
     }
+  }
+
+  bool _isValidFieldValue(dynamic input) {
+    if (input == null) return false;
+    final str = input.toString().trim();
+    if (str.isEmpty) return false;
+    final lower = str.toLowerCase();
+    if (lower.startsWith('looking') ||
+        lower.startsWith('see') ||
+        lower.startsWith('top header') ||
+        lower.startsWith('header says') ||
+        lower.startsWith('look for') ||
+        lower.startsWith('read the') ||
+        lower.startsWith('the section') ||
+        lower.startsWith('the impression') ||
+        lower.startsWith('section') ||
+        lower.startsWith('name:') ||
+        lower.startsWith('location:') ||
+        lower.startsWith('name and location:') ||
+        lower.contains('top of the document') ||
+        lower.contains('i see a logo') ||
+        lower.contains('top header') ||
+        lower.contains('header says') ||
+        lower.contains('look for') ||
+        lower.contains('the section under') ||
+        str.endsWith(':') ||
+        str.length < 3) {
+      return false;
+    }
+    return true;
   }
 
   // ── Gestational Age & Discrepancy Logic ────────────────────────────────
@@ -505,6 +565,11 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
     final isFirstTrimester = registeredAogWeeksOnScanDate <= 13.0;
     final threshold = isFirstTrimester ? 5 : 7;
     return discrepancyDays >= threshold;
+  }
+
+  bool get isEgaLowerThanAog {
+    if (_date == null || ultrasoundEgaTotalDays <= 0 || _originalEdd == null) return false;
+    return ultrasoundEgaTotalDays < registeredAogDaysOnScanDate;
   }
 
   void _redatePregnancyEdd() {
@@ -542,6 +607,62 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
       helpText: _pregnancyLmp == null
           ? 'Select Ultrasound Date'
           : 'Select date after LMP (${DateFormat('MMM d, yyyy').format(_pregnancyLmp!)})',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.brandPrimary,
+              onPrimary: Colors.white,
+              onSurface: AppColors.brandText,
+              secondary: AppColors.brandPrimary,
+              surface: Colors.white,
+            ),
+            dialogTheme: DialogThemeData(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+              backgroundColor: Colors.white,
+              elevation: 4,
+              surfaceTintColor: Colors.transparent,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.brandPrimary,
+                textStyle: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            datePickerTheme: DatePickerThemeData(
+              backgroundColor: Colors.white,
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+              headerBackgroundColor: Colors.white,
+              headerForegroundColor: AppColors.brandText,
+              headerHeadlineStyle: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppColors.brandText,
+              ),
+              weekdayStyle: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+              dayStyle: const TextStyle(fontWeight: FontWeight.w500),
+              todayBorder: const BorderSide(color: AppColors.brandPrimary, width: 1.5),
+              dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) return Colors.white;
+                return AppColors.brandText;
+              }),
+              dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) return AppColors.brandPrimary;
+                return Colors.transparent;
+              }),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (picked == null) return;
@@ -588,7 +709,7 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
     return true;
   }
 
-  String? _workingBucket;
+  static String? _workingBucket;
 
   Future<List<String>> _uploadAttachments() async {
     final urls = <String>[];
@@ -611,40 +732,110 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
       final mime = item.isPdf ? 'application/pdf' : 'image/jpeg';
       bool uploaded = false;
 
-      final bucketsToTry = _workingBucket != null
-          ? [_workingBucket!, ...candidateBuckets.where((b) => b != _workingBucket)]
-          : candidateBuckets;
+      // Fast-path: If storage buckets don't exist on Supabase, skip timeouts instantly
+      if (_workingBucket != 'none') {
+        final bucketsToTry = _workingBucket != null
+            ? [_workingBucket!, ...candidateBuckets.where((b) => b != _workingBucket)]
+            : candidateBuckets;
 
-      for (final bucket in bucketsToTry) {
-        try {
-          await Supabase.instance.client.storage.from(bucket).uploadBinary(
-            filePath,
-            bytes,
-            fileOptions: FileOptions(contentType: mime, upsert: true),
-          );
-          final publicUrl = Supabase.instance.client.storage.from(bucket).getPublicUrl(filePath);
-          urls.add(publicUrl);
-          _workingBucket = bucket;
-          uploaded = true;
-          if (kDebugMode) debugPrint('[AddUltrasound] Uploaded to storage bucket "$bucket": $publicUrl');
-          break;
-        } catch (e) {
-          if (kDebugMode) debugPrint('[AddUltrasound] Bucket "$bucket" upload failed: $e');
+        for (final bucket in bucketsToTry) {
+          try {
+            await Supabase.instance.client.storage.from(bucket).uploadBinary(
+              filePath,
+              bytes,
+              fileOptions: FileOptions(contentType: mime, upsert: true),
+            ).timeout(const Duration(milliseconds: 500));
+            final publicUrl = Supabase.instance.client.storage.from(bucket).getPublicUrl(filePath);
+            urls.add(publicUrl);
+            _workingBucket = bucket;
+            uploaded = true;
+            break;
+          } catch (_) {}
         }
       }
 
       if (!uploaded) {
+        _workingBucket = 'none';
         try {
           final base64Str = base64Encode(bytes);
           final dataUrl = 'data:$mime;base64,$base64Str';
           urls.add(dataUrl);
-          if (kDebugMode) debugPrint('[AddUltrasound] Stored image as base64 data URL fallback (length ${dataUrl.length})');
-        } catch (e) {
-          if (kDebugMode) debugPrint('[AddUltrasound] Base64 fallback failed: $e');
-        }
+        } catch (_) {}
       }
     }
     return urls;
+  }
+
+  Future<String?> _showDiscrepancyWarningDialog() async {
+    final isLower = isEgaLowerThanAog;
+    final String subtitleText = isLower
+        ? 'Ultrasound EGA (${(ultrasoundEgaTotalDays / 7).floor()}w ${ultrasoundEgaTotalDays % 7}d) is $discrepancyDays days LOWER than expected AOG (${(registeredAogDaysOnScanDate / 7).floor()}w ${registeredAogDaysOnScanDate % 7}d).\n\nWould you like to re-date the official pregnancy EDD to match the ultrasound, or keep the current EDD?'
+        : 'Ultrasound EGA (${(ultrasoundEgaTotalDays / 7).floor()}w ${ultrasoundEgaTotalDays % 7}d) is $discrepancyDays days AHEAD of expected AOG (${(registeredAogDaysOnScanDate / 7).floor()}w ${registeredAogDaysOnScanDate % 7}d).\n\nWould you like to re-date the official pregnancy EDD to match the ultrasound, or keep the current EDD?';
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: isLower ? Colors.orange.shade800 : Colors.amber.shade800,
+              size: 26,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Gestational Age Discrepancy',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: isLower ? Colors.orange.shade900 : Colors.amber.shade900,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          subtitleText,
+          style: const TextStyle(fontSize: 14, height: 1.4, color: AppColors.brandText),
+        ),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, 'ignore'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.brandText,
+                    side: const BorderSide(color: AppColors.borderPrimary),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: const Text('Ignore & Save', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, 'redate'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isLower ? Colors.orange.shade900 : Colors.amber.shade900,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    elevation: 0,
+                  ),
+                  child: const Text('Re-date EDD', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _submit() async {
@@ -652,6 +843,14 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
     if (_pregnancyId == null) {
       _showMessage('No ongoing pregnancy found for this mother.');
       return;
+    }
+
+    if (hasSignificantDiscrepancy && !_eddRedated) {
+      final choice = await _showDiscrepancyWarningDialog();
+      if (choice == null) return;
+      if (choice == 'redate') {
+        _redatePregnancyEdd();
+      }
     }
 
     setState(() => _submitting = true);
@@ -752,6 +951,42 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
     }
   }
 
+  // ── Discard Confirmation Logic ──────────────────────────────────────────
+
+  bool get _hasUnsavedData {
+    return _attachments.isNotEmpty ||
+        _dateCtrl.text.isNotEmpty ||
+        _locationCtrl.text.isNotEmpty ||
+        _workerNameCtrl.text.isNotEmpty ||
+        _institutionCtrl.text.isNotEmpty ||
+        _egaWeeksCtrl.text.isNotEmpty ||
+        _egaDaysCtrl.text.isNotEmpty ||
+        _remarksCtrl.text.isNotEmpty;
+  }
+
+  Future<bool> _showDiscardConfirmationDialog() async {
+    if (!_hasUnsavedData) return true;
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) => ConfirmationDialogBox(
+        title: 'Discard ultrasound record?',
+        subtitle: 'You have unsaved ultrasound document and record details. Are you sure you want to discard these changes?',
+        cancelText: 'Cancel',
+        confirmText: 'Discard',
+        onCancel: () => Navigator.pop(context, false),
+        onConfirm: () => Navigator.pop(context, true),
+      ),
+    );
+    return result ?? false;
+  }
+
+  void _handleBack() async {
+    final shouldDiscard = await _showDiscardConfirmationDialog();
+    if (shouldDiscard && mounted) {
+      Navigator.pop(context);
+    }
+  }
+
   // ── UI BUILDERS ─────────────────────────────────────────────────────────
 
   @override
@@ -766,14 +1001,20 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
         ? '--'
         : '${registeredAogWeeksOnScanDate.floor()}w ${(registeredAogDaysOnScanDate % 7)}d';
 
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            SecondaryHeader(
-              title: 'Record Ultrasound',
-              onBack: () => Navigator.pop(context),
-            ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: Column(
+            children: [
+              SecondaryHeader(
+                title: 'Record Ultrasound',
+                onBack: _handleBack,
+              ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
@@ -783,56 +1024,6 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
                     // ── Card 1: Document Upload / Dropzone ─────────────────────
                     _buildUploadSectionCard(),
                     const SizedBox(height: 16),
-
-                    // ── Discrepancy Banner & Redating Button ──────────────
-                    if (hasSignificantDiscrepancy) ...[
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.shade50,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.amber.shade400, width: 1.2),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 22),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Gestational Age Discrepancy: $discrepancyDays Days',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.amber.shade900),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Ultrasound EGA ($ultrasoundEgaTotalDays days) differs from registered LMP AOG on scan date ($registeredAogDaysOnScanDate days) by $discrepancyDays days. Updating official EDD ensures accurate growth & weight gain tracking.',
-                              style: TextStyle(fontSize: 12, color: Colors.amber.shade900, height: 1.35),
-                            ),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _redatePregnancyEdd,
-                                icon: const Icon(Icons.sync, size: 16),
-                                label: Text(_eddRedated ? '✓ Official EDD Re-dated' : 'Update Official Pregnancy EDD to Ultrasound'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _eddRedated ? Colors.green : Colors.amber.shade800,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
 
                     // ── Card 2: Ultrasound Information ────────────────────
                     _sectionCard(
@@ -1005,8 +1196,9 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ── Unified Document Upload Section Card ──────────────────────────────
 

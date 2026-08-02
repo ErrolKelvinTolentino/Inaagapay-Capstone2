@@ -5727,10 +5727,16 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     for (final c in checkups) {
       final w = c['checkup_weight'];
       if (w != null) {
+        final dtStr = c['checkup_datetime']?.toString() ?? c['encounter']?['encounter_datetime']?.toString();
+        final dt = dtStr != null ? DateTime.tryParse(dtStr) : null;
+        double aogVal = c['age_of_gestation'] != null ? (c['age_of_gestation'] as num).toDouble() : 0.0;
+        if (dt != null && lmp != null) {
+          aogVal = (dt.difference(lmp).inDays / 7.0).clamp(0.0, 42.0);
+        }
         rawList.add({
           'prenatal_checkup_id': c['encounter_id'] ?? -1,
-          'checkup_datetime': c['checkup_datetime'],
-          'age_of_gestation': c['age_of_gestation'] != null ? (c['age_of_gestation'] as num).toDouble() : 0.0,
+          'checkup_datetime': dtStr,
+          'age_of_gestation': aogVal,
           'checkup_weight': (w as num).toDouble(),
           'is_checkup': true,
         });
@@ -5739,10 +5745,16 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     for (final v in vitals) {
       final w = v['weight_kg'];
       if (w != null) {
+        final dtStr = v['recorded_at']?.toString();
+        final dt = dtStr != null ? DateTime.tryParse(dtStr) : null;
+        double aogVal = v['age_of_gestation'] != null ? (v['age_of_gestation'] as num).toDouble() : 0.0;
+        if (dt != null && lmp != null) {
+          aogVal = (dt.difference(lmp).inDays / 7.0).clamp(0.0, 42.0);
+        }
         rawList.add({
           'prenatal_checkup_id': v['vital_id'] ?? -1,
-          'checkup_datetime': v['recorded_at'],
-          'age_of_gestation': v['age_of_gestation'] != null ? (v['age_of_gestation'] as num).toDouble() : 0.0,
+          'checkup_datetime': dtStr,
+          'age_of_gestation': aogVal,
           'checkup_weight': (w as num).toDouble(),
           'is_checkup': false,
         });
