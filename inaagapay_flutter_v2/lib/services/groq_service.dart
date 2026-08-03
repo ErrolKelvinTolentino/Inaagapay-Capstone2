@@ -13,10 +13,8 @@ import '../models/ocr_result.dart';
 class GroqService {
   // ── Model Configuration ─────────────────────────────────────────────────
 
-  static const String _visionModel = 'llama-3.2-11b-vision-preview';
+  static const String _visionModel = 'qwen/qwen3.6-27b';
   static const List<String> _visionModelFallbacks = [
-    'llama-3.2-11b-vision-preview',
-    'llama-3.2-90b-vision-preview',
     'qwen/qwen3.6-27b',
   ];
   static const String _reasoningModel = 'llama-3.3-70b-versatile';
