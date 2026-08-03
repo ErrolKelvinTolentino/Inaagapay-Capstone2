@@ -212,9 +212,8 @@ class _GrowthMetricTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
-    this.subtitle,
     required this.color,
-  });
+  }) : subtitle = null;
 
   @override
   Widget build(BuildContext context) {

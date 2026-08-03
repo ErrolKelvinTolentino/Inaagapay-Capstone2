@@ -10,12 +10,9 @@ import '../../services/growth_reference_data.dart';
 import '../../services/groq_service.dart';
 import '../../services/language_service.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/ai_analytics_card.dart';
 import '../../widgets/chart_card.dart';
 import '../../widgets/secondary_header.dart';
 import '../../widgets/hero_card.dart';
-import 'growth_history_screen.dart';
-import '../../widgets/growth_record_card.dart';
 
 /// Data class representing a reference curve for growth charts
 class ReferenceCurve {

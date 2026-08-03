@@ -106,8 +106,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   String _ultrasoundSort = 'desc';
   String _labSort = 'desc';
   String _vitalSort = 'desc';
-  String _childQuery = '';
-  String _childSort = 'recent';
+  final String _childQuery = '';
+  final String _childSort = 'recent';
   final Set<String> _expandedLabInsightAspects = <String>{};
   static const int _pageSize = 5;
 
@@ -130,7 +130,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   // Editable medical conditions & allergies
   bool _isEditingConditions = false;
   bool _isEditingAllergies = false;
-  bool _isEditingContacts = false;
+  final bool _isEditingContacts = false;
   List<dynamic> _currentMedicalConditions = [];
   List<dynamic> _currentAllergies = [];
 
@@ -1165,18 +1165,22 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   }
 
   Color _statusChipBackground(String status) {
-    if (_isConcerningStatus(status))
+    if (_isConcerningStatus(status)) {
       return AppColors.error.withValues(alpha: 0.08);
-    if (_isCautionStatus(status))
+    }
+    if (_isCautionStatus(status)) {
       return AppColors.warning.withValues(alpha: 0.08);
+    }
     return AppColors.success.withValues(alpha: 0.08);
   }
 
   Color _statusChipBorder(String status) {
-    if (_isConcerningStatus(status))
+    if (_isConcerningStatus(status)) {
       return AppColors.error.withValues(alpha: 0.25);
-    if (_isCautionStatus(status))
+    }
+    if (_isCautionStatus(status)) {
       return AppColors.warning.withValues(alpha: 0.25);
+    }
     return AppColors.success.withValues(alpha: 0.25);
   }
 

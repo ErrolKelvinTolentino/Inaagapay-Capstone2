@@ -109,7 +109,12 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
     final mothersResponse = await Supabase.instance.client
         .from('mothers')
         .select('mother_id')
-        .eq('assigned_bhc_id', _assignedBhcId!);
+        .eq('assigned_bhc_id', _assignedBhcId!)
+        .timeout(const Duration(seconds: 8))
+        .catchError((e) {
+          debugPrint('Children mothers fetch note: $e');
+          return <Map<String, dynamic>>[];
+        });
     
     final List<int> motherIds = [];
     for (var mother in mothersResponse) {
@@ -142,7 +147,12 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
               birth_length
             )
           ''')
-          .inFilter('mother_id', motherIds);
+          .inFilter('mother_id', motherIds)
+          .timeout(const Duration(seconds: 8))
+          .catchError((e) {
+            debugPrint('Children query note: $e');
+            return <Map<String, dynamic>>[];
+          });
       
       childrenList.addAll(List<Map<String, dynamic>>.from(childrenWithMother));
     }
@@ -171,7 +181,12 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
           )
         ''')
         .filter('mother_id', 'is', null)
-        .not('guardian_id', 'is', null);
+        .not('guardian_id', 'is', null)
+        .timeout(const Duration(seconds: 8))
+        .catchError((e) {
+          debugPrint('Children with guardian query note: $e');
+          return <Map<String, dynamic>>[];
+        });
     
     childrenList.addAll(List<Map<String, dynamic>>.from(childrenWithGuardianOnly));
     

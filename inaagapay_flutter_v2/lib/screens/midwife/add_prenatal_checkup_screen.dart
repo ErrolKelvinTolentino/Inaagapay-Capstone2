@@ -78,9 +78,8 @@ class _RiskFactorItem {
   _RiskFactorItem({
     required this.factor,
     required this.influence,
-    this.sourceTable,
-    this.sourceId,
-  });
+  })  : sourceTable = null,
+        sourceId = null;
 
   final String factor;
   final String influence; // low | high
@@ -232,7 +231,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   static const int _totalSteps = 6;
   bool _submitting = false;
   bool _loadingSymptomTypes = false;
-  String _symptomRiskFilter = 'all';
+  final String _symptomRiskFilter = 'all';
   int? _midwifeId;
   String? _midwifeName;
   int? _accountId;
@@ -290,9 +289,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     _fetalBeatCtrl.addListener(_validateFetalBeatInline);
     _ferrousQtyCtrl.addListener(_validateFerrousInline);
     _calciumQtyCtrl.addListener(_validateCalciumInline);
-    if (_nextSchedule == null) {
-      _nextSchedule = _calculateRecommendedNextSchedule();
-    }
+    _nextSchedule ??= _calculateRecommendedNextSchedule();
   }
 
   void _validateWeightInline() {
@@ -373,7 +370,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           .eq('pregnancy_id', widget.pregnancyId)
           .limit(1);
 
-      final hasUltrasound = ultrasoundRes != null && ultrasoundRes.isNotEmpty;
+      final hasUltrasound = ultrasoundRes.isNotEmpty;
 
       final res = await Supabase.instance.client
           .from('pregnancies')
@@ -981,7 +978,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     final isLow =
         text.contains('everything is looking good') || text.contains('maayos') || text.contains('commonly expected');
     final currentBpMatch = RegExp(r'(\d+/\d+)').firstMatch(text);
-    final currentBp = currentBpMatch != null ? currentBpMatch.group(1) : null;
+    final currentBp = currentBpMatch?.group(1);
 
     final buf = StringBuffer();
     if (isLow) {
@@ -1352,7 +1349,7 @@ HEADER:
 - Tagalog header: "Buod ng Checkup — Linggo $aogWeekStr ng AOG"
 
 SENTENCE 1: THE REASSURANCE ANCHOR
-- Lead ONLY with vitals/findings that are WITHIN EXPECTED RANGE, including ACTUAL NUMBERS (e.g. "Fetal heart rate (${_fetalBeatCtrl.text.trim().isEmpty ? '120 bpm' : _fetalBeatCtrl.text.trim() + ' bpm'}) is within expected range this visit.").
+- Lead ONLY with vitals/findings that are WITHIN EXPECTED RANGE, including ACTUAL NUMBERS (e.g. "Fetal heart rate (${_fetalBeatCtrl.text.trim().isEmpty ? '120 bpm' : '${_fetalBeatCtrl.text.trim()} bpm'}) is within expected range this visit.").
 - CRITICAL BLOOD PRESSURE RULE: ONLY include Blood Pressure in Sentence 1 if Blood Pressure Assessment is explicitly "WITHIN EXPECTED RANGE". If BP is HIGH or ELEVATED (e.g. 120/90 mmHg where diastolic >= 80/90 mmHg), DO NOT put BP in Sentence 1! Place BP in Sentence 2 (Flagged Items)!
 - NEVER use the word "normal" or "normal values". Use "within expected range" or "within commonly expected range".
 
@@ -1497,7 +1494,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           .from('clinical_encounters')
           .select('prenatal_checkups!inner(td_vaccine_dose)')
           .eq('mother_id', widget.motherId);
-      if (res != null && mounted) {
+      if (mounted) {
         final doses = <String>[];
         for (final row in (res as List)) {
           final pc = row['prenatal_checkups'];
@@ -2392,7 +2389,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     if (saved == true) {
       final nameLower = symptomType.name.trim().toLowerCase();
       final exists = _symptoms.any((s) =>
-          (s.symptomTypeId != null && s.symptomTypeId == symptomType.id) ||
+          (s.symptomTypeId == symptomType.id) ||
           s.name.trim().toLowerCase() == nameLower);
       if (!exists) {
         setState(() {
@@ -2560,7 +2557,9 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       selectableDayPredicate: (date) {
         // Block weekends — BHCs are typically closed on Sat/Sun
         if (date.weekday == DateTime.saturday ||
-            date.weekday == DateTime.sunday) return false;
+            date.weekday == DateTime.sunday) {
+          return false;
+        }
         // Block Philippine regular holidays
         if (isHoliday(date)) return false;
 
@@ -2717,7 +2716,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
     // Build final text (what the midwife actually submitted)
     final finalAiText = hasAiRemarks
-        ? '=== FILIPINO ===\n${_aiRemarksFilipino}\n\n=== ENGLISH ===\n${_aiRemarksEnglish}'
+        ? '=== FILIPINO ===\n$_aiRemarksFilipino\n\n=== ENGLISH ===\n$_aiRemarksEnglish'
         : remarksText;
 
     final wasEdited = _remarksSource == 'ai_generated_edited';
@@ -4030,13 +4029,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                                 options: _symptomTypes,
                                 displayStringForOption: (st) => st.name,
                                 onSelected: (st) {
-                                  if (st != null) {
-                                    setDialogState(() {
-                                      selectedType = st;
-                                      customNameCtrl.text = st.name;
-                                      selectedRisk = st.riskCategory;
-                                    });
-                                  }
+                                  setDialogState(() {
+                                    selectedType = st;
+                                    customNameCtrl.text = st.name;
+                                    selectedRisk = st.riskCategory;
+                                  });
                                 },
                               ),
                               const SizedBox(height: 14),
@@ -4073,9 +4070,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                                 }
                               },
                               onSelected: (val) {
-                                if (val != null) {
-                                  setDialogState(() => selectedRisk = val);
-                                }
+                                setDialogState(() => selectedRisk = val);
                               },
                             ),
                             const SizedBox(height: 14),
@@ -4302,9 +4297,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   }
 
   Widget _buildStep4() {
-    if (_nextSchedule == null) {
-      _nextSchedule = _calculateRecommendedNextSchedule();
-    }
+    _nextSchedule ??= _calculateRecommendedNextSchedule();
     final bool hasAiRemarks = _remarksSource != 'midwife_authored';
 
     return Column(

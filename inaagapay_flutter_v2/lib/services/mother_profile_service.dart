@@ -15,7 +15,7 @@ class MotherProfileService {
       }
 
       // Step 1: Run ALL independent top-level queries concurrently
-      final results = await Future.wait([
+      final results = await Future.wait<dynamic>([
         // [0] motherResponse
         client.from('mothers').select('''
               *,
@@ -41,34 +41,59 @@ class MotherProfileService {
             .from('pregnancies')
             .select('*')
             .eq('mother_id', motherId)
-            .order('created_at', ascending: false),
+            .order('created_at', ascending: false)
+            .timeout(const Duration(seconds: 8))
+            .catchError((e) {
+              debugPrint('Pregnancies query note: $e');
+              return <Map<String, dynamic>>[];
+            }),
 
         // [2] medicalConditions
         client
             .from('medical_conditions')
             .select('*')
             .eq('mother_id', motherId)
-            .order('created_at', ascending: false),
+            .order('created_at', ascending: false)
+            .timeout(const Duration(seconds: 8))
+            .catchError((e) {
+              debugPrint('Medical conditions query note: $e');
+              return <Map<String, dynamic>>[];
+            }),
 
         // [3] allergies
         client
             .from('allergies')
             .select('*')
             .eq('mother_id', motherId)
-            .order('created_at', ascending: false),
+            .order('created_at', ascending: false)
+            .timeout(const Duration(seconds: 8))
+            .catchError((e) {
+              debugPrint('Allergies query note: $e');
+              return <Map<String, dynamic>>[];
+            }),
 
         // [4] emergencyContacts
         client
             .from('emergency_contacts')
             .select('*')
             .eq('mother_id', motherId)
-            .order('created_at', ascending: false),
+            .order('created_at', ascending: false)
+            .timeout(const Duration(seconds: 8))
+            .catchError((e) {
+              debugPrint('Emergency contacts query note: $e');
+              return <Map<String, dynamic>>[];
+            }),
 
         // [5] children
         client.from('children').select('''
               *,
               birth_details (*)
-            ''').eq('mother_id', motherId).order('added_at', ascending: false),
+            ''').eq('mother_id', motherId).order('added_at', ascending: false)
+            .timeout(const Duration(seconds: 8))
+            .catchError((e) {
+              debugPrint('Mother children query note: $e');
+              return <Map<String, dynamic>>[];
+            }),
       ]);
 
       final motherResponse = results[0] as Map<String, dynamic>;
@@ -364,7 +389,7 @@ class MotherProfileService {
 
       // Step 3: Re-assemble encounter data onto checkups, ultrasounds, lab_tests
       for (final p in pregnancies) {
-        final pregnancy = p as Map<String, dynamic>;
+        final pregnancy = p;
         final checkups = (pregnancy['checkups'] as List?) ?? const [];
         for (final c in checkups) {
           final checkup = c as Map<String, dynamic>;

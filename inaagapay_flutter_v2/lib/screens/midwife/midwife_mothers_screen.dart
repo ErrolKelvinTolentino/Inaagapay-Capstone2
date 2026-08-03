@@ -22,8 +22,8 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
   List<Map<String, dynamic>> _allMothers = [];
   List<Map<String, dynamic>> _filteredMothers = [];
   bool _isLoading = true;
-  bool _isLoadingMore = false;
-  bool _hasMoreData = false; // Always false to disable pagination loaders
+  final bool _isLoadingMore = false;
+  final bool _hasMoreData = false; // Always false to disable pagination loaders
   String? _error;
 
   static List<Map<String, dynamic>>? _mothersCache;
@@ -233,13 +233,38 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
     final List<dynamic> rawMothers = List<dynamic>.from(response);
     rawMothers.sort((a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
 
-    // Parallelize profile picture URL fetching
-    final pictureUrls = await Future.wait(
-      rawMothers.map((raw) {
-        final mId = raw['mother_id'] as int?;
-        return mId != null ? _loadProfilePicture(mId) : Future<String?>.value(null);
-      }),
-    );
+    final accountIds = rawMothers
+        .map((r) => r['account_id'] as int?)
+        .whereType<int>()
+        .toList();
+
+    final Map<int, String?> profileUrlsByAccountId = {};
+    if (accountIds.isNotEmpty) {
+      try {
+        final filesResponse = await SupabaseService.client
+            .from('files')
+            .select('uploaded_by, file_path, bucket_name')
+            .eq('reference_type', 'profile_photo')
+            .inFilter('uploaded_by', accountIds)
+            .timeout(const Duration(seconds: 5))
+            .catchError((e) {
+              debugPrint('Batch profile picture fetch note: $e');
+              return <Map<String, dynamic>>[];
+            });
+
+        for (var file in filesResponse) {
+          final accId = file['uploaded_by'] as int?;
+          final path = file['file_path'] as String?;
+          final bucket = file['bucket_name'] as String? ?? 'files';
+          if (accId != null && path != null && path.isNotEmpty) {
+            final url = SupabaseService.client.storage.from(bucket).getPublicUrl(path);
+            profileUrlsByAccountId[accId] = url;
+          }
+        }
+      } catch (e) {
+        debugPrint('Error batch fetching profile pictures: $e');
+      }
+    }
 
     final List<Map<String, dynamic>> parsedMothers = [];
 
@@ -285,7 +310,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         }
       }
 
-      String? profilePictureUrl = pictureUrls[i];
+      String? profilePictureUrl = profileUrlsByAccountId[accountId];
 
       parsedMothers.add({
         'account_id': accountId,

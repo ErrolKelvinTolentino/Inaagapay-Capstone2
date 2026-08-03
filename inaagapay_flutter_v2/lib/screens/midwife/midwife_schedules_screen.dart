@@ -84,7 +84,12 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
             .select('schedule_date')
             .eq('bhc_id', _assignedBhcId!)
             .gte('schedule_date', startOfYear)
-            .lte('schedule_date', endOfYear);
+            .lte('schedule_date', endOfYear)
+            .timeout(const Duration(seconds: 5))
+            .catchError((e) {
+              debugPrint('Immunization schedule dates error: $e');
+              return <Map<String, dynamic>>[];
+            });
 
         final datesImm = (resImm as List)
             .map((r) => r['schedule_date']?.toString() ?? '')
@@ -99,7 +104,12 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
       final resPrenatal = await Supabase.instance.client
           .from('clinical_encounters')
           .select('prenatal_checkups!inner(next_schedule)')
-          .eq('recorded_by', _midwifeId!);
+          .eq('recorded_by', _midwifeId!)
+          .timeout(const Duration(seconds: 5))
+          .catchError((e) {
+            debugPrint('Prenatal schedule dates error: $e');
+            return <Map<String, dynamic>>[];
+          });
 
       final datesPrenatal = (resPrenatal as List)
           .map((r) {
@@ -123,7 +133,12 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
             .select('schedule_date')
             .eq('status', 'scheduled')
             .gte('schedule_date', startOfYear)
-            .lte('schedule_date', endOfYear);
+            .lte('schedule_date', endOfYear)
+            .timeout(const Duration(seconds: 5))
+            .catchError((e) {
+              debugPrint('Schedules table dates error: $e');
+              return <Map<String, dynamic>>[];
+            });
       } catch (e) {
         debugPrint('Could not fetch schedules table: $e');
       }
@@ -174,7 +189,12 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
           ''')
           .eq('encounter.recorded_by', midwifeIdValue)
           .eq('next_schedule', formattedDate)
-          .order('next_schedule');
+          .order('next_schedule')
+          .timeout(const Duration(seconds: 5))
+          .catchError((e) {
+            debugPrint('Checkups for date error: $e');
+            return <Map<String, dynamic>>[];
+          });
 
       // Also fetch from schedules table (only scheduled/upcoming entries)
       List<dynamic> scheduleResponse = [];

@@ -7,7 +7,6 @@ import '../../widgets/secondary_header.dart';
 import '../../widgets/hero_card.dart';
 import '../../widgets/records_display_card.dart';
 import '../../widgets/status_indicator.dart';
-import '../../widgets/ai_analytics_card.dart';
 import '../../services/groq_service.dart';
 import '../../services/growth_calculator.dart';
 import 'add_growth_step1.dart';
@@ -50,32 +49,72 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
     setState(() => loading = true);
 
     try {
-      final childResponse =
-          await Supabase.instance.client.from('children').select('''
-            *,
-            mother:mother_id (
-              mother_id,
-              barangay,
-              city_municipality,
-              province,
-              account:account_id (
-                first_name,
-                last_name,
-                middle_name,
-                phone_number
-              )
-            ),
-            guardian:guardian_id (
-              guardian_id,
+      final results = await Future.wait([
+        Supabase.instance.client.from('children').select('''
+          *,
+          mother:mother_id (
+            mother_id,
+            barangay,
+            city_municipality,
+            province,
+            account:account_id (
               first_name,
               last_name,
               middle_name,
-              extension_name,
-              phone_number,
-              address,
-              relationship
+              phone_number
             )
-          ''').eq('child_id', widget.childId).single();
+          ),
+          guardian:guardian_id (
+            guardian_id,
+            first_name,
+            last_name,
+            middle_name,
+            extension_name,
+            phone_number,
+            address,
+            relationship
+          )
+        ''').eq('child_id', widget.childId).single().timeout(const Duration(seconds: 8)),
+        Supabase.instance.client
+            .from('birth_details')
+            .select('*')
+            .eq('child_id', widget.childId)
+            .maybeSingle()
+            .timeout(const Duration(seconds: 8))
+            .catchError((e) {
+              debugPrint('Child birth details note: $e');
+              return null;
+            }),
+        Supabase.instance.client
+            .from('child_growth_records')
+            .select('*')
+            .eq('child_id', widget.childId)
+            .order('created_at', ascending: true)
+            .timeout(const Duration(seconds: 8))
+            .catchError((e) {
+              debugPrint('Child growth records note: $e');
+              return <Map<String, dynamic>>[];
+            }),
+        Supabase.instance.client
+            .from('immunization_records')
+            .select('''
+              *,
+              vaccine:vaccine_id (*)
+            ''')
+            .eq('child_id', widget.childId)
+            .order('vaccination_date', ascending: false)
+            .limit(5)
+            .timeout(const Duration(seconds: 8))
+            .catchError((e) {
+              debugPrint('Child immunizations note: $e');
+              return <Map<String, dynamic>>[];
+            }),
+      ]);
+
+      final childResponse = results[0] as Map<String, dynamic>;
+      final birthResponse = results[1] as Map<String, dynamic>?;
+      final growthResponse = (results[2] as List<dynamic>?) ?? [];
+      final immunizationResponse = (results[3] as List<dynamic>?) ?? [];
 
       childData = childResponse;
 
@@ -86,36 +125,15 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
         guardianData = guardian;
       }
 
-      final birthResponse = await Supabase.instance.client
-          .from('birth_details')
-          .select('*')
-          .eq('child_id', widget.childId)
-          .maybeSingle();
-
       birthData = birthResponse;
-
-      final growthResponse = await Supabase.instance.client
-          .from('child_growth_records')
-          .select('*')
-          .eq('child_id', widget.childId)
-          .order('created_at', ascending: true);
 
       growthRecords = List<Map<String, dynamic>>.from(growthResponse);
       latestGrowth = growthRecords.isNotEmpty ? growthRecords.last : null;
 
       if (latestGrowth != null && latestGrowth!['child_details_id'] != null) {
-        await _loadProfileAiInsight(latestGrowth!['child_details_id'] as int);
+        await _loadProfileAiInsight(latestGrowth!['child_details_id'] as int)
+            .catchError((e) => debugPrint('AI insight note: $e'));
       }
-
-      final immunizationResponse = await Supabase.instance.client
-          .from('immunization_records')
-          .select('''
-            *,
-            vaccine:vaccine_id (*)
-          ''')
-          .eq('child_id', widget.childId)
-          .order('vaccination_date', ascending: false)
-          .limit(5);
 
       immunizations = List<Map<String, dynamic>>.from(immunizationResponse);
 

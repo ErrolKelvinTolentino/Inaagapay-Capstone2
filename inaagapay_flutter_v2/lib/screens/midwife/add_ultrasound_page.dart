@@ -202,10 +202,10 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
         }
       }
 
-      _pregnancyId = int.tryParse(response?['pregnancy_id']?.toString() ?? '');
+      _pregnancyId = int.tryParse(response['pregnancy_id']?.toString() ?? '');
       
-      final lmpStr = response?['last_menstrual_period']?.toString();
-      final eddStr = response?['expected_date_of_delivery']?.toString();
+      final lmpStr = response['last_menstrual_period']?.toString();
+      final eddStr = response['expected_date_of_delivery']?.toString();
 
       _pregnancyLmp = lmpStr != null ? DateTime.tryParse(lmpStr) : null;
       _pregnancyEdd = eddStr != null ? DateTime.tryParse(eddStr) : null;
@@ -216,7 +216,7 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
       }
 
       _originalEdd = _pregnancyEdd;
-      _fetalCount = int.tryParse(response?['fetal_count']?.toString() ?? '') ?? 1;
+      _fetalCount = int.tryParse(response['fetal_count']?.toString() ?? '') ?? 1;
 
       if (kDebugMode) debugPrint('[AddUltrasound] Pregnancy loaded: id=$_pregnancyId');
     } catch (e) {

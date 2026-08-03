@@ -10,7 +10,6 @@ import '../../widgets/midwife_statistics_card.dart';
 import '../../widgets/midwife_history_card.dart';
 import '../../widgets/chart_card.dart';
 import 'child_profile_page.dart';
-import '../mother/mother_profile_page.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/app_snackbar.dart';
 import '../shared/record_detail_screen.dart';
@@ -269,10 +268,16 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
   }
 
   Future<void> _loadDashboardData() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    if (_allMothers.isEmpty && _recentVisits.isEmpty) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    } else {
+      setState(() {
+        _errorMessage = null;
+      });
+    }
 
     try {
       // Get midwife context
@@ -287,12 +292,34 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
       final assignedBhcId = contextResult['assigned_bhc_id'] as int?;
       _bhcName = contextResult['bhc_name']?.toString() ?? 'Unknown BHC';
 
-      // Get midwife name from accounts
-      final accountResponse = await SupabaseService.client
-          .from('accounts')
-          .select('first_name, last_name')
-          .eq('account_id', accountId)
-          .maybeSingle();
+      // Fetch midwife name and mothers list concurrently in 1 parallel roundtrip
+      final stage1Results = await Future.wait<dynamic>([
+        SupabaseService.client
+            .from('accounts')
+            .select('first_name, last_name')
+            .eq('account_id', accountId)
+            .maybeSingle()
+            .timeout(const Duration(seconds: 5))
+            .catchError((_) => null),
+        SupabaseService.client.from('mothers').select('''
+          mother_id,
+          account_id,
+          birthdate,
+          assigned_bhc_id,
+          accounts!inner (
+            account_id,
+            first_name,
+            last_name,
+            phone_number,
+            email_address
+          )
+        ''').eq('assigned_bhc_id', assignedBhcId!).eq('status', 'active')
+          .timeout(const Duration(seconds: 8))
+          .catchError((_) => <Map<String, dynamic>>[]),
+      ]);
+
+      final accountResponse = stage1Results[0] as Map<String, dynamic>?;
+      final mothersData = stage1Results[1] as List<dynamic>;
 
       if (accountResponse != null) {
         _midwifeName =
@@ -300,26 +327,6 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 .trim();
         if (_midwifeName.isEmpty) _midwifeName = 'Midwife';
       }
-
-      if (assignedBhcId == null) {
-        throw Exception('No BHC assigned to this midwife');
-      }
-
-      // Get registered mothers for this BHC
-      final mothersData =
-          await SupabaseService.client.from('mothers').select('''
-            mother_id,
-            account_id,
-            birthdate,
-            assigned_bhc_id,
-            accounts!inner (
-              account_id,
-              first_name,
-              last_name,
-              phone_number,
-              email_address
-            )
-          ''').eq('assigned_bhc_id', assignedBhcId).eq('status', 'active');
 
       _registeredMothers = mothersData.length;
       _motherIds = mothersData.map<int>((m) => m['mother_id'] as int).toList();
@@ -347,14 +354,55 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         }
       }
 
+      // Render core dashboard header & stats immediately
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+
       // Get registered children count and load for search
       if (_motherIds.isNotEmpty) {
         // Parallelize initial children, pregnancies, and given medications queries
         final responses = await Future.wait([
-          SupabaseService.client.from('children').select('child_id, first_name, last_name, mother_id').inFilter('mother_id', _motherIds),
-          SupabaseService.client.from('pregnancies').select('pregnancy_id, mother_id, last_menstrual_period, status').inFilter('mother_id', _motherIds),
-          SupabaseService.client.from('given_medications').select('given_medication_id').eq('given_medication_name', 'Ferrous FA').inFilter('mother_id', _motherIds),
-          SupabaseService.client.from('given_medications').select('given_medication_id').eq('given_medication_name', 'Calcium').inFilter('mother_id', _motherIds),
+          SupabaseService.client
+              .from('children')
+              .select('child_id, first_name, last_name, mother_id')
+              .inFilter('mother_id', _motherIds)
+              .timeout(const Duration(seconds: 8))
+              .catchError((e) {
+                debugPrint('Dashboard children query note: $e');
+                return <Map<String, dynamic>>[];
+              }),
+          SupabaseService.client
+              .from('pregnancies')
+              .select('pregnancy_id, mother_id, last_menstrual_period, status')
+              .inFilter('mother_id', _motherIds)
+              .timeout(const Duration(seconds: 8))
+              .catchError((e) {
+                debugPrint('Dashboard pregnancies query note: $e');
+                return <Map<String, dynamic>>[];
+              }),
+          SupabaseService.client
+              .from('given_medications')
+              .select('given_medication_id')
+              .eq('given_medication_name', 'Ferrous FA')
+              .inFilter('mother_id', _motherIds)
+              .timeout(const Duration(seconds: 8))
+              .catchError((e) {
+                debugPrint('Dashboard ferrous query note: $e');
+                return <Map<String, dynamic>>[];
+              }),
+          SupabaseService.client
+              .from('given_medications')
+              .select('given_medication_id')
+              .eq('given_medication_name', 'Calcium')
+              .inFilter('mother_id', _motherIds)
+              .timeout(const Duration(seconds: 8))
+              .catchError((e) {
+                debugPrint('Dashboard calcium query note: $e');
+                return <Map<String, dynamic>>[];
+              }),
         ]);
 
         final childrenResponse = responses[0] as List<dynamic>;
@@ -444,6 +492,11 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                   .inFilter('pregnancy_id', pregnancyIds)
                   .eq('encounter_type', 'checkup')
                   .not('prenatal_checkups.td_vaccine_dose', 'is', null)
+                  .timeout(const Duration(seconds: 8))
+                  .catchError((e) {
+                    debugPrint('Dashboard TD query note: $e');
+                    return <Map<String, dynamic>>[];
+                  })
             else
               Future.value([]),
 
@@ -474,17 +527,32 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 ''')
                 .inFilter('pregnancy_id', allPregnancyIds)
                 .eq('encounter_type', 'checkup')
-                .gte('encounter_datetime', sevenDaysAgo.toIso8601String()),
+                .gte('encounter_datetime', sevenDaysAgo.toIso8601String())
+                .timeout(const Duration(seconds: 8))
+                .catchError((e) {
+                  debugPrint('Dashboard recent checkups query note: $e');
+                  return <Map<String, dynamic>>[];
+                }),
             SupabaseService.client
                 .from('ultrasounds')
                 .select('encounter_id, ultrasound_date, remarks:findings_summary, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
                 .inFilter('pregnancy_id', allPregnancyIds)
-                .gte('ultrasound_date', sevenDaysAgoDate),
+                .gte('ultrasound_date', sevenDaysAgoDate)
+                .timeout(const Duration(seconds: 8))
+                .catchError((e) {
+                  debugPrint('Dashboard recent ultrasounds query note: $e');
+                  return <Map<String, dynamic>>[];
+                }),
             SupabaseService.client
                 .from('lab_tests')
-                .select('encounter_id, lab_test_type, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession, encounter:clinical_encounters!inner(encounter_datetime, midwife_notes)')
+                .select('encounter_id, lab_test_type, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession, created_at')
                 .inFilter('pregnancy_id', allPregnancyIds)
-                .gte('encounter.encounter_datetime', sevenDaysAgo.toIso8601String()),
+                .gte('created_at', sevenDaysAgo.toIso8601String())
+                .timeout(const Duration(seconds: 8))
+                .catchError((e) {
+                  debugPrint('Dashboard recent lab tests query note: $e');
+                  return <Map<String, dynamic>>[];
+                }),
 
             // BHC Chart query (single call for 7 days)
             if (pregnancyIds.isNotEmpty)
@@ -495,6 +563,11 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                   .gte('encounter_datetime', chartStart.toIso8601String())
                   .lte('encounter_datetime', chartEnd.toIso8601String())
                   .inFilter('pregnancy_id', pregnancyIds)
+                  .timeout(const Duration(seconds: 8))
+                  .catchError((e) {
+                    debugPrint('Dashboard chart query note: $e');
+                    return <Map<String, dynamic>>[];
+                  })
             else
               Future.value([]),
 
@@ -526,38 +599,51 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 .inFilter('pregnancy_id', allPregnancyIds)
                 .eq('encounter_type', 'checkup')
                 .order('encounter_datetime', ascending: false)
-                .limit(50),
+                .limit(50)
+                .timeout(const Duration(seconds: 8))
+                .catchError((e) {
+                  debugPrint('Dashboard search checkups query note: $e');
+                  return <Map<String, dynamic>>[];
+                }),
             SupabaseService.client
                 .from('ultrasounds')
                 .select('encounter_id, ultrasound_date, remarks:findings_summary, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
                 .inFilter('pregnancy_id', allPregnancyIds)
                 .order('ultrasound_date', ascending: false)
-                .limit(50),
+                .limit(50)
+                .timeout(const Duration(seconds: 8))
+                .catchError((e) {
+                  debugPrint('Dashboard search ultrasounds query note: $e');
+                  return <Map<String, dynamic>>[];
+                }),
             SupabaseService.client
                 .from('lab_tests')
-                .select('encounter_id, lab_test_type, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession, encounter:clinical_encounters(encounter_datetime, midwife_notes)')
+                .select('encounter_id, lab_test_type, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession, created_at')
                 .inFilter('pregnancy_id', allPregnancyIds)
-                .limit(50),
+                .limit(50)
+                .timeout(const Duration(seconds: 8))
+                .catchError((e) {
+                  debugPrint('Dashboard search lab tests query note: $e');
+                  return <Map<String, dynamic>>[];
+                }),
           ]);
 
           tdResponse = clinicalResponses[0];
           final List recentCheckupsRaw = clinicalResponses[1];
-          recentUltrasounds = (clinicalResponses[2] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-          recentLabTests = (clinicalResponses[3] as List).map((e) {
+          recentUltrasounds = (clinicalResponses[2]).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          recentLabTests = (clinicalResponses[3]).map((e) {
             final map = Map<String, dynamic>.from(e as Map);
-            final enc = map['encounter'] as Map<String, dynamic>?;
-            map['lab_test_date'] = enc?['encounter_datetime'];
-            map['remarks'] = enc?['midwife_notes'];
+            map['lab_test_date'] = map['created_at'];
+            map['remarks'] = map['lab_test_type'];
             return map;
           }).toList();
           final List chartCheckupsRaw = clinicalResponses[4];
           final List checkupsDataRaw = clinicalResponses[5];
-          ultrasoundsData = (clinicalResponses[6] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-          labTestsData = (clinicalResponses[7] as List).map((e) {
+          ultrasoundsData = (clinicalResponses[6]).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          labTestsData = (clinicalResponses[7]).map((e) {
             final map = Map<String, dynamic>.from(e as Map);
-            final enc = map['encounter'] as Map<String, dynamic>?;
-            map['lab_test_date'] = enc?['encounter_datetime'];
-            map['remarks'] = enc?['midwife_notes'];
+            map['lab_test_date'] = map['created_at'];
+            map['remarks'] = map['lab_test_type'];
             return map;
           }).toList();
 
@@ -2050,7 +2136,7 @@ class _PriorityTaskTile extends StatelessWidget {
   final PriorityTask task;
   final VoidCallback? onTap;
 
-  const _PriorityTaskTile({required this.task, this.onTap});
+  const _PriorityTaskTile({required this.task}) : onTap = null;
 
   Color _getUrgencyColor() {
     switch (task.urgency) {

@@ -523,7 +523,9 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
   double? _calculatePrePregnancyBmi() {
     if (_maternalPrePregWeight == null ||
         _maternalHeight == null ||
-        _maternalHeight! <= 0) return null;
+        _maternalHeight! <= 0) {
+      return null;
+    }
     final heightInMeters = _maternalHeight! / 100.0;
     return _maternalPrePregWeight! / (heightInMeters * heightInMeters);
   }
@@ -561,7 +563,7 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
     // Multiple pregnancy pill
     if (_pregnancyFetalCount != null && _pregnancyFetalCount! > 1) {
       pills.add(_buildRiskPill(
-          'Multiple Pregnancy (${_pregnancyFetalCount} babies)',
+          'Multiple Pregnancy ($_pregnancyFetalCount babies)',
           isSevere: true));
     }
 
@@ -2493,17 +2495,20 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
   static const Color _cautionBlue = Color(0xFF3B82F6);
 
   Color _statusChipBackground(String status) {
-    if (_isConcerningStatus(status))
+    if (_isConcerningStatus(status)) {
       return AppColors.error.withValues(alpha: 0.08);
+    }
     if (_isCautionStatus(status)) return Colors.white;
     return AppColors.success.withValues(alpha: 0.08);
   }
 
   Color _statusChipBorder(String status) {
-    if (_isConcerningStatus(status))
+    if (_isConcerningStatus(status)) {
       return AppColors.error.withValues(alpha: 0.25);
-    if (_isCautionStatus(status))
+    }
+    if (_isCautionStatus(status)) {
       return AppColors.warning.withValues(alpha: 0.35);
+    }
     return AppColors.success.withValues(alpha: 0.25);
   }
 

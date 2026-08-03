@@ -1378,7 +1378,7 @@ class SupabaseService {
               'updated_at': DateTime.now().toIso8601String(),
             })
             .eq('account_id', accountId)
-            .or('created_by.eq.self,created_by.eq.${accountId}');
+            .or('created_by.eq.self,created_by.eq.$accountId');
       }
 
       final obScore = ObstetricScore.calculate(
@@ -1620,7 +1620,7 @@ class SupabaseService {
             hashedPassword = 'NO_LOGIN_UNDERAGE';
           } else {
             generatedPassword = _generateSecurePassword();
-            hashedPassword = _hashPassword(generatedPassword!);
+            hashedPassword = _hashPassword(generatedPassword);
           }
           await client.from('accounts').update({
             'password_hash': hashedPassword,
@@ -1649,7 +1649,7 @@ class SupabaseService {
           hashedPassword = 'NO_LOGIN_UNDERAGE';
         } else {
           generatedPassword = _generateSecurePassword();
-          hashedPassword = _hashPassword(generatedPassword!);
+          hashedPassword = _hashPassword(generatedPassword);
         }
 
         int? midwifeAccountId;
