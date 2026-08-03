@@ -202,6 +202,7 @@
           <button class="inventory-tab-btn active" data-tab="catalog"><i class="fa-solid fa-list-check"></i> Stock Overview Catalog</button>
           <button class="inventory-tab-btn" data-tab="batches"><i class="fa-solid fa-boxes-packing"></i> Active Batches &amp; Expiry</button>
           <button class="inventory-tab-btn" data-tab="transactions"><i class="fa-solid fa-receipt"></i> Stock Movement History</button>
+          <button class="inventory-tab-btn" data-tab="requests"><i class="fa-solid fa-clipboard-list"></i> Stock Requests <span id="requests-pending-badge" class="badge badge-medium" style="margin-left:4px;display:none;">0</span></button>
           <button class="inventory-tab-btn" data-tab="analytics" id="tab-btn-analytics"><i class="fa-solid fa-chart-line"></i> BHC Reports &amp; Analytics</button>
         </div>
 
@@ -308,6 +309,7 @@
                   <option value="dispense">Dispensed (-)</option>
                   <option value="adjustment">Stock Adjustment</option>
                   <option value="expiry_disposal">Expiry Disposal (-)</option>
+                  <option value="transfer">RHU / BHC Transfer</option>
                 </select>
               </div>
             </div>
@@ -333,7 +335,72 @@
           </div>
         </div>
 
-        <!-- Tab 4: BHC Reports & Analytics -->
+        <!-- Tab 4: BHC Stock Requests & Transfers -->
+        <div id="tab-requests" class="tab-content" style="display: none;">
+          <div class="card" style="margin-bottom:20px;">
+            <div class="toolbar">
+              <div>
+                <h3 style="margin:0;font-size:16px;"><i class="fa-solid fa-clipboard-list" style="color:var(--brand-primary);margin-right:7px;"></i>BHC Stock Requests</h3>
+                <p style="margin:4px 0 0;color:var(--text-secondary);font-size:12.5px;">Review requests, approve them, then issue an available central batch.</p>
+              </div>
+              <div class="filter-group">
+                <select class="form-select" id="request-filter-status" style="width:auto;">
+                  <option value="">All Request Statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="issued">Issued</option>
+                  <option value="received">Received</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" id="refresh-requests-btn"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+              </div>
+            </div>
+            <div class="table-wrap" style="border:none;border-radius:0;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Request</th>
+                    <th>BHC / Requested By</th>
+                    <th>Item</th>
+                    <th style="text-align:right;">Quantity</th>
+                    <th>Reason / Remarks</th>
+                    <th style="text-align:center;">Status</th>
+                    <th style="text-align:center;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="requests-tbody">
+                  <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary);">Loading stock requests...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header" style="padding:16px 20px;border-bottom:1px solid var(--border-primary);">
+              <h3 style="margin:0;font-size:16px;"><i class="fa-solid fa-truck-ramp-box" style="color:#8b5cf6;margin-right:7px;"></i>Issued Transfers</h3>
+              <p style="margin:4px 0 0;color:var(--text-secondary);font-size:12.5px;">BHC stock stays unchanged while a transfer is pending receipt.</p>
+            </div>
+            <div class="table-wrap" style="border:none;border-radius:0;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Issued</th>
+                    <th>Destination</th>
+                    <th>Item &amp; Batch</th>
+                    <th style="text-align:right;">Quantity</th>
+                    <th style="text-align:center;">Receipt Status</th>
+                    <th>Remarks</th>
+                  </tr>
+                </thead>
+                <tbody id="transfers-tbody">
+                  <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);">Loading issued transfers...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 5: BHC Reports & Analytics -->
         <div id="tab-analytics" class="tab-content" style="display: none;">
           <div class="card" style="margin-bottom: 20px; padding: 20px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
@@ -595,6 +662,8 @@
         <div class="modal-body">
           <div id="issue-form-alert" class="alert alert-error" style="display: none; margin-bottom: 14px; padding: 10px; border-radius: 6px;"></div>
           <form id="form-issue" onsubmit="return false;">
+            <input type="hidden" id="issue-request-id" />
+            <div id="issue-request-context" class="alert alert-info" style="display:none;margin-bottom:14px;padding:10px;border-radius:6px;"></div>
             <div class="form-group" style="margin-bottom: 14px;">
               <label class="form-label" for="issue-source-batch">Select Source Batch (Central Warehouse) <span class="req">*</span></label>
               <select class="form-select" id="issue-source-batch" required style="width:100%;">
@@ -644,7 +713,10 @@
         let items = [];
         let batches = [];
         let transactions = [];
+        let stockRequests = [];
+        let inventoryTransfers = [];
         let accountMap = {};
+        let workflowLoadError = "";
 
         function esc(str) { const d = document.createElement("div"); d.textContent = str ?? ""; return d.innerHTML; }
         function showToast(msg, type = "info") {
@@ -687,9 +759,21 @@
         document.getElementById("batch-expiration-date").value = nextYear.toISOString().slice(0, 10);
         document.getElementById("analytics-month").value = new Date().toISOString().slice(0, 7);
 
+        function localDateKey(date = new Date()) {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const day = String(date.getDate()).padStart(2, "0");
+          return `${year}-${month}-${day}`;
+        }
+
+        function isBatchExpired(batch) {
+          return Boolean(batch?.expiration_date && batch.expiration_date < localDateKey());
+        }
+
         // Load Data with Resilient Fallback
         async function loadInventoryData() {
           try {
+            workflowLoadError = "";
             await loadBhcs();
             // Load Items
             const { data: itemData, error: itemErr } = await db.from("inventory_items").select("*").order("name");
@@ -718,8 +802,38 @@
               transactions = txData || [];
             }
 
+            // Load BHC requests and RHU -> BHC transfers. These tables are
+            // supplied by the inventory distribution migration.
+            const { data: requestData, error: requestErr } = await db
+              .from("inventory_stock_requests")
+              .select("*")
+              .order("created_at", { ascending: false });
+            if (requestErr) {
+              console.warn("inventory_stock_requests query error:", requestErr);
+              workflowLoadError = "The stock request workflow is unavailable. Run database/migrations/20260803_inventory_distribution_workflow.sql in the shared Supabase project.";
+              stockRequests = [];
+            } else {
+              stockRequests = requestData || [];
+            }
+
+            const { data: transferData, error: transferErr } = await db
+              .from("inventory_transfers")
+              .select("*")
+              .order("issued_at", { ascending: false });
+            if (transferErr) {
+              console.warn("inventory_transfers query error:", transferErr);
+              workflowLoadError = "The stock request workflow is unavailable. Run database/migrations/20260803_inventory_distribution_workflow.sql in the shared Supabase project.";
+              inventoryTransfers = [];
+            } else {
+              inventoryTransfers = transferData || [];
+            }
+
             // Fetch performing users map
-            const accountIds = [...new Set(transactions.map(t => t.performed_by).filter(Boolean))];
+            const accountIds = [...new Set([
+              ...transactions.map(t => t.performed_by),
+              ...stockRequests.flatMap(r => [r.requested_by, r.reviewed_by]),
+              ...inventoryTransfers.flatMap(t => [t.issued_by, t.received_by])
+            ].filter(Boolean))];
             if (accountIds.length > 0) {
               const { data: accs } = await db.from("accounts").select("account_id, first_name, last_name, email_address").in("account_id", accountIds);
               (accs || []).forEach(a => {
@@ -731,6 +845,8 @@
             renderCatalog();
             renderBatches();
             renderTransactions();
+            renderStockRequests();
+            renderInventoryTransfers();
             populateDropdowns();
           } catch (e) {
             showToast("Failed to load inventory data: " + e.message, "error");
@@ -873,7 +989,7 @@
             const expDate = new Date(b.expiration_date);
             let urgencyBadge = `<span class="batch-urgency-good">Active</span>`;
             if (b.status === 'discarded') urgencyBadge = `<span class="badge badge-inactive">Discarded</span>`;
-            else if (expDate < now || b.status === 'expired') urgencyBadge = `<span class="batch-urgency-expired"><i class="fa-solid fa-ban"></i> Expired</span>`;
+            else if (isBatchExpired(b) || b.status === 'expired') urgencyBadge = `<span class="batch-urgency-expired"><i class="fa-solid fa-ban"></i> Expired</span>`;
             else if (expDate <= thirtyDays) urgencyBadge = `<span class="batch-urgency-warning"><i class="fa-solid fa-clock"></i> Expiring Soon</span>`;
 
             let locName = "🏢 Central";
@@ -886,7 +1002,7 @@
               <tr>
                 <td><strong style="font-family:monospace;">${esc(b.batch_number)}</strong></td>
                 <td>${esc(item ? item.name : 'Unknown Item')}</td>
-                <td style="font-size:12.5px;font-weight:600;color:var(--text-primary);">${locName}</td>
+                <td style="font-size:12.5px;font-weight:600;color:var(--text-primary);">${esc(locName)}</td>
                 <td style="font-size:12px;color:var(--text-secondary);">${b.received_date || '—'}</td>
                 <td style="font-size:12px;font-weight:600;">${b.expiration_date}</td>
                 <td style="text-align:right;">${b.quantity_received}</td>
@@ -894,7 +1010,7 @@
                 <td>${esc(b.manufacturer || '—')}</td>
                 <td style="text-align:center;">${urgencyBadge}</td>
                 <td style="text-align:center;">
-                  ${b.status === 'active' && b.quantity_remaining > 0 ? `<button class="btn btn-sm btn-outline-pink" onclick="quickDispense(${b.batch_id})"><i class="fa-solid fa-minus"></i> Use</button>` : '—'}
+                  ${b.status === 'active' && !isBatchExpired(b) && b.quantity_remaining > 0 ? `<button class="btn btn-sm btn-outline-pink" onclick="quickDispense(${b.batch_id})"><i class="fa-solid fa-minus"></i> Use</button>` : '—'}
                 </td>
               </tr>
             `;
@@ -952,9 +1068,9 @@
             return `
               <tr>
                 <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap;">${dateStr}</td>
-                <td style="font-size:12.5px;font-weight:600;color:var(--text-primary);">${locName}</td>
+                <td style="font-size:12.5px;font-weight:600;color:var(--text-primary);">${esc(locName)}</td>
                 <td>${typeBadges[t.transaction_type] || t.transaction_type}</td>
-                <td><strong>${esc(item?.name || "Item")}</strong> <span style="font-size:11px;color:var(--text-secondary);">(${batch?.batch_number || "Batch"})</span></td>
+                <td><strong>${esc(item?.name || "Item")}</strong> <span style="font-size:11px;color:var(--text-secondary);">(${esc(batch?.batch_number || "Batch")})</span></td>
                 <td style="text-align:right;font-weight:700;color:${t.quantity < 0 ? '#dc2626' : '#059669'};">${qtyStr}</td>
                 <td>${esc(accountMap[t.performed_by] || "System / Admin")}</td>
                 <td style="font-size:12px;color:var(--text-secondary);">${esc(t.reference_type || "")} ${esc(t.reference_id ? '#' + t.reference_id : '')}</td>
@@ -963,13 +1079,178 @@
           }).join('');
         }
 
+        function requestStatusBadge(status) {
+          const badges = {
+            pending: '<span class="badge badge-medium"><i class="fa-solid fa-clock"></i> Pending</span>',
+            approved: '<span class="badge badge-active" style="background:rgba(16,185,129,.13);color:#047857;"><i class="fa-solid fa-check"></i> Approved</span>',
+            issued: '<span class="badge badge-medium" style="background:rgba(139,92,246,.13);color:#7c3aed;"><i class="fa-solid fa-truck"></i> Issued</span>',
+            received: '<span class="badge badge-active"><i class="fa-solid fa-box-open"></i> Received</span>',
+            completed: '<span class="badge badge-active"><i class="fa-solid fa-circle-check"></i> Completed</span>',
+            rejected: '<span class="badge badge-inactive"><i class="fa-solid fa-xmark"></i> Rejected</span>',
+            cancelled: '<span class="badge badge-inactive">Cancelled</span>'
+          };
+          return badges[status] || `<span class="badge">${esc(status || 'unknown')}</span>`;
+        }
+
+        function renderStockRequests() {
+          const statusFilter = document.getElementById("request-filter-status")?.value || "";
+          const filtered = stockRequests.filter(r => !statusFilter || r.status === statusFilter);
+          const pendingCount = stockRequests.filter(r => r.status === "pending").length;
+          const badge = document.getElementById("requests-pending-badge");
+          if (badge) {
+            badge.textContent = pendingCount;
+            badge.style.display = pendingCount > 0 ? "inline-flex" : "none";
+          }
+
+          const tbody = document.getElementById("requests-tbody");
+          if (!tbody) return;
+          if (workflowLoadError) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#b45309;"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(workflowLoadError)}</td></tr>`;
+            return;
+          }
+          if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary);">No stock requests found.</td></tr>';
+            return;
+          }
+
+          tbody.innerHTML = filtered.map(request => {
+            const item = items.find(i => i.item_id === request.item_id);
+            const bhc = bhcs.find(b => String(b.bhc_id) === String(request.facility_id));
+            const requester = accountMap[request.requested_by] || `Account #${request.requested_by}`;
+            const submitted = request.created_at ? new Date(request.created_at).toLocaleString("en-PH") : "—";
+            let actions = "—";
+            if (request.status === "pending") {
+              actions = `
+                <div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;">
+                  <button class="btn btn-sm btn-primary" onclick="approveStockRequest(${request.request_id})"><i class="fa-solid fa-check"></i> Approve</button>
+                  <button class="btn btn-sm btn-secondary" onclick="rejectStockRequest(${request.request_id})"><i class="fa-solid fa-xmark"></i> Reject</button>
+                </div>`;
+            } else if (request.status === "approved") {
+              actions = `<button class="btn btn-sm" style="background:#8b5cf6;border-color:#8b5cf6;color:white;" onclick="issueForRequest(${request.request_id})"><i class="fa-solid fa-truck-ramp-box"></i> Issue</button>`;
+            } else if (request.status === "issued") {
+              actions = '<span style="font-size:12px;color:#7c3aed;font-weight:600;"><i class="fa-solid fa-hourglass-half"></i> Awaiting BHC receipt</span>';
+            }
+
+            return `
+              <tr>
+                <td><strong>#${request.request_id}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">${submitted}</div></td>
+                <td><strong>${esc(bhc?.bhc_name || `BHC #${request.facility_id}`)}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">${esc(requester)}</div></td>
+                <td><strong>${esc(item?.name || `Item #${request.item_id}`)}</strong><div style="font-size:11px;color:var(--text-secondary);">${esc(item?.unit_of_measure || '')}</div></td>
+                <td style="text-align:right;font-weight:700;">${request.requested_quantity}</td>
+                <td style="max-width:260px;"><div>${esc(request.reason)}</div>${request.remarks ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">Remarks: ${esc(request.remarks)}</div>` : ''}${request.admin_remarks ? `<div style="font-size:11px;color:#7c3aed;margin-top:4px;">RHU: ${esc(request.admin_remarks)}</div>` : ''}</td>
+                <td style="text-align:center;">${requestStatusBadge(request.status)}</td>
+                <td style="text-align:center;">${actions}</td>
+              </tr>`;
+          }).join("");
+        }
+
+        function renderInventoryTransfers() {
+          const tbody = document.getElementById("transfers-tbody");
+          if (!tbody) return;
+          if (workflowLoadError) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:#b45309;"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(workflowLoadError)}</td></tr>`;
+            return;
+          }
+          if (inventoryTransfers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);">No issued transfers found.</td></tr>';
+            return;
+          }
+
+          tbody.innerHTML = inventoryTransfers.map(transfer => {
+            const source = batches.find(b => b.batch_id === transfer.source_batch_id);
+            const item = source ? items.find(i => i.item_id === source.item_id) : null;
+            const bhc = bhcs.find(b => String(b.bhc_id) === String(transfer.destination_facility_id));
+            const issued = transfer.issued_at ? new Date(transfer.issued_at).toLocaleString("en-PH") : "—";
+            const received = transfer.received_at ? new Date(transfer.received_at).toLocaleString("en-PH") : null;
+            const status = transfer.status === "received"
+              ? `<span class="badge badge-active"><i class="fa-solid fa-circle-check"></i> Received</span>${received ? `<div style="font-size:10.5px;color:var(--text-secondary);margin-top:4px;">${received}</div>` : ''}`
+              : transfer.status === "cancelled"
+                ? '<span class="badge badge-inactive"><i class="fa-solid fa-ban"></i> Cancelled</span>'
+                : '<span class="badge badge-medium" style="background:rgba(139,92,246,.13);color:#7c3aed;"><i class="fa-solid fa-clock"></i> Pending Receipt</span>';
+            return `
+              <tr>
+                <td><strong>#${transfer.transfer_id}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">${issued}</div></td>
+                <td>${esc(bhc?.bhc_name || `BHC #${transfer.destination_facility_id}`)}</td>
+                <td><strong>${esc(item?.name || 'Inventory item')}</strong><div style="font-size:11px;color:var(--text-secondary);">Batch ${esc(source?.batch_number || `#${transfer.source_batch_id}`)}</div></td>
+                <td style="text-align:right;font-weight:700;">${transfer.quantity_issued}</td>
+                <td style="text-align:center;">${status}</td>
+                <td>${esc(transfer.remarks || '—')}${transfer.request_id ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">Request #${transfer.request_id}</div>` : ''}</td>
+              </tr>`;
+          }).join("");
+        }
+
+        window.approveStockRequest = async function(requestId) {
+          try {
+            const { error } = await db.rpc("approve_inventory_stock_request", {
+              p_request_id: requestId,
+              p_admin_id: session.account_id,
+              p_admin_remarks: null
+            });
+            if (error) throw error;
+            showToast(`Stock request #${requestId} approved.`, "success");
+            await loadInventoryData();
+          } catch (err) {
+            showToast("Could not approve request: " + err.message, "error");
+          }
+        };
+
+        window.rejectStockRequest = async function(requestId) {
+          const remarks = prompt("Reason for rejecting this stock request (optional):");
+          if (remarks === null) return;
+          try {
+            const { error } = await db.rpc("reject_inventory_stock_request", {
+              p_request_id: requestId,
+              p_admin_id: session.account_id,
+              p_admin_remarks: remarks.trim() || null
+            });
+            if (error) throw error;
+            showToast(`Stock request #${requestId} rejected.`, "success");
+            await loadInventoryData();
+          } catch (err) {
+            showToast("Could not reject request: " + err.message, "error");
+          }
+        };
+
+        window.issueForRequest = function(requestId) {
+          const request = stockRequests.find(r => r.request_id === requestId);
+          if (!request || request.status !== "approved") {
+            showToast("Only approved requests can be issued.", "warning");
+            return;
+          }
+
+            const matchingBatch = batches.find(b =>
+              b.item_id === request.item_id &&
+              b.status === "active" &&
+              !isBatchExpired(b) &&
+              b.quantity_remaining >= request.requested_quantity &&
+              (b.facility_id === null || b.facility_id === undefined || String(b.facility_id) === "null")
+            );
+            if (!matchingBatch) {
+              showToast("No single active central batch has enough stock to fulfill this request.", "warning");
+              return;
+            }
+
+          document.getElementById("form-issue").reset();
+          populateDropdowns();
+          document.getElementById("issue-request-id").value = requestId;
+          document.getElementById("issue-source-batch").value = matchingBatch.batch_id;
+          document.getElementById("issue-target-bhc").value = request.facility_id;
+          document.getElementById("issue-qty").value = request.requested_quantity;
+          const item = items.find(i => i.item_id === request.item_id);
+          const context = document.getElementById("issue-request-context");
+          context.textContent = `Fulfilling Request #${requestId}: ${request.requested_quantity} ${item?.unit_of_measure || 'units'} of ${item?.name || 'item'}.`;
+          context.style.display = "block";
+          document.getElementById("issue-form-alert").style.display = "none";
+          document.getElementById("modal-issue").classList.add("show");
+        };
+
         function populateDropdowns() {
           const itemSel = document.getElementById("batch-item-id");
           itemSel.innerHTML = `<option value="">— Select Item —</option>` + items.map(i => `<option value="${i.item_id}">${esc(i.name)} (${esc(i.unit_of_measure)})</option>`).join('');
 
           // Dispense batch selection
           const batchSel = document.getElementById("dispense-batch-id");
-          const activeBatches = batches.filter(b => b.status === 'active' && b.quantity_remaining > 0);
+          const activeBatches = batches.filter(b => b.status === 'active' && !isBatchExpired(b) && b.quantity_remaining > 0);
           batchSel.innerHTML = `<option value="">— Select Active Batch —</option>` + activeBatches.map(b => {
             const item = items.find(i => i.item_id === b.item_id);
             let locText = "Central";
@@ -977,11 +1258,11 @@
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
               locText = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
             }
-            return `<option value="${b.batch_id}">${esc(item?.name || 'Item')} — Batch ${esc(b.batch_number)} (Stock: ${b.quantity_remaining}, Location: ${locText})</option>`;
+            return `<option value="${b.batch_id}">${esc(item?.name || 'Item')} — Batch ${esc(b.batch_number)} (Stock: ${b.quantity_remaining}, Location: ${esc(locText)})</option>`;
           }).join('');
 
           // Issue source batch selection
-          const centralActiveBatches = batches.filter(b => b.status === 'active' && b.quantity_remaining > 0 && (b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null"));
+          const centralActiveBatches = batches.filter(b => b.status === 'active' && !isBatchExpired(b) && b.quantity_remaining > 0 && (b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null"));
           const issueBatchSel = document.getElementById("issue-source-batch");
           issueBatchSel.innerHTML = `<option value="">— Select Central Batch —</option>` + centralActiveBatches.map(b => {
             const item = items.find(i => i.item_id === b.item_id);
@@ -1149,6 +1430,11 @@
           const batch = batches.find(b => b.batch_id === batchId);
           if (!batch) { showToast("Selected batch not found.", "error"); return; }
 
+          if (type === 'dispense' && isBatchExpired(batch)) {
+            showToast("Expired batches cannot be dispensed to patients.", "warning");
+            return;
+          }
+
           if ((type === 'dispense' || type === 'expiry_disposal') && qtyInput > batch.quantity_remaining) {
             showToast(`Cannot deduct ${qtyInput}. Remaining batch stock is only ${batch.quantity_remaining}.`, "warning");
             return;
@@ -1212,11 +1498,16 @@
           try {
             let bhcData = [];
             try {
-              const { data, error } = await db.from("bhc").select("bhc_id, bhc_name").order("bhc_name");
-              if (!error && data && data.length > 0) bhcData = data;
-              else {
-                const { data: facs } = await db.from("health_facilities").select("facility_id, name").order("name");
-                bhcData = (facs || []).map(f => ({ bhc_id: f.facility_id, bhc_name: f.name }));
+              const { data: facs, error: facilityError } = await db
+                .from("health_facilities")
+                .select("facility_id, name, facility_type")
+                .eq("facility_type", "BHC")
+                .order("name");
+              if (!facilityError && facs && facs.length > 0) {
+                bhcData = facs.map(f => ({ bhc_id: f.facility_id, bhc_name: f.name }));
+              } else {
+                const { data } = await db.from("bhc").select("bhc_id, bhc_name").order("bhc_name");
+                bhcData = data || [];
               }
             } catch (e) { console.warn("BHC load fallback:", e); }
 
@@ -1299,6 +1590,8 @@
         document.getElementById("open-issue-modal-btn").addEventListener("click", () => {
           document.getElementById("issue-form-alert").style.display = "none";
           document.getElementById("form-issue").reset();
+          document.getElementById("issue-request-id").value = "";
+          document.getElementById("issue-request-context").style.display = "none";
           populateDropdowns();
           document.getElementById("modal-issue").classList.add("show");
         });
@@ -1309,6 +1602,8 @@
           const targetBhcId = parseInt(document.getElementById("issue-target-bhc").value);
           const qtyInput = parseInt(document.getElementById("issue-qty").value);
           const ref = document.getElementById("issue-reference").value.trim();
+          const requestIdValue = document.getElementById("issue-request-id").value;
+          const requestId = requestIdValue ? parseInt(requestIdValue) : null;
           const alertEl = document.getElementById("issue-form-alert");
 
           alertEl.style.display = "none";
@@ -1337,84 +1632,20 @@
           btn.innerHTML = '<div class="btn-loader"></div> Issuing...';
 
           try {
-            // 1. Deduct from Central source batch
-            const { error: updateErr } = await db.from("inventory_batches")
-              .update({ quantity_remaining: sourceBatch.quantity_remaining - qtyInput })
-              .eq("batch_id", sourceBatch.batch_id);
-
-            if (updateErr) throw updateErr;
-
             const targetBhcName = bhcs.find(b => String(b.bhc_id) === String(targetBhcId))?.bhc_name || `BHC #${targetBhcId}`;
-
-            // 2. Log transfer transaction for Central
-            await db.from("inventory_transactions").insert({
-              batch_id: sourceBatch.batch_id,
-              facility_id: null,
-              transaction_type: "transfer",
-              quantity: -qtyInput,
-              reference_type: `Issued to ${targetBhcName}`,
-              performed_by: session.account_id
+            const { error: issueError } = await db.rpc("issue_inventory_transfer", {
+              p_source_batch_id: sourceBatchId,
+              p_destination_facility_id: targetBhcId,
+              p_quantity: qtyInput,
+              p_issued_by: session.account_id,
+              p_request_id: requestId,
+              p_remarks: ref || null
             });
+            if (issueError) throw issueError;
 
-            // 3. Upsert destination batch at target BHC
-            const { data: existingTargetBatch } = await db.from("inventory_batches")
-              .select("*")
-              .eq("item_id", sourceBatch.item_id)
-              .eq("batch_number", sourceBatch.batch_number)
-              .eq("facility_id", targetBhcId)
-              .eq("status", "active")
-              .maybeSingle();
-
-            let destBatchId;
-            if (existingTargetBatch) {
-              destBatchId = existingTargetBatch.batch_id;
-              const { error: targetUpdateErr } = await db.from("inventory_batches")
-                .update({
-                  quantity_received: existingTargetBatch.quantity_received + qtyInput,
-                  quantity_remaining: existingTargetBatch.quantity_remaining + qtyInput
-                })
-                .eq("batch_id", destBatchId);
-              if (targetUpdateErr) throw targetUpdateErr;
-            } else {
-              const { data: newTargetBatch, error: targetInsertErr } = await db.from("inventory_batches").insert({
-                item_id: sourceBatch.item_id,
-                facility_id: targetBhcId,
-                batch_number: sourceBatch.batch_number,
-                quantity_received: qtyInput,
-                quantity_remaining: qtyInput,
-                received_date: new Date().toISOString().slice(0, 10),
-                expiration_date: sourceBatch.expiration_date,
-                manufacturer: sourceBatch.manufacturer,
-                status: "active"
-              }).select().single();
-              if (targetInsertErr) throw targetInsertErr;
-              destBatchId = newTargetBatch.batch_id;
-            }
-
-            // 4. Log transfer transaction for destination batch
-            await db.from("inventory_transactions").insert({
-              batch_id: destBatchId,
-              facility_id: targetBhcId,
-              transaction_type: "transfer",
-              quantity: qtyInput,
-              reference_type: ref || "Received from Central Warehouse",
-              performed_by: session.account_id
-            });
-
-            // 5. Log audit trail
-            const item = items.find(i => i.item_id === sourceBatch.item_id);
-            try {
-              await db.from("audit_trail").insert({
-                account_id: session.account_id,
-                action: "issue_inventory_stock",
-                table_name: "inventory_batches",
-                description: `Issued ${qtyInput} units of "${item?.name || ''}" (Batch #${sourceBatch.batch_number}) to ${targetBhcName}`
-              });
-            } catch (e) {}
-
-            showToast(`Successfully issued ${qtyInput} stock to ${targetBhcName}.`, "success");
+            showToast(`Issued ${qtyInput} stock to ${targetBhcName}; awaiting BHC receipt.`, "success");
             closeModal("modal-issue");
-            loadInventoryData();
+            await loadInventoryData();
           } catch (err) {
             alertEl.textContent = "Error issuing stock: " + err.message;
             alertEl.style.display = "block";
@@ -1756,6 +1987,9 @@
           document.getElementById(id).addEventListener("input", renderTransactions);
           document.getElementById(id).addEventListener("change", renderTransactions);
         });
+
+        document.getElementById("request-filter-status").addEventListener("change", renderStockRequests);
+        document.getElementById("refresh-requests-btn").addEventListener("click", loadInventoryData);
 
         // Initial Load
         loadInventoryData();
