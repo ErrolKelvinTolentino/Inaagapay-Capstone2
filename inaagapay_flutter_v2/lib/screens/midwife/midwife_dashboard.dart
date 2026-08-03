@@ -498,7 +498,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
             else
               Future.value([]),
 
-            // Search records
+            // Search records (bounded for fast dashboard load)
             SupabaseService.client
                 .from('clinical_encounters')
                 .select('''
@@ -524,15 +524,20 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                   )
                 ''')
                 .inFilter('pregnancy_id', allPregnancyIds)
-                .eq('encounter_type', 'checkup'),
+                .eq('encounter_type', 'checkup')
+                .order('encounter_datetime', ascending: false)
+                .limit(50),
             SupabaseService.client
                 .from('ultrasounds')
                 .select('encounter_id, ultrasound_date, remarks:findings_summary, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
-                .inFilter('pregnancy_id', allPregnancyIds),
+                .inFilter('pregnancy_id', allPregnancyIds)
+                .order('ultrasound_date', ascending: false)
+                .limit(50),
             SupabaseService.client
                 .from('lab_tests')
                 .select('encounter_id, lab_test_type, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession, encounter:clinical_encounters(encounter_datetime, midwife_notes)')
-                .inFilter('pregnancy_id', allPregnancyIds),
+                .inFilter('pregnancy_id', allPregnancyIds)
+                .limit(50),
           ]);
 
           tdResponse = clinicalResponses[0];
@@ -752,17 +757,33 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     final today = DateTime(now.year, now.month, now.day);
 
     try {
-      // Task 1: Check for upcoming scheduled checkups (next 7 days)
-      final upcomingCheckups = await SupabaseService.client
-          .from('prenatal_checkups')
-          .select('''
+      // Fetch both queries concurrently
+      final taskResults = await Future.wait([
+        // [0] Upcoming checkups
+        SupabaseService.client
+            .from('prenatal_checkups')
+            .select('''
             prenatal_checkup_id,
             next_schedule,
             pregnancy_id
           ''')
-          .inFilter('pregnancy_id', pregnancyIds)
-          .not('next_schedule', 'is', null)
-          .gte('next_schedule', today.toIso8601String().split('T')[0]);
+            .inFilter('pregnancy_id', pregnancyIds)
+            .not('next_schedule', 'is', null)
+            .gte('next_schedule', today.toIso8601String().split('T')[0]),
+        // [1] High-risk pregnancies
+        SupabaseService.client
+            .from('pregnancies')
+            .select('''
+            pregnancy_id,
+            pregnancy_risk_level,
+            mother_id
+          ''')
+            .inFilter('pregnancy_id', pregnancyIds)
+            .eq('pregnancy_risk_level', 'high'),
+      ]);
+
+      final upcomingCheckups = taskResults[0] as List<dynamic>;
+      final highRiskPregnancies = taskResults[1] as List<dynamic>;
 
       for (var checkup in upcomingCheckups) {
         final nextDate = DateTime.parse(checkup['next_schedule']);
@@ -773,18 +794,10 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
               ? 'urgent'
               : (daysUntil <= 2 ? 'warning' : 'normal');
 
-          final pregnancyData = await SupabaseService.client
-              .from('pregnancies')
-              .select('mother_id')
-              .eq('pregnancy_id', checkup['pregnancy_id'])
-              .maybeSingle();
+          final pregId = checkup['pregnancy_id'] as int?;
+          final motherInfo = pregId != null ? _pregnancyToMotherMap[pregId] : null;
 
-          if (pregnancyData != null) {
-            final motherInfo = _allMothers.firstWhere(
-              (m) => m['mother_id'] == pregnancyData['mother_id'],
-              orElse: () => {},
-            );
-
+          if (motherInfo != null && motherInfo.isNotEmpty) {
             final name = motherInfo.isNotEmpty
                 ? '${motherInfo['first_name']} ${motherInfo['last_name']}'
                     .trim()
@@ -792,7 +805,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
             _priorityTasks.add(PriorityTask(
               id: checkup['prenatal_checkup_id'],
-              motherId: pregnancyData['mother_id'] as int,
+              motherId: motherInfo['mother_id'] as int,
               title: 'Prenatal Checkup Scheduled',
               description:
                   '$name has a checkup scheduled for ${DateFormat('MMM d, yyyy').format(nextDate)}',
@@ -803,17 +816,6 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           }
         }
       }
-
-      // Task 2: Check for high-risk pregnancies
-      final highRiskPregnancies = await SupabaseService.client
-          .from('pregnancies')
-          .select('''
-            pregnancy_id,
-            pregnancy_risk_level,
-            mother_id
-          ''')
-          .inFilter('pregnancy_id', pregnancyIds)
-          .eq('pregnancy_risk_level', 'high');
 
       for (var pregnancy in highRiskPregnancies) {
         final motherInfo = _allMothers.firstWhere(

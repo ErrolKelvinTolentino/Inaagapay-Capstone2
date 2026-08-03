@@ -233,6 +233,14 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
     final List<dynamic> rawMothers = List<dynamic>.from(response);
     rawMothers.sort((a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
 
+    // Parallelize profile picture URL fetching
+    final pictureUrls = await Future.wait(
+      rawMothers.map((raw) {
+        final mId = raw['mother_id'] as int?;
+        return mId != null ? _loadProfilePicture(mId) : Future<String?>.value(null);
+      }),
+    );
+
     final List<Map<String, dynamic>> parsedMothers = [];
 
     for (int i = 0; i < rawMothers.length; i++) {
@@ -277,7 +285,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         }
       }
 
-      String? profilePictureUrl = await _loadProfilePicture(motherId);
+      String? profilePictureUrl = pictureUrls[i];
 
       parsedMothers.add({
         'account_id': accountId,
