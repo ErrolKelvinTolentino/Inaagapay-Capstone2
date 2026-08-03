@@ -94,6 +94,85 @@
       .type-pill.supplement { background: rgba(16, 185, 129, 0.12); color: #059669; }
       .type-pill.medical_device { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
       .type-pill.contraceptive { background: rgba(236, 72, 153, 0.12); color: #db2777; }
+
+      /* Skeleton Loader Animation */
+      @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      .skeleton-box {
+        display: inline-block;
+        height: 16px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, rgba(229,231,235,0.8) 25%, rgba(243,244,246,0.9) 50%, rgba(229,231,235,0.8) 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+      }
+      .skeleton-tr td {
+        padding: 16px 12px;
+      }
+
+      /* Reusable Pagination Controls */
+      .pagination-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px;
+        background: var(--bg-card, #ffffff);
+        border-top: 1px solid var(--border-primary, #e5e7eb);
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 13px;
+        color: var(--text-secondary, #6b7280);
+      }
+      .pagination-info {
+        font-weight: 500;
+      }
+      .pagination-controls {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .pagination-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 30px;
+        height: 30px;
+        padding: 0 6px;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: 6px;
+        border: 1px solid var(--border-primary, #e5e7eb);
+        background: var(--bg-secondary, #f9fafb);
+        color: var(--text-primary, #111827);
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .pagination-btn:hover:not(:disabled) {
+        border-color: var(--brand-primary, #ff68a5);
+        color: var(--brand-primary, #ff68a5);
+        background: rgba(255, 104, 165, 0.08);
+      }
+      .pagination-btn.active {
+        background: var(--brand-primary, #ff68a5);
+        border-color: var(--brand-primary, #ff68a5);
+        color: #ffffff;
+      }
+      .pagination-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .pagination-size-select {
+        padding: 3px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--border-primary, #e5e7eb);
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--bg-card, #ffffff);
+        color: var(--text-primary, #111827);
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
@@ -147,8 +226,13 @@
       <main class="app-main">
         <div class="page-header">
           <div class="page-title-block">
-            <h1 class="page-title">BHC Inventory Management</h1>
-            <p class="page-subtitle" style="margin-bottom: 12px;">Track vaccines, supplements, contraceptives, and medical supplies across health centers</p>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <h1 class="page-title" style="margin: 0;">BHC Inventory Management</h1>
+              <span id="live-sync-indicator" class="badge badge-active" style="display: inline-flex; align-items: center; gap: 6px; background: rgba(16,185,129,0.15); color: #059669; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px;">
+                <i class="fa-solid fa-signal" style="font-size: 10px;"></i> Connecting Live Sync...
+              </span>
+            </div>
+            <p class="page-subtitle" style="margin-top: 4px; margin-bottom: 12px;">Track vaccines, supplements, contraceptives, and medical supplies across health centers</p>
             <div style="display: flex; align-items: center; gap: 8px;">
               <span style="font-size: 13.5px; font-weight: 600; color: var(--text-secondary);"><i class="fa-solid fa-hospital" style="color: var(--brand-primary)"></i> View Stocks At:</span>
               <select class="form-select" id="global-bhc-filter" style="width: auto; min-width: 280px; padding: 6px 12px; font-size: 13.5px; border-radius: 6px; font-weight: 600; border-color: var(--brand-primary); cursor: pointer;">
@@ -157,7 +241,8 @@
               </select>
             </div>
           </div>
-          <div class="page-actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <div class="page-actions" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+            <button class="btn btn-secondary btn-sm" id="open-alerts-hub-btn" onclick="openAlertsModal()"><i class="fa-solid fa-bell" style="color:#d97706;"></i> Alerts Hub <span id="alerts-hub-count" class="badge" style="background:#d97706; color:white; margin-left:4px; display:none;">0</span></button>
             <button class="btn btn-secondary btn-sm" id="open-item-modal-btn"><i class="fa-solid fa-plus"></i> Add Item Catalog</button>
             <button class="btn btn-primary btn-sm" id="open-batch-modal-btn"><i class="fa-solid fa-box-archive"></i> Receive Stock Batch</button>
             <button class="btn btn-outline-pink btn-sm" id="open-dispense-modal-btn"><i class="fa-solid fa-hand-holding-medical"></i> Dispense / Adjust Stock</button>
@@ -165,30 +250,44 @@
           </div>
         </div>
 
+        <!-- Active Alerts Banner -->
+        <div id="inventory-alerts-banner" class="card" style="display: none; margin-bottom: 20px; padding: 14px 20px; border-left: 5px solid #f59e0b; background: #fffbeb;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <i class="fa-solid fa-triangle-exclamation" style="font-size: 22px; color: #d97706;"></i>
+              <div>
+                <strong style="color: #b45309; font-size: 14.5px;" id="alerts-banner-title">Inventory Alerts Requiring Attention</strong>
+                <div style="font-size: 13px; color: #78350f; margin-top: 2px;" id="alerts-banner-desc">Low stock items, expiring batches, or pending midwife requests detected.</div>
+              </div>
+            </div>
+            <button class="btn btn-sm btn-secondary" onclick="openAlertsModal()" style="border-color: #d97706; color: #b45309;"><i class="fa-solid fa-bell"></i> Open Alert Center</button>
+          </div>
+        </div>
+
         <!-- KPI Cards -->
         <div class="inventory-kpi-grid">
-          <div class="stat-card">
+          <div class="stat-card" style="cursor: pointer;" onclick="switchTab('catalog')">
             <div class="stat-icon blue"><i class="fa-solid fa-boxes-stacked"></i></div>
             <div class="stat-info">
               <div class="stat-value" id="kpi-total-items">—</div>
               <div class="stat-label">Total Unique Items</div>
             </div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" style="cursor: pointer;" onclick="openAlertsModal()">
             <div class="stat-icon amber"><i class="fa-solid fa-triangle-exclamation"></i></div>
             <div class="stat-info">
               <div class="stat-value" id="kpi-low-stock">—</div>
               <div class="stat-label">Low Stock Alerts</div>
             </div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" style="cursor: pointer;" onclick="switchTab('batches')">
             <div class="stat-icon pink"><i class="fa-solid fa-clock-rotate-left"></i></div>
             <div class="stat-info">
               <div class="stat-value" id="kpi-expiring-batches">—</div>
               <div class="stat-label">Expiring / Expired Batches</div>
             </div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card" style="cursor: pointer;" onclick="switchTab('transactions')">
             <div class="stat-icon green"><i class="fa-solid fa-arrow-right-arrow-left"></i></div>
             <div class="stat-info">
               <div class="stat-value" id="kpi-total-movements">—</div>
@@ -209,26 +308,29 @@
         <!-- Tab 1: Catalog -->
         <div id="tab-catalog" class="tab-content">
           <div class="card">
-            <div class="toolbar">
-              <div class="search-box">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input class="form-control" type="search" id="catalog-search" placeholder="Search items by name..." />
+            <div class="toolbar" style="display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+              <div style="display: flex; gap: 12px; flex: 1; flex-wrap: wrap;">
+                <div class="search-box" style="flex: 1; min-width: 240px;">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input class="form-control" type="search" id="catalog-search" placeholder="Search items by name..." />
+                </div>
+                <div class="filter-group">
+                  <select class="form-select" id="catalog-filter-type" style="width: auto">
+                    <option value="">All Item Types</option>
+                    <option value="vaccine">Vaccines</option>
+                    <option value="supplement">Supplements</option>
+                    <option value="contraceptive">Contraceptives</option>
+                    <option value="medical_device">Medical Supplies</option>
+                  </select>
+                  <select class="form-select" id="catalog-filter-stock" style="width: auto">
+                    <option value="">All Stock Levels</option>
+                    <option value="low">Low Stock Only</option>
+                    <option value="out">Out of Stock Only</option>
+                    <option value="normal">Normal Stock Only</option>
+                  </select>
+                </div>
               </div>
-              <div class="filter-group">
-                <select class="form-select" id="catalog-filter-type" style="width: auto">
-                  <option value="">All Item Types</option>
-                  <option value="vaccine">Vaccines</option>
-                  <option value="supplement">Supplements</option>
-                  <option value="contraceptive">Contraceptives</option>
-                  <option value="medical_device">Medical Supplies</option>
-                </select>
-                <select class="form-select" id="catalog-filter-stock" style="width: auto">
-                  <option value="">All Stock Levels</option>
-                  <option value="low">Low Stock Only</option>
-                  <option value="out">Out of Stock Only</option>
-                  <option value="normal">Normal Stock Only</option>
-                </select>
-              </div>
+              <button class="btn btn-secondary btn-sm" id="export-catalog-csv" onclick="exportCatalogCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
             </div>
 
             <div class="table-wrap" style="border: none; border-radius: 0">
@@ -236,38 +338,44 @@
                 <thead>
                   <tr>
                     <th>Item Name</th>
-                    <th>Category Type</th>
-                    <th>Unit of Measure</th>
-                    <th style="text-align: right">Min. Threshold</th>
-                    <th style="text-align: right">Current Stock</th>
+                    <th>Category</th>
+                    <th>Unit</th>
+                    <th style="text-align: right">Total Added</th>
+                    <th style="text-align: right">Total Issued</th>
+                    <th style="text-align: right">Allocated / Pending</th>
+                    <th style="text-align: right">Available Stock</th>
                     <th style="text-align: center">Stock Health</th>
                     <th style="text-align: center">Actions</th>
                   </tr>
                 </thead>
                 <tbody id="catalog-tbody">
-                  <tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px"></div>Loading inventory items...</td></tr>
+                  <tr><td colspan="9" style="text-align:center;padding:48px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px"></div>Loading inventory items...</td></tr>
                 </tbody>
               </table>
             </div>
+            <div id="catalog-pagination"></div>
           </div>
         </div>
 
         <!-- Tab 2: Batches -->
         <div id="tab-batches" class="tab-content" style="display: none;">
           <div class="card">
-            <div class="toolbar">
-              <div class="search-box">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input class="form-control" type="search" id="batches-search" placeholder="Search batch number or item name..." />
+            <div class="toolbar" style="display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+              <div style="display: flex; gap: 12px; flex: 1; flex-wrap: wrap;">
+                <div class="search-box" style="flex: 1; min-width: 240px;">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input class="form-control" type="search" id="batches-search" placeholder="Search batch number or item name..." />
+                </div>
+                <div class="filter-group">
+                  <select class="form-select" id="batches-filter-status" style="width: auto">
+                    <option value="">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="expired">Expired</option>
+                    <option value="discarded">Discarded</option>
+                  </select>
+                </div>
               </div>
-              <div class="filter-group">
-                <select class="form-select" id="batches-filter-status" style="width: auto">
-                  <option value="">All Statuses</option>
-                  <option value="active">Active</option>
-                  <option value="expired">Expired</option>
-                  <option value="discarded">Discarded</option>
-                </select>
-              </div>
+              <button class="btn btn-secondary btn-sm" id="export-batches-csv" onclick="exportBatchesCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
             </div>
 
             <div class="table-wrap" style="border: none; border-radius: 0">
@@ -291,6 +399,7 @@
                 </tbody>
               </table>
             </div>
+            <div id="batches-pagination"></div>
           </div>
         </div>
 
@@ -332,6 +441,7 @@
                 </tbody>
               </table>
             </div>
+            <div id="tx-pagination"></div>
           </div>
         </div>
 
@@ -373,6 +483,7 @@
                 </tbody>
               </table>
             </div>
+            <div id="requests-pagination"></div>
           </div>
 
           <div class="card">
@@ -397,6 +508,7 @@
                 </tbody>
               </table>
             </div>
+            <div id="transfers-pagination"></div>
           </div>
         </div>
 
@@ -695,6 +807,124 @@
       </div>
     </div>
 
+    <!-- Modal 5: Item Inventory Breakdown Drawer / Details Modal -->
+    <div class="modal-overlay" id="modal-item-details">
+      <div class="modal" style="max-width: 720px; width: 90%;">
+        <div class="modal-header">
+          <div>
+            <h2 class="modal-title" id="item-details-title"><i class="fa-solid fa-boxes-stacked" style="color:var(--brand-primary);margin-right:8px;"></i> Item Breakdown &amp; Stock Summary</h2>
+            <div id="item-details-subtitle" style="font-size:12.5px; color:var(--text-secondary); margin-top:2px;">Detailed view across Central and BHC facilities</div>
+          </div>
+          <button class="modal-close" onclick="closeModal('modal-item-details')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" id="item-details-body" style="max-height: 70vh; overflow-y: auto;">
+          <div class="spinner" style="margin: 40px auto;"></div>
+        </div>
+        <div class="modal-footer" style="justify-content: space-between;">
+          <button class="btn btn-secondary" onclick="closeModal('modal-item-details')">Close</button>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary" id="item-details-edit-btn"><i class="fa-solid fa-pen-to-square"></i> Edit Catalog</button>
+            <button class="btn btn-primary" id="item-details-receive-btn"><i class="fa-solid fa-plus"></i> Receive Batch</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 6: Edit Catalog Item -->
+    <div class="modal-overlay" id="modal-edit-item">
+      <div class="modal" style="max-width: 480px;">
+        <div class="modal-header">
+          <h2 class="modal-title"><i class="fa-solid fa-pen-to-square" style="color:var(--brand-primary);margin-right:8px;"></i> Edit Inventory Catalog Item</h2>
+          <button class="modal-close" onclick="closeModal('modal-edit-item')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <form id="form-edit-item">
+            <input type="hidden" id="edit-item-id" />
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="edit-item-name">Item Name <span class="req">*</span></label>
+              <input class="form-control" type="text" id="edit-item-name" required />
+            </div>
+            <div class="form-row" style="margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label" for="edit-item-type">Category Type <span class="req">*</span></label>
+                <select class="form-select" id="edit-item-type" required>
+                  <option value="vaccine">Vaccine</option>
+                  <option value="supplement">Supplement</option>
+                  <option value="contraceptive">Contraceptive</option>
+                  <option value="medical_device">Medical Supply</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="edit-item-uom">Unit of Measure <span class="req">*</span></label>
+                <input class="form-control" type="text" id="edit-item-uom" required />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-item-threshold">Minimum Stock Alert Threshold</label>
+              <input class="form-control" type="number" id="edit-item-threshold" min="1" required />
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('modal-edit-item')">Cancel</button>
+          <button class="btn btn-primary" id="save-edit-item-btn"><i class="fa-solid fa-floppy-disk"></i> Update Item</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 7: Custom Stock Request Approval -->
+    <div class="modal-overlay" id="modal-approve-request">
+      <div class="modal" style="max-width: 480px;">
+        <div class="modal-header">
+          <h2 class="modal-title"><i class="fa-solid fa-check-double" style="color:#059669;margin-right:8px;"></i> Approve Stock Request</h2>
+          <button class="modal-close" onclick="closeModal('modal-approve-request')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <form id="form-approve-request" onsubmit="return false;">
+            <input type="hidden" id="approve-request-id" />
+            <div id="approve-request-info" class="alert alert-info" style="margin-bottom:14px; padding:10px; font-size:13px;"></div>
+            <div class="form-group" style="margin-bottom:14px;">
+              <label class="form-label" for="approve-qty">Approved Quantity <span class="req">*</span></label>
+              <input class="form-control" type="number" id="approve-qty" min="1" required />
+              <span class="form-hint">You can adjust the approved quantity if central stock is limited.</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="approve-remarks">Admin Remarks / Instructions (Optional)</label>
+              <textarea class="form-control" id="approve-remarks" rows="2" placeholder="e.g. Approved 50 units for immediate delivery, remaining 50 on next allocation shipment."></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('modal-approve-request')">Cancel</button>
+          <button class="btn btn-primary" id="save-approve-btn" style="background:#059669; border-color:#059669;"><i class="fa-solid fa-check"></i> Confirm Approval</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 8: Alert Hub Modal -->
+    <div class="modal-overlay" id="modal-alerts-hub">
+      <div class="modal" style="max-width: 760px; width: 90%;">
+        <div class="modal-header">
+          <h2 class="modal-title"><i class="fa-solid fa-bell" style="color:#d97706;margin-right:8px;"></i> Inventory Alert Center</h2>
+          <button class="modal-close" onclick="closeModal('modal-alerts-hub')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+          <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+            <button class="btn btn-sm btn-secondary active" id="alert-tab-all" onclick="filterAlerts('all')">All Alerts</button>
+            <button class="btn btn-sm btn-secondary" id="alert-tab-low" onclick="filterAlerts('low')"><i class="fa-solid fa-triangle-exclamation" style="color:#d97706;"></i> Low Stock</button>
+            <button class="btn btn-sm btn-secondary" id="alert-tab-expiry" onclick="filterAlerts('expiry')"><i class="fa-solid fa-clock-rotate-left" style="color:#dc2626;"></i> Expiry</button>
+            <button class="btn btn-sm btn-secondary" id="alert-tab-requests" onclick="filterAlerts('requests')"><i class="fa-solid fa-clipboard-list" style="color:#2563eb;"></i> Pending Requests</button>
+          </div>
+          <div id="alerts-hub-content">
+            <div class="spinner" style="margin: 40px auto;"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('modal-alerts-hub')">Close Alert Hub</button>
+        </div>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="common-security.js"></script>
@@ -717,6 +947,8 @@
         let inventoryTransfers = [];
         let accountMap = {};
         let workflowLoadError = "";
+        let realtimeChannel = null;
+        let activeAlertFilter = "all";
 
         function esc(str) { const d = document.createElement("div"); d.textContent = str ?? ""; return d.innerHTML; }
         function showToast(msg, type = "info") {
@@ -736,16 +968,25 @@
         document.getElementById("sidebar-toggle").addEventListener("click", () => document.querySelector(".app-sidebar").classList.toggle("open"));
 
         // Tab Switching
+        window.switchTab = function(target) {
+          document.querySelectorAll(".inventory-tab-btn").forEach(b => {
+            b.classList.toggle("active", b.dataset.tab === target);
+          });
+          document.querySelectorAll(".tab-content").forEach(c => {
+            c.style.display = "none";
+          });
+          const targetEl = document.getElementById(`tab-${target}`);
+          if (targetEl) {
+            targetEl.style.display = "block";
+          }
+          if (target === "analytics") {
+            loadAnalyticsReport();
+          }
+        };
+
         document.querySelectorAll(".inventory-tab-btn").forEach(btn => {
           btn.addEventListener("click", () => {
-            document.querySelectorAll(".inventory-tab-btn").forEach(b => b.classList.remove("active"));
-            document.querySelectorAll(".tab-content").forEach(c => c.style.display = "none");
-            btn.classList.add("active");
-            const target = btn.dataset.tab;
-            document.getElementById(`tab-${target}`).style.display = "block";
-            if (target === "analytics") {
-              loadAnalyticsReport();
-            }
+            switchTab(btn.dataset.tab);
           });
         });
 
@@ -770,70 +1011,243 @@
           return Boolean(batch?.expiration_date && batch.expiration_date < localDateKey());
         }
 
-        // Load Data with Resilient Fallback
-        async function loadInventoryData() {
+        // Supabase Realtime Subscription
+        function setupRealtimeSubscription() {
+          if (realtimeChannel) return;
+
+          realtimeChannel = db.channel("admin-inventory-realtime-sync")
+            .on("postgres_changes", { event: "*", schema: "public", table: "inventory_items" }, () => triggerRealtimeRefresh("Inventory catalog updated"))
+            .on("postgres_changes", { event: "*", schema: "public", table: "inventory_batches" }, () => triggerRealtimeRefresh("Stock batches updated"))
+            .on("postgres_changes", { event: "*", schema: "public", table: "inventory_transactions" }, () => triggerRealtimeRefresh("Stock movement logged"))
+            .on("postgres_changes", { event: "*", schema: "public", table: "inventory_stock_requests" }, () => triggerRealtimeRefresh("Stock request updated"))
+            .on("postgres_changes", { event: "*", schema: "public", table: "inventory_transfers" }, () => triggerRealtimeRefresh("Stock transfer updated"))
+            .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => triggerRealtimeRefresh("New system notification"))
+            .subscribe((status) => {
+              const el = document.getElementById("live-sync-indicator");
+              if (el) {
+                if (status === "SUBSCRIBED") {
+                  el.style.background = "rgba(16,185,129,0.15)";
+                  el.style.color = "#059669";
+                  el.innerHTML = '<i class="fa-solid fa-signal" style="font-size:10px;"></i> Live Sync Connected';
+                } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+                  el.style.background = "rgba(239,68,68,0.15)";
+                  el.style.color = "#dc2626";
+                  el.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin" style="font-size:10px;"></i> Reconnecting...';
+                }
+              }
+            });
+        }
+
+        let realtimeDebounceTimer = null;
+        function triggerRealtimeRefresh(msg) {
+          if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
+          realtimeDebounceTimer = setTimeout(() => {
+            loadInventoryData(true);
+            showToast(`⚡ Real-time update: ${msg}`, "info");
+          }, 600);
+        }
+
+        // Comprehensive Stock Metrics Calculator
+        function getItemStockMetrics(itemId, customFilter = null) {
+          const filter = customFilter !== null ? customFilter : document.getElementById("global-bhc-filter").value;
+
+          // Filter batches by item and facility
+          const itemBatches = batches.filter(b => {
+            if (b.item_id !== itemId) return false;
+            if (filter === "central") {
+              return b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null";
+            } else if (filter !== "all") {
+              return String(b.facility_id) === String(filter);
+            }
+            return true;
+          });
+
+          // Total Added (Received Quantity across batches)
+          const added = itemBatches.reduce((sum, b) => sum + (b.quantity_received || 0), 0);
+
+          // Available Stock (Active & Unexpired remaining quantity)
+          const available = itemBatches
+            .filter(b => b.status === "active" && !isBatchExpired(b))
+            .reduce((sum, b) => sum + (b.quantity_remaining || 0), 0);
+
+          // Expired Stock
+          const expired = itemBatches
+            .filter(b => isBatchExpired(b) || b.status === "expired")
+            .reduce((sum, b) => sum + (b.quantity_remaining || 0), 0);
+
+          // Total Issued (From central to BHCs via inventory_transfers)
+          const batchIds = new Set(itemBatches.map(b => b.batch_id));
+          const issued = inventoryTransfers
+            .filter(t => batchIds.has(t.source_batch_id) && t.status !== "cancelled")
+            .reduce((sum, t) => sum + (t.quantity_issued || 0), 0);
+
+          // Allocated / Reserved Stock for pending/approved stock requests & pending transfers
+          const allocatedRequests = stockRequests
+            .filter(r => {
+              if (r.item_id !== itemId) return false;
+              if (r.status !== "pending" && r.status !== "approved") return false;
+              if (filter === "central") return true;
+              if (filter !== "all") return String(r.facility_id) === String(filter);
+              return true;
+            })
+            .reduce((sum, r) => sum + (r.requested_quantity || 0), 0);
+
+          const allocatedTransfers = inventoryTransfers
+            .filter(t => {
+              if (t.status !== "pending_receipt") return false;
+              const source = batches.find(b => b.batch_id === t.source_batch_id);
+              if (!source || source.item_id !== itemId) return false;
+              if (filter === "central") return true;
+              if (filter !== "all") return String(t.destination_facility_id) === String(filter);
+              return true;
+            })
+            .reduce((sum, t) => sum + (t.quantity_issued || 0), 0);
+
+          const allocated = allocatedRequests + allocatedTransfers;
+
+          return { added, issued, allocated, available, expired };
+        }
+
+        function calculateStockPerItem(itemId) {
+          return getItemStockMetrics(itemId).available;
+        }
+
+        // Universal Pagination State
+        const paginationState = {
+          catalog: { currentPage: 1, pageSize: 10 },
+          batches: { currentPage: 1, pageSize: 10 },
+          tx: { currentPage: 1, pageSize: 10 },
+          requests: { currentPage: 1, pageSize: 10 },
+          transfers: { currentPage: 1, pageSize: 10 }
+        };
+
+        function renderSkeletonTable(tbodyId, cols = 7, rows = 5) {
+          const tbody = document.getElementById(tbodyId);
+          if (!tbody) return;
+          let html = "";
+          for (let r = 0; r < rows; r++) {
+            let cells = "";
+            for (let c = 0; c < cols; c++) {
+              const width = Math.floor(Math.random() * 35) + 50;
+              cells += `<td><div class="skeleton-box" style="width:${width}%;"></div></td>`;
+            }
+            html += `<tr class="skeleton-tr">${cells}</tr>`;
+          }
+          tbody.innerHTML = html;
+        }
+
+        function renderPaginationControls(containerId, totalItems, key) {
+          const container = document.getElementById(containerId);
+          if (!container) return;
+          if (totalItems === 0) {
+            container.innerHTML = "";
+            return;
+          }
+
+          const state = paginationState[key];
+          const totalPages = Math.ceil(totalItems / state.pageSize) || 1;
+          if (state.currentPage > totalPages) state.currentPage = totalPages;
+          if (state.currentPage < 1) state.currentPage = 1;
+
+          const start = (state.currentPage - 1) * state.pageSize + 1;
+          const end = Math.min(state.currentPage * state.pageSize, totalItems);
+
+          const maxBtns = 5;
+          let startPage = Math.max(1, state.currentPage - 2);
+          let endPage = Math.min(totalPages, startPage + maxBtns - 1);
+          if (endPage - startPage < maxBtns - 1) {
+            startPage = Math.max(1, endPage - maxBtns + 1);
+          }
+
+          let pageBtnsHtml = "";
+          for (let i = startPage; i <= endPage; i++) {
+            pageBtnsHtml += `<button class="pagination-btn ${i === state.currentPage ? 'active' : ''}" onclick="changePaginationPage('${key}', ${i})">${i}</button>`;
+          }
+
+          container.innerHTML = `
+            <div class="pagination-wrap">
+              <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <span class="pagination-info">Showing <strong>${start}–${end}</strong> of <strong>${totalItems}</strong> items</span>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span style="font-size:12px; color:var(--text-secondary);">Rows:</span>
+                  <select class="pagination-size-select" onchange="changePaginationSize('${key}', this.value)">
+                    <option value="10" ${state.pageSize === 10 ? 'selected' : ''}>10</option>
+                    <option value="25" ${state.pageSize === 25 ? 'selected' : ''}>25</option>
+                    <option value="50" ${state.pageSize === 50 ? 'selected' : ''}>50</option>
+                    <option value="100" ${state.pageSize === 100 ? 'selected' : ''}>100</option>
+                  </select>
+                </div>
+              </div>
+              <div class="pagination-controls">
+                <button class="pagination-btn" ${state.currentPage === 1 ? 'disabled' : ''} onclick="changePaginationPage('${key}', 1)" title="First Page"><i class="fa-solid fa-angles-left"></i></button>
+                <button class="pagination-btn" ${state.currentPage === 1 ? 'disabled' : ''} onclick="changePaginationPage('${key}', ${state.currentPage - 1})" title="Previous Page"><i class="fa-solid fa-chevron-left"></i></button>
+                ${pageBtnsHtml}
+                <button class="pagination-btn" ${state.currentPage === totalPages ? 'disabled' : ''} onclick="changePaginationPage('${key}', ${state.currentPage + 1})" title="Next Page"><i class="fa-solid fa-chevron-right"></i></button>
+                <button class="pagination-btn" ${state.currentPage === totalPages ? 'disabled' : ''} onclick="changePaginationPage('${key}', ${totalPages})" title="Last Page"><i class="fa-solid fa-angles-right"></i></button>
+              </div>
+            </div>
+          `;
+        }
+
+        window.changePaginationPage = function(key, newPage) {
+          paginationState[key].currentPage = newPage;
+          if (key === 'catalog') renderCatalog();
+          else if (key === 'batches') renderBatches();
+          else if (key === 'tx') renderTransactions();
+          else if (key === 'requests') renderStockRequests();
+          else if (key === 'transfers') renderInventoryTransfers();
+        };
+
+        window.changePaginationSize = function(key, newSize) {
+          paginationState[key].pageSize = parseInt(newSize) || 10;
+          paginationState[key].currentPage = 1;
+          if (key === 'catalog') renderCatalog();
+          else if (key === 'batches') renderBatches();
+          else if (key === 'tx') renderTransactions();
+          else if (key === 'requests') renderStockRequests();
+          else if (key === 'transfers') renderInventoryTransfers();
+        };
+
+        // Load Data with Resilient Fallback & Skeleton Loading Animations
+        async function loadInventoryData(isSilentRefresh = false) {
           try {
             workflowLoadError = "";
+            if (!isSilentRefresh) {
+              renderSkeletonTable("catalog-tbody", 9, 5);
+              renderSkeletonTable("batches-tbody", 10, 5);
+              renderSkeletonTable("tx-tbody", 7, 5);
+              renderSkeletonTable("requests-tbody", 7, 5);
+              renderSkeletonTable("transfers-tbody", 6, 5);
+            }
+
             await loadBhcs();
-            // Load Items
-            const { data: itemData, error: itemErr } = await db.from("inventory_items").select("*").order("name");
-            if (itemErr) {
-              console.warn("inventory_items query error:", itemErr);
-              items = [];
-            } else {
-              items = itemData || [];
-            }
 
-            // Load Batches
-            const { data: batchData, error: batchErr } = await db.from("inventory_batches").select("*").order("expiration_date", { ascending: true });
-            if (batchErr) {
-              console.warn("inventory_batches query error:", batchErr);
-              batches = [];
-            } else {
-              batches = batchData || [];
-            }
+            // Parallelized Queries for maximum efficiency
+            const [itemRes, batchRes, txRes, reqRes, transRes] = await Promise.all([
+              db.from("inventory_items").select("*").order("name"),
+              db.from("inventory_batches").select("*").order("expiration_date", { ascending: true }),
+              db.from("inventory_transactions").select("*").order("logged_at", { ascending: false }).limit(300),
+              db.from("inventory_stock_requests").select("*").order("created_at", { ascending: false }),
+              db.from("inventory_transfers").select("*").order("issued_at", { ascending: false })
+            ]);
 
-            // Load Transactions
-            const { data: txData, error: txErr } = await db.from("inventory_transactions").select("*").order("logged_at", { ascending: false }).limit(200);
-            if (txErr) {
-              console.warn("inventory_transactions query error:", txErr);
-              transactions = [];
-            } else {
-              transactions = txData || [];
-            }
+            items = itemRes.data || [];
+            batches = batchRes.data || [];
+            transactions = txRes.data || [];
+            stockRequests = reqRes.data || [];
+            inventoryTransfers = transRes.data || [];
 
-            // Load BHC requests and RHU -> BHC transfers. These tables are
-            // supplied by the inventory distribution migration.
-            const { data: requestData, error: requestErr } = await db
-              .from("inventory_stock_requests")
-              .select("*")
-              .order("created_at", { ascending: false });
-            if (requestErr) {
-              console.warn("inventory_stock_requests query error:", requestErr);
+            if (reqRes.error || transRes.error) {
               workflowLoadError = "The stock request workflow is unavailable. Run database/migrations/20260803_inventory_distribution_workflow.sql in the shared Supabase project.";
-              stockRequests = [];
-            } else {
-              stockRequests = requestData || [];
             }
 
-            const { data: transferData, error: transferErr } = await db
-              .from("inventory_transfers")
-              .select("*")
-              .order("issued_at", { ascending: false });
-            if (transferErr) {
-              console.warn("inventory_transfers query error:", transferErr);
-              workflowLoadError = "The stock request workflow is unavailable. Run database/migrations/20260803_inventory_distribution_workflow.sql in the shared Supabase project.";
-              inventoryTransfers = [];
-            } else {
-              inventoryTransfers = transferData || [];
-            }
-
-            // Fetch performing users map
+            // Fetch performing users map efficiently
             const accountIds = [...new Set([
               ...transactions.map(t => t.performed_by),
               ...stockRequests.flatMap(r => [r.requested_by, r.reviewed_by]),
               ...inventoryTransfers.flatMap(t => [t.issued_by, t.received_by])
             ].filter(Boolean))];
+
             if (accountIds.length > 0) {
               const { data: accs } = await db.from("accounts").select("account_id, first_name, last_name, email_address").in("account_id", accountIds);
               (accs || []).forEach(a => {
@@ -848,24 +1262,12 @@
             renderStockRequests();
             renderInventoryTransfers();
             populateDropdowns();
+            setupRealtimeSubscription();
           } catch (e) {
-            showToast("Failed to load inventory data: " + e.message, "error");
+            if (!isSilentRefresh) {
+              showToast("Failed to load inventory data: " + e.message, "error");
+            }
           }
-        }
-
-        function calculateStockPerItem(itemId) {
-          const filter = document.getElementById("global-bhc-filter").value;
-          return batches
-            .filter(b => {
-              if (b.item_id !== itemId || b.status !== 'active') return false;
-              if (filter === "central") {
-                return b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null";
-              } else if (filter !== "all") {
-                return String(b.facility_id) === String(filter);
-              }
-              return true;
-            })
-            .reduce((sum, b) => sum + (b.quantity_remaining || 0), 0);
         }
 
         function renderKPIs() {
@@ -874,8 +1276,8 @@
           
           let lowCount = 0;
           items.forEach(item => {
-            const stock = calculateStockPerItem(item.item_id);
-            if (stock <= (item.minimum_stock_threshold || 50)) lowCount++;
+            const metrics = getItemStockMetrics(item.item_id, bhcFilter);
+            if (metrics.available <= (item.minimum_stock_threshold || 50)) lowCount++;
           });
           document.getElementById("kpi-low-stock").textContent = lowCount;
 
@@ -908,51 +1310,95 @@
             return true;
           }).length;
           document.getElementById("kpi-total-movements").textContent = todayMovements;
+
+          // Pending Requests Badges
+          const pendingCount = stockRequests.filter(r => r.status === "pending").length;
+          const reqBadge = document.getElementById("requests-pending-badge");
+          if (reqBadge) {
+            reqBadge.textContent = pendingCount;
+            reqBadge.style.display = pendingCount > 0 ? "inline-flex" : "none";
+          }
+
+          const alertCount = lowCount + expiringCount + pendingCount;
+          const alertBadge = document.getElementById("alerts-hub-count");
+          if (alertBadge) {
+            alertBadge.textContent = alertCount;
+            alertBadge.style.display = alertCount > 0 ? "inline-flex" : "none";
+          }
+
+          // Top Alert Banner
+          const banner = document.getElementById("inventory-alerts-banner");
+          if (banner) {
+            if (alertCount > 0) {
+              const details = [];
+              if (lowCount > 0) details.push(`${lowCount} item(s) low/out of stock`);
+              if (expiringCount > 0) details.push(`${expiringCount} batch(es) expiring soon or expired`);
+              if (pendingCount > 0) details.push(`${pendingCount} pending midwife request(s) awaiting approval`);
+              document.getElementById("alerts-banner-desc").textContent = details.join(" • ");
+              banner.style.display = "block";
+            } else {
+              banner.style.display = "none";
+            }
+          }
         }
 
         function renderCatalog() {
           const q = document.getElementById("catalog-search").value.trim().toLowerCase();
           const type = document.getElementById("catalog-filter-type").value;
           const stockFilter = document.getElementById("catalog-filter-stock").value;
+          const bhcFilter = document.getElementById("global-bhc-filter").value;
 
           const filtered = items.filter(item => {
             if (type && item.item_type !== type) return false;
             if (q && !item.name.toLowerCase().includes(q)) return false;
-            const currentStock = calculateStockPerItem(item.item_id);
+            const metrics = getItemStockMetrics(item.item_id, bhcFilter);
             const min = item.minimum_stock_threshold || 50;
-            if (stockFilter === "low" && (currentStock > min || currentStock === 0)) return false;
-            if (stockFilter === "out" && currentStock > 0) return false;
-            if (stockFilter === "normal" && currentStock <= min) return false;
+            if (stockFilter === "low" && (metrics.available > min || metrics.available === 0)) return false;
+            if (stockFilter === "out" && metrics.available > 0) return false;
+            if (stockFilter === "normal" && metrics.available <= min) return false;
             return true;
           });
 
           const tbody = document.getElementById("catalog-tbody");
           if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);">No inventory items matching criteria.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-folder-open" style="font-size:28px;margin-bottom:8px;display:block;opacity:0.5;"></i>No inventory items matching criteria.</td></tr>`;
+            renderPaginationControls("catalog-pagination", 0, "catalog");
             return;
           }
 
-          tbody.innerHTML = filtered.map(item => {
-            const stock = calculateStockPerItem(item.item_id);
+          const state = paginationState.catalog;
+          const startIdx = (state.currentPage - 1) * state.pageSize;
+          const paginatedItems = filtered.slice(startIdx, startIdx + state.pageSize);
+
+          tbody.innerHTML = paginatedItems.map(item => {
+            const metrics = getItemStockMetrics(item.item_id, bhcFilter);
             const min = item.minimum_stock_threshold || 50;
             let statusBadge = `<span class="badge badge-active">In Stock</span>`;
-            if (stock === 0) statusBadge = `<span class="badge badge-inactive" style="background:rgba(220,38,38,0.15);color:#dc2626;">Out of Stock</span>`;
-            else if (stock <= min) statusBadge = `<span class="badge badge-medium">Low Stock</span>`;
+            if (metrics.available === 0) statusBadge = `<span class="badge badge-inactive" style="background:rgba(220,38,38,0.15);color:#dc2626;">Out of Stock</span>`;
+            else if (metrics.available <= min) statusBadge = `<span class="badge badge-medium">Low Stock</span>`;
 
             return `
               <tr>
-                <td><strong style="color:var(--text-primary);">${esc(item.name)}</strong></td>
+                <td><strong style="color:var(--text-primary);cursor:pointer;" onclick="openItemDetails(${item.item_id})">${esc(item.name)}</strong><div style="font-size:11px;color:var(--text-secondary);">Min Threshold: ${min} ${esc(item.unit_of_measure)}</div></td>
                 <td><span class="type-pill ${item.item_type}">${esc(item.item_type.replace('_',' '))}</span></td>
                 <td>${esc(item.unit_of_measure)}</td>
-                <td style="text-align:right;">${min}</td>
-                <td style="text-align:right;font-weight:700;font-size:15px;color:${stock <= min ? '#dc2626' : 'var(--text-primary)'};">${stock}</td>
+                <td style="text-align:right;font-weight:600;color:#059669;">+${metrics.added}</td>
+                <td style="text-align:right;font-weight:600;color:#7c3aed;">${metrics.issued}</td>
+                <td style="text-align:right;font-weight:600;color:#d97706;">${metrics.allocated > 0 ? `${metrics.allocated}` : '0'}</td>
+                <td style="text-align:right;font-weight:700;font-size:15px;color:${metrics.available <= min ? '#dc2626' : 'var(--text-primary)'};">${metrics.available}</td>
                 <td style="text-align:center;">${statusBadge}</td>
                 <td style="text-align:center;">
-                  <button class="btn btn-sm btn-secondary" onclick="quickReceive(${item.item_id})"><i class="fa-solid fa-plus"></i> Batch</button>
+                  <div style="display:flex;justify-content:center;gap:4px;flex-wrap:wrap;">
+                    <button class="btn btn-sm btn-secondary" onclick="openItemDetails(${item.item_id})" title="View Stock Breakdown"><i class="fa-solid fa-eye"></i></button>
+                    <button class="btn btn-sm btn-secondary" onclick="openEditItem(${item.item_id})" title="Edit Item Details"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-sm btn-primary" onclick="quickReceive(${item.item_id})" title="Receive New Batch"><i class="fa-solid fa-plus"></i> Batch</button>
+                  </div>
                 </td>
               </tr>
             `;
           }).join('');
+
+          renderPaginationControls("catalog-pagination", filtered.length, "catalog");
         }
 
         function renderBatches() {
@@ -980,11 +1426,16 @@
 
           const tbody = document.getElementById("batches-tbody");
           if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:48px;color:var(--text-secondary);">No inventory batches found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-box-open" style="font-size:28px;margin-bottom:8px;display:block;opacity:0.5;"></i>No inventory batches found.</td></tr>`;
+            renderPaginationControls("batches-pagination", 0, "batches");
             return;
           }
 
-          tbody.innerHTML = filtered.map(b => {
+          const state = paginationState.batches;
+          const startIdx = (state.currentPage - 1) * state.pageSize;
+          const paginatedBatches = filtered.slice(startIdx, startIdx + state.pageSize);
+
+          tbody.innerHTML = paginatedBatches.map(b => {
             const item = items.find(i => i.item_id === b.item_id);
             const expDate = new Date(b.expiration_date);
             let urgencyBadge = `<span class="batch-urgency-good">Active</span>`;
@@ -1015,6 +1466,8 @@
               </tr>
             `;
           }).join('');
+
+          renderPaginationControls("batches-pagination", filtered.length, "batches");
         }
 
         function renderTransactions() {
@@ -1041,7 +1494,8 @@
 
           const tbody = document.getElementById("tx-tbody");
           if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);">No movement records found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-clock-rotate-left" style="font-size:28px;margin-bottom:8px;display:block;opacity:0.5;"></i>No movement records found.</td></tr>`;
+            renderPaginationControls("tx-pagination", 0, "tx");
             return;
           }
 
@@ -1053,7 +1507,11 @@
             transfer: `<span class="badge badge-medium" style="background:rgba(139,92,246,0.12);color:#7c3aed;"><i class="fa-solid fa-arrow-right-arrow-left"></i> Transfer</span>`
           };
 
-          tbody.innerHTML = filtered.map(t => {
+          const state = paginationState.tx;
+          const startIdx = (state.currentPage - 1) * state.pageSize;
+          const paginatedTx = filtered.slice(startIdx, startIdx + state.pageSize);
+
+          tbody.innerHTML = paginatedTx.map(t => {
             const batch = batches.find(b => b.batch_id === t.batch_id);
             const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
             const dateStr = t.logged_at ? new Date(t.logged_at).toLocaleString("en-PH") : "—";
@@ -1077,6 +1535,8 @@
               </tr>
             `;
           }).join('');
+
+          renderPaginationControls("tx-pagination", filtered.length, "tx");
         }
 
         function requestStatusBadge(status) {
@@ -1106,14 +1566,20 @@
           if (!tbody) return;
           if (workflowLoadError) {
             tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#b45309;"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(workflowLoadError)}</td></tr>`;
+            renderPaginationControls("requests-pagination", 0, "requests");
             return;
           }
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary);">No stock requests found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary);"><i class="fa-solid fa-clipboard-list" style="font-size:28px;margin-bottom:8px;display:block;opacity:0.5;"></i>No stock requests found.</td></tr>';
+            renderPaginationControls("requests-pagination", 0, "requests");
             return;
           }
 
-          tbody.innerHTML = filtered.map(request => {
+          const state = paginationState.requests;
+          const startIdx = (state.currentPage - 1) * state.pageSize;
+          const paginatedReqs = filtered.slice(startIdx, startIdx + state.pageSize);
+
+          tbody.innerHTML = paginatedReqs.map(request => {
             const item = items.find(i => i.item_id === request.item_id);
             const bhc = bhcs.find(b => String(b.bhc_id) === String(request.facility_id));
             const requester = accountMap[request.requested_by] || `Account #${request.requested_by}`;
@@ -1122,11 +1588,11 @@
             if (request.status === "pending") {
               actions = `
                 <div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;">
-                  <button class="btn btn-sm btn-primary" onclick="approveStockRequest(${request.request_id})"><i class="fa-solid fa-check"></i> Approve</button>
+                  <button class="btn btn-sm btn-primary" onclick="openApproveModal(${request.request_id})"><i class="fa-solid fa-check"></i> Approve</button>
                   <button class="btn btn-sm btn-secondary" onclick="rejectStockRequest(${request.request_id})"><i class="fa-solid fa-xmark"></i> Reject</button>
                 </div>`;
             } else if (request.status === "approved") {
-              actions = `<button class="btn btn-sm" style="background:#8b5cf6;border-color:#8b5cf6;color:white;" onclick="issueForRequest(${request.request_id})"><i class="fa-solid fa-truck-ramp-box"></i> Issue</button>`;
+              actions = `<button class="btn btn-sm" style="background:#8b5cf6;border-color:#8b5cf6;color:white;" onclick="issueForRequest(${request.request_id})"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock</button>`;
             } else if (request.status === "issued") {
               actions = '<span style="font-size:12px;color:#7c3aed;font-weight:600;"><i class="fa-solid fa-hourglass-half"></i> Awaiting BHC receipt</span>';
             }
@@ -1137,11 +1603,13 @@
                 <td><strong>${esc(bhc?.bhc_name || `BHC #${request.facility_id}`)}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">${esc(requester)}</div></td>
                 <td><strong>${esc(item?.name || `Item #${request.item_id}`)}</strong><div style="font-size:11px;color:var(--text-secondary);">${esc(item?.unit_of_measure || '')}</div></td>
                 <td style="text-align:right;font-weight:700;">${request.requested_quantity}</td>
-                <td style="max-width:260px;"><div>${esc(request.reason)}</div>${request.remarks ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">Remarks: ${esc(request.remarks)}</div>` : ''}${request.admin_remarks ? `<div style="font-size:11px;color:#7c3aed;margin-top:4px;">RHU: ${esc(request.admin_remarks)}</div>` : ''}</td>
+                <td style="max-width:260px;"><div>${esc(request.reason)}</div>${request.remarks ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">Midwife Note: ${esc(request.remarks)}</div>` : ''}${request.admin_remarks ? `<div style="font-size:11px;color:#7c3aed;margin-top:4px;">Admin Note: ${esc(request.admin_remarks)}</div>` : ''}</td>
                 <td style="text-align:center;">${requestStatusBadge(request.status)}</td>
                 <td style="text-align:center;">${actions}</td>
               </tr>`;
           }).join("");
+
+          renderPaginationControls("requests-pagination", filtered.length, "requests");
         }
 
         function renderInventoryTransfers() {
@@ -1149,24 +1617,37 @@
           if (!tbody) return;
           if (workflowLoadError) {
             tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:#b45309;"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(workflowLoadError)}</td></tr>`;
+            renderPaginationControls("transfers-pagination", 0, "transfers");
             return;
           }
           if (inventoryTransfers.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);">No issued transfers found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);"><i class="fa-solid fa-truck-ramp-box" style="font-size:28px;margin-bottom:8px;display:block;opacity:0.5;"></i>No issued transfers found.</td></tr>';
+            renderPaginationControls("transfers-pagination", 0, "transfers");
             return;
           }
 
-          tbody.innerHTML = inventoryTransfers.map(transfer => {
+          const state = paginationState.transfers;
+          const startIdx = (state.currentPage - 1) * state.pageSize;
+          const paginatedTransfers = inventoryTransfers.slice(startIdx, startIdx + state.pageSize);
+
+          tbody.innerHTML = paginatedTransfers.map(transfer => {
             const source = batches.find(b => b.batch_id === transfer.source_batch_id);
             const item = source ? items.find(i => i.item_id === source.item_id) : null;
             const bhc = bhcs.find(b => String(b.bhc_id) === String(transfer.destination_facility_id));
             const issued = transfer.issued_at ? new Date(transfer.issued_at).toLocaleString("en-PH") : "—";
             const received = transfer.received_at ? new Date(transfer.received_at).toLocaleString("en-PH") : null;
-            const status = transfer.status === "received"
+            
+            let status = transfer.status === "received"
               ? `<span class="badge badge-active"><i class="fa-solid fa-circle-check"></i> Received</span>${received ? `<div style="font-size:10.5px;color:var(--text-secondary);margin-top:4px;">${received}</div>` : ''}`
               : transfer.status === "cancelled"
                 ? '<span class="badge badge-inactive"><i class="fa-solid fa-ban"></i> Cancelled</span>'
                 : '<span class="badge badge-medium" style="background:rgba(139,92,246,.13);color:#7c3aed;"><i class="fa-solid fa-clock"></i> Pending Receipt</span>';
+
+            let actionBtn = "—";
+            if (transfer.status === "pending_receipt") {
+              actionBtn = `<button class="btn btn-sm btn-secondary" onclick="cancelTransfer(${transfer.transfer_id})" style="color:#dc2626;border-color:#fca5a5;"><i class="fa-solid fa-ban"></i> Cancel Transfer</button>`;
+            }
+
             return `
               <tr>
                 <td><strong>#${transfer.transfer_id}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">${issued}</div></td>
@@ -1174,25 +1655,72 @@
                 <td><strong>${esc(item?.name || 'Inventory item')}</strong><div style="font-size:11px;color:var(--text-secondary);">Batch ${esc(source?.batch_number || `#${transfer.source_batch_id}`)}</div></td>
                 <td style="text-align:right;font-weight:700;">${transfer.quantity_issued}</td>
                 <td style="text-align:center;">${status}</td>
-                <td>${esc(transfer.remarks || '—')}${transfer.request_id ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">Request #${transfer.request_id}</div>` : ''}</td>
+                <td><div>${esc(transfer.remarks || '—')}</div>${transfer.request_id ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">Linked Request #${transfer.request_id}</div>` : ''}<div style="margin-top:6px;">${actionBtn}</div></td>
               </tr>`;
           }).join("");
+
+          renderPaginationControls("transfers-pagination", inventoryTransfers.length, "transfers");
         }
 
-        window.approveStockRequest = async function(requestId) {
+        // Custom Approval Modal Opener
+        window.openApproveModal = function(requestId) {
+          const request = stockRequests.find(r => r.request_id === requestId);
+          if (!request) return;
+          const item = items.find(i => i.item_id === request.item_id);
+          const bhc = bhcs.find(b => String(b.bhc_id) === String(request.facility_id));
+
+          document.getElementById("approve-request-id").value = requestId;
+          document.getElementById("approve-qty").value = request.requested_quantity;
+          document.getElementById("approve-remarks").value = "";
+          document.getElementById("approve-request-info").innerHTML = `
+            <strong>Stock Request #${requestId}</strong> for <strong>${esc(bhc?.bhc_name || `BHC #${request.facility_id}`)}</strong><br>
+            Item: <strong>${esc(item?.name || 'Item')}</strong> (Requested: <strong>${request.requested_quantity} ${esc(item?.unit_of_measure || '')}</strong>)<br>
+            Reason: <em>${esc(request.reason)}</em>
+          `;
+          document.getElementById("modal-approve-request").classList.add("show");
+        };
+
+        // Submit Custom Approval
+        document.getElementById("save-approve-btn").addEventListener("click", async () => {
+          const requestId = parseInt(document.getElementById("approve-request-id").value);
+          const approvedQty = parseInt(document.getElementById("approve-qty").value);
+          const remarks = document.getElementById("approve-remarks").value.trim();
+
+          if (!requestId || !approvedQty || approvedQty <= 0) {
+            showToast("Please enter a valid approved quantity.", "warning");
+            return;
+          }
+
+          const btn = document.getElementById("save-approve-btn");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Approving...';
+
           try {
+            // Update quantity if modified
+            const request = stockRequests.find(r => r.request_id === requestId);
+            if (request && approvedQty !== request.requested_quantity) {
+              await db.from("inventory_stock_requests")
+                .update({ requested_quantity: approvedQty })
+                .eq("request_id", requestId);
+            }
+
             const { error } = await db.rpc("approve_inventory_stock_request", {
               p_request_id: requestId,
               p_admin_id: session.account_id,
-              p_admin_remarks: null
+              p_admin_remarks: remarks || null
             });
             if (error) throw error;
-            showToast(`Stock request #${requestId} approved.`, "success");
+
+            showToast(`Stock request #${requestId} approved (${approvedQty} units).`, "success");
+            closeModal("modal-approve-request");
             await loadInventoryData();
           } catch (err) {
             showToast("Could not approve request: " + err.message, "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> Confirm Approval';
           }
-        };
+        });
 
         window.rejectStockRequest = async function(requestId) {
           const remarks = prompt("Reason for rejecting this stock request (optional):");
@@ -1211,6 +1739,47 @@
           }
         };
 
+        // Cancel Pending Transfer
+        window.cancelTransfer = async function(transferId) {
+          if (!confirm(`Cancel pending transfer #${transferId}? Central stock will be returned to the source batch.`)) return;
+
+          try {
+            const transfer = inventoryTransfers.find(t => t.transfer_id === transferId);
+            if (!transfer) throw new Error("Transfer record not found.");
+
+            // Update transfer status
+            const { error: tErr } = await db.from("inventory_transfers")
+              .update({ status: "cancelled" })
+              .eq("transfer_id", transferId);
+            if (tErr) throw tErr;
+
+            // Restore source batch remaining quantity
+            const sourceBatch = batches.find(b => b.batch_id === transfer.source_batch_id);
+            if (sourceBatch) {
+              await db.from("inventory_batches")
+                .update({ quantity_remaining: sourceBatch.quantity_remaining + transfer.quantity_issued })
+                .eq("batch_id", transfer.source_batch_id);
+            }
+
+            // Log cancellation movement
+            try {
+              await db.from("inventory_transactions").insert({
+                batch_id: transfer.source_batch_id,
+                facility_id: null,
+                transaction_type: "adjustment",
+                quantity: transfer.quantity_issued,
+                reference_type: `Cancelled Transfer #${transferId} — stock restored`,
+                performed_by: session.account_id
+              });
+            } catch (e) {}
+
+            showToast(`Transfer #${transferId} cancelled and stock restored.`, "success");
+            await loadInventoryData();
+          } catch (err) {
+            showToast("Failed to cancel transfer: " + err.message, "error");
+          }
+        };
+
         window.issueForRequest = function(requestId) {
           const request = stockRequests.find(r => r.request_id === requestId);
           if (!request || request.status !== "approved") {
@@ -1218,30 +1787,380 @@
             return;
           }
 
-            const matchingBatch = batches.find(b =>
-              b.item_id === request.item_id &&
-              b.status === "active" &&
-              !isBatchExpired(b) &&
-              b.quantity_remaining >= request.requested_quantity &&
-              (b.facility_id === null || b.facility_id === undefined || String(b.facility_id) === "null")
-            );
-            if (!matchingBatch) {
-              showToast("No single active central batch has enough stock to fulfill this request.", "warning");
-              return;
-            }
+          // Central active batches for the item
+          const centralBatches = batches.filter(b =>
+            b.item_id === request.item_id &&
+            b.status === "active" &&
+            !isBatchExpired(b) &&
+            b.quantity_remaining > 0 &&
+            (b.facility_id === null || b.facility_id === undefined || String(b.facility_id) === "null")
+          );
+
+          if (centralBatches.length === 0) {
+            showToast("No active central warehouse batches available for this item.", "warning");
+            return;
+          }
+
+          // Pick the best batch (or first batch with highest stock)
+          const bestBatch = centralBatches.find(b => b.quantity_remaining >= request.requested_quantity) || centralBatches[0];
 
           document.getElementById("form-issue").reset();
           populateDropdowns();
           document.getElementById("issue-request-id").value = requestId;
-          document.getElementById("issue-source-batch").value = matchingBatch.batch_id;
+          document.getElementById("issue-source-batch").value = bestBatch.batch_id;
           document.getElementById("issue-target-bhc").value = request.facility_id;
           document.getElementById("issue-qty").value = request.requested_quantity;
           const item = items.find(i => i.item_id === request.item_id);
           const context = document.getElementById("issue-request-context");
-          context.textContent = `Fulfilling Request #${requestId}: ${request.requested_quantity} ${item?.unit_of_measure || 'units'} of ${item?.name || 'item'}.`;
+          context.textContent = `Fulfilling Request #${requestId}: ${request.requested_quantity} ${item?.unit_of_measure || 'units'} of ${item?.name || 'item'}. Available batch stock: ${bestBatch.quantity_remaining}.`;
           context.style.display = "block";
           document.getElementById("issue-form-alert").style.display = "none";
           document.getElementById("modal-issue").classList.add("show");
+        };
+
+        // Item Inventory Breakdown Drawer / Details Modal
+        window.openItemDetails = function(itemId) {
+          const item = items.find(i => i.item_id === itemId);
+          if (!item) return;
+
+          document.getElementById("item-details-title").innerHTML = `<i class="fa-solid fa-boxes-stacked" style="color:var(--brand-primary);margin-right:8px;"></i> ${esc(item.name)}`;
+          document.getElementById("item-details-subtitle").textContent = `Category: ${item.item_type.replace('_',' ')} • Unit: ${item.unit_of_measure} • Min Threshold: ${item.minimum_stock_threshold || 50}`;
+
+          const itemMetrics = getItemStockMetrics(itemId, "all");
+          const itemBatches = batches.filter(b => b.item_id === itemId);
+
+          // Facility Breakdown
+          const facilityRows = bhcs.map(bhc => {
+            const fMetrics = getItemStockMetrics(itemId, bhc.bhc_id);
+            return `
+              <tr>
+                <td><strong>📍 ${esc(bhc.bhc_name)}</strong></td>
+                <td style="text-align:right;">+${fMetrics.added}</td>
+                <td style="text-align:right;">${fMetrics.issued}</td>
+                <td style="text-align:right;color:#d97706;">${fMetrics.allocated}</td>
+                <td style="text-align:right;font-weight:700;color:var(--brand-primary);">${fMetrics.available}</td>
+              </tr>
+            `;
+          });
+
+          const centralMetrics = getItemStockMetrics(itemId, "central");
+          const centralRow = `
+            <tr style="background:rgba(255,104,165,0.05);">
+              <td><strong>🏢 Central Warehouse</strong></td>
+              <td style="text-align:right;">+${centralMetrics.added}</td>
+              <td style="text-align:right;">${centralMetrics.issued}</td>
+              <td style="text-align:right;color:#d97706;">${centralMetrics.allocated}</td>
+              <td style="text-align:right;font-weight:700;color:var(--brand-primary);">${centralMetrics.available}</td>
+            </tr>
+          `;
+
+          // Batches Breakdown Table
+          const batchRows = itemBatches.length === 0
+            ? '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:20px;">No batches recorded for this item yet.</td></tr>'
+            : itemBatches.map(b => {
+                let loc = "🏢 Central";
+                if (b.facility_id) {
+                  const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
+                  loc = bh ? `📍 ${bh.bhc_name}` : `📍 BHC #${b.facility_id}`;
+                }
+                const expired = isBatchExpired(b);
+                const badge = expired || b.status === 'expired'
+                  ? '<span class="batch-urgency-expired">Expired</span>'
+                  : b.status === 'discarded'
+                    ? '<span class="badge badge-inactive">Discarded</span>'
+                    : '<span class="batch-urgency-good">Active</span>';
+                return `
+                  <tr>
+                    <td><strong style="font-family:monospace;">${esc(b.batch_number)}</strong></td>
+                    <td>${esc(loc)}</td>
+                    <td>${b.expiration_date}</td>
+                    <td style="text-align:right;">${b.quantity_received}</td>
+                    <td style="text-align:right;font-weight:700;">${b.quantity_remaining}</td>
+                    <td style="text-align:center;">${badge}</td>
+                  </tr>
+                `;
+              }).join('');
+
+          document.getElementById("item-details-body").innerHTML = `
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:12px; margin-bottom:20px;">
+              <div style="background:var(--bg-secondary); padding:12px; border-radius:8px; text-align:center;">
+                <div style="font-size:11px; color:var(--text-secondary); font-weight:600;">TOTAL RECEIVED</div>
+                <div style="font-size:18px; font-weight:700; color:#059669; margin-top:2px;">+${itemMetrics.added}</div>
+              </div>
+              <div style="background:var(--bg-secondary); padding:12px; border-radius:8px; text-align:center;">
+                <div style="font-size:11px; color:var(--text-secondary); font-weight:600;">TOTAL ISSUED</div>
+                <div style="font-size:18px; font-weight:700; color:#7c3aed; margin-top:2px;">${itemMetrics.issued}</div>
+              </div>
+              <div style="background:var(--bg-secondary); padding:12px; border-radius:8px; text-align:center;">
+                <div style="font-size:11px; color:var(--text-secondary); font-weight:600;">ALLOCATED / PENDING</div>
+                <div style="font-size:18px; font-weight:700; color:#d97706; margin-top:2px;">${itemMetrics.allocated}</div>
+              </div>
+              <div style="background:var(--bg-secondary); padding:12px; border-radius:8px; text-align:center;">
+                <div style="font-size:11px; color:var(--text-secondary); font-weight:600;">AVAILABLE STOCK</div>
+                <div style="font-size:18px; font-weight:700; color:var(--brand-primary); margin-top:2px;">${itemMetrics.available}</div>
+              </div>
+            </div>
+
+            <h4 style="font-size:14px; margin:0 0 10px; color:var(--text-primary);"><i class="fa-solid fa-hospital" style="color:var(--brand-primary);"></i> Stock Breakdown per Health Facility</h4>
+            <div class="table-wrap" style="margin-bottom:24px;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Facility Location</th>
+                    <th style="text-align:right;">Received</th>
+                    <th style="text-align:right;">Issued</th>
+                    <th style="text-align:right;">Allocated</th>
+                    <th style="text-align:right;">Available</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${centralRow}
+                  ${facilityRows.join('')}
+                </tbody>
+              </table>
+            </div>
+
+            <h4 style="font-size:14px; margin:0 0 10px; color:var(--text-primary);"><i class="fa-solid fa-boxes-packing" style="color:var(--brand-primary);"></i> Registered Batches (${itemBatches.length})</h4>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Batch #</th>
+                    <th>Location</th>
+                    <th>Expiration</th>
+                    <th style="text-align:right;">Received</th>
+                    <th style="text-align:right;">Remaining</th>
+                    <th style="text-align:center;">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${batchRows}
+                </tbody>
+              </table>
+            </div>
+          `;
+
+          document.getElementById("item-details-edit-btn").onclick = () => { closeModal("modal-item-details"); openEditItem(itemId); };
+          document.getElementById("item-details-receive-btn").onclick = () => { closeModal("modal-item-details"); quickReceive(itemId); };
+          document.getElementById("modal-item-details").classList.add("show");
+        };
+
+        // Edit Item Catalog Modal
+        window.openEditItem = function(itemId) {
+          const item = items.find(i => i.item_id === itemId);
+          if (!item) return;
+
+          document.getElementById("edit-item-id").value = itemId;
+          document.getElementById("edit-item-name").value = item.name;
+          document.getElementById("edit-item-type").value = item.item_type;
+          document.getElementById("edit-item-uom").value = item.unit_of_measure;
+          document.getElementById("edit-item-threshold").value = item.minimum_stock_threshold || 50;
+          document.getElementById("modal-edit-item").classList.add("show");
+        };
+
+        // Submit Edit Item Catalog
+        document.getElementById("save-edit-item-btn").addEventListener("click", async () => {
+          const itemId = parseInt(document.getElementById("edit-item-id").value);
+          const name = document.getElementById("edit-item-name").value.trim();
+          const type = document.getElementById("edit-item-type").value;
+          const uom = document.getElementById("edit-item-uom").value.trim();
+          const threshold = parseInt(document.getElementById("edit-item-threshold").value) || 50;
+
+          if (!itemId || !name || !uom) {
+            showToast("Item name and unit of measure are required.", "warning");
+            return;
+          }
+
+          const btn = document.getElementById("save-edit-item-btn");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Updating...';
+
+          try {
+            const { error } = await db.from("inventory_items")
+              .update({
+                name,
+                item_type: type,
+                unit_of_measure: uom,
+                minimum_stock_threshold: threshold
+              })
+              .eq("item_id", itemId);
+
+            if (error) throw error;
+
+            // Audit Trail
+            try {
+              await db.from("audit_trail").insert({
+                account_id: session.account_id,
+                action: "update_inventory_item",
+                table_name: "inventory_items",
+                description: `Updated inventory catalog item #${itemId} "${name}"`
+              });
+            } catch (e) {}
+
+            showToast(`Catalog item "${name}" updated.`, "success");
+            closeModal("modal-edit-item");
+            await loadInventoryData();
+          } catch (err) {
+            showToast("Error updating item: " + err.message, "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Update Item';
+          }
+        });
+
+        // Alert Hub Modal Renderer
+        window.openAlertsModal = function() {
+          filterAlerts("all");
+          document.getElementById("modal-alerts-hub").classList.add("show");
+        };
+
+        window.filterAlerts = function(type) {
+          activeAlertFilter = type;
+          ["all", "low", "expiry", "requests"].forEach(t => {
+            const btn = document.getElementById(`alert-tab-${t}`);
+            if (btn) btn.classList.toggle("active", t === type);
+          });
+
+          const bhcFilter = document.getElementById("global-bhc-filter").value;
+          const now = new Date();
+          const thirtyDays = new Date(); thirtyDays.setDate(now.getDate() + 30);
+
+          // 1. Low Stock Alerts
+          const lowAlerts = items.filter(item => {
+            const metrics = getItemStockMetrics(item.item_id, bhcFilter);
+            return metrics.available <= (item.minimum_stock_threshold || 50);
+          }).map(item => {
+            const metrics = getItemStockMetrics(item.item_id, bhcFilter);
+            return {
+              kind: "low",
+              title: `Low Stock: ${esc(item.name)}`,
+              desc: `Available stock is ${metrics.available} ${esc(item.unit_of_measure)} (Threshold: ${item.minimum_stock_threshold || 50}).`,
+              action: `<button class="btn btn-sm btn-primary" onclick="closeModal('modal-alerts-hub'); quickReceive(${item.item_id});"><i class="fa-solid fa-plus"></i> Receive Batch</button>`
+            };
+          });
+
+          // 2. Expiry Alerts
+          const expiryAlerts = batches.filter(b => {
+            const exp = new Date(b.expiration_date);
+            if (b.status !== 'active') return false;
+            if (isBatchExpired(b) || exp <= thirtyDays) {
+              if (bhcFilter === "central") {
+                return b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null";
+              } else if (bhcFilter !== "all") {
+                return String(b.facility_id) === String(bhcFilter);
+              }
+              return true;
+            }
+            return false;
+          }).map(b => {
+            const item = items.find(i => i.item_id === b.item_id);
+            const expired = isBatchExpired(b);
+            let loc = "Central Warehouse";
+            if (b.facility_id) {
+              const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
+              loc = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
+            }
+            return {
+              kind: "expiry",
+              title: `${expired ? 'Expired Batch' : 'Expiring Soon Batch'}: Batch ${esc(b.batch_number)}`,
+              desc: `Item: ${esc(item?.name || 'Item')} • Location: ${esc(loc)} • Expiration Date: ${b.expiration_date} • Remaining: ${b.quantity_remaining} units.`,
+              action: `<button class="btn btn-sm btn-outline-pink" onclick="closeModal('modal-alerts-hub'); quickDispense(${b.batch_id});"><i class="fa-solid fa-trash"></i> Dispose / Adjust</button>`
+            };
+          });
+
+          // 3. Pending Stock Requests Alerts
+          const requestAlerts = stockRequests.filter(r => r.status === "pending").map(r => {
+            const item = items.find(i => i.item_id === r.item_id);
+            const bhc = bhcs.find(b => String(b.bhc_id) === String(r.facility_id));
+            return {
+              kind: "requests",
+              title: `Pending Request #${r.request_id} from ${esc(bhc?.bhc_name || `BHC #${r.facility_id}`)}`,
+              desc: `Requested: ${r.requested_quantity} units of ${esc(item?.name || 'item')}. Reason: "${esc(r.reason)}".`,
+              action: `<button class="btn btn-sm btn-primary" onclick="closeModal('modal-alerts-hub'); openApproveModal(${r.request_id});"><i class="fa-solid fa-check"></i> Review &amp; Approve</button>`
+            };
+          });
+
+          let alertList = [];
+          if (type === "low") alertList = lowAlerts;
+          else if (type === "expiry") alertList = expiryAlerts;
+          else if (type === "requests") alertList = requestAlerts;
+          else alertList = [...requestAlerts, ...lowAlerts, ...expiryAlerts];
+
+          const container = document.getElementById("alerts-hub-content");
+          if (alertList.length === 0) {
+            container.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-secondary);"><i class="fa-solid fa-circle-check" style="font-size:32px; color:#059669; margin-bottom:12px;"></i><div>No active alerts in this category!</div></div>`;
+            return;
+          }
+
+          container.innerHTML = alertList.map(a => `
+            <div class="card" style="margin-bottom:12px; padding:14px 18px; border-left:4px solid ${a.kind==='low'?'#d97706':a.kind==='expiry'?'#dc2626':'#2563eb'};">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div>
+                  <strong style="font-size:14px; color:var(--text-primary);">${a.title}</strong>
+                  <div style="font-size:12.5px; color:var(--text-secondary); margin-top:3px;">${a.desc}</div>
+                </div>
+                <div>${a.action}</div>
+              </div>
+            </div>
+          `).join('');
+        };
+
+        // CSV Export Handlers
+        window.exportCatalogCSV = function() {
+          const bhcFilter = document.getElementById("global-bhc-filter").value;
+          const headers = ["Item Name", "Category", "Unit of Measure", "Minimum Threshold", "Total Received", "Total Issued", "Allocated/Pending", "Available Stock"];
+          const rows = items.map(item => {
+            const m = getItemStockMetrics(item.item_id, bhcFilter);
+            return [
+              item.name,
+              item.item_type,
+              item.unit_of_measure,
+              item.minimum_stock_threshold || 50,
+              m.added,
+              m.issued,
+              m.allocated,
+              m.available
+            ];
+          });
+
+          const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n");
+          const link = document.createElement("a");
+          link.setAttribute("href", encodeURI(csvContent));
+          link.setAttribute("download", `inventory_catalog_${localDateKey()}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        };
+
+        window.exportBatchesCSV = function() {
+          const headers = ["Batch Number", "Item Name", "Location", "Received Date", "Expiration Date", "Quantity Received", "Quantity Remaining", "Manufacturer", "Status"];
+          const rows = batches.map(b => {
+            const item = items.find(i => i.item_id === b.item_id);
+            let locName = "Central Warehouse";
+            if (b.facility_id) {
+              const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
+              locName = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
+            }
+            return [
+              b.batch_number,
+              item ? item.name : "Unknown Item",
+              locName,
+              b.received_date || "",
+              b.expiration_date || "",
+              b.quantity_received,
+              b.quantity_remaining,
+              b.manufacturer || "",
+              isBatchExpired(b) ? "Expired" : b.status
+            ];
+          });
+
+          const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n");
+          const link = document.createElement("a");
+          link.setAttribute("href", encodeURI(csvContent));
+          link.setAttribute("download", `inventory_batches_${localDateKey()}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
         };
 
         function populateDropdowns() {
@@ -1972,24 +2891,30 @@
 
         document.getElementById("btn-load-analytics").addEventListener("click", loadAnalyticsReport);
 
-        // Filter Event Listeners
+        // Filter Event Listeners with Page Reset
         ["catalog-search", "catalog-filter-type", "catalog-filter-stock"].forEach(id => {
-          document.getElementById(id).addEventListener("input", renderCatalog);
-          document.getElementById(id).addEventListener("change", renderCatalog);
+          const handler = () => { paginationState.catalog.currentPage = 1; renderCatalog(); };
+          document.getElementById(id).addEventListener("input", handler);
+          document.getElementById(id).addEventListener("change", handler);
         });
 
         ["batches-search", "batches-filter-status"].forEach(id => {
-          document.getElementById(id).addEventListener("input", renderBatches);
-          document.getElementById(id).addEventListener("change", renderBatches);
+          const handler = () => { paginationState.batches.currentPage = 1; renderBatches(); };
+          document.getElementById(id).addEventListener("input", handler);
+          document.getElementById(id).addEventListener("change", handler);
         });
 
         ["tx-search", "tx-filter-type"].forEach(id => {
-          document.getElementById(id).addEventListener("input", renderTransactions);
-          document.getElementById(id).addEventListener("change", renderTransactions);
+          const handler = () => { paginationState.tx.currentPage = 1; renderTransactions(); };
+          document.getElementById(id).addEventListener("input", handler);
+          document.getElementById(id).addEventListener("change", handler);
         });
 
-        document.getElementById("request-filter-status").addEventListener("change", renderStockRequests);
-        document.getElementById("refresh-requests-btn").addEventListener("click", loadInventoryData);
+        document.getElementById("request-filter-status").addEventListener("change", () => {
+          paginationState.requests.currentPage = 1;
+          renderStockRequests();
+        });
+        document.getElementById("refresh-requests-btn").addEventListener("click", () => loadInventoryData());
 
         // Initial Load
         loadInventoryData();
