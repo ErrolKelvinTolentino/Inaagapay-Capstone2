@@ -1035,8 +1035,18 @@ class SupabaseService {
     }
   }
 
+  static final Map<int, Map<String, dynamic>> _midwifeContextCache = {};
+
+  static void clearMidwifeContextCache() {
+    _midwifeContextCache.clear();
+  }
+
   // Get midwife context
   static Future<Map<String, dynamic>> getMidwifeContext(int accountId) async {
+    if (_midwifeContextCache.containsKey(accountId)) {
+      return _midwifeContextCache[accountId]!;
+    }
+
     try {
       if (kDebugMode) {
         debugPrint('=== GET MIDWIFE CONTEXT ===');
@@ -1128,12 +1138,14 @@ class SupabaseService {
         }
       } catch (_) {}
 
-      return {
+      final result = {
         'success': true,
         'midwife_id': midwifeId ?? accountId,
         'assigned_bhc_id': assignedBhcId,
         'bhc_name': bhcName,
       };
+      _midwifeContextCache[accountId] = result;
+      return result;
     } catch (e) {
       if (kDebugMode) debugPrint('getMidwifeContext error: $e');
       return {

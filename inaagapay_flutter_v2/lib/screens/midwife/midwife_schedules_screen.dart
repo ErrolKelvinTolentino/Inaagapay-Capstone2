@@ -43,11 +43,13 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
         if (ctx['success'] == true) {
           _midwifeId = ctx['midwife_id'] as int?;
           _assignedBhcId = ctx['assigned_bhc_id'] as int?;
-          setState(() {
-            _isLoading = false;
-          });
-          await _loadAllEventDates();
           _refreshSchedules();
+          await _loadAllEventDates();
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
         } else {
           setState(() {
             _midwifeId = null;
@@ -95,30 +97,39 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
 
       // 2. Fetch prenatal checkups next scheduled dates
       final resPrenatal = await Supabase.instance.client
-          .from('prenatal_checkups')
-          .select('next_schedule')
-          .eq('midwife_id', _midwifeId!)
-          .gte('next_schedule', startOfYear)
-          .lte('next_schedule', endOfYear);
+          .from('clinical_encounters')
+          .select('prenatal_checkups!inner(next_schedule)')
+          .eq('recorded_by', _midwifeId!);
 
       final datesPrenatal = (resPrenatal as List)
-          .map((r) => r['next_schedule']?.toString() ?? '')
-          .where((d) => d.isNotEmpty)
+          .map((r) {
+            final checkup = r['prenatal_checkups'] as Map<String, dynamic>?;
+            return checkup?['next_schedule']?.toString() ?? '';
+          })
+          .where((d) {
+            if (d.isEmpty) return false;
+            return d.compareTo(startOfYear) >= 0 && d.compareTo(endOfYear) <= 0;
+          })
           .toSet();
 
       _prenatalDates.clear();
       _prenatalDates.addAll(datesPrenatal);
 
       // 3. Fetch checkup schedules (for mothers/children assigned)
-      final resCheckup = await Supabase.instance.client
-          .from('checkup_schedule')
-          .select('scheduled_date')
-          .eq('status', 'scheduled')
-          .gte('scheduled_date', startOfYear)
-          .lte('scheduled_date', endOfYear);
+      List<dynamic> resCheckup = [];
+      try {
+        resCheckup = await Supabase.instance.client
+            .from('schedules')
+            .select('schedule_date')
+            .eq('status', 'scheduled')
+            .gte('schedule_date', startOfYear)
+            .lte('schedule_date', endOfYear);
+      } catch (e) {
+        debugPrint('Could not fetch schedules table: $e');
+      }
 
-      final datesCheckup = (resCheckup as List)
-          .map((r) => r['scheduled_date']?.toString() ?? '')
+      final datesCheckup = resCheckup
+          .map((r) => r['schedule_date']?.toString() ?? '')
           .where((d) => d.isNotEmpty)
           .toSet();
 
@@ -146,9 +157,7 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
           .from('prenatal_checkups')
           .select('''
             prenatal_checkup_id,
-            checkup_datetime,
             next_schedule,
-            remarks,
             pregnancy:pregnancy_id (
               mother:mother_id (
                 account:account_id (
@@ -156,26 +165,36 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
                   last_name
                 )
               )
+            ),
+            encounter:clinical_encounters!inner (
+              encounter_datetime,
+              midwife_notes,
+              recorded_by
             )
           ''')
-          .eq('midwife_id', midwifeIdValue)
+          .eq('encounter.recorded_by', midwifeIdValue)
           .eq('next_schedule', formattedDate)
           .order('next_schedule');
 
-      // Also fetch from checkup_schedule table (only scheduled/upcoming entries)
-      final scheduleResponse =
-          await Supabase.instance.client.from('checkup_schedule').select('''
-            schedule_id,
-            scheduled_date,
-            notes,
-            status,
-            mother:mother_id (
-              account:account_id (
-                first_name,
-                last_name
+      // Also fetch from schedules table (only scheduled/upcoming entries)
+      List<dynamic> scheduleResponse = [];
+      try {
+        scheduleResponse =
+            await Supabase.instance.client.from('schedules').select('''
+              id,
+              schedule_date,
+              notes,
+              status,
+              mother:mother_id (
+                account:account_id (
+                  first_name,
+                  last_name
+                )
               )
-            )
-          ''').eq('scheduled_date', formattedDate).eq('status', 'scheduled').order('scheduled_date');
+            ''').eq('schedule_date', formattedDate).eq('status', 'scheduled').order('schedule_date');
+      } catch (e) {
+        debugPrint('Could not fetch schedules for date: $e');
+      }
 
       final List<Map<String, dynamic>> schedules = [];
 
@@ -188,12 +207,14 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
         final lastName = account?['last_name']?.toString() ?? '';
         final motherName = '$firstName $lastName'.trim();
 
+        final encounter = checkup['encounter'] as Map<String, dynamic>?;
+
         schedules.add({
           'time': 'All Day',
           'mother_name': motherName.isNotEmpty ? motherName : 'Unknown Mother',
           'type': 'Prenatal Checkup',
           'status': 'upcoming',
-          'notes': checkup['remarks']?.toString(),
+          'notes': encounter?['midwife_notes']?.toString(),
           'icon': Icons.medical_services,
           'next_schedule': checkup['next_schedule']?.toString(),
         });

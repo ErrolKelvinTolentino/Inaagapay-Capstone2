@@ -20,19 +20,7 @@ class MidwifeShell extends StatefulWidget {
 class _MidwifeShellState extends State<MidwifeShell> {
   int _currentIndex = 0;
   final ValueNotifier<int> _refreshNotifier = ValueNotifier<int>(0);
-
-  late final List<Widget> _screens;
-
-  @override
-  void initState() {
-    super.initState();
-    _screens = [
-      MidwifeDashboard(refreshNotifier: _refreshNotifier),
-      const MidwifeMothersScreen(),
-      const MidwifeChildrenScreen(),
-      const MidwifeSchedulesScreen(),
-    ];
-  }
+  final List<bool> _visitedTabs = [true, false, false, false];
 
   final List<String> _titles = [
     'HOME',
@@ -40,6 +28,16 @@ class _MidwifeShellState extends State<MidwifeShell> {
     'CHILDREN',
     'SCHEDULES',
   ];
+
+  void _onTabSelected(int index) {
+    setState(() {
+      _currentIndex = index;
+      _visitedTabs[index] = true;
+    });
+    if (index == 0) {
+      _refreshNotifier.value++;
+    }
+  }
 
   Future<void> _logout() async {
     await PushNotificationService.removeToken();
@@ -73,7 +71,18 @@ class _MidwifeShellState extends State<MidwifeShell> {
             Expanded(
               child: IndexedStack(
                 index: _currentIndex,
-                children: _screens,
+                children: [
+                  MidwifeDashboard(refreshNotifier: _refreshNotifier),
+                  _visitedTabs[1]
+                      ? const MidwifeMothersScreen()
+                      : const SizedBox.shrink(),
+                  _visitedTabs[2]
+                      ? const MidwifeChildrenScreen()
+                      : const SizedBox.shrink(),
+                  _visitedTabs[3]
+                      ? const MidwifeSchedulesScreen()
+                      : const SizedBox.shrink(),
+                ],
               ),
             ),
           ],
@@ -103,35 +112,28 @@ class _MidwifeShellState extends State<MidwifeShell> {
               activeIcon: Icons.home,
               label: 'Home',
               isActive: _currentIndex == 0,
-              onTap: () {
-                if (_currentIndex == 0) {
-                  _refreshNotifier.value++;
-                } else {
-                  setState(() => _currentIndex = 0);
-                  _refreshNotifier.value++;
-                }
-              },
+              onTap: () => _onTabSelected(0),
             ),
             _NavItem(
               icon: Icons.pregnant_woman_outlined,
               activeIcon: Icons.pregnant_woman,
               label: 'Mothers',
               isActive: _currentIndex == 1,
-              onTap: () => setState(() => _currentIndex = 1),
+              onTap: () => _onTabSelected(1),
             ),
             _NavItem(
               icon: Icons.child_care_outlined,
               activeIcon: Icons.child_care,
               label: 'Children',
               isActive: _currentIndex == 2,
-              onTap: () => setState(() => _currentIndex = 2),
+              onTap: () => _onTabSelected(2),
             ),
             _NavItem(
               icon: Icons.calendar_today_outlined,
               activeIcon: Icons.calendar_today,
               label: 'Schedules',
               isActive: _currentIndex == 3,
-              onTap: () => setState(() => _currentIndex = 3),
+              onTap: () => _onTabSelected(3),
             ),
           ],
         ),

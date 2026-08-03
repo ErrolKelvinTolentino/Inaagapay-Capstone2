@@ -14,43 +14,93 @@ class MotherProfileService {
         print('Mother ID: $motherId');
       }
 
-      // Get account ID from mother record
-      final motherResponse = await client.from('mothers').select('''
-            *,
-            registered_by:midwives!registered_by_midwife_id (
-              midwife_id,
-              account:accounts (first_name, last_name)
-            ),
-            account:account_id (
-              account_id,
-              email_address,
-              first_name,
-              middle_name,
-              last_name,
-              extension_name,
-              phone_number,
-              status,
-              created_at
-            )
-          ''').eq('mother_id', motherId).single();
+      // Step 1: Run ALL independent top-level queries concurrently
+      final results = await Future.wait([
+        // [0] motherResponse
+        client.from('mothers').select('''
+              *,
+              registered_by:midwives!registered_by_midwife_id (
+                midwife_id,
+                account:accounts (first_name, last_name)
+              ),
+              account:account_id (
+                account_id,
+                email_address,
+                first_name,
+                middle_name,
+                last_name,
+                extension_name,
+                phone_number,
+                status,
+                created_at
+              )
+            ''').eq('mother_id', motherId).single(),
+
+        // [1] pregnanciesResponse (flat scalar query - no heavy embedded child array subqueries)
+        client
+            .from('pregnancies')
+            .select('*')
+            .eq('mother_id', motherId)
+            .order('created_at', ascending: false),
+
+        // [2] medicalConditions
+        client
+            .from('medical_conditions')
+            .select('*')
+            .eq('mother_id', motherId)
+            .order('created_at', ascending: false),
+
+        // [3] allergies
+        client
+            .from('allergies')
+            .select('*')
+            .eq('mother_id', motherId)
+            .order('created_at', ascending: false),
+
+        // [4] emergencyContacts
+        client
+            .from('emergency_contacts')
+            .select('*')
+            .eq('mother_id', motherId)
+            .order('created_at', ascending: false),
+
+        // [5] children
+        client.from('children').select('''
+              *,
+              birth_details (*)
+            ''').eq('mother_id', motherId).order('added_at', ascending: false),
+      ]);
+
+      final motherResponse = results[0] as Map<String, dynamic>;
+      final pregnanciesRaw = results[1] as List<dynamic>;
+      final medicalConditions = results[2] as List<dynamic>;
+      final allergies = results[3] as List<dynamic>;
+      final emergencyContacts = results[4] as List<dynamic>;
+      final children = results[5] as List<dynamic>;
+
+      final pregnancies = pregnanciesRaw
+          .map((p) => Map<String, dynamic>.from(p as Map))
+          .toList();
 
       final account = motherResponse['account'] as Map<String, dynamic>? ?? {};
 
-      // Get all pregnancies for this mother
-      final pregnanciesResponse = await client.from('pregnancies').select('''
-            *,
-            checkups:prenatal_checkups (
-              encounter_id,
-              checkup_weight,
-              blood_pressure_systolic,
-              blood_pressure_diastolic,
-              fetal_position,
-              fetal_heart_beat,
-              fetal_heart_tone,
-              td_vaccine_dose,
-              edema,
-              next_schedule,
-              encounter:clinical_encounters (
+      final pregnancyIds = pregnancies
+          .map((p) => p['pregnancy_id'])
+          .whereType<int>()
+          .toList();
+
+      final encounterById = <int, Map<String, dynamic>>{};
+      final aiByCheckupId = <int, Map<String, dynamic>>{};
+      final riskByAiResponseId = <int, Map<String, dynamic>>{};
+      final factorsByRiskId = <int, List<Map<String, dynamic>>>{};
+
+      // Step 2: Fetch pregnancy child tables, encounters, and risk data concurrently
+      if (pregnancyIds.isNotEmpty) {
+        final step2Futures = <Future<dynamic>>[
+          // [0] Encounters
+          client.from('clinical_encounters').select('''
+                encounter_id,
+                pregnancy_id,
                 encounter_datetime,
                 age_of_gestation_weeks,
                 age_of_gestation_days,
@@ -78,132 +128,209 @@ class MotherProfileService {
                   actual_gain,
                   weekly_gain
                 )
-              )
-            ),
-            ultrasounds (
-              encounter_id,
-              ultrasound_date,
-              ultrasound_location,
-              ultrasound_image,
-              remarks:findings_summary,
-              health_worker_name,
-              health_worker_institution,
-              health_worker_profession,
-              monitoring_classification,
-              created_at,
-              encounter:clinical_encounters (
-                recorded_by:midwives (
-                  midwife_id,
-                  account:accounts (first_name, last_name)
-                )
-              )
-            ),
-            lab_tests (
-              encounter_id,
-              lab_test_type,
-              lab_test_location,
-              lab_test_image,
-              health_worker_name,
-              health_worker_institution,
-              health_worker_profession,
-              created_at,
-              encounter:clinical_encounters (
-                encounter_datetime,
-                midwife_notes,
-                recorded_by:midwives (
-                  midwife_id,
-                  account:accounts (first_name, last_name)
-                )
-              )
-            ),
-            maternal_vitals (
-              vital_id,
-              recorded_at,
-              age_of_gestation,
-              weight_kg,
-              height_cm,
-              notes,
-              created_at
-            ),
-            delivery:deliveries (
-              delivery_id:encounter_id,
-              delivery_date,
-              place_of_delivery,
-              delivery_method,
-              fetus_number
-            ),
-            outcomes:pregnancy_outcomes (
-              outcome_id,
-              fetus_number,
-              outcome,
-              outcome_date
-            )
-          ''').eq('mother_id', motherId).order('created_at', ascending: false);
+              ''').inFilter('pregnancy_id', pregnancyIds),
 
-      final List<dynamic> pregnancies = pregnanciesResponse as List<dynamic>;
+          // [1] Checkups
+          client.from('prenatal_checkups').select('''
+                encounter_id,
+                pregnancy_id,
+                checkup_weight,
+                blood_pressure_systolic,
+                blood_pressure_diastolic,
+                fetal_position,
+                fetal_heart_beat,
+                fetal_heart_tone,
+                td_vaccine_dose,
+                edema,
+                next_schedule
+              ''').inFilter('pregnancy_id', pregnancyIds),
 
-      final pregnancyIds = pregnancies
-          .map((p) => (p as Map)['pregnancy_id'])
-          .whereType<int>()
-          .toList();
-      final checkupIds = <int>[];
-      for (final p in pregnancies) {
-        final map = p as Map<String, dynamic>;
-        final checkups = (map['checkups'] as List?) ?? const [];
-        for (final c in checkups) {
-          final cid = (c as Map<String, dynamic>)['encounter_id'];
-          if (cid is int) checkupIds.add(cid);
-        }
-      }
+          // [2] Ultrasounds
+          client.from('ultrasounds').select('''
+                encounter_id,
+                pregnancy_id,
+                ultrasound_date,
+                ultrasound_location,
+                ultrasound_image,
+                remarks:findings_summary,
+                health_worker_name,
+                health_worker_institution,
+                health_worker_profession,
+                monitoring_classification,
+                created_at
+              ''').inFilter('pregnancy_id', pregnancyIds),
 
-      final aiByCheckupId = <int, Map<String, dynamic>>{};
-      final riskByAiResponseId = <int, Map<String, dynamic>>{};
-      final factorsByRiskId = <int, List<Map<String, dynamic>>>{};
+          // [3] Lab Tests
+          client.from('lab_tests').select('''
+                encounter_id,
+                pregnancy_id,
+                lab_test_type,
+                lab_test_location,
+                lab_test_image,
+                health_worker_name,
+                health_worker_institution,
+                health_worker_profession,
+                created_at
+              ''').inFilter('pregnancy_id', pregnancyIds),
 
-      if (checkupIds.isNotEmpty) {
-        final aiRows = await client
-            .from('ai_responses')
-            .select('''
-              ai_response_id,
-              reference_id,
-              response,
-              ai_model,
-              status,
-              generated_by_ai,
-              created_at,
-              updated_at
-            ''')
-            .eq('reference_table', 'prenatal_checkups')
-            .eq('response_type', 'risk_assessment')
-            .inFilter('reference_id', checkupIds);
+          // [4] Maternal Vitals
+          client.from('maternal_vitals').select('''
+                vital_id,
+                pregnancy_id,
+                recorded_at,
+                age_of_gestation,
+                weight_kg,
+                height_cm,
+                notes,
+                created_at
+              ''').inFilter('pregnancy_id', pregnancyIds),
 
-        for (final row in (aiRows as List).cast<Map<String, dynamic>>()) {
-          final refId = row['reference_id'];
-          if (refId is int) {
-            aiByCheckupId[refId] = row;
-          }
-        }
-      }
+          // [5] Deliveries
+          client.from('deliveries').select('''
+                delivery_id:encounter_id,
+                pregnancy_id,
+                delivery_date,
+                place_of_delivery,
+                delivery_method,
+                fetus_number
+              ''').inFilter('pregnancy_id', pregnancyIds),
 
-      if (pregnancyIds.isNotEmpty) {
-        final riskRows = await client
-            .from('pregnancy_risk_assessments')
-            .select('''
-              pregnancy_risk_id,
-              pregnancy_id,
-              ai_response_id,
-              risk_level,
-              assessed_by_ai,
-              created_at,
-              updated_at
-            ''')
-            .inFilter('pregnancy_id', pregnancyIds)
-            .order('created_at', ascending: false);
+          // [6] Outcomes
+          client.from('pregnancy_outcomes').select('''
+                outcome_id,
+                pregnancy_id,
+                fetus_number,
+                outcome,
+                outcome_date
+              ''').inFilter('pregnancy_id', pregnancyIds),
 
-        for (final row in (riskRows as List).cast<Map<String, dynamic>>()) {
+          // [7] Risk Assessments
+          client
+              .from('pregnancy_risk_assessments')
+              .select('''
+                pregnancy_risk_id,
+                pregnancy_id,
+                ai_response_id,
+                risk_level,
+                assessed_by_ai,
+                created_at,
+                updated_at
+              ''')
+              .inFilter('pregnancy_id', pregnancyIds)
+              .order('created_at', ascending: false),
+        ];
+
+        final step2Results = await Future.wait(step2Futures);
+        final encountersList = step2Results[0] as List<dynamic>;
+        final checkupsList = step2Results[1] as List<dynamic>;
+        final ultrasoundsList = step2Results[2] as List<dynamic>;
+        final labTestsList = step2Results[3] as List<dynamic>;
+        final vitalsList = step2Results[4] as List<dynamic>;
+        final deliveriesList = step2Results[5] as List<dynamic>;
+        final outcomesList = step2Results[6] as List<dynamic>;
+        final riskRows = step2Results[7] as List<dynamic>;
+
+        for (final row in riskRows.cast<Map<String, dynamic>>()) {
           final aiId = row['ai_response_id'];
           if (aiId is int && !riskByAiResponseId.containsKey(aiId)) {
             riskByAiResponseId[aiId] = row;
+          }
+        }
+
+        for (final enc in encountersList.cast<Map<String, dynamic>>()) {
+          final id = enc['encounter_id'];
+          if (id is int) encounterById[id] = enc;
+        }
+
+        final checkupsByPregId = <int, List<Map<String, dynamic>>>{};
+        final checkupIds = <int>[];
+        for (final row in checkupsList.cast<Map<String, dynamic>>()) {
+          final pId = row['pregnancy_id'];
+          if (pId is int) {
+            checkupsByPregId.putIfAbsent(pId, () => []);
+            checkupsByPregId[pId]!.add(row);
+          }
+          final encId = row['encounter_id'];
+          if (encId is int) checkupIds.add(encId);
+        }
+
+        final ultrasoundsByPregId = <int, List<Map<String, dynamic>>>{};
+        for (final row in ultrasoundsList.cast<Map<String, dynamic>>()) {
+          final pId = row['pregnancy_id'];
+          if (pId is int) {
+            ultrasoundsByPregId.putIfAbsent(pId, () => []);
+            ultrasoundsByPregId[pId]!.add(row);
+          }
+        }
+
+        final labTestsByPregId = <int, List<Map<String, dynamic>>>{};
+        for (final row in labTestsList.cast<Map<String, dynamic>>()) {
+          final pId = row['pregnancy_id'];
+          if (pId is int) {
+            labTestsByPregId.putIfAbsent(pId, () => []);
+            labTestsByPregId[pId]!.add(row);
+          }
+        }
+
+        final vitalsByPregId = <int, List<Map<String, dynamic>>>{};
+        for (final row in vitalsList.cast<Map<String, dynamic>>()) {
+          final pId = row['pregnancy_id'];
+          if (pId is int) {
+            vitalsByPregId.putIfAbsent(pId, () => []);
+            vitalsByPregId[pId]!.add(row);
+          }
+        }
+
+        final deliveriesByPregId = <int, List<Map<String, dynamic>>>{};
+        for (final row in deliveriesList.cast<Map<String, dynamic>>()) {
+          final pId = row['pregnancy_id'];
+          if (pId is int) {
+            deliveriesByPregId.putIfAbsent(pId, () => []);
+            deliveriesByPregId[pId]!.add(row);
+          }
+        }
+
+        final outcomesByPregId = <int, List<Map<String, dynamic>>>{};
+        for (final row in outcomesList.cast<Map<String, dynamic>>()) {
+          final pId = row['pregnancy_id'];
+          if (pId is int) {
+            outcomesByPregId.putIfAbsent(pId, () => []);
+            outcomesByPregId[pId]!.add(row);
+          }
+        }
+
+        // Attach child table arrays to pregnancy objects
+        for (final pregnancy in pregnancies) {
+          final pId = pregnancy['pregnancy_id'] as int;
+          pregnancy['checkups'] = checkupsByPregId[pId] ?? <Map<String, dynamic>>[];
+          pregnancy['ultrasounds'] = ultrasoundsByPregId[pId] ?? <Map<String, dynamic>>[];
+          pregnancy['lab_tests'] = labTestsByPregId[pId] ?? <Map<String, dynamic>>[];
+          pregnancy['maternal_vitals'] = vitalsByPregId[pId] ?? <Map<String, dynamic>>[];
+          pregnancy['delivery'] = deliveriesByPregId[pId] ?? <Map<String, dynamic>>[];
+          pregnancy['outcomes'] = outcomesByPregId[pId] ?? <Map<String, dynamic>>[];
+        }
+
+        // Fetch AI responses and Risk factors concurrently in Step 2b if checkupIds / riskRows exist
+        if (checkupIds.isNotEmpty) {
+          final aiRows = await client
+              .from('ai_responses')
+              .select('''
+                ai_response_id,
+                reference_id,
+                response,
+                ai_model,
+                status,
+                generated_by_ai,
+                created_at,
+                updated_at
+              ''')
+              .eq('reference_table', 'prenatal_checkups')
+              .eq('response_type', 'risk_assessment')
+              .inFilter('reference_id', checkupIds);
+
+          for (final row in (aiRows as List).cast<Map<String, dynamic>>()) {
+            final refId = row['reference_id'];
+            if (refId is int) aiByCheckupId[refId] = row;
           }
         }
 
@@ -235,11 +362,16 @@ class MotherProfileService {
         }
       }
 
+      // Step 3: Re-assemble encounter data onto checkups, ultrasounds, lab_tests
       for (final p in pregnancies) {
         final pregnancy = p as Map<String, dynamic>;
         final checkups = (pregnancy['checkups'] as List?) ?? const [];
         for (final c in checkups) {
           final checkup = c as Map<String, dynamic>;
+          final encId = checkup['encounter_id'];
+          if (encId is int && encounterById.containsKey(encId)) {
+            checkup['encounter'] = encounterById[encId];
+          }
 
           // Map encounter fields to top-level keys
           final encounter = checkup['encounter'] as Map<String, dynamic>?;
@@ -273,17 +405,25 @@ class MotherProfileService {
             }
           }
         }
-        
+
         final ultrasounds = (pregnancy['ultrasounds'] as List?) ?? const [];
         for (final us in ultrasounds) {
           final usMap = us as Map<String, dynamic>;
+          final encId = usMap['encounter_id'];
+          if (encId is int && encounterById.containsKey(encId)) {
+            usMap['encounter'] = encounterById[encId];
+          }
           usMap['ultrasound_id'] = usMap['encounter_id'];
           usMap['recorded_by'] = usMap['encounter']?['recorded_by'];
         }
-        
+
         final labTests = (pregnancy['lab_tests'] as List?) ?? const [];
         for (final lt in labTests) {
           final ltMap = lt as Map<String, dynamic>;
+          final encId = ltMap['encounter_id'];
+          if (encId is int && encounterById.containsKey(encId)) {
+            ltMap['encounter'] = encounterById[encId];
+          }
           ltMap['lab_test_id'] = ltMap['encounter_id'];
           ltMap['lab_test_date'] = ltMap['encounter']?['encounter_datetime'];
           ltMap['remarks'] = ltMap['encounter']?['midwife_notes'];
@@ -303,47 +443,6 @@ class MotherProfileService {
           pastPregnancies.add(pregnancy);
         }
       }
-
-      // Get medical conditions
-      final medicalConditionsResponse = await client
-          .from('medical_conditions')
-          .select('*')
-          .eq('mother_id', motherId)
-          .order('created_at', ascending: false);
-
-      final List<dynamic> medicalConditions =
-          medicalConditionsResponse as List<dynamic>;
-
-      // Get allergies
-      final allergiesResponse = await client
-          .from('allergies')
-          .select('*')
-          .eq('mother_id', motherId)
-          .order('created_at', ascending: false);
-
-      final List<dynamic> allergies = allergiesResponse as List<dynamic>;
-
-      // Get emergency contacts
-      final emergencyContactsResponse = await client
-          .from('emergency_contacts')
-          .select('*')
-          .eq('mother_id', motherId)
-          .order('created_at', ascending: false);
-
-      final List<dynamic> emergencyContacts =
-          emergencyContactsResponse as List<dynamic>;
-
-      // Get children
-      final childrenResponse = await client.from('children').select('''
-            *,
-            birth_details (*),
-            child_growth_records (*)
-          ''').eq('mother_id', motherId).order('added_at', ascending: false);
-
-      final List<dynamic> children = childrenResponse as List<dynamic>;
-
-      // Calculate children count
-      final childrenCount = children.length;
 
       // Build complete profile
       final profile = <String, dynamic>{
@@ -396,7 +495,7 @@ class MotherProfileService {
 
         // Children
         'children': children,
-        'children_count': childrenCount,
+        'children_count': children.length,
       };
 
       if (kDebugMode) {
