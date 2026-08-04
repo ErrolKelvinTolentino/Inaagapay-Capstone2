@@ -30,6 +30,8 @@ class RecordDetailScreen extends StatefulWidget {
     this.suggestedActions,
     this.weightGainEval,
     this.ultrasoundClassification,
+    this.approvedByName,
+    this.isMidwifeApproved,
   });
 
   final String title;
@@ -44,6 +46,13 @@ class RecordDetailScreen extends StatefulWidget {
   final List<String>? suggestedActions;
   final Map<String, dynamic>? weightGainEval;
   final String? ultrasoundClassification;
+
+  /// Name of the midwife who reviewed this record's assessment.
+  final String? approvedByName;
+
+  /// `clinical_encounters.is_midwife_approved`. Null when the caller does not
+  /// know the review state, in which case no attribution line is rendered.
+  final bool? isMidwifeApproved;
 
   @override
   State<RecordDetailScreen> createState() => _RecordDetailScreenState();
@@ -72,6 +81,68 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
 
   String _tAi(String english, String filipino) {
     return _showAiInFilipino ? filipino : english;
+  }
+
+  /// Shows which midwife stands behind the assessment above.
+  ///
+  /// The point of this line is that a mother reading an AI-generated insight
+  /// can see a named human reviewed it — so an unreviewed record says so
+  /// plainly rather than rendering nothing.
+  Widget _buildApprovalAttribution() {
+    final approved = widget.isMidwifeApproved;
+    if (approved == null) return const SizedBox.shrink();
+
+    final name = widget.approvedByName?.trim();
+    final hasName = name != null && name.isNotEmpty;
+
+    final String label;
+    if (approved) {
+      label = hasName
+          ? _t('Assessed and approved by $name',
+              'Sinuri at inaprubahan ni $name')
+          : _t('Assessed and approved by your midwife',
+              'Sinuri at inaprubahan ng iyong midwife');
+    } else {
+      label = _t('Pending midwife review', 'Hinihintay ang pagsusuri ng midwife');
+    }
+
+    final Color accent =
+        approved ? const Color(0xFF2E7D32) : AppColors.brandAccent;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: accent.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              approved ? Icons.verified_user_outlined : Icons.schedule_outlined,
+              size: 14,
+              color: accent,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                  color: accent,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _localizedSectionTitle(String title) {
@@ -1592,6 +1663,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               else
                 _buildFormattedAiText(_getAiTextForLanguage(aiText)),
               const SizedBox(height: 12),
+              _buildApprovalAttribution(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(

@@ -331,25 +331,25 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
       _registeredMothers = mothersData.length;
       _motherIds = mothersData.map<int>((m) => m['mother_id'] as int).toList();
 
-      // Sort mothers assigned to this BHC by mother_id to determine chronological index
       final sortedMothersList = List<Map<String, dynamic>>.from(mothersData);
       sortedMothersList.sort((a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
 
-      // Load all mothers for search
+      // Load all mothers for search. bhc_patient_id is filled in just below,
+      // from the database, once the header has rendered.
       _allMothers = [];
       for (int i = 0; i < sortedMothersList.length; i++) {
         final mother = sortedMothersList[i];
         final account = mother['accounts'];
         if (account != null) {
           final mId = mother['mother_id'] as int;
-          final displayId = 'INA-${(i + 1).toString().padLeft(3, '0')}';
           _allMothers.add({
             'mother_id': mId,
+            'account_id': mother['account_id'],
             'first_name': account['first_name'] ?? '',
             'last_name': account['last_name'] ?? '',
             'phone_number': account['phone_number'] ?? '',
             'email_address': account['email_address'] ?? '',
-            'bhc_patient_id': displayId,
+            'bhc_patient_id': null,
           });
         }
       }
@@ -359,6 +359,26 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         setState(() {
           _isLoading = false;
         });
+      }
+
+      // Resolve real BHC patient numbers after the first paint so this query
+      // never sits in front of the header render. Entries are mutated in place,
+      // so _pregnancyToMotherMap (built later, from these same maps) picks them
+      // up without a second lookup.
+      final patientNumbersByAccountId =
+          await SupabaseService.getPatientNumbersByAccountId(
+        _allMothers
+            .map((m) => m['account_id'] as int?)
+            .whereType<int>()
+            .toList(),
+        facilityId: assignedBhcId,
+      );
+      if (patientNumbersByAccountId.isNotEmpty) {
+        for (final mother in _allMothers) {
+          mother['bhc_patient_id'] = SupabaseService.formatPatientNumber(
+            patientNumbersByAccountId[mother['account_id'] as int?],
+          );
+        }
       }
 
       // Get registered children count and load for search
@@ -508,6 +528,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                   midwife_notes,
                   age_of_gestation_weeks,
                   age_of_gestation_days,
+                  is_midwife_approved,
                   recorded_by:midwives (
                     midwife_id,
                     account:accounts (first_name, last_name)
@@ -579,6 +600,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                   midwife_notes,
                   age_of_gestation_weeks,
                   age_of_gestation_days,
+                  is_midwife_approved,
                   recorded_by:midwives (
                     midwife_id,
                     account:accounts (first_name, last_name)
@@ -669,6 +691,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 'fetal_heart_beat': innerCheckup['fetal_heart_beat'],
                 'next_schedule': innerCheckup['next_schedule'],
                 'midwife': enc['recorded_by'],
+                'is_midwife_approved': enc['is_midwife_approved'],
               });
             }
           }
@@ -700,6 +723,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 'fetal_heart_beat': innerCheckup['fetal_heart_beat'],
                 'next_schedule': innerCheckup['next_schedule'],
                 'midwife': enc['recorded_by'],
+                'is_midwife_approved': enc['is_midwife_approved'],
               });
             }
           }
@@ -722,7 +746,9 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           final fullName = mother != null ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'.trim() : 'Unknown Mother';
           final motherId = mother != null ? mother['mother_id'] as int? : null;
           final bhcPatientId = mother != null ? mother['bhc_patient_id']?.toString() : null;
-          final displayId = bhcPatientId ?? (motherId != null ? 'INA-${motherId.toString().padLeft(3, '0')}' : 'INA-000');
+          // No mother_id fallback: a missing patient number must look missing,
+          // not like a valid number that happens to be wrong.
+          final displayId = bhcPatientId ?? '—';
 
           final dt = DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
           if (dt == null) continue;
@@ -1067,6 +1093,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           title: 'Prenatal Checkup',
           subtitle: date,
           icon: Icons.medical_services,
+          approvedByName: midwifeName == '—' ? null : midwifeName,
+          isMidwifeApproved: record['is_midwife_approved'] == true,
           rows: [
             MapEntry('Conducted by', midwifeName),
             MapEntry('Fetal Count', fetalCount.toString()),
@@ -1355,11 +1383,15 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     List<String>? suggestedActions,
     Map<String, dynamic>? weightGainEval,
     String? ultrasoundClassification,
+    String? approvedByName,
+    bool? isMidwifeApproved,
   }) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => RecordDetailScreen(
+          approvedByName: approvedByName,
+          isMidwifeApproved: isMidwifeApproved,
           title: title,
           rows: rows,
           icon: icon,

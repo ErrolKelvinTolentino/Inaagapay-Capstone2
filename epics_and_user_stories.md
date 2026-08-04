@@ -1,3 +1,9 @@
+> **⚠️ SUPERSEDED — historical record only.**
+> This document describes the pre–Capstone Defense 1 scope. Its six epics are now largely complete, and it does not cover the defense revisions (patient numbers, contact-number login, inventory distribution, Baby Book, self-logged vitals, automated scheduling).
+> **Current product map: [defense2_epics_and_progress.md](defense2_epics_and_progress.md)**
+
+---
+
 # Epic: EPIC-01 Core Maternal Health & Prenatal Workflows
 *Goal:* Refine the maternal registration and prenatal checkup workflows to enforce proper business processes and data constraints.
 *Context:* The current flow allows exiting before completing a mandatory first checkup and lacks critical data constraints like pre-pregnancy weight and LMP validations. This epic ensures data integrity and workflow enforcement, foundational for accurate risk assessment and AI interpretation.

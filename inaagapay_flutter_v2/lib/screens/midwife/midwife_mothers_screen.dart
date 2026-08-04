@@ -94,7 +94,11 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
       results = results.where((mother) {
         final fullName = mother['full_name']?.toString().toLowerCase() ?? '';
         final email = mother['email_address']?.toString().toLowerCase() ?? '';
-        return fullName.contains(_searchQuery) || email.contains(_searchQuery);
+        final patientId =
+            mother['bhc_patient_id']?.toString().toLowerCase() ?? '';
+        return fullName.contains(_searchQuery) ||
+            email.contains(_searchQuery) ||
+            patientId.contains(_searchQuery);
       }).toList();
     }
 
@@ -266,13 +270,21 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
       }
     }
 
+    final patientNumbersByAccountId =
+        await SupabaseService.getPatientNumbersByAccountId(
+      accountIds,
+      facilityId: _assignedBhcId,
+    );
+
     final List<Map<String, dynamic>> parsedMothers = [];
 
     for (int i = 0; i < rawMothers.length; i++) {
       final raw = rawMothers[i];
       final int motherId = raw['mother_id'] as int;
       final int accountId = raw['account_id'] as int;
-      final String bhcPatientId = 'INA-${(i + 1).toString().padLeft(3, '0')}';
+      final String? bhcPatientId = SupabaseService.formatPatientNumber(
+        patientNumbersByAccountId[accountId],
+      );
       final account = raw['accounts'] as Map<String, dynamic>?;
       if (account == null) continue;
 
@@ -384,13 +396,24 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
       final List<dynamic> rawMothers = List<dynamic>.from(response);
       rawMothers.sort((a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
 
+      final patientNumbersByAccountId =
+          await SupabaseService.getPatientNumbersByAccountId(
+        rawMothers
+            .map((r) => r['account_id'] as int?)
+            .whereType<int>()
+            .toList(),
+        facilityId: _assignedBhcId,
+      );
+
       final List<Map<String, dynamic>> parsedMothers = [];
 
       for (int i = 0; i < rawMothers.length; i++) {
         final raw = rawMothers[i];
         final int motherId = raw['mother_id'] as int;
         final int accountId = raw['account_id'] as int;
-        final String bhcPatientId = 'INA-${(i + 1).toString().padLeft(3, '0')}';
+        final String? bhcPatientId = SupabaseService.formatPatientNumber(
+          patientNumbersByAccountId[accountId],
+        );
         final account = raw['accounts'] as Map<String, dynamic>?;
         if (account == null) continue;
 
@@ -1327,7 +1350,7 @@ class _MotherCard extends StatelessWidget {
                               ),
                             ),
                             child: Text(
-                              '${mother['bhc_patient_id'] ?? mother['mother_id']}',
+                              mother['bhc_patient_id']?.toString() ?? '—',
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,

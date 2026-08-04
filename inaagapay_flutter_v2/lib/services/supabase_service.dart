@@ -1055,6 +1055,7 @@ class SupabaseService {
 
       int? midwifeId;
       int? assignedBhcId;
+      int? patientNumber;
 
       // 1. Get or create midwife_id from midwives table
       try {
@@ -1082,13 +1083,14 @@ class SupabaseService {
       try {
         final faRow = await client
             .from('facility_assignments')
-            .select('facility_id')
+            .select('facility_id, patient_number')
             .eq('account_id', accountId)
             .eq('is_active', true)
             .maybeSingle();
 
         if (faRow != null) {
           assignedBhcId = faRow['facility_id'] as int?;
+          patientNumber = faRow['patient_number'] as int?;
         }
       } catch (e) {
         if (kDebugMode) debugPrint('Facility assignment query note: $e');
@@ -1143,6 +1145,7 @@ class SupabaseService {
         'midwife_id': midwifeId ?? accountId,
         'assigned_bhc_id': assignedBhcId,
         'bhc_name': bhcName,
+        'patient_number': patientNumber,
       };
       _midwifeContextCache[accountId] = result;
       return result;
@@ -1154,6 +1157,90 @@ class SupabaseService {
         'assigned_bhc_id': 1,
         'bhc_name': 'Barangay Health Center',
       };
+    }
+  }
+
+  /// Display format for the BHC patient number stored in
+  /// `facility_assignments.patient_number`.
+  ///
+  /// Returns null when the mother has no patient number yet so callers can show
+  /// a neutral placeholder. Never fall back to `mother_id` here — a wrong-but-
+  /// plausible number is harder to notice than a visibly missing one.
+  static String? formatPatientNumber(int? patientNumber) {
+    if (patientNumber == null) return null;
+    return 'INA-${patientNumber.toString().padLeft(3, '0')}';
+  }
+
+  /// Batch-resolves BHC patient numbers for a set of mother account IDs.
+  ///
+  /// One query for the whole list — mother list screens render dozens of rows
+  /// and per-row lookups would undo the load-time work already done there.
+  /// Accounts without an active assignment are simply absent from the result.
+  static Future<Map<int, int>> getPatientNumbersByAccountId(
+    List<int> accountIds, {
+    int? facilityId,
+  }) async {
+    if (accountIds.isEmpty) return {};
+
+    try {
+      var query = client
+          .from('facility_assignments')
+          .select('account_id, patient_number')
+          .inFilter('account_id', accountIds)
+          .eq('is_active', true);
+
+      if (facilityId != null) {
+        query = query.eq('facility_id', facilityId);
+      }
+
+      final rows = await query.timeout(const Duration(seconds: 5));
+
+      final Map<int, int> byAccountId = {};
+      for (final row in rows) {
+        final accId = row['account_id'] as int?;
+        final number = row['patient_number'] as int?;
+        if (accId != null && number != null) {
+          byAccountId[accId] = number;
+        }
+      }
+      return byAccountId;
+    } catch (e) {
+      if (kDebugMode) debugPrint('getPatientNumbersByAccountId note: $e');
+      return {};
+    }
+  }
+
+  /// Resolves the BHC patient number for a single mother account.
+  static Future<int?> getPatientNumberForAccount(
+    int accountId, {
+    int? facilityId,
+  }) async {
+    final result = await getPatientNumbersByAccountId(
+      [accountId],
+      facilityId: facilityId,
+    );
+    return result[accountId];
+  }
+
+  /// Resolves the formatted BHC patient number for a mother, by mother_id.
+  ///
+  /// Kept off the main profile fetch so it loads the same way the profile
+  /// picture does — after first paint, without holding up the record.
+  static Future<String?> getPatientNumberForMother(int motherId) async {
+    try {
+      final motherResponse = await client
+          .from('mothers')
+          .select('account_id')
+          .eq('mother_id', motherId)
+          .maybeSingle();
+
+      final accountId = motherResponse?['account_id'] as int?;
+      if (accountId == null) return null;
+
+      return formatPatientNumber(await getPatientNumberForAccount(accountId));
+    } catch (e) {
+      if (kDebugMode) debugPrint('getPatientNumberForMother note: $e');
+      return null;
     }
   }
 

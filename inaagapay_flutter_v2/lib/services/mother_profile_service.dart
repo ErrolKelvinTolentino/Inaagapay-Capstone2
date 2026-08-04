@@ -130,6 +130,7 @@ class MotherProfileService {
                 age_of_gestation_weeks,
                 age_of_gestation_days,
                 midwife_notes,
+                is_midwife_approved,
                 recorded_by:midwives (
                   midwife_id,
                   account:accounts (first_name, last_name)
@@ -409,6 +410,7 @@ class MotherProfileService {
             checkup['remarks'] = encounter['midwife_notes'];
             checkup['symptoms'] = encounter['symptoms'];
             checkup['weight_gain'] = encounter['weight_gain'];
+            checkup['is_midwife_approved'] = encounter['is_midwife_approved'];
           }
 
           final checkupId = checkup['encounter_id'];
@@ -440,6 +442,8 @@ class MotherProfileService {
           }
           usMap['ultrasound_id'] = usMap['encounter_id'];
           usMap['recorded_by'] = usMap['encounter']?['recorded_by'];
+          usMap['is_midwife_approved'] =
+              usMap['encounter']?['is_midwife_approved'];
         }
 
         final labTests = (pregnancy['lab_tests'] as List?) ?? const [];
@@ -453,6 +457,8 @@ class MotherProfileService {
           ltMap['lab_test_date'] = ltMap['encounter']?['encounter_datetime'];
           ltMap['remarks'] = ltMap['encounter']?['midwife_notes'];
           ltMap['recorded_by'] = ltMap['encounter']?['recorded_by'];
+          ltMap['is_midwife_approved'] =
+              ltMap['encounter']?['is_midwife_approved'];
         }
       }
 

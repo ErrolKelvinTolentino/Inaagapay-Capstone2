@@ -136,6 +136,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
   // Profile picture
   String? _profilePictureUrl;
+  String? _patientNumber;
 
 
 
@@ -150,6 +151,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     });
     _profileFuture = MotherProfileService.fetchMotherProfile(widget.motherId);
     _loadProfilePicture();
+    _loadPatientNumber();
   }
 
   @override
@@ -168,6 +170,14 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     final url = await SupabaseService.getProfilePictureUrl(widget.motherId);
     if (mounted) {
       setState(() => _profilePictureUrl = url);
+    }
+  }
+
+  Future<void> _loadPatientNumber() async {
+    final number =
+        await SupabaseService.getPatientNumberForMother(widget.motherId);
+    if (mounted) {
+      setState(() => _patientNumber = number);
     }
   }
 
@@ -1636,11 +1646,15 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     String? riskFactors,
     List<String>? suggestedActions,
     Map<String, dynamic>? weightGainEval,
+    String? approvedByName,
+    bool? isMidwifeApproved,
   }) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => RecordDetailScreen(
+          approvedByName: approvedByName,
+          isMidwifeApproved: isMidwifeApproved,
           title: title,
           rows: rows,
           icon: icon,
@@ -1921,6 +1935,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             title: 'Prenatal Checkup',
             subtitle: date,
             icon: Icons.medical_services,
+            approvedByName: midwifeName == '—' ? null : midwifeName,
+            isMidwifeApproved: checkup['is_midwife_approved'] == true,
             rows: [
               MapEntry('Conducted by', midwifeName),
               MapEntry('Fetal Count', fetalCount.toString()),
@@ -2035,6 +2051,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             subtitle: date,
             icon: Icons.monitor_heart,
             imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
+            approvedByName: midwifeName == '—' ? null : midwifeName,
+            isMidwifeApproved: ultrasound['is_midwife_approved'] == true,
             rows: [
               MapEntry('Recorded by', midwifeName),
               MapEntry(
@@ -2131,6 +2149,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             subtitle: date,
             icon: Icons.science,
             imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
+            approvedByName: midwifeName == '—' ? null : midwifeName,
+            isMidwifeApproved: labTest['is_midwife_approved'] == true,
             rows: [
               MapEntry('Recorded by', midwifeName),
               MapEntry('Lab Test Type', type),
@@ -5446,6 +5466,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               email: profile['email_address'],
               phone: profile['phone_number'],
               profilePictureUrl: _profilePictureUrl,
+              patientNumber: _patientNumber,
             ),
             const SizedBox(height: 16),
 

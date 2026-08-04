@@ -10,12 +10,18 @@ class ProfileHeaderCard extends StatelessWidget {
   final String? phone;
   final String? profilePictureUrl;
 
+  /// BHC patient number, already formatted (e.g. "INA-004"). Null when the
+  /// mother has no number assigned yet — the badge is then hidden rather than
+  /// showing a placeholder identifier.
+  final String? patientNumber;
+
   const ProfileHeaderCard({
     super.key,
     required this.fullName,
     this.email,
     this.phone,
     this.profilePictureUrl,
+    this.patientNumber,
   });
 
   @override
@@ -114,6 +120,34 @@ class ProfileHeaderCard extends StatelessWidget {
                       ),
                       textAlign: TextAlign.center,
                     ),
+
+                    // Patient number badge — the key the midwife uses to match
+                    // this record to the physical chart, so it sits directly
+                    // under the name rather than among the contact chips.
+                    if (patientNumber != null && patientNumber!.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.brandPrimary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color:
+                                AppColors.brandPrimary.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Text(
+                          patientNumber!,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.brandPrimary,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    ],
 
                     const SizedBox(height: 8),
 
