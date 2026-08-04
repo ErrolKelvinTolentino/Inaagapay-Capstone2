@@ -151,6 +151,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="common-security.js"></script>
+    <script src="live-refresh.js"></script>
     <script>
       (function(){
         const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
@@ -629,6 +630,12 @@
             t.addEventListener("animationend", () => t.remove());
           }, 4500);
         }
+
+        window.AdminLiveRefresh?.start({
+          db,
+          tables: ["audit_trail", "accounts"],
+          refresh: loadAudit,
+        });
       })();
     </script>
   </body>

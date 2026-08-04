@@ -344,6 +344,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bcryptjs/2.4.3/bcrypt.min.js"></script>
     <script src="common-security.js"></script>
+    <script src="live-refresh.js"></script>
     <script>
         (function() {
             const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
@@ -936,6 +937,11 @@
 
             loadAccounts();
             loadBhcs();
+            window.AdminLiveRefresh?.start({
+                db,
+                tables: ["accounts", "midwives", "facility_assignments", "bhc", "health_facilities"],
+                refresh: () => Promise.all([loadAccounts(), loadBhcs()]),
+            });
         })();
     </script>
 </body>
