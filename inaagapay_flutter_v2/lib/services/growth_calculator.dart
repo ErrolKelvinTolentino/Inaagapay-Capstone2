@@ -4,7 +4,55 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'growth_reference_data.dart';
 
+/// Where a measurement sits against the WHO Child Growth Standards.
+enum GrowthBand {
+  below,
+  within,
+  above;
+
+  /// Label shown to midwives and mothers. Kept here so every screen renders the
+  /// same words for the same z-score.
+  String get label => switch (this) {
+        GrowthBand.below => 'Below standard range',
+        GrowthBand.within => 'Within standard range',
+        GrowthBand.above => 'Above standard range',
+      };
+
+  String get labelFilipino => switch (this) {
+        GrowthBand.below => 'Mababa sa pamantayan',
+        GrowthBand.within => 'Nasa loob ng pamantayan',
+        GrowthBand.above => 'Mataas sa pamantayan',
+      };
+
+  bool get isWithin => this == GrowthBand.within;
+}
+
 class GrowthCalculator {
+  /// WHO reference cut-off, in standard deviations.
+  ///
+  /// ±2 SD is the WHO threshold: -2 SD marks wasting/thinness and +2 SD marks
+  /// overweight in under-fives. A tighter ±1 SD would flag roughly a third of
+  /// perfectly healthy children, since that is simply how a normal
+  /// distribution is shaped.
+  static const double whoStandardSd = 2.0;
+
+  /// The single source of truth for classifying a growth z-score.
+  ///
+  /// Every screen that shows a growth status pill must go through this, so the
+  /// same child cannot read "within range" on one page and "above range" on
+  /// another.
+  static GrowthBand bandForZScore(double? zScore) {
+    if (zScore == null || zScore.isNaN || zScore.isInfinite) {
+      return GrowthBand.within;
+    }
+    if (zScore < -whoStandardSd) return GrowthBand.below;
+    if (zScore > whoStandardSd) return GrowthBand.above;
+    return GrowthBand.within;
+  }
+
+  /// Convenience wrapper returning the display label directly.
+  static String bandLabel(double? zScore) => bandForZScore(zScore).label;
+
   // Weight data for girls (WHO standards) - Weeks 0-13
   static final List<Map<String, dynamic>> _weightGirlsData = [
     {
@@ -1319,6 +1367,55 @@ class GrowthCalculator {
       } else {
         return 3.0 + (value - sd3) / (sd3 - sd2);
       }
+    }
+  }
+
+  /// BMI-for-age boundaries at a given week, as the inverse of the z-score
+  /// calculation: what BMI values sit at -2 SD and +2 SD for this age and sex.
+  ///
+  /// Used to plot the WHO reference band behind a child's BMI trend, the same
+  /// way the maternal chart plots its IOM bounds.
+  ///
+  /// Returns null when there is no reference data for the requested week.
+  static Map<String, double>? bmiStandardRangeAt(
+    int week,
+    String gender, {
+    double sd = 2.0,
+  }) {
+    if (week <= 13) {
+      final data = getBMIData(week, gender);
+      if (data == null) return null;
+
+      final l = data['l'] as double;
+      final m = data['m'] as double;
+      final s = data['s'] as double;
+
+      // Inverse Box-Cox (LMS): value = M * (1 + L*S*z)^(1/L), or M*exp(S*z)
+      // when L is zero.
+      double valueAt(double z) {
+        if (l == 0) return m * math.exp(s * z);
+        final base = 1 + l * s * z;
+        if (base <= 0) return double.nan;
+        return m * math.pow(base, 1 / l).toDouble();
+      }
+
+      final min = valueAt(-sd);
+      final max = valueAt(sd);
+      if (min.isNaN || max.isNaN) return null;
+      return {'min': min, 'max': max};
+    }
+
+    // Monthly reference data uses tabulated SD boundaries rather than LMS.
+    final month = (week / 4.345).round();
+    try {
+      final entry = _getInterpolatedSDBoundaries(month, 'bmi', gender);
+      return {
+        'min': (entry['sd2neg'] as num).toDouble(),
+        'max': (entry['sd2'] as num).toDouble(),
+      };
+    } catch (e) {
+      debugPrint('bmiStandardRangeAt note: $e');
+      return null;
     }
   }
 

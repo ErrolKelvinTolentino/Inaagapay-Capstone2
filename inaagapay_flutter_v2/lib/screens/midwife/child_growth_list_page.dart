@@ -293,7 +293,7 @@ Refer to the child by their first name or as "your little one" ("iyong munting a
 Provide the response in both English and Filipino.
 Use the exact output format below. Do not add extra sections, titles, bullet points, or tables.
 
-Please carefully note the status indicators: "Within expected standard range", "Slightly above standard range", or "Slightly below standard range". 
+Please carefully note the status indicators: "Within standard range", "Above standard range", or "Below standard range".
 - If any measurement is slightly above standard range, reassure the parent warmly and concisely (e.g. "Baby [Name] is growing well! Even though it seems like [his/her] [weight/height/BMI] is a bit higher than most babies [his/her] age, [he/she]'s gaining steadily and will catch up!").
 - If any measurement is slightly below standard range, reassure them warmly and concisely (e.g. "Baby [Name] is growing well! Even though [his/her] [weight/height/BMI] is a bit lower than most babies [his/her] age, [he/she]'s growing steadily and will catch up at [his/her] own pace!").
 - If everything is within expected range, celebrate their steady growth concisely (e.g. "Baby [Name] is doing great! [His/Her] growth is right on track, and [he/she] is growing steadily and beautifully!").
@@ -316,10 +316,7 @@ $recordsSummary
   }
 
   String _getZStatus(double? z) {
-    if (z == null || z.isNaN || z.isInfinite) return 'Within expected standard range';
-    if (z < -1) return 'Slightly below standard range';
-    if (z <= 1) return 'Within expected standard range';
-    return 'Slightly above standard range';
+    return GrowthCalculator.bandLabel(z);
   }
 
   Future<void> _saveAIResponse(String responseText, int childDetailsId) async {
@@ -497,21 +494,18 @@ $recordsSummary
   }
 
   String _bmiCategory(double bmi) {
-    final zScore =
-        GrowthCalculator.calculateBMIZScore(bmi, latestAgeWeeks, childSex);
-    if (zScore == null) return 'Within expected standard range';
-    if (zScore < -1) return 'Slightly below standard range';
-    if (zScore <= 1) return 'Within expected standard range';
-    return 'Slightly above standard range';
+    return GrowthCalculator.bandLabel(
+      GrowthCalculator.calculateBMIZScore(bmi, latestAgeWeeks, childSex),
+    );
   }
 
   Color _bmiCategoryColor(String category) {
     switch (category) {
-      case 'Slightly below standard range':
+      case 'Below standard range':
         return Colors.orange; // Yellow/Orange
-      case 'Within expected standard range':
+      case 'Within standard range':
         return AppColors.success; // Green
-      case 'Slightly above standard range':
+      case 'Above standard range':
         return Colors.orange; // Yellow/Orange
       default:
         return AppColors.textSecondary;
@@ -545,9 +539,9 @@ $recordsSummary
                 style: TextStyle(fontSize: 13, height: 1.4),
               ),
               SizedBox(height: 8),
-              Text('• Within expected standard range (Green): between -1 and +1 Z-score.', style: TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w600)),
-              Text('• Slightly below standard range (Yellow): less than -1 Z-score.', style: TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600)),
-              Text('• Slightly above standard range (Yellow): greater than +1 Z-score.', style: TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600)),
+              Text('• Within standard range (Green): between -2 and +2 Z-score.', style: TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w600)),
+              Text('• Below standard range (Yellow): less than -2 Z-score.', style: TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600)),
+              Text('• Above standard range (Yellow): greater than +2 Z-score.', style: TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -565,14 +559,12 @@ $recordsSummary
     if (zscore == null || zscore.isNaN || zscore.isInfinite) {
       return 'Status unavailable';
     }
-    if (zscore < -1) return 'Slightly below standard range';
-    if (zscore <= 1) return 'Within expected standard range';
-    return 'Slightly above standard range';
+    return GrowthCalculator.bandLabel(zscore);
   }
 
   Color _zScoreColor(double? zScore) {
     if (zScore == null) return AppColors.textSecondary;
-    if (zScore < -1 || zScore > 1) return Colors.orange; // Yellow/Orange
+    if (!GrowthCalculator.bandForZScore(zScore).isWithin) return Colors.orange; // Yellow/Orange
     return AppColors.success; // Green
   }
 
@@ -1344,18 +1336,18 @@ $recordsSummary
           displayText = isFilipino
               ? 'Hindi sapat ang datos para sa pagsusuri ng BMI.'
               : 'Insufficient data for BMI analysis.';
-        } else if (z < -1) {
+        } else if (GrowthCalculator.bandForZScore(z) == GrowthBand.below) {
           displayText = isFilipino
-              ? 'Ang BMI ng iyong anak ay bahagyang mas mababa sa standard range para sa kaniyang edad. Ibig sabihin, medyo mababa ang timbang niya kumpara sa kaniyang tangkad, na karaniwang nangyayari kapag napaka-aktibo ng bata o mabilis na tumatangkad.'
-              : "Your child's BMI is slightly below the standard range for their age. This means their weight is relatively low compared to their height, which is common during active phases or rapid growth spurts.";
-        } else if (z <= 1) {
+              ? 'Ang BMI ng iyong anak ay mas mababa sa standard range para sa kaniyang edad. Ibig sabihin, medyo mababa ang timbang niya kumpara sa kaniyang tangkad, na karaniwang nangyayari kapag napaka-aktibo ng bata o mabilis na tumatangkad.'
+              : "Your child's BMI is below the standard range for their age. This means their weight is relatively low compared to their height, which is common during active phases or rapid growth spurts.";
+        } else if (GrowthCalculator.bandForZScore(z).isWithin) {
           displayText = isFilipino
-              ? 'Ang BMI ng iyong anak ay nasa loob ng inaasahang standard range para sa kaniyang edad. Nagpapakita ito ng malusog at balanseng ugnayan sa pagitan ng kaniyang tangkad at timbang habang patuloy siyang lumalaki.'
-              : "Your child's BMI is within the expected standard range for their age. This indicates a healthy, balanced relationship between their height and weight as they continue to grow.";
+              ? 'Ang BMI ng iyong anak ay nasa loob ng standard range para sa kaniyang edad. Nagpapakita ito ng malusog at balanseng ugnayan sa pagitan ng kaniyang tangkad at timbang habang patuloy siyang lumalaki.'
+              : "Your child's BMI is within the standard range for their age. This indicates a healthy, balanced relationship between their height and weight as they continue to grow.";
         } else {
           displayText = isFilipino
-              ? 'Ang BMI ng iyong anak ay bahagyang mas mataas sa standard range para sa kaniyang edad. Ibig sabihin, medyo mas mabigat siya kumpara sa kaniyang tangkad, na maaaring bahagi ng kaniyang normal na paglaki o hubog ng katawan.'
-              : "Your child's BMI is slightly above the standard range for their age. This means their weight is a bit higher relative to their height, which can be a temporary phase or natural body build variation.";
+              ? 'Ang BMI ng iyong anak ay mas mataas sa standard range para sa kaniyang edad. Ibig sabihin, medyo mas mabigat siya kumpara sa kaniyang tangkad, na maaaring bahagi ng kaniyang normal na paglaki o hubog ng katawan.'
+              : "Your child's BMI is above the standard range for their age. This means their weight is a bit higher relative to their height, which can be a temporary phase or natural body build variation.";
         }
       } else if (activeTab == 1) {
         // Weight
@@ -1364,18 +1356,18 @@ $recordsSummary
           displayText = isFilipino
               ? 'Hindi sapat ang datos para sa pagsusuri ng timbang.'
               : 'Insufficient data for weight analysis.';
-        } else if (z < -1) {
+        } else if (GrowthCalculator.bandForZScore(z) == GrowthBand.below) {
           displayText = isFilipino
-              ? 'Ang timbang ng iyong anak ay bahagyang mas mababa sa standard range para sa kaniyang edad. Ipinapakita nito na medyo mas magaan siya kaysa sa karaniwan, na maaaring dahil sa kaniyang pagiging aktibo o mabilis na paglaki.'
-              : "Your child's weight is slightly below the standard range for their age. This suggests they are a bit lighter than average, which can happen if they are highly active or during a growth spurt.";
-        } else if (z <= 1) {
+              ? 'Ang timbang ng iyong anak ay mas mababa sa standard range para sa kaniyang edad. Ipinapakita nito na medyo mas magaan siya kaysa sa karaniwan, na maaaring dahil sa kaniyang pagiging aktibo o mabilis na paglaki.'
+              : "Your child's weight is below the standard range for their age. This suggests they are a bit lighter than average, which can happen if they are highly active or during a growth spurt.";
+        } else if (GrowthCalculator.bandForZScore(z).isWithin) {
           displayText = isFilipino
-              ? 'Ang timbang ng iyong anak ay nasa loob ng inaasahang standard range para sa kaniyang edad. Isang magandang senyales ito na sapat ang kaniyang nutrisyon at patuloy siyang lumalaki nang malusog.'
-              : "Your child's weight is within the expected standard range for their age. This is a wonderful sign that they are receiving good nourishment and gaining weight steadily.";
+              ? 'Ang timbang ng iyong anak ay nasa loob ng standard range para sa kaniyang edad. Isang magandang senyales ito na sapat ang kaniyang nutrisyon at patuloy siyang lumalaki nang malusog.'
+              : "Your child's weight is within the standard range for their age. This is a wonderful sign that they are receiving good nourishment and gaining weight steadily.";
         } else {
           displayText = isFilipino
-              ? 'Ang timbang ng iyong anak ay bahagyang mas mataas sa standard range para sa kaniyang edad. Ipinapakita nito na medyo mas mabigat siya kaysa sa karaniwan, na maaaring dahil sa kaniyang natural na pangangatawan.'
-              : "Your child's weight is slightly above the standard range for their age. This indicates they are a bit heavier than average for their age, which can be due to their natural body frame.";
+              ? 'Ang timbang ng iyong anak ay mas mataas sa standard range para sa kaniyang edad. Ipinapakita nito na medyo mas mabigat siya kaysa sa karaniwan, na maaaring dahil sa kaniyang natural na pangangatawan.'
+              : "Your child's weight is above the standard range for their age. This indicates they are a bit heavier than average for their age, which can be due to their natural body frame.";
         }
       } else {
         // Height
@@ -1384,18 +1376,18 @@ $recordsSummary
           displayText = isFilipino
               ? 'Hindi sapat ang datos para sa pagsusuri ng tangkad.'
               : 'Insufficient data for height analysis.';
-        } else if (z < -1) {
+        } else if (GrowthCalculator.bandForZScore(z) == GrowthBand.below) {
           displayText = isFilipino
-              ? 'Ang tangkad ng iyong anak ay bahagyang mas mababa sa standard range para sa kaniyang edad. Ibig sabihin, medyo mas mababa siya kaysa sa karaniwan, na madalas ay dulot ng henetika o sariling takbo ng kaniyang paglaki.'
-              : "Your child's height is slightly below the standard range for their age. This means they are a bit shorter than average, which is often influenced by genetics or individual growth timing.";
-        } else if (z <= 1) {
+              ? 'Ang tangkad ng iyong anak ay mas mababa sa standard range para sa kaniyang edad. Ibig sabihin, medyo mas mababa siya kaysa sa karaniwan, na madalas ay dulot ng henetika o sariling takbo ng kaniyang paglaki.'
+              : "Your child's height is below the standard range for their age. This means they are a bit shorter than average, which is often influenced by genetics or individual growth timing.";
+        } else if (GrowthCalculator.bandForZScore(z).isWithin) {
           displayText = isFilipino
-              ? 'Ang tangkad ng iyong anak ay nasa loob ng inaasahang standard range para sa kaniyang edad. Ipinapakita nito na maganda at tuloy-tuloy ang kaniyang pagtangkad sa malusog na pamamaraan.'
-              : "Your child's height is within the expected standard range for their age. This shows they are stretching up and growing beautifully at a steady, healthy pace.";
+              ? 'Ang tangkad ng iyong anak ay nasa loob ng standard range para sa kaniyang edad. Ipinapakita nito na maganda at tuloy-tuloy ang kaniyang pagtangkad sa malusog na pamamaraan.'
+              : "Your child's height is within the standard range for their age. This shows they are stretching up and growing beautifully at a steady, healthy pace.";
         } else {
           displayText = isFilipino
-              ? 'Ang tangkad ng iyong anak ay bahagyang mas mataas sa standard range para sa kaniyang edad. Ibig sabihin, mas matangkad siya kaysa sa karaniwan, na nagpapakita ng magandang paglaki ng kaniyang mga buto at katawan.'
-              : "Your child's height is slightly above the standard range for their age. This indicates they are taller than average for their age, showing active bone development and growth.";
+              ? 'Ang tangkad ng iyong anak ay mas mataas sa standard range para sa kaniyang edad. Ibig sabihin, mas matangkad siya kaysa sa karaniwan, na nagpapakita ng magandang paglaki ng kaniyang mga buto at katawan.'
+              : "Your child's height is above the standard range for their age. This indicates they are taller than average for their age, showing active bone development and growth.";
         }
       }
     }

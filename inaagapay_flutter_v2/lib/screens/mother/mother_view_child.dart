@@ -616,24 +616,23 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
   }
 
   String _bmiStatus(double bmi) {
-    if (latestGrowth == null || childData == null) return 'Within expected standard range';
+    if (latestGrowth == null || childData == null) {
+      return 'Within standard range';
+    }
     final sex = (childData!['sex'] as String?) ?? 'female';
     final ageWeeks = _ageInWeeks(DateTime.parse(latestGrowth!['created_at']));
-    final zScore = GrowthCalculator.calculateBMIZScore(bmi, ageWeeks, sex);
-
-    if (zScore == null) return 'Within expected standard range';
-    if (zScore < -1) return 'Slightly below standard range';
-    if (zScore <= 1) return 'Within expected standard range';
-    return 'Slightly above standard range';
+    return GrowthCalculator.bandLabel(
+      GrowthCalculator.calculateBMIZScore(bmi, ageWeeks, sex),
+    );
   }
 
   Color _bmiStatusColor(String status) {
     switch (status) {
-      case 'Slightly below standard range':
+      case 'Below standard range':
         return Colors.orange; // Yellow/Orange
-      case 'Within expected standard range':
+      case 'Within standard range':
         return AppColors.success; // Green
-      case 'Slightly above standard range':
+      case 'Above standard range':
         return Colors.orange; // Yellow/Orange
       default:
         return AppColors.textSecondary;
@@ -674,15 +673,15 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                _t('• Within expected standard range (Green): between -1 and +1 Z-score.', '• Naaayon sa inaasahang pamantayan (Green): nasa pagitan ng -1 at +1 Z-score.'),
+                _t('• Within standard range (Green): between -2 and +2 Z-score.', '• Nasa loob ng pamantayan (Green): nasa pagitan ng -2 at +2 Z-score.'),
                 style: const TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w600),
               ),
               Text(
-                _t('• Slightly below standard range (Yellow): less than -1 Z-score.', '• Medyo mababa sa pamantayan (Yellow): mas mababa sa -1 Z-score.'),
+                _t('• Below standard range (Yellow): less than -2 Z-score.', '• Mababa sa pamantayan (Yellow): mas mababa sa -2 Z-score.'),
                 style: const TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600),
               ),
               Text(
-                _t('• Slightly above standard range (Yellow): greater than +1 Z-score.', '• Medyo mataas sa pamantayan (Yellow): mas mataas sa +1 Z-score.'),
+                _t('• Above standard range (Yellow): greater than +2 Z-score.', '• Mataas sa pamantayan (Yellow): mas mataas sa +2 Z-score.'),
                 style: const TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600),
               ),
             ],
@@ -828,7 +827,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
     final latestAgeWeeks = _ageInWeeks(DateTime.parse(latestGrowth!['created_at']));
     final childSex = (childData!['sex'] as String?) ?? 'female';
 
-    final status = latestBMI != null ? _bmiStatus(latestBMI) : 'Within expected standard range';
+    final status = latestBMI != null ? _bmiStatus(latestBMI) : 'Within standard range';
     final bmiColor = _bmiStatusColor(status);
 
     final heightZ = GrowthCalculator.calculateHeightZScore(latestHeight, latestAgeWeeks, childSex);
@@ -998,36 +997,41 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
     final heightZ = GrowthCalculator.calculateHeightZScore(height, ageWeeks, sex);
     final weightZ = GrowthCalculator.calculateWeightZScore(weight, ageWeeks, sex);
 
-    if (status == 'Slightly below standard range') {
-      if (weightZ != null && weightZ < -1 && heightZ != null && heightZ > 1) {
-        return 'Both the child\'s weight is slightly below expected range and height is slightly above expected range, contributing to the lower BMI.';
+    const sd = GrowthCalculator.whoStandardSd;
+
+    if (status == 'Below standard range') {
+      if (weightZ != null && weightZ < -sd && heightZ != null && heightZ > sd) {
+        return 'Your child\'s weight is below and height is above the standard range for their age, which together lower the BMI.';
       }
-      if (weightZ != null && weightZ < -1) {
-        return 'The child\'s weight is slightly below the standard range for their age, contributing to the lower BMI.';
+      if (weightZ != null && weightZ < -sd) {
+        return 'Your child\'s weight is below the standard range for their age, contributing to the lower BMI.';
       }
-      if (heightZ != null && heightZ > 1) {
-        return 'The child\'s height is slightly above the standard range for their age, which contributes to a lower BMI relative to their frame.';
+      if (heightZ != null && heightZ > sd) {
+        return 'Your child\'s height is above the standard range for their age, which lowers the BMI relative to their frame.';
       }
-      if (weightZ != null && weightZ >= -1 && heightZ != null && heightZ <= 1) {
-        return 'Although the child\'s height and weight are both individually within expected ranges, the weight is on the lower side relative to their height, resulting in a slightly lower BMI.';
+      return 'Your child\'s weight is lower than typical for their height at this age, resulting in a lower BMI.';
+    } else if (status == 'Above standard range') {
+      if (weightZ != null && weightZ > sd && heightZ != null && heightZ < -sd) {
+        return 'Your child\'s weight is above and height is below the standard range for their age, which together raise the BMI.';
       }
-      return 'The child\'s weight is lower than typical for their height at this age, resulting in a lower BMI.';
-    } else if (status == 'Slightly above standard range') {
-      if (weightZ != null && weightZ > 1 && heightZ != null && heightZ < -1) {
-        return 'Both the child\'s weight is slightly above expected range and height is slightly below expected range, contributing to the higher BMI.';
+      if (weightZ != null && weightZ > sd) {
+        return 'Your child\'s weight is above the standard range for their age, contributing to the higher BMI.';
       }
-      if (weightZ != null && weightZ > 1) {
-        return 'The child\'s weight is slightly above the standard range for their age, contributing to the higher BMI.';
+      if (heightZ != null && heightZ < -sd) {
+        return 'Your child\'s height is below the standard range for their age, which raises the BMI relative to their frame.';
       }
-      if (heightZ != null && heightZ < -1) {
-        return 'The child\'s height is slightly below the standard range for their age, which contributes to a higher BMI relative to their frame.';
-      }
-      if (weightZ != null && weightZ <= 1 && heightZ != null && heightZ >= -1) {
-        return 'Although the child\'s height and weight are both individually within expected ranges, the weight is on the higher side relative to their height, resulting in a slightly higher BMI.';
-      }
-      return 'The child\'s weight is higher than typical for their height at this age, resulting in a higher BMI.';
+      return 'Your child\'s weight is higher than typical for their height at this age, resulting in a higher BMI.';
     } else {
-      return 'The child\'s height and weight are both within the expected standard range for this age, resulting in a standard BMI.';
+      // BMI can sit inside the range while weight and height are both outside
+      // it — a small but proportionate child. Claiming "both within" would
+      // contradict the figures shown alongside this text.
+      final weightOut = weightZ != null && weightZ.abs() > sd;
+      final heightOut = heightZ != null && heightZ.abs() > sd;
+
+      if (weightOut || heightOut) {
+        return 'Your child\'s BMI is within the standard range because weight and height are in proportion, though ${weightOut && heightOut ? 'both are' : (weightOut ? 'weight-for-age is' : 'height-for-age is')} outside the standard range for this age. Your midwife will keep an eye on overall growth.';
+      }
+      return 'Your child\'s height and weight are both within the standard range for this age, resulting in a healthy BMI.';
     }
   }
 
@@ -1261,10 +1265,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
   }
 
   String _describeZScoreLocal(double? zScore) {
-    if (zScore == null) return 'Within expected standard range';
-    if (zScore < -1) return 'Slightly below standard range';
-    if (zScore <= 1) return 'Within expected standard range';
-    return 'Slightly above standard range';
+    return GrowthCalculator.bandLabel(zScore);
   }
 
   String _describeZScoreFilipinoLocal(double? zScore) {
@@ -1475,12 +1476,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
       return '- Week $weeks: ${heightVal.toStringAsFixed(1)} cm, ${weightVal.toStringAsFixed(1)} kg, BMI ${bmiVal.toStringAsFixed(1)}';
     }).join('\n');
 
-    String getStatus(double? z) {
-      if (z == null || z.isNaN || z.isInfinite) return 'Within expected standard range';
-      if (z < -1) return 'Slightly below standard range';
-      if (z <= 1) return 'Within expected standard range';
-      return 'Slightly above standard range';
-    }
+    String getStatus(double? z) => GrowthCalculator.bandLabel(z);
 
     final heightStatus = getStatus(heightZ);
     final weightStatus = getStatus(weightZ);
@@ -1497,7 +1493,7 @@ Refer to the child by their first name or as "your little one" ("iyong munting a
 Provide the response in both English and Filipino.
 Use the exact output format below. Do not add extra sections, titles, bullet points, or tables.
 
-Please carefully note the status indicators: "Within expected standard range", "Slightly above standard range", or "Slightly below standard range". 
+Please carefully note the status indicators: "Within standard range", "Above standard range", or "Below standard range". 
 - If any measurement is slightly above standard range, reassure the parent warmly and concisely (e.g. "Baby [Name] is growing well! Even though it seems like [his/her] [weight/height/BMI] is a bit higher than most babies [his/her] age, [he/she]'s gaining steadily and will catch up!").
 - If any measurement is slightly below standard range, reassure them warmly and concisely (e.g. "Baby [Name] is growing well! Even though [his/her] [weight/height/BMI] is a bit lower than most babies [his/her] age, [he/she]'s growing steadily and will catch up at [his/her] own pace!").
 - If everything is within expected range, celebrate their steady growth concisely (e.g. "Baby [Name] is doing great! [His/Her] growth is right on track, and [he/she] is growing steadily and beautifully!").

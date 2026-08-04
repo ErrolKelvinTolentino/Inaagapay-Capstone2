@@ -29,6 +29,13 @@ class MidwifeDashboard extends StatefulWidget {
 
 class _MidwifeDashboardState extends State<MidwifeDashboard> {
   bool _isLoading = true;
+
+  /// True between the header rendering and the visit data arriving.
+  ///
+  /// Without this, the recent-visits and chart sections cannot tell "still
+  /// fetching" from "nothing found", so they flash their empty state on every
+  /// load before the real data replaces it.
+  bool _detailsLoading = false;
   String? _errorMessage;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -354,32 +361,27 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         }
       }
 
-      // Render core dashboard header & stats immediately
+      // Render core dashboard header & stats immediately. Recent visits and the
+      // visits chart are still empty at this point, so _detailsLoading keeps
+      // them showing a loading state rather than "no records" — those sections
+      // only mean "nothing found" once this second stage has finished.
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _detailsLoading = true;
         });
       }
 
-      // Resolve real BHC patient numbers after the first paint so this query
-      // never sits in front of the header render. Entries are mutated in place,
-      // so _pregnancyToMotherMap (built later, from these same maps) picks them
-      // up without a second lookup.
-      final patientNumbersByAccountId =
-          await SupabaseService.getPatientNumbersByAccountId(
+      // Started here but awaited below, so it runs alongside the stage-two
+      // queries instead of delaying them. It must resolve before recent visits
+      // are built, since those render the patient number.
+      final patientNumbersFuture = SupabaseService.getPatientNumbersByAccountId(
         _allMothers
             .map((m) => m['account_id'] as int?)
             .whereType<int>()
             .toList(),
         facilityId: assignedBhcId,
       );
-      if (patientNumbersByAccountId.isNotEmpty) {
-        for (final mother in _allMothers) {
-          mother['bhc_patient_id'] = SupabaseService.formatPatientNumber(
-            patientNumbersByAccountId[mother['account_id'] as int?],
-          );
-        }
-      }
 
       // Get registered children count and load for search
       if (_motherIds.isNotEmpty) {
@@ -424,6 +426,17 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 return <Map<String, dynamic>>[];
               }),
         ]);
+
+        // Ran concurrently with the batch above. Applied here, before recent
+        // visits are assembled, because those rows display the patient number.
+        final patientNumbersByAccountId = await patientNumbersFuture;
+        if (patientNumbersByAccountId.isNotEmpty) {
+          for (final mother in _allMothers) {
+            mother['bhc_patient_id'] = SupabaseService.formatPatientNumber(
+              patientNumbersByAccountId[mother['account_id'] as int?],
+            );
+          }
+        }
 
         final childrenResponse = responses[0] as List<dynamic>;
         final allPregnanciesResponse = responses[1] as List<dynamic>;
@@ -848,10 +861,12 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
       setState(() {
         _isLoading = false;
+        _detailsLoading = false;
       });
     } catch (e) {
       setState(() {
         _isLoading = false;
+        _detailsLoading = false;
         _errorMessage = e.toString();
       });
       if (kDebugMode) {
@@ -1563,6 +1578,42 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     return 'Welcome, ${_midwifeName.split(' ').first}! 🌸';
   }
 
+  /// Placeholder for a dashboard section whose data is still loading.
+  ///
+  /// Matches the empty-state card's shape so the layout does not jump when the
+  /// real content arrives.
+  Widget _buildSectionLoadingCard(String message) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.cardColorOf(context),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.borderOf(context)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: AppColors.brandPrimary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondaryOf(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _getChartInsight() {
     int maxIndex = 0;
     int maxValue = 0;
@@ -2038,6 +2089,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                             MidwifeHistoryCard(
                               visits: _recentVisits,
                             )
+                          else if (_detailsLoading)
+                            _buildSectionLoadingCard('Loading recent visits...')
                           else
                             Container(
                               padding: const EdgeInsets.all(24),
@@ -2094,6 +2147,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                               latestValue: null,
                               insightText: _getChartInsight(),
                             )
+                          else if (_detailsLoading)
+                            _buildSectionLoadingCard('Loading visit data...')
                           else
                             Container(
                               padding: const EdgeInsets.all(24),

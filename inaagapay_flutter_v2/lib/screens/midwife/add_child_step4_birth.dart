@@ -635,6 +635,19 @@ class _AddChildStep4BirthState extends State<AddChildStep4Birth> {
     }
   }
 
+  /// The signed-in midwife's midwife_id, for registrar attribution.
+  Future<int?> _resolveMidwifeId() async {
+    try {
+      final accountId = await AuthStorage.getUserId();
+      if (accountId == null) return null;
+      final ctx = await SupabaseService.getMidwifeContext(accountId);
+      return ctx['midwife_id'] as int?;
+    } catch (e) {
+      debugPrint('Could not resolve registering midwife: $e');
+      return null;
+    }
+  }
+
   Future<void> _saveChild() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -686,6 +699,13 @@ class _AddChildStep4BirthState extends State<AddChildStep4Birth> {
       final bhcId = widget.assignedBhcId ?? await _resolveMidwifeBhcId();
       if (bhcId != null) {
         childData['assigned_bhc_id'] = bhcId;
+      }
+
+      // Records which midwife registered this child, mirroring
+      // mothers.registered_by_midwife_id.
+      final midwifeId = await _resolveMidwifeId();
+      if (midwifeId != null) {
+        childData['registered_by_midwife_id'] = midwifeId;
       }
 
       if (widget.mode == ChildParentMode.registeredMother &&
