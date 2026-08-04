@@ -9,6 +9,7 @@ import '../../widgets/records_display_card.dart';
 import '../../widgets/status_indicator.dart';
 import '../../services/groq_service.dart';
 import '../../services/growth_calculator.dart';
+import '../../services/supabase_service.dart';
 import 'add_growth_step1.dart';
 import 'add_immunization_page.dart';
 import 'child_growth_list_page.dart';
@@ -556,6 +557,39 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
                 showWeekBadge: false,
                 showHeartRow: false,
               ),
+
+              // ── Child Number ───────────────────────────────────
+              // Hidden when absent rather than showing a placeholder id, so a
+              // child registered before the child_number migration simply has
+              // no badge instead of a misleading one.
+              if (SupabaseService.formatChildNumber(
+                    childData?['child_number'] as int?,
+                  ) !=
+                  null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.brandPrimary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Text(
+                    SupabaseService.formatChildNumber(
+                      childData?['child_number'] as int?,
+                    )!,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.brandPrimary,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 20),
 

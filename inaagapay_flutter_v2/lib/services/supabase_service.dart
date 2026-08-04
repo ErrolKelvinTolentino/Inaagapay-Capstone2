@@ -1222,6 +1222,117 @@ class SupabaseService {
     return result[accountId];
   }
 
+  /// Display format for `children.child_number`.
+  ///
+  /// Same contract as [formatPatientNumber]: null in, null out, so a child
+  /// without an assigned number renders a placeholder instead of a fake id.
+  static String? formatChildNumber(int? childNumber) {
+    if (childNumber == null) return null;
+    return 'NAK-${childNumber.toString().padLeft(3, '0')}';
+  }
+
+  /// Counts registered children per mother in a single query.
+  ///
+  /// Used by the child-registration mother picker, which shows a child count on
+  /// every row — one query for the page instead of one per mother.
+  static Future<Map<int, int>> getChildCountsByMotherId(
+    List<int> motherIds,
+  ) async {
+    if (motherIds.isEmpty) return {};
+
+    try {
+      final rows = await client
+          .from('children')
+          .select('mother_id')
+          .inFilter('mother_id', motherIds)
+          .timeout(const Duration(seconds: 5));
+
+      final Map<int, int> counts = {for (final id in motherIds) id: 0};
+      for (final row in rows) {
+        final motherId = row['mother_id'] as int?;
+        if (motherId != null && counts.containsKey(motherId)) {
+          counts[motherId] = counts[motherId]! + 1;
+        }
+      }
+      return counts;
+    } catch (e) {
+      if (kDebugMode) debugPrint('getChildCountsByMotherId note: $e');
+      return {};
+    }
+  }
+
+  /// Dates of a mother's previous live births, newest first.
+  ///
+  /// Used to pre-fill the child birth date during registration: when a mother
+  /// already recorded her pregnancy history, the birth dates are known and the
+  /// midwife should not have to retype them.
+  ///
+  /// Only `live_birth` outcomes are returned. Every other outcome in the schema
+  /// (miscarriage, stillbirth, abortion, ectopic, fetal_loss, vanishing_twin)
+  /// produced no living child, so offering those dates would invite registering
+  /// a child against a pregnancy that did not result in one.
+  static Future<List<DateTime>> getLiveBirthDatesForMother(int motherId) async {
+    try {
+      // Resolved in two steps rather than one embedded filter. This is an
+      // optional convenience, so a PostgREST embedding quirk should not make it
+      // fail quietly — plain `in` filters behave predictably.
+      final pregnancyRows = await client
+          .from('pregnancies')
+          .select('pregnancy_id')
+          .eq('mother_id', motherId)
+          .timeout(const Duration(seconds: 5));
+
+      final pregnancyIds = (pregnancyRows as List)
+          .map((row) => row['pregnancy_id'] as int?)
+          .whereType<int>()
+          .toList();
+
+      if (pregnancyIds.isEmpty) return [];
+
+      final rows = await client
+          .from('pregnancy_outcomes')
+          .select('outcome_date')
+          .inFilter('pregnancy_id', pregnancyIds)
+          .eq('outcome', 'live_birth')
+          .timeout(const Duration(seconds: 5));
+
+      final dates = <DateTime>{};
+      for (final row in rows) {
+        final raw = row['outcome_date']?.toString();
+        if (raw == null || raw.isEmpty) continue;
+        final parsed = DateTime.tryParse(raw);
+        // Twins share one outcome_date; the Set collapses them into one option.
+        if (parsed != null) {
+          dates.add(DateTime(parsed.year, parsed.month, parsed.day));
+        }
+      }
+
+      return dates.toList()..sort((a, b) => b.compareTo(a));
+    } catch (e) {
+      if (kDebugMode) debugPrint('getLiveBirthDatesForMother note: $e');
+      return [];
+    }
+  }
+
+  /// Resolves the formatted NAK child number for a single child.
+  ///
+  /// Returns null when the migration adding `children.child_number` has not
+  /// been applied yet, so the UI degrades to a placeholder instead of erroring.
+  static Future<String?> getChildNumber(int childId) async {
+    try {
+      final row = await client
+          .from('children')
+          .select('child_number')
+          .eq('child_id', childId)
+          .maybeSingle();
+
+      return formatChildNumber(row?['child_number'] as int?);
+    } catch (e) {
+      if (kDebugMode) debugPrint('getChildNumber note: $e');
+      return null;
+    }
+  }
+
   /// Resolves the formatted BHC patient number for a mother, by mother_id.
   ///
   /// Kept off the main profile fetch so it loads the same way the profile

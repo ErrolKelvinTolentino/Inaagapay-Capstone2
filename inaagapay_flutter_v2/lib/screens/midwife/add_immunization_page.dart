@@ -8,6 +8,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/secondary_header.dart';
 import '../../widgets/page_title.dart';
 import '../../widgets/app_input_field.dart';
+import '../../widgets/branded_date_picker.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/dialog_box.dart';
 import '../../widgets/confirmation_dialog_box.dart';
@@ -605,17 +606,20 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
       _selectedVaccineId != null && _selectedDate != null;
 
   Future<void> _selectDate() async {
-    final picked = await showDatePicker(
+    final picked = await showBrandedDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDate: _selectedDate ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
+      helpText: 'SELECT VACCINATION DATE',
     );
 
     if (picked != null) {
       setState(() {
         _selectedDate = picked;
-        _dateController.text = DateFormat('yyyy-MM-dd').format(picked);
+        // Display only — the row written to the database is built from
+        // _selectedDate, so the readable format here is safe.
+        _dateController.text = DateFormat('MMMM d, yyyy').format(picked);
       });
     }
   }
