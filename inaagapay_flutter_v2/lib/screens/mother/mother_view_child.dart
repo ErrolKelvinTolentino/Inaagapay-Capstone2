@@ -1269,10 +1269,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
   }
 
   String _describeZScoreFilipinoLocal(double? zScore) {
-    if (zScore == null) return 'naaayon sa inaasahang pamantayan';
-    if (zScore < -1) return 'medyo mababa sa pamantayan';
-    if (zScore <= 1) return 'naaayon sa inaasahang pamantayan';
-    return 'medyo mataas sa pamantayan';
+    return GrowthCalculator.bandForZScore(zScore).labelFilipino;
   }
 
   void _runBackgroundAiAnalysis(int childDetailsId, double height, double weight, double bmi) async {

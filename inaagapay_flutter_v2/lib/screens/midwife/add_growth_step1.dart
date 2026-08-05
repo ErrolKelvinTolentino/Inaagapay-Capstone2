@@ -790,13 +790,6 @@ $recordsSummary
     }
   }
 
-  Color _zScoreColor(double? zScore) {
-    if (zScore == null) return AppColors.textSecondary;
-    if (zScore < -2 || zScore > 2) return AppColors.error;
-    if (zScore < -1 || zScore > 1) return AppColors.warning;
-    return AppColors.success;
-  }
-
   void _showReferenceDialog() {
     showDialog(
       context: context,
