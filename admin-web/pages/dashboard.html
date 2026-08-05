@@ -417,6 +417,7 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="common-security.js"></script>
+    <script src="live-refresh.js"></script>
     <script>
       (function () {
         const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
@@ -940,6 +941,22 @@
         loadMonthlyChart();
         loadInventoryChart();
         loadAuditTrail();
+        window.AdminLiveRefresh?.start({
+          db,
+          tables: [
+            "accounts", "mothers", "midwives", "children", "pregnancies",
+            "bhc", "health_facilities", "inventory_items", "inventory_batches",
+            "inventory_transactions", "audit_trail"
+          ],
+          refresh: () => Promise.all([
+            loadStats(),
+            loadRiskChart(),
+            loadBhcChart(),
+            loadMonthlyChart(),
+            loadInventoryChart(),
+            loadAuditTrail(),
+          ]),
+        });
       })();
     </script>
   </body>

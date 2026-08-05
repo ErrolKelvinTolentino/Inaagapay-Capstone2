@@ -226,6 +226,95 @@ img {
   gap: 14px;
 }
 
+.live-sync-control {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition),
+    color var(--transition), transform var(--transition-fast);
+}
+
+.live-sync-control:hover {
+  border-color: var(--brand-primary-30);
+  background: var(--brand-secondary);
+  color: var(--brand-text);
+}
+
+.live-sync-control:active {
+  transform: scale(0.98);
+}
+
+.live-sync-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+}
+
+.live-sync-icon {
+  font-size: 11px;
+}
+
+.live-sync-control[data-state="live"] {
+  color: #318f7d;
+  border-color: rgba(104, 203, 184, 0.35);
+  background: var(--success-10);
+}
+
+.live-sync-control[data-state="live"] .live-sync-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 4px rgba(104, 203, 184, 0.15);
+}
+
+.live-sync-control[data-state="syncing"] {
+  color: var(--brand-text);
+  border-color: var(--brand-primary-30);
+  background: var(--brand-primary-10);
+}
+
+.live-sync-control[data-state="syncing"] .live-sync-dot {
+  background: var(--brand-primary);
+}
+
+.live-sync-control[data-state="syncing"] .live-sync-icon,
+.live-sync-control[data-state="connecting"] .live-sync-icon {
+  animation: liveSyncSpin 0.9s linear infinite;
+}
+
+.live-sync-control[data-state="fallback"] .live-sync-dot,
+.live-sync-control[data-state="connecting"] .live-sync-dot {
+  background: var(--warning);
+}
+
+.live-sync-control[data-state="offline"],
+.live-sync-control[data-state="error"] {
+  color: var(--error);
+  border-color: rgba(229, 115, 115, 0.35);
+  background: var(--error-10);
+}
+
+.live-sync-control[data-state="offline"] .live-sync-dot,
+.live-sync-control[data-state="error"] .live-sync-dot {
+  background: var(--error);
+}
+
+@keyframes liveSyncSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .header-badge {
   background: var(--brand-primary-10);
   color: var(--brand-primary);
@@ -1573,6 +1662,13 @@ table.data-table tbody tr:hover td {
 }
 
 @media (max-width: 576px) {
+  .live-sync-control {
+    min-width: 34px;
+    justify-content: center;
+    padding: 6px 8px;
+  }
+
+  .live-sync-label,
   .header-user-name {
     display: none;
   }

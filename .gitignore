@@ -66,6 +66,9 @@ pubspec.lock
 # Coverage / reports
 coverage/
 
+# Hosting provider local metadata
+**/.vercel/
+
 # Keep safe example file
 !.env.example
 inaagapay-1728f4916cfb.json

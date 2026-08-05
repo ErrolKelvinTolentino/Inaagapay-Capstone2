@@ -500,6 +500,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
     <script src="common-security.js"></script>
+    <script src="live-refresh.js"></script>
     <script>
       (function () {
         const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
@@ -1126,6 +1127,15 @@
           btn.innerHTML =
             '<i class="fa-solid fa-user-plus"></i> Create Account';
         }
+
+        window.AdminLiveRefresh?.start({
+          db,
+          tables: ["bhc", "health_facilities"],
+          refresh: loadBhc,
+          canRefresh: (source) =>
+            source === "manual" ||
+            !document.getElementById("create-form")?.matches(":focus-within"),
+        });
       })();
     </script>
   </body>
