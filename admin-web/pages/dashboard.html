@@ -142,15 +142,16 @@
         font-weight: 600;
         display: inline-block;
       }
-      .badge-admin { background: #e3f2fd; color: #1976d2; }
-      .badge-midwife { background: #f3e5f5; color: #7b1fa2; }
-      .badge-mother { background: #fce4ec; color: #c2185b; }
-      .badge-active { background: #e8f5e9; color: #388e3c; }
-      .badge-inactive { background: #f5f5f5; color: #666; }
-      .badge-suspended { background: #ffebee; color: #d32f2f; }
-      .badge-low { background: #e8f5e9; color: #2e7d32; }
-      .badge-medium { background: #fff3e0; color: #e65100; }
-      .badge-high { background: #ffebee; color: #d32f2f; }
+      .badge-admin { background: rgba(255, 104, 165, 0.15); color: var(--brand-text); border: 1px solid rgba(255, 104, 165, 0.25); }
+      .badge-midwife { background: rgba(255, 104, 165, 0.12); color: var(--brand-primary); }
+      .badge-mother { background: #FFF5F8; color: var(--brand-accent); }
+      .badge-teal { background: rgba(16, 185, 129, 0.12); color: #059669; }
+      .badge-active { background: rgba(16, 185, 129, 0.15); color: #059669; }
+      .badge-inactive { background: #F5F5F5; color: var(--text-secondary); }
+      .badge-suspended { background: rgba(220, 38, 38, 0.12); color: #dc2626; }
+      .badge-low { background: rgba(16, 185, 129, 0.15); color: #059669; }
+      .badge-medium { background: rgba(217, 119, 6, 0.15); color: #d97706; }
+      .badge-high { background: rgba(220, 38, 38, 0.15); color: #dc2626; }
     </style>
   </head>
   <body>
@@ -165,7 +166,7 @@
           <img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" />
         </div>
         <div class="header-right">
-          <span class="header-badge">Admin Portal</span>
+          <span class="header-badge">RHU Portal</span>
           <div class="header-user" id="header-user-btn">
             <div class="header-avatar" id="header-avatar">A</div>
             <span class="header-user-name" id="header-user-name">Admin</span>

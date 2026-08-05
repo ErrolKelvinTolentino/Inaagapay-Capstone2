@@ -143,4 +143,51 @@
     const str = String(phone).trim();
     return /^(09|\+639)\d{9}$/.test(str);
   };
+
+  // 6. Custom RHU Confirmation Modal (Replaces browser confirm/alert popups)
+  window.openConfirmationModal = function (options) {
+    const opts = Object.assign({
+      title: "Confirm Action",
+      message: "Are you sure you want to proceed with this operation?",
+      icon: "fa-solid fa-circle-question",
+      confirmText: "Proceed",
+      cancelText: "Cancel",
+      isDanger: false,
+      onConfirm: () => {}
+    }, options || {});
+
+    const existing = document.getElementById("rhu-confirmation-modal-overlay");
+    if (existing) existing.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "rhu-confirmation-modal-overlay";
+    overlay.className = "rhu-modal-overlay";
+    overlay.innerHTML = `
+      <div class="rhu-modal-card">
+        <div class="rhu-modal-header">
+          <i class="${opts.icon}"></i>
+          <h3 class="rhu-modal-title">${opts.title}</h3>
+        </div>
+        <div class="rhu-modal-body">
+          <p style="margin:0;font-size:14px;color:var(--text-primary);line-height:1.5;">${opts.message}</p>
+          <div class="rhu-dpa-notice">
+            <i class="fa-solid fa-user-shield"></i>
+            <span>Data Privacy Act (RA 10173): Action will be logged for security compliance.</span>
+          </div>
+        </div>
+        <div class="rhu-modal-footer">
+          <button class="btn btn-secondary btn-sm" id="rhu-confirm-cancel-btn" style="min-width:90px;">${opts.cancelText}</button>
+          <button class="btn ${opts.isDanger ? 'btn-danger' : 'btn-primary'} btn-sm" id="rhu-confirm-action-btn" style="min-width:100px;">${opts.confirmText}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    document.getElementById("rhu-confirm-cancel-btn").addEventListener("click", () => overlay.remove());
+    document.getElementById("rhu-confirm-action-btn").addEventListener("click", () => {
+      overlay.remove();
+      if (typeof opts.onConfirm === "function") opts.onConfirm();
+    });
+  };
 })();
+

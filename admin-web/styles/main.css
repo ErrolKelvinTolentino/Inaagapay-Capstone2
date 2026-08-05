@@ -1773,12 +1773,12 @@ table.data-table tbody tr:hover td {
 }
 
 .network-status-banner.offline {
-  background: #f43f5e;
+  background: var(--brand-accent);
   color: #ffffff;
 }
 
 .network-status-banner.online {
-  background: #10b981;
+  background: var(--brand-primary);
   color: #ffffff;
 }
 
@@ -1787,3 +1787,119 @@ table.data-table tbody tr:hover td {
   font-family: monospace;
   color: var(--text-secondary);
 }
+
+/* ── Password Reveal Suppress (Native Edge/IE toggle hide) ── */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none !important;
+}
+
+/* ── Password Toggle Pink Styling ── */
+.pwd-toggle,
+.pwd-toggle-btn {
+  color: var(--brand-primary) !important;
+}
+.pwd-toggle:hover,
+.pwd-toggle-btn:hover {
+  color: var(--brand-accent) !important;
+}
+
+/* ── Expiring Countdown Badges ── */
+.badge-expiring-days {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.badge-expiring-critical {
+  background: rgba(229, 115, 115, 0.15);
+  color: #D32F2F;
+  border: 1px solid rgba(229, 115, 115, 0.3);
+}
+.badge-expiring-warning {
+  background: rgba(255, 181, 98, 0.18);
+  color: #C77700;
+  border: 1px solid rgba(255, 181, 98, 0.35);
+}
+.badge-expiring-good {
+  background: rgba(255, 104, 165, 0.1);
+  color: var(--brand-primary);
+  border: 1px solid var(--brand-primary-30);
+}
+
+/* ── Data Privacy Act & Custom Confirmation Modal ── */
+.rhu-dpa-notice {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--brand-secondary);
+  border: 1px dashed var(--brand-primary-30);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rhu-dpa-notice i {
+  color: var(--brand-primary);
+  font-size: 14px;
+}
+
+.rhu-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(45, 45, 45, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+.rhu-modal-card {
+  background: #FFFFFF;
+  border-radius: var(--radius-dialog, 24px);
+  border: 1px solid var(--border-primary, #F0F0F0);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+  max-width: 480px;
+  width: 100%;
+  overflow: hidden;
+  animation: slideUp 0.2s ease;
+}
+.rhu-modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rhu-modal-header i {
+  font-size: 22px;
+  color: var(--brand-primary);
+}
+.rhu-modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--brand-text);
+  margin: 0;
+}
+.rhu-modal-body {
+  padding: 20px 24px;
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+.rhu-modal-footer {
+  padding: 14px 24px 20px;
+  background: var(--brand-secondary);
+  border-top: 1px solid var(--border-primary);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+

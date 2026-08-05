@@ -39,7 +39,7 @@
           />
         </div>
         <div class="header-right">
-          <span class="header-badge">Admin Portal</span>
+          <span class="header-badge">RHU Portal</span>
           <div class="header-user">
             <div class="header-avatar" id="header-avatar">A</div>
             <span class="header-user-name" id="header-user-name">Admin</span>
@@ -532,34 +532,37 @@
           const tbody = document.getElementById("mothers-tbody");
           const search = document.getElementById("search-mothers")?.value.toLowerCase() || "";
           const bhcFilter = document.getElementById("filter-bhc-mothers")?.value || "";
-          if (!cachedMothers) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...<\/td><\/tr>'; return; }
+          if (!cachedMothers) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
           
           let filtered = cachedMothers.filter(m => {
             const name = [m.accounts?.first_name, m.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
-            if (search && !(name.includes(search) || (m.accounts?.email_address||"").toLowerCase().includes(search) || (m.barangay||"").toLowerCase().includes(search))) return false;
-            if (bhcFilter && m.assigned_bhc_id != bhcFilter) return false;
+            const email = (m.accounts?.email_address || "").toLowerCase();
+            const barangay = (m.barangay || "").toLowerCase();
+            if (search && !name.includes(search) && !email.includes(search) && !barangay.includes(search)) return false;
+            if (bhcFilter && String(m.assigned_bhc_id) !== String(bhcFilter)) return false;
             return true;
           });
-          document.getElementById("total-badge").textContent = `${filtered.length} mothers`;
           document.getElementById("mothers-count").textContent = filtered.length;
+          document.getElementById("total-badge").textContent = `${filtered.length} records`;
+
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-users-slash"></i> No mothers found.<\/td><\/tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-folder-open"></i> No mothers found.</td></tr>';
             return;
           }
           tbody.innerHTML = filtered.map(m => {
             const name = [m.accounts?.first_name, m.accounts?.last_name].filter(Boolean).join(" ") || "—";
             const initials = name.charAt(0) || "?";
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern">${esc(initials)}</div><span style="font-weight:600;">${esc(name)}</span></div></td>
-              <td>${maskEmail(m.accounts?.email_address)}</td>
-              <td>${esc(m.barangay || "—")}</td>
+              <td><div class="mother-info"><div class="avatar-modern">${esc(initials)}</div><span style="font-weight:600;">${maskText(name)}</span></div></td>
+              <td>${maskText(m.accounts?.email_address)}</td>
+              <td>${maskText(m.barangay)}</td>
               <td><span class="badge badge-admin">${esc(m.bhc?.bhc_name || "—")}</span></td>
-              <td>${fmtDate(m.birthdate)}</div>
-              <td><span class="badge-modern ${m.status === 'active' ? 'badge-active' : 'badge-inactive'}">${m.status || "active"}</span></div>
+              <td>${fmtDate(m.birthdate)}</td>
+              <td><span class="badge-modern ${m.status === 'active' ? 'badge-active' : 'badge-inactive'}">${m.status || "active"}</span></td>
               <td style="text-align:center;">
                 <button class="view-btn-modern" onclick="viewMotherDetails(${m.mother_id})"><i class="fa-solid fa-eye"></i> View</button>
                 <button class="view-btn-modern" style="background: var(--brand-primary); color: white; margin-left: 6px;" onclick="analyzeMother(${m.mother_id})"><i class="fa-solid fa-microchip"></i> Analyze</button>
-              </div>
+              </td>
             </tr>`;
           }).join("");
         }
@@ -569,7 +572,7 @@
           const search = document.getElementById("search-pregnancies")?.value.toLowerCase() || "";
           const riskFilter = document.getElementById("filter-risk")?.value || "";
           const statusFilter = document.getElementById("filter-pregnancy-status")?.value || "";
-          if (!cachedPregnancies) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...<\/td><\/tr>'; return; }
+          if (!cachedPregnancies) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
           
           let filtered = cachedPregnancies.filter(p => {
             const motherName = [p.mothers?.accounts?.first_name, p.mothers?.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
@@ -580,7 +583,7 @@
           });
           document.getElementById("pregnancies-count").textContent = filtered.length;
           if (filtered.length === 0) {
-            tbody.innerHTML = '</tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-person-pregnant"></i> No pregnancies found.<\/td><\/tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-person-pregnant"></i> No pregnancies found.</td></tr>';
             return;
           }
           tbody.innerHTML = filtered.map(p => {
@@ -588,24 +591,24 @@
             const riskClass = p.pregnancy_risk_level === 'low' ? 'badge-low' : (p.pregnancy_risk_level === 'medium' ? 'badge-medium' : 'badge-high');
             const statusClass = p.status === 'ongoing' ? 'badge-ongoing' : 'badge-ended';
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--warning);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${esc(name)}</span></div></td>
-              <td>${fmtDate(p.last_menstrual_period)}</div>
-              <td>${fmtDate(p.expected_date_of_delivery)}</div>
-              <td><span class="badge-modern ${riskClass}">${p.pregnancy_risk_level || "—"}</span></div>
-              <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">👶 ${p.fetal_count || 1}</span></div>
-              <td><span class="badge-modern ${statusClass}">${p.status}</span></div>
-              <td style=\"text-align:center;\">
-                <button class=\"view-btn-modern\" onclick=\"viewPregnancyDetails(${p.pregnancy_id})\"><i class=\"fa-solid fa-eye\"></i> View</button>
-                <button class=\"view-btn-modern\" style=\"background: var(--brand-primary); color: white; margin-left: 6px;\" onclick=\"analyzePregnancy(${p.pregnancy_id})\"><i class=\"fa-solid fa-microchip\"></i> Analyze</button>
-              </div>
-            </table>`;
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--warning);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></div></td>
+              <td>${fmtDate(p.last_menstrual_period)}</td>
+              <td>${fmtDate(p.expected_date_of_delivery)}</td>
+              <td><span class="badge-modern ${riskClass}">${p.pregnancy_risk_level || "—"}</span></td>
+              <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">👶 ${p.fetal_count || 1}</span></td>
+              <td><span class="badge-modern ${statusClass}">${p.status}</span></td>
+              <td style="text-align:center;">
+                <button class="view-btn-modern" onclick="viewPregnancyDetails(${p.pregnancy_id})"><i class="fa-solid fa-eye"></i> View</button>
+                <button class="view-btn-modern" style="background: var(--brand-primary); color: white; margin-left: 6px;" onclick="analyzePregnancy(${p.pregnancy_id})"><i class="fa-solid fa-microchip"></i> Analyze</button>
+              </td>
+            </tr>`;
           }).join("");
         }
 
         function renderCheckups() {
           const tbody = document.getElementById("checkups-tbody");
           const search = document.getElementById("search-checkups")?.value.toLowerCase() || "";
-          if (!cachedCheckups) { tbody.innerHTML = '<tr><td colspan="8" class="loading-cell"><div class="spinner"></div> Loading...<\/td><\/tr>'; return; }
+          if (!cachedCheckups) { tbody.innerHTML = '<tr><td colspan="8" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
           
           let filtered = cachedCheckups.filter(c => {
             const motherName = [c.pregnancies?.mothers?.accounts?.first_name, c.pregnancies?.mothers?.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
@@ -613,7 +616,7 @@
           });
           document.getElementById("checkups-count").textContent = filtered.length;
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="loading-cell"><i class="fa-solid fa-stethoscope"></i> No checkups found.<\/td><\/tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="loading-cell"><i class="fa-solid fa-stethoscope"></i> No checkups found.</td></tr>';
             return;
           }
           tbody.innerHTML = filtered.map(c => {
@@ -621,13 +624,13 @@
             const bp = `${c.blood_pressure_systolic || "—"}/${c.blood_pressure_diastolic || "—"}`;
             const isHigh = (c.blood_pressure_systolic >= 140 || c.blood_pressure_diastolic >= 90);
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--info);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${esc(name)}</span></div></td>
-              <td>${fmtDateTime(c.checkup_datetime)}</div>
-              <td>${c.age_of_gestation || "—"} wks</div>
-              <td>${c.checkup_weight || "—"} kg</div>
-              <td><span ${isHigh ? 'style="color:var(--error);font-weight:bold;"' : ""}>${bp}</span></div>
-              <td>${c.fetal_heart_beat || "—"} bpm</div>
-              <td><span class="badge-modern" style="${c.edema === 'severe' ? 'background:var(--error-10);color:var(--error);' : 'background:var(--warning-10);color:var(--warning);'}">${c.edema || "none"}</span></div>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--info);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></div></td>
+              <td>${fmtDateTime(c.checkup_datetime)}</td>
+              <td>${c.age_of_gestation || "—"} wks</td>
+              <td>${c.checkup_weight || "—"} kg</td>
+              <td><span ${isHigh ? 'style="color:var(--error);font-weight:bold;"' : ""}>${bp}</span></td>
+              <td>${c.fetal_heart_beat || "—"} bpm</td>
+              <td><span class="badge-modern" style="${c.edema === 'severe' ? 'background:var(--error-10);color:var(--error);' : 'background:var(--warning-10);color:var(--warning);'}">${c.edema || "none"}</span></td>
               <td style="text-align:center;"><button class="view-btn-modern" style="background: var(--brand-primary); color: white;" onclick="analyzeCheckup(${c.prenatal_checkup_id})"><i class="fa-solid fa-microchip"></i> Analyze</button></td>
             </tr>`;
           }).join("");
@@ -636,7 +639,7 @@
         function renderUltrasounds() {
           const tbody = document.getElementById("ultrasounds-tbody");
           const search = document.getElementById("search-ultrasounds")?.value.toLowerCase() || "";
-          if (!cachedUltrasounds) { tbody.innerHTML = '<tr><td colspan="6" class="loading-cell"><div class="spinner"></div> Loading...<\/td><\/tr>'; return; }
+          if (!cachedUltrasounds) { tbody.innerHTML = '<tr><td colspan="6" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
           
           let filtered = cachedUltrasounds.filter(u => {
             const motherName = [u.pregnancies?.mothers?.accounts?.first_name, u.pregnancies?.mothers?.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
@@ -644,7 +647,7 @@
           });
           document.getElementById("ultrasounds-count").textContent = filtered.length;
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="loading-cell"><i class="fa-solid fa-waveform"></i> No ultrasounds found.<\/td><\/tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="loading-cell"><i class="fa-solid fa-waveform"></i> No ultrasounds found.</td></tr>';
             return;
           }
           tbody.innerHTML = filtered.map(u => {
@@ -656,11 +659,11 @@
             const jsonUrls = JSON.stringify(imageUrls).replace(/"/g, '&quot;');
             const imgId = `us_${u.ultrasound_id}_${Date.now()}`;
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--brand-primary);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${esc(name)}</span></div></td>
-              <td>${fmtDate(u.ultrasound_date)}</div>
-              <td>${esc(u.ultrasound_location || "—")}</div>
-              <td>${esc(u.health_worker_name || "—")}</div>
-              <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(u.remarks || "—")}</div>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--brand-primary);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></div></td>
+              <td>${fmtDate(u.ultrasound_date)}</td>
+              <td>${esc(u.ultrasound_location || "—")}</td>
+              <td>${esc(u.health_worker_name || "—")}</td>
+              <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(u.remarks || "—")}</td>
               <td style="text-align:center; display:flex; gap:6px; justify-content:center; align-items:center;">
                 ${hasImage ? 
                   `<div class="image-container" id="container_${imgId}" style="display:inline-block;">
@@ -670,7 +673,7 @@
                    '<div class="no-image"><i class="fa-solid fa-image"></i></div>'}
                 <button class="view-btn-modern" style="background: var(--brand-primary); color: white; padding: 6px 10px;" onclick="analyzeUltrasound(${u.ultrasound_id})"><i class="fa-solid fa-microchip"></i></button>
               </td>
-            <tr>`;
+            </tr>`;
           }).join("");
           setTimeout(() => {
             filtered.forEach(u => {
@@ -687,7 +690,7 @@
         function renderLabTests() {
           const tbody = document.getElementById("labtests-tbody");
           const search = document.getElementById("search-labtests")?.value.toLowerCase() || "";
-          if (!cachedLabTests) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...<\/td><\/tr>'; return; }
+          if (!cachedLabTests) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
           
           let filtered = cachedLabTests.filter(l => {
             const motherName = [l.pregnancies?.mothers?.accounts?.first_name, l.pregnancies?.mothers?.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
@@ -695,7 +698,7 @@
           });
           document.getElementById("labtests-count").textContent = filtered.length;
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-flask"></i> No lab tests found.<\/td><\/tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-flask"></i> No lab tests found.</td></tr>';
             return;
           }
           tbody.innerHTML = filtered.map(l => {
@@ -707,12 +710,12 @@
             const jsonUrls = JSON.stringify(imageUrls).replace(/"/g, '&quot;');
             const imgId = `lt_${l.lab_test_id}_${Date.now()}`;
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--warning);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${esc(name)}</span></div></td>
-              <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">${esc(l.lab_test_type || "—")}</span></div>
-              <td>${fmtDate(l.lab_test_date)}</div>
-              <td>${esc(l.lab_test_location || "—")}</div>
-              <td>${esc(l.health_worker_name || "—")}</div>
-              <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(l.remarks || "—")}</div>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--warning);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></div></td>
+              <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">${esc(l.lab_test_type || "—")}</span></td>
+              <td>${fmtDate(l.lab_test_date)}</td>
+              <td>${esc(l.lab_test_location || "—")}</td>
+              <td>${esc(l.health_worker_name || "—")}</td>
+              <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(l.remarks || "—")}</td>
               <td style="text-align:center; display:flex; gap:6px; justify-content:center; align-items:center;">
                 ${hasImage ? 
                   `<div class="image-container" id="container_${imgId}" style="display:inline-block;">
@@ -739,7 +742,7 @@
         function renderChildren() {
           const tbody = document.getElementById("children-tbody");
           const search = document.getElementById("search-children")?.value.toLowerCase() || "";
-          if (!cachedChildren) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...<\/td><\/tr>'; return; }
+          if (!cachedChildren) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
           
           let filtered = cachedChildren.filter(c => {
             const childName = [c.first_name, c.last_name].filter(Boolean).join(" ").toLowerCase();
@@ -748,7 +751,7 @@
           });
           document.getElementById("children-count").textContent = filtered.length;
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-baby"></i> No children found.<\/td><\/tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-baby"></i> No children found.</td></tr>';
             return;
           }
           tbody.innerHTML = filtered.map(c => {
@@ -756,16 +759,16 @@
             const motherName = [c.mothers?.accounts?.first_name, c.mothers?.accounts?.last_name].filter(Boolean).join(" ") || "—";
             const genderIcon = c.sex === 'male' ? 'fa-mars' : (c.sex === 'female' ? 'fa-venus' : 'fa-genderless');
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--success);"><i class="fa-solid ${genderIcon}"></i></div><span style="font-weight:600;">${esc(childName)}</span></div></td>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--brand-primary);">${esc(motherName.charAt(0) || "?")}</div><span>${esc(motherName)}</span></div></td>
-              <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">${c.sex || "—"}</span></div>
-              <td>${fmtDate(c.birth_details?.birthdate)}</div>
-              <td>${c.birth_details?.birth_weight || "—"} kg</div>
-              <td>${esc(c.birth_details?.birthplace_city_municipality || "—")}</div>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--success);"><i class="fa-solid ${genderIcon}"></i></div><span style="font-weight:600;">${maskText(childName)}</span></div></td>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--brand-primary);">${esc(motherName.charAt(0) || "?")}</div><span>${maskText(motherName)}</span></div></td>
+              <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">${c.sex || "—"}</span></td>
+              <td>${fmtDate(c.birth_details?.birthdate)}</td>
+              <td>${c.birth_details?.birth_weight || "—"} kg</td>
+              <td>${esc(c.birth_details?.birthplace_city_municipality || "—")}</td>
               <td style="text-align:center;">
                 <button class="view-btn-modern" onclick="viewChildDetails(${c.child_id})"><i class="fa-solid fa-eye"></i> View</button>
                 <button class="view-btn-modern" style="background: var(--brand-primary); color: white; margin-left: 6px;" onclick="analyzeChild(${c.child_id})"><i class="fa-solid fa-microchip"></i> Analyze</button>
-              </div>
+              </td>
             </tr>`;
           }).join("");
         }
