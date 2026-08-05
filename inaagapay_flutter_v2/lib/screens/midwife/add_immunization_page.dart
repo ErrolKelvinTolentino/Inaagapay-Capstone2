@@ -818,6 +818,46 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     );
   }
 
+  /// "Pentavalent 3" — name plus dose, when the vaccine has more than one.
+  String _vaccineLabel(Map<String, dynamic> vaccine) {
+    final name = vaccine['vaccine_name']?.toString() ?? 'This vaccine';
+    final dose = (vaccine['dose_number'] as num?)?.toInt() ?? 1;
+    final hasMultipleDoses = _vaccines.any((v) =>
+        v['vaccine_name'] == vaccine['vaccine_name'] &&
+        ((v['dose_number'] as num?)?.toInt() ?? 1) > 1);
+    return hasMultipleDoses ? '$name $dose' : name;
+  }
+
+  Future<void> _showBlockedDialog(String title, String message) {
+    return showDialog(
+      context: context,
+      builder: (_) => DialogBox(
+        type: DialogType.error,
+        title: title,
+        content: message,
+        buttonText: 'OK',
+        onPressed: () => Navigator.pop(context),
+      ),
+    );
+  }
+
+  Future<bool?> _confirmMissingPrerequisite(String label, int doseNumber) {
+    return showDialog<bool>(
+      context: context,
+      builder: (_) => ConfirmationDialogBox(
+        title: 'Earlier dose not recorded',
+        subtitle:
+            'Dose ${doseNumber - 1} of this vaccine is not on file for this child. '
+            'Record $label anyway? Do this only if the earlier dose was given '
+            'elsewhere — note where, in the remarks.',
+        cancelText: 'Cancel',
+        confirmText: 'Record anyway',
+        onCancel: () => Navigator.pop(context, false),
+        onConfirm: () => Navigator.pop(context, true),
+      ),
+    );
+  }
+
   Future<bool> _submitImmunization() async {
     if (_selectedVaccineId == null) {
       if (mounted) {
@@ -837,6 +877,37 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
       return false;
     }
 
+    final selected = _vaccines.firstWhere(
+      (v) => v['vaccine_id'] == _selectedVaccineId,
+      orElse: () => <String, dynamic>{},
+    );
+    final vaccineLabel = _vaccineLabel(selected);
+
+    // Already recorded. The database now enforces this too, but catching it
+    // here gives a readable message instead of a constraint error.
+    if (_takenVaccineIds.contains(_selectedVaccineId)) {
+      if (mounted) {
+        await _showBlockedDialog(
+          'Already recorded',
+          '$vaccineLabel is already on this child\'s immunization record. '
+          'Use the immunization list to review or correct the existing entry.',
+        );
+      }
+      return false;
+    }
+
+    // Earlier dose missing. This is a warning rather than a hard block:
+    // catch-up schedules are real, and a child may have been vaccinated
+    // elsewhere. The midwife decides, and the decision is recorded.
+    if (!_isPrerequisiteMet(selected)) {
+      final doseNumber = (selected['dose_number'] as num?)?.toInt() ?? 1;
+      final proceed = await _confirmMissingPrerequisite(
+        vaccineLabel,
+        doseNumber,
+      );
+      if (proceed != true) return false;
+    }
+
     try {
       int? midwifeId;
       try {
@@ -849,19 +920,33 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
         debugPrint('Error getting midwife ID: $e');
       }
 
+      final vaccine = _vaccines.firstWhere(
+        (v) => v['vaccine_id'] == _selectedVaccineId,
+        orElse: () => <String, dynamic>{},
+      );
+
       await Supabase.instance.client
           .from('immunization_records')
           .insert({
             'child_id': widget.childId,
             'vaccine_id': _selectedVaccineId!,
             'vaccination_date': _selectedDate!.toIso8601String().split('T')[0],
+            // The column defaults to 1, so omitting it stored every dose as a
+            // first dose — a Pentavalent 3 looked like a Pentavalent 1.
+            'dose_number': (vaccine['dose_number'] as num?)?.toInt() ?? 1,
             'remarks': _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
             'created_at': DateTime.now().toIso8601String(),
-            if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
+            // The column is `administered_by`. This previously wrote
+            // `recorded_by_midwife_id`, which the table does not declare.
+            if (midwifeId != null) 'administered_by': midwifeId,
           });
 
       setState(() {
         _anyRecordAdded = true;
+        // Keep the taken set current: this screen lets the midwife record
+        // several vaccines without reloading, so a stale set would let the
+        // same one through twice.
+        _takenVaccineIds.add(_selectedVaccineId!);
       });
 
       return true;

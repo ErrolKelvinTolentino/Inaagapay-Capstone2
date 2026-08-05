@@ -255,13 +255,23 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
       }
 
       for (final item in selectedItems) {
+        final vaccine = widget.allVaccines.firstWhere(
+          (v) => v['vaccine_id'] == item.matchedVaccineId,
+          orElse: () => <String, dynamic>{},
+        );
+
         recordsToInsert.add({
           'child_id': widget.childId,
           'vaccine_id': item.matchedVaccineId!,
           'vaccination_date': DateFormat('yyyy-MM-dd').format(item.vaccinationDate!),
+          // Without this the column falls back to its default of 1, so every
+          // scanned dose was stored as a first dose.
+          'dose_number': (vaccine['dose_number'] as num?)?.toInt() ?? 1,
           'remarks': item.remarks.trim().isEmpty ? null : item.remarks.trim(),
           'created_at': DateTime.now().toIso8601String(),
-          if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
+          // Canonical column name; this previously wrote a column the table
+          // does not declare.
+          if (midwifeId != null) 'administered_by': midwifeId,
         });
       }
 

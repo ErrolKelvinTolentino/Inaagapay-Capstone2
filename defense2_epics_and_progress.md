@@ -1,7 +1,7 @@
 # InaAgapay — Product Definition, Epics, User Stories & Progress
 
 > **Status:** Post–Capstone Defense 1 revision map. Supersedes `epics_and_user_stories.md`.
-> **Last updated:** 2026-08-04
+> **Last updated:** 2026-08-06
 > **Scope decision:** QR-based account linking is **descoped for now** (see E1-05).
 
 ---
@@ -41,12 +41,16 @@ The AI is **interpretative, not diagnostic**. It explains an existing radiologis
 | E3 | Prenatal Encounter & Clinical Decision Support | **80%** | Attribution done; BP/FHR clinical research outstanding |
 | E4 | Diagnostic Document Intelligence (Ultrasound / Lab / OCR) | **80%** | AI-purpose reframing outstanding |
 | E5 | Automated Prenatal Scheduling & Reminders | **45%** | Auto-schedule algorithm not built |
-| E6 | Child Health — Immunization & Growth | **80%** | Data + UI complete, 0–5y chart polish left |
+| E6 | Child Health — Immunization & Growth | **92%** | Growth verified against WHO + tested; immunization save fixed |
 | E7 | Mother Experience, Self-Care & Baby Book | **55%** | Baby Book module not started |
 | E8 | Inventory Distribution (RHU → BHC) | **90%** | De-mocked; release-edit path left to verify |
 | E9 | Admin Web — Monitoring, Reporting & Governance | **80%** | Working; polish + role hardening left |
 | E10 | Research & Documentation Artifacts | **25%** | ERD redo + sampling revision not done |
-| | **Weighted overall** | **~73%** | |
+| | **Weighted overall** | **~76%** | |
+
+Weights used (by build scope, summing to 100): E1 8 · E2 12 · E3 15 · E4 12 · E5 8 · E6 15 · E7 12 · E8 8 · E9 7 · E10 3.
+
+**Code progress is ~76%. Defense readiness is lower** — E10 (ERD, sampling, limitations) is only 3% of build effort but a High-Priority panel item, so it drags the *defense* far more than it drags the *build*.
 
 Legend: ✅ done · 🟡 partial · 🔴 partial with a known defect · ❌ not started · ⏸️ parked
 

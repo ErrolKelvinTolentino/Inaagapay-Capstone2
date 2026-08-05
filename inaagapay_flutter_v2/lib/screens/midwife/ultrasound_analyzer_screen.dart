@@ -2101,7 +2101,8 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
                     _monitoringClassification)
                 : null,
             'created_at': DateTime.now().toIso8601String(),
-            if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
+            // `recorded_by_midwife_id` was never a column on this table.
+            if (midwifeId != null) 'recorded_by': midwifeId,
           })
           .select('ultrasound_id')
           .single();
