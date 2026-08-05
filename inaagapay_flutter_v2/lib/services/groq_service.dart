@@ -41,8 +41,27 @@ class GroqService {
 
   // ── API Constraints ─────────────────────────────────────────────────────
 
-  static const String _baseUrl =
+  static const String _groqBaseUrl =
       'https://api.groq.com/openai/v1/chat/completions';
+
+  /// NVIDIA NIM speaks the same OpenAI-compatible protocol as Groq, so the
+  /// same request body works against either host.
+  static const String _nvidiaBaseUrl =
+      'https://integrate.api.nvidia.com/v1/chat/completions';
+
+  /// Groq text model → NVIDIA NIM equivalent, used when Groq is rate-limited
+  /// or down. Llama 3.3 70B is the same model on both hosts, so the prompts
+  /// and safety rules behave identically on the fallback.
+  ///
+  /// Vision models are deliberately absent: that path already falls back to
+  /// Gemini in [_sendVisionRequest], and NVIDIA's VLMs expect a different
+  /// image payload shape than the OpenAI-style `image_url` blocks we send.
+  static const Map<String, String> _nvidiaModelEquivalents = {
+    _reasoningModel: 'meta/llama-3.3-70b-instruct',
+    _firstFallbackReasoningModel: 'meta/llama-3.1-8b-instruct',
+    _secondFallbackReasoningModel: 'meta/llama-3.1-70b-instruct',
+  };
+
   static const int _maxBase64Size = 4 * 1024 * 1024;
   static const int _maxImagesPerRequest = 5;
 
@@ -64,6 +83,14 @@ class GroqService {
       throw Exception('Groq API Key not found in .env');
     }
     return apiKey;
+  }
+
+  /// Optional — returns null when no NVIDIA key is configured, in which case
+  /// the provider fallback is simply skipped.
+  String? _getNvidiaApiKey() {
+    final apiKey = dotenv.env['NVIDIA_API_KEY'];
+    if (apiKey == null || apiKey.trim().isEmpty) return null;
+    return apiKey.trim();
   }
 
   // ════════════════════════════════════════════════════════════════════════
@@ -1804,6 +1831,68 @@ Rules:
     final bool isVisionModel = model.toLowerCase().contains('vision');
     final bool useJsonMode = (forceJsonMode || _detectJsonMode(messages)) && !isVisionModel;
 
+    try {
+      return await _postChatCompletion(
+        baseUrl: _groqBaseUrl,
+        providerLabel: 'Groq',
+        apiKey: apiKey,
+        model: model,
+        messages: messages,
+        temperature: temperature,
+        maxOutputTokens: maxOutputTokens,
+        useJsonMode: useJsonMode,
+      );
+    } catch (e) {
+      final errorMessage = e.toString();
+
+      // Fallback 1 — same provider, smaller model. The prompt was too large
+      // for this model, so switching hosts would not help.
+      if (allowModelFallback && _isTokenLimitError(errorMessage)) {
+        final nextModel = _nextReasoningFallbackModel(model);
+        if (nextModel != null) {
+          _log(
+              '⚠️ ${model.split('/').last} token limit reached; retrying with ${nextModel.split('/').last}');
+          return _sendChatCompletion(
+            messages: messages,
+            apiKey: apiKey,
+            model: nextModel,
+            temperature: temperature,
+            maxOutputTokens: maxOutputTokens,
+            forceJsonMode: forceJsonMode,
+            allowModelFallback: true,
+          );
+        }
+      }
+
+      // Fallback 2 — different provider. Groq itself is rate-limited, down,
+      // or unreachable, so retry the same request against NVIDIA NIM.
+      if (_isProviderOutageError(errorMessage)) {
+        final nvidiaResult = await _tryNvidiaFallback(
+          messages: messages,
+          groqModel: model,
+          temperature: temperature,
+          maxOutputTokens: maxOutputTokens,
+          useJsonMode: useJsonMode,
+        );
+        if (nvidiaResult != null) return nvidiaResult;
+      }
+
+      rethrow;
+    }
+  }
+
+  /// Raw OpenAI-compatible chat-completion POST. Host-agnostic: both Groq and
+  /// NVIDIA NIM accept this exact body shape.
+  Future<String> _postChatCompletion({
+    required String baseUrl,
+    required String providerLabel,
+    required String apiKey,
+    required String model,
+    required List<Map<String, dynamic>> messages,
+    required double temperature,
+    required int maxOutputTokens,
+    required bool useJsonMode,
+  }) async {
     final requestBody = <String, dynamic>{
       'model': model,
       'messages': messages,
@@ -1815,12 +1904,12 @@ Rules:
     };
 
     _log(
-        '🌐 Sending request to ${model.split('/').last} (${messages.toString().length} chars)...');
+        '🌐 Sending request to $providerLabel/${model.split('/').last} (${messages.toString().length} chars)...');
 
     try {
       final response = await http
           .post(
-            Uri.parse(_baseUrl),
+            Uri.parse(baseUrl),
             headers: {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer $apiKey',
@@ -1835,24 +1924,6 @@ Rules:
           final errorData = jsonDecode(response.body);
           errorMessage = errorData['error']?['message'] ?? response.body;
         } catch (_) {}
-
-        if (allowModelFallback && _isTokenLimitError(errorMessage)) {
-          final nextModel = _nextReasoningFallbackModel(model);
-          if (nextModel != null) {
-            _log(
-                '⚠️ ${model.split('/').last} token limit reached; retrying with ${nextModel.split('/').last}');
-            return _sendChatCompletion(
-              messages: messages,
-              apiKey: apiKey,
-              model: nextModel,
-              temperature: temperature,
-              maxOutputTokens: maxOutputTokens,
-              forceJsonMode: forceJsonMode,
-              allowModelFallback: true,
-            );
-          }
-        }
-
         throw Exception('API Error (${response.statusCode}): $errorMessage');
       }
 
@@ -1860,10 +1931,96 @@ Rules:
       return _extractChatCompletionText(data);
     } on http.ClientException {
       throw Exception(
-          'Network error: Unable to reach Groq API. Please check your connection.');
+          'Network error: Unable to reach $providerLabel API. Please check your connection.');
     } on FormatException catch (e) {
-      throw Exception('Invalid response format from Groq API: $e');
+      throw Exception('Invalid response format from $providerLabel API: $e');
     }
+  }
+
+  /// Retries a failed Groq text request against NVIDIA NIM.
+  ///
+  /// Returns null — rather than throwing — whenever the fallback is
+  /// unavailable or also fails, so the caller surfaces the original Groq
+  /// error instead of a confusing secondary one.
+  Future<String?> _tryNvidiaFallback({
+    required List<Map<String, dynamic>> messages,
+    required String groqModel,
+    required double temperature,
+    required int maxOutputTokens,
+    required bool useJsonMode,
+  }) async {
+    final nvidiaKey = _getNvidiaApiKey();
+    if (nvidiaKey == null) {
+      _log('ℹ️ Groq unavailable and no NVIDIA_API_KEY set; skipping fallback.');
+      return null;
+    }
+
+    final nvidiaModel = _nvidiaModelEquivalents[groqModel];
+    if (nvidiaModel == null) {
+      _log('ℹ️ No NVIDIA equivalent mapped for $groqModel; skipping fallback.');
+      return null;
+    }
+
+    _log('🔁 Groq unavailable — falling back to NVIDIA NIM ($nvidiaModel)');
+
+    Future<String> attempt(bool jsonMode) => _postChatCompletion(
+          baseUrl: _nvidiaBaseUrl,
+          providerLabel: 'NVIDIA',
+          apiKey: nvidiaKey,
+          model: nvidiaModel,
+          messages: messages,
+          temperature: temperature,
+          maxOutputTokens: maxOutputTokens,
+          useJsonMode: jsonMode,
+        );
+
+    try {
+      return await attempt(useJsonMode);
+    } catch (e) {
+      final error = e.toString();
+
+      // Not every NIM model accepts response_format. Retry once as plain
+      // text — the JSON parsers downstream already tolerate prose and fences.
+      if (useJsonMode && error.contains('(400)')) {
+        _log('⚠️ NVIDIA rejected JSON mode; retrying without response_format');
+        try {
+          return await attempt(false);
+        } catch (retryError) {
+          _log('⚠️ NVIDIA fallback failed after retry: $retryError');
+          return null;
+        }
+      }
+
+      // NVIDIA's free tier returns transient 504s while a model cold-starts.
+      // One retry is cheap and this is already the last line of defence.
+      if (_isProviderOutageError(error)) {
+        _log('⚠️ NVIDIA transient failure; retrying once in 2s...');
+        await Future.delayed(const Duration(seconds: 2));
+        try {
+          return await attempt(useJsonMode);
+        } catch (retryError) {
+          _log('⚠️ NVIDIA fallback failed after retry: $retryError');
+          return null;
+        }
+      }
+
+      _log('⚠️ NVIDIA fallback failed: $error');
+      return null;
+    }
+  }
+
+  /// True when the failure is about provider availability rather than the
+  /// request itself — the only case where retrying on another host helps.
+  bool _isProviderOutageError(String message) {
+    final normalized = message.toLowerCase();
+    if (normalized.contains('network error') ||
+        normalized.contains('clientexception') ||
+        normalized.contains('timeoutexception') ||
+        normalized.contains('rate limit')) {
+      return true;
+    }
+    return RegExp(r'api error \((429|500|502|503|504|529)\)')
+        .hasMatch(normalized);
   }
 
   bool _isTokenLimitError(String message) {
