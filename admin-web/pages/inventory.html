@@ -2149,7 +2149,7 @@
                   <button class="btn btn-xs btn-secondary" onclick="rejectStockRequest(${request.request_id})" style="padding:2px 8px;font-size:11px;border-radius:5px;color:#dc2626;border-color:#fca5a5;"><i class="fa-solid fa-xmark"></i> Reject</button>
                 </div>`;
             } else if (request.status === "approved") {
-              actions = `<button class="btn btn-xs btn-primary" onclick="issueForRequest(${request.request_id})" style="padding:2px 10px;font-size:11px;border-radius:5px;white-space:nowrap;"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock</button>`;
+              actions = `<button class="btn btn-xs btn-primary" onclick="openIssueForRequest(${request.request_id})" style="padding:2px 10px;font-size:11px;border-radius:5px;white-space:nowrap;"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock</button>`;
             } else if (request.status === "issued") {
               actions = '<span style="font-size:11px;color:var(--brand-primary);font-weight:600;"><i class="fa-solid fa-hourglass-half"></i> In-Transit</span>';
             }
@@ -2994,64 +2994,111 @@
           }
         };
 
+        // Helper to ensure BHC dropdown has options loaded
+        function ensureBhcDropdownPopulated() {
+          const issueDropdown = document.getElementById("issue-target-bhc");
+          if (issueDropdown && (issueDropdown.options.length <= 1 || issueDropdown.querySelectorAll("option").length <= 1)) {
+            issueDropdown.innerHTML = '<option value="">— Select Target BHC —</option>';
+            (bhcs || []).forEach(b => {
+              const opt = document.createElement("option");
+              opt.value = b.bhc_id;
+              opt.textContent = b.bhc_name;
+              issueDropdown.appendChild(opt);
+            });
+          }
+        }
+
         // Open General Issue Modal (No specific request)
-        window.openGeneralIssueModal = function() {
-          document.getElementById("form-issue").reset();
-          document.getElementById("issue-request-id").value = "";
-          document.getElementById("issue-request-context").style.display = "none";
-          document.getElementById("issue-form-alert").style.display = "none";
-          populateIssueBatchDropdown(null);
+        window.openGeneralIssueModal = function(targetBhcId = null) {
           openModal("modal-issue");
+          try {
+            const form = document.getElementById("form-issue");
+            if (form) form.reset();
+            const reqId = document.getElementById("issue-request-id");
+            if (reqId) reqId.value = "";
+            const ctx = document.getElementById("issue-request-context");
+            if (ctx) ctx.style.display = "none";
+            const alertEl = document.getElementById("issue-form-alert");
+            if (alertEl) alertEl.style.display = "none";
+
+            ensureBhcDropdownPopulated();
+            if (targetBhcId) {
+              const bhcSel = document.getElementById("issue-target-bhc");
+              if (bhcSel) bhcSel.value = targetBhcId;
+            }
+            populateIssueBatchDropdown(null);
+          } catch (err) {
+            console.error("Error setting up general issue modal:", err);
+          }
         };
 
         // Open Issue Modal Prefilled for a Specific BHC Stock Request
         window.openIssueForRequest = function(requestId) {
-          const request = stockRequests.find(r => r.request_id === requestId);
-          if (!request) return;
-
-          const item = items.find(i => i.item_id === request.item_id);
-
-          document.getElementById("form-issue").reset();
-          document.getElementById("issue-request-id").value = requestId;
-          document.getElementById("issue-target-bhc").value = request.facility_id;
-
-          // Filter issue batch dropdown to ONLY batches matching the requested item
-          populateIssueBatchDropdown(request.item_id);
-
-          const centralBatches = batches.filter(b =>
-            b.item_id === request.item_id &&
-            b.status === 'active' &&
-            !isBatchExpired(b) &&
-            b.quantity_remaining > 0 &&
-            (b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null")
-          );
-
-          if (centralBatches.length === 0) {
-            showToast(`No active central warehouse batches available for ${item?.name || 'requested item'}.`, "warning");
-            return;
-          }
-
-          // Issue what was approved, which may be less than what was requested.
-          const fulfilQty = request.approved_quantity ?? request.requested_quantity;
-          const bestBatch = centralBatches.find(b => b.quantity_remaining >= fulfilQty) || centralBatches[0];
-
-          const batchSel = document.getElementById("issue-source-batch");
-          if (batchSel) {
-            batchSel.value = bestBatch.batch_id;
-            batchSel.dispatchEvent(new Event('change', { bubbles: true }));
-          }
-
-          document.getElementById("issue-qty").value = fulfilQty;
-
-          const context = document.getElementById("issue-request-context");
-          const partialNote = request.approved_quantity != null && request.approved_quantity !== request.requested_quantity
-            ? ` (partially approved from ${request.requested_quantity})`
-            : "";
-          context.innerHTML = `<i class="fa-solid fa-clipboard-check" style="color:#8b5cf6;margin-right:6px;"></i> Fulfilling Request #${requestId}: <strong>${fulfilQty} ${esc(item?.unit_of_measure || 'units')}</strong> of <strong>${esc(item?.name || 'item')}</strong>${partialNote}.`;
-          context.style.display = "block";
-          document.getElementById("issue-form-alert").style.display = "none";
           openModal("modal-issue");
+          try {
+            const request = (stockRequests || []).find(r => String(r.request_id) === String(requestId));
+            if (!request) {
+              showToast(`Stock request #${requestId} not found.`, "warning");
+              return;
+            }
+
+            const item = (items || []).find(i => String(i.item_id) === String(request.item_id));
+
+            const form = document.getElementById("form-issue");
+            if (form) form.reset();
+            const reqId = document.getElementById("issue-request-id");
+            if (reqId) reqId.value = requestId;
+
+            ensureBhcDropdownPopulated();
+            const bhcSel = document.getElementById("issue-target-bhc");
+            if (bhcSel) {
+              bhcSel.value = request.facility_id;
+            }
+
+            // Filter issue batch dropdown to ONLY batches matching the requested item
+            populateIssueBatchDropdown(request.item_id);
+
+            const centralBatches = (batches || []).filter(b =>
+              String(b.item_id) === String(request.item_id) &&
+              b.status === 'active' &&
+              !isBatchExpired(b) &&
+              b.quantity_remaining > 0 &&
+              (b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null")
+            );
+
+            if (centralBatches.length === 0) {
+              showToast(`No active central warehouse batches available for ${item?.name || 'requested item'}.`, "warning");
+              return;
+            }
+
+            // Issue what was approved, which may be less than what was requested.
+            const fulfilQty = request.approved_quantity ?? request.requested_quantity;
+            const bestBatch = centralBatches.find(b => b.quantity_remaining >= fulfilQty) || centralBatches[0];
+
+            const batchSel = document.getElementById("issue-source-batch");
+            if (batchSel) {
+              batchSel.value = bestBatch.batch_id;
+              batchSel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            const qtyInput = document.getElementById("issue-qty");
+            if (qtyInput) qtyInput.value = fulfilQty;
+
+            const context = document.getElementById("issue-request-context");
+            if (context) {
+              const partialNote = request.approved_quantity != null && request.approved_quantity !== request.requested_quantity
+                ? ` (partially approved from ${request.requested_quantity})`
+                : "";
+              context.innerHTML = `<i class="fa-solid fa-clipboard-check" style="color:#8b5cf6;margin-right:6px;"></i> Fulfilling Request #${requestId}: <strong>${fulfilQty} ${esc(item?.unit_of_measure || 'units')}</strong> of <strong>${esc(item?.name || 'item')}</strong>${partialNote}.`;
+              context.style.display = "block";
+            }
+            const alertEl = document.getElementById("issue-form-alert");
+            if (alertEl) alertEl.style.display = "none";
+          } catch (err) {
+            console.error("Error setting up issue request modal:", err);
+          }
         };
+        window.issueForRequest = window.openIssueForRequest;
 
         // Item Details Breakdown Drawer
         window.openItemDetails = function(itemId) {
@@ -3458,6 +3505,18 @@
             renderOptionsList(e.target.value);
           });
 
+          selectEl.addEventListener('change', () => {
+            const val = selectEl.value;
+            const chosen = options.find(o => String(o.value) === String(val));
+            if (chosen) {
+              mainInput.value = chosen.name || chosen.label;
+              chipPreview.innerHTML = chosen.richChipHtml || ``;
+            } else if (!val) {
+              mainInput.value = '';
+              chipPreview.innerHTML = '';
+            }
+          });
+
           if (!window._searchableSelectGlobalClickListener) {
             window._searchableSelectGlobalClickListener = true;
             document.addEventListener('click', (e) => {
@@ -3627,21 +3686,21 @@
           const centralActiveBatches = batches.filter(b => {
             if (b.status !== 'active' || isBatchExpired(b) || b.quantity_remaining <= 0) return false;
             if (b.facility_id !== null && b.facility_id !== 0 && b.facility_id !== undefined && String(b.facility_id) !== "null") return false;
-            const parentItem = items.find(i => i.item_id === b.item_id);
+            const parentItem = items.find(i => String(i.item_id) === String(b.item_id));
             if (!parentItem || parentItem.is_archived) return false;
             if (targetItemId != null && String(b.item_id) !== String(targetItemId)) return false;
             return true;
           });
 
           issueBatchSel.innerHTML = `<option value="">— Select Central Batch —</option>` + centralActiveBatches.map(b => {
-            const item = items.find(i => i.item_id === b.item_id);
+            const item = items.find(i => String(i.item_id) === String(b.item_id));
             return `<option value="${b.batch_id}">${formatBatchOption(item?.name, b.batch_number, b.quantity_remaining)}</option>`;
           }).join('');
 
           const targetItem = targetItemId ? items.find(i => String(i.item_id) === String(targetItemId)) : null;
 
           const issueOpts = centralActiveBatches.map(b => {
-            const item = items.find(i => i.item_id === b.item_id);
+            const item = items.find(i => String(i.item_id) === String(b.item_id));
             return {
               value: b.batch_id,
               name: item?.name || 'Item',
@@ -4034,8 +4093,8 @@
 
         // Issue Stock Form Submit
         document.getElementById("save-issue-btn").addEventListener("click", async () => {
-          const sourceBatchId = parseInt(document.getElementById("issue-source-batch").value);
-          const targetBhcId = parseInt(document.getElementById("issue-target-bhc").value);
+          const sourceBatchVal = document.getElementById("issue-source-batch").value;
+          const targetBhcVal = document.getElementById("issue-target-bhc").value;
           const qtyInput = parseInt(document.getElementById("issue-qty").value);
           const ref = document.getElementById("issue-reference").value.trim();
           const requestIdValue = document.getElementById("issue-request-id").value;
@@ -4044,22 +4103,31 @@
 
           alertEl.style.display = "none";
 
-          if (!sourceBatchId || !targetBhcId || !qtyInput) {
-            alertEl.textContent = "Please fill in all required fields.";
+          if (!sourceBatchVal || !targetBhcVal || !qtyInput || isNaN(qtyInput) || qtyInput <= 0) {
+            const msg = "Please select a central batch, target BHC, and enter a valid quantity.";
+            alertEl.textContent = msg;
             alertEl.style.display = "block";
+            showToast(msg, "warning");
             return;
           }
 
-          const sourceBatch = batches.find(b => b.batch_id === sourceBatchId);
+          const sourceBatchId = parseInt(sourceBatchVal);
+          const targetBhcId = parseInt(targetBhcVal);
+
+          const sourceBatch = batches.find(b => String(b.batch_id) === String(sourceBatchVal));
           if (!sourceBatch) {
-            alertEl.textContent = "Source batch not found.";
+            const msg = "Source batch not found in central inventory.";
+            alertEl.textContent = msg;
             alertEl.style.display = "block";
+            showToast(msg, "error");
             return;
           }
 
           if (qtyInput > sourceBatch.quantity_remaining) {
-            alertEl.textContent = `Cannot issue ${qtyInput}. Available central stock is only ${sourceBatch.quantity_remaining}.`;
+            const msg = `Cannot issue ${qtyInput}. Available central stock is only ${sourceBatch.quantity_remaining}.`;
+            alertEl.textContent = msg;
             alertEl.style.display = "block";
+            showToast(msg, "warning");
             return;
           }
 
@@ -4069,22 +4137,39 @@
 
           try {
             const targetBhcName = bhcs.find(b => String(b.bhc_id) === String(targetBhcId))?.bhc_name || `BHC #${targetBhcId}`;
-            const { error: issueError } = await db.rpc("issue_inventory_transfer", {
+            const parsedActorId = parseInt(actorId) || actorId;
+
+            let { error: issueError } = await db.rpc("issue_inventory_transfer", {
               p_source_batch_id: sourceBatchId,
               p_destination_facility_id: targetBhcId,
               p_quantity: qtyInput,
-              p_issued_by: actorId,
+              p_issued_by: parsedActorId,
               p_request_id: requestId,
               p_remarks: ref || null
             });
+
+            if (issueError && (issueError.code === "PGRST202" || isMissingSchemaError(issueError))) {
+              // Fallback for DB schema versions where p_remarks was not yet added
+              const fallback = await db.rpc("issue_inventory_transfer", {
+                p_source_batch_id: sourceBatchId,
+                p_destination_facility_id: targetBhcId,
+                p_quantity: qtyInput,
+                p_issued_by: parsedActorId,
+                p_request_id: requestId
+              });
+              issueError = fallback.error;
+            }
+
             if (issueError) throw issueError;
 
             showToast(`Issued ${qtyInput} stock to ${targetBhcName}; awaiting BHC receipt.`, "success");
             closeModal("modal-issue");
             await loadInventoryData();
           } catch (err) {
-            alertEl.textContent = "Error issuing stock: " + err.message;
+            const msg = "Error issuing stock: " + (err.message || err);
+            alertEl.textContent = msg;
             alertEl.style.display = "block";
+            showToast(msg, "error");
           } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="fa-solid fa-truck-ramp-box"></i> Issue Stock';
