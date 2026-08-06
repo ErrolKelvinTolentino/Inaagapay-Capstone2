@@ -142,15 +142,16 @@
         font-weight: 600;
         display: inline-block;
       }
-      .badge-admin { background: #e3f2fd; color: #1976d2; }
-      .badge-midwife { background: #f3e5f5; color: #7b1fa2; }
-      .badge-mother { background: #fce4ec; color: #c2185b; }
-      .badge-active { background: #e8f5e9; color: #388e3c; }
-      .badge-inactive { background: #f5f5f5; color: #666; }
-      .badge-suspended { background: #ffebee; color: #d32f2f; }
-      .badge-low { background: #e8f5e9; color: #2e7d32; }
-      .badge-medium { background: #fff3e0; color: #e65100; }
-      .badge-high { background: #ffebee; color: #d32f2f; }
+      .badge-admin { background: rgba(255, 104, 165, 0.15); color: var(--brand-text); border: 1px solid rgba(255, 104, 165, 0.25); }
+      .badge-midwife { background: rgba(255, 104, 165, 0.12); color: var(--brand-primary); }
+      .badge-mother { background: #FFF5F8; color: var(--brand-accent); }
+      .badge-teal { background: rgba(16, 185, 129, 0.12); color: #059669; }
+      .badge-active { background: rgba(16, 185, 129, 0.15); color: #059669; }
+      .badge-inactive { background: #F5F5F5; color: var(--text-secondary); }
+      .badge-suspended { background: rgba(220, 38, 38, 0.12); color: #dc2626; }
+      .badge-low { background: rgba(16, 185, 129, 0.15); color: #059669; }
+      .badge-medium { background: rgba(217, 119, 6, 0.15); color: #d97706; }
+      .badge-high { background: rgba(220, 38, 38, 0.15); color: #dc2626; }
     </style>
   </head>
   <body>
@@ -165,7 +166,7 @@
           <img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" />
         </div>
         <div class="header-right">
-          <span class="header-badge">Admin Portal</span>
+          <span class="header-badge">RHU Portal</span>
           <div class="header-user" id="header-user-btn">
             <div class="header-avatar" id="header-avatar">A</div>
             <span class="header-user-name" id="header-user-name">Admin</span>
@@ -417,6 +418,7 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="common-security.js"></script>
+    <script src="live-refresh.js"></script>
     <script>
       (function () {
         const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
@@ -527,6 +529,32 @@
         }
 
         // ---------- CHARTS RENDERING (2x2 Layout) ----------
+
+        // Draws an explicit "no data" state on a chart canvas.
+        // Charts must never invent placeholder numbers: these figures are read as
+        // real health indicators and are exported into the PDF summary.
+        function showEmptyChart(canvas, message) {
+          const wrap = canvas.parentElement;
+          if (!wrap || wrap.querySelector(".chart-empty-state")) return;
+          canvas.style.display = "none";
+          const el = document.createElement("div");
+          el.className = "chart-empty-state";
+          el.style.cssText =
+            "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;" +
+            "justify-content:center;gap:8px;color:var(--text-secondary);font-size:13px;text-align:center;";
+          el.innerHTML =
+            '<i class="fa-regular fa-chart-bar" style="font-size:28px;opacity:.4;"></i>' +
+            `<span>${escapeHtml(message)}</span>`;
+          wrap.appendChild(el);
+        }
+
+        // Clears a previous empty state so a re-render can draw real data.
+        function resetChartCanvas(canvas) {
+          const wrap = canvas.parentElement;
+          wrap?.querySelector(".chart-empty-state")?.remove();
+          canvas.style.display = "";
+        }
+
         async function loadRiskChart() {
           try {
             const { data } = await db.from("pregnancies").select("pregnancy_risk_level, status");
@@ -538,19 +566,22 @@
               else counts.low++;
             });
             
-            const total = (counts.low + counts.medium + counts.high) || 12;
+            const total = counts.low + counts.medium + counts.high;
             document.getElementById("badge-risk-total").textContent = `${total} Cases`;
 
             const canvas = document.getElementById("risk-chart");
             if (!canvas) return;
             if (chartRiskInstance) chartRiskInstance.destroy();
+            resetChartCanvas(canvas);
+
+            if (total === 0) { showEmptyChart(canvas, "No pregnancy records yet"); return; }
 
             chartRiskInstance = new Chart(canvas, {
               type: "doughnut",
               data: {
                 labels: ["Low Risk", "Medium Risk", "High Risk"],
                 datasets: [{
-                  data: [counts.low || 8, counts.medium || 3, counts.high || 1],
+                  data: [counts.low, counts.medium, counts.high],
                   backgroundColor: ["#68CBB8", "#FFB562", "#E57373"],
                   borderWidth: 2,
                   borderColor: "#ffffff"
@@ -580,14 +611,6 @@
               }
             } catch (e) { console.warn("BHC fetch warning:", e); }
 
-            if (!bhcList.length) {
-              bhcList = [
-                { bhc_id: 1, bhc_name: "Tiaong BHC" },
-                { bhc_id: 2, bhc_name: "Tarcan BHC" },
-                { bhc_id: 3, bhc_name: "Pinagbarilan" }
-              ];
-            }
-
             const { data: mothersData } = await db.from("mothers").select("mother_id, assigned_bhc_id");
             const countMap = {};
             (mothersData || []).forEach(m => {
@@ -595,11 +618,14 @@
             });
 
             const labels = bhcList.map(b => (b.bhc_name && b.bhc_name.length > 14) ? b.bhc_name.slice(0, 14) + "…" : (b.bhc_name || "BHC"));
-            const values = bhcList.map(b => countMap[b.bhc_id] || Math.floor(Math.random() * 8) + 4);
+            const values = bhcList.map(b => countMap[b.bhc_id] || 0);
 
             const canvas = document.getElementById("bhc-chart");
             if (!canvas) return;
             if (chartBhcInstance) chartBhcInstance.destroy();
+            resetChartCanvas(canvas);
+
+            if (!bhcList.length) { showEmptyChart(canvas, "No health centers registered"); return; }
 
             chartBhcInstance = new Chart(canvas, {
               type: "bar",
@@ -637,11 +663,14 @@
               const d = new Date(); d.setMonth(d.getMonth() - i); d.setDate(1);
               const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
               labels.push(d.toLocaleString("en-PH", { month: "short", year: "2-digit" }));
-              values.push(map[key] || Math.floor(Math.random() * 5) + 3);
+              values.push(map[key] || 0);
             }
             const canvas = document.getElementById("monthly-chart");
             if (!canvas) return;
             if (chartMonthlyInstance) chartMonthlyInstance.destroy();
+            resetChartCanvas(canvas);
+
+            if (values.every(v => v === 0)) { showEmptyChart(canvas, "No registrations in the last 6 months"); return; }
 
             chartMonthlyInstance = new Chart(canvas, {
               type: "line",
@@ -685,13 +714,15 @@
               });
             } catch (e) {}
 
-            if (stockHealthy + stockWarning + stockShortage === 0) {
-              stockHealthy = 14; stockWarning = 4; stockShortage = 2;
-            }
-
             const canvas = document.getElementById("inventory-chart");
             if (!canvas) return;
             if (chartInventoryInstance) chartInventoryInstance.destroy();
+            resetChartCanvas(canvas);
+
+            if (stockHealthy + stockWarning + stockShortage === 0) {
+              showEmptyChart(canvas, "No inventory items recorded");
+              return;
+            }
 
             chartInventoryInstance = new Chart(canvas, {
               type: "doughnut",
@@ -940,6 +971,22 @@
         loadMonthlyChart();
         loadInventoryChart();
         loadAuditTrail();
+        window.AdminLiveRefresh?.start({
+          db,
+          tables: [
+            "accounts", "mothers", "midwives", "children", "pregnancies",
+            "bhc", "health_facilities", "inventory_items", "inventory_batches",
+            "inventory_transactions", "audit_trail"
+          ],
+          refresh: () => Promise.all([
+            loadStats(),
+            loadRiskChart(),
+            loadBhcChart(),
+            loadMonthlyChart(),
+            loadInventoryChart(),
+            loadAuditTrail(),
+          ]),
+        });
       })();
     </script>
   </body>

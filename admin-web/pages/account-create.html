@@ -37,7 +37,7 @@
           />
         </div>
         <div class="header-right">
-          <span class="header-badge">Admin Portal</span>
+          <span class="header-badge">RHU Portal</span>
           <div class="header-user">
             <div class="header-avatar" id="header-avatar">A</div>
             <span class="header-user-name" id="header-user-name">Admin</span>
@@ -500,6 +500,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
     <script src="common-security.js"></script>
+    <script src="live-refresh.js"></script>
     <script>
       (function () {
         const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
@@ -660,7 +661,9 @@
 
         function validateEmail() {
           const val = emailInput.value.trim();
-          const emailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/i;
+          // Accept any valid address — RHU staff use government domains
+          // (@doh.gov.ph, @bulacan.gov.ph) as well as personal webmail.
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
           if (!val) {
             emailInput.classList.add("error");
             emailErrorMsg.textContent = "Email address is required.";
@@ -668,7 +671,7 @@
             return false;
           } else if (!emailRegex.test(val)) {
             emailInput.classList.add("error");
-            emailErrorMsg.textContent = "Please enter a valid Gmail address (e.g. user@gmail.com).";
+            emailErrorMsg.textContent = "Please enter a valid email address (e.g. user@example.com).";
             emailErrorMsg.style.display = "block";
             return false;
           } else {
@@ -723,18 +726,21 @@
         function generateSecurePassword() {
           const length = 12;
           const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#*";
-          let pwd = "";
           const cryptoObj = window.crypto || window.msCrypto;
-          if (cryptoObj && cryptoObj.getRandomValues) {
-            const values = new Uint32Array(length);
-            cryptoObj.getRandomValues(values);
-            for (let i = 0; i < length; i++) {
-              pwd += chars[values[i] % chars.length];
-            }
-          } else {
-            for (let i = 0; i < length; i++) {
-              pwd += chars[Math.floor(Math.random() * chars.length)];
-            }
+
+          // No Math.random() fallback: it is seeded predictably and must never
+          // generate a credential. Refusing is safer than issuing a guessable one.
+          if (!cryptoObj || !cryptoObj.getRandomValues) {
+            throw new Error(
+              "This browser cannot generate a secure password. Please use an up-to-date browser to create accounts.",
+            );
+          }
+
+          const values = new Uint32Array(length);
+          cryptoObj.getRandomValues(values);
+          let pwd = "";
+          for (let i = 0; i < length; i++) {
+            pwd += chars[values[i] % chars.length];
           }
           return pwd;
         }
@@ -837,7 +843,7 @@
               }
             } catch (nErr) { console.warn("notifications insert warning:", nErr); }
 
-            // 2. Primary Method (Midwife-side logic): Queue email in Supabase email_queue table
+            // 2. Primary path: queue the email in Supabase for the worker to pick up.
             let isQueuedInDb = false;
             try {
               const { error: queueErr } = await db.from("email_queue").insert({
@@ -845,18 +851,16 @@
                 subject: "🔑 Welcome to INAAGAPAY - Your Temporary Login Credentials",
                 html_content: html
               });
-
               if (!queueErr) {
-                console.log("Email credentials successfully queued in email_queue table for:", email);
                 isQueuedInDb = true;
               } else {
-                console.warn("email_queue insert warning:", queueErr);
+                console.warn("email_queue insert failed:", queueErr);
               }
             } catch (qErr) {
               console.warn("email_queue exception:", qErr);
             }
 
-            // 3. Secondary Edge function invocation (Optional / Fail-safe)
+            // 3. Secondary: the send-email Edge Function, if it is deployed.
             try {
               const response = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
                 method: "POST",
@@ -872,30 +876,77 @@
               });
               if (response.ok) return true;
             } catch (fnErr) {
-              console.warn("Edge function send-email endpoint unavailable, using DB queue result:", fnErr);
+              console.warn("Edge function send-email unavailable, using DB queue result:", fnErr);
             }
 
-            return isQueuedInDb || true;
+            // Report what actually happened. Returning an unconditional true here
+            // made the caller claim delivery succeeded even when nothing was sent,
+            // and made the SMS fallback and manual-password panel unreachable.
+            return isQueuedInDb;
           } catch (e) {
-            console.error("Email sending handler completed with fallback:", e);
-            return true;
+            console.error("Email delivery failed:", e);
+            return false;
           }
         }
 
+        // Sends credentials by SMS.
+        //
+        // Preferred route is the send-sms Edge Function, which holds the provider
+        // API key server-side. If that function is not deployed the call falls
+        // through to the original direct request, so this page keeps working either
+        // way and the deployment order does not matter.
         async function sendCredentialsSms(phone, pwd, type) {
+          if (!phone) return false;
+          if (!isValidPhilippineNumber(phone)) {
+            console.error("Invalid Philippine phone number:", phone);
+            return false;
+          }
+          const formatted = formatPhilippineNumber(phone);
+          const roleName = type === "midwife" ? "Midwife" : "Admin";
+          const message = `Welcome to INAAGAPAY! An administrator created a ${roleName} account for you. Your temporary password is: ${pwd}\n\nPlease change it on your first login.`;
+
           try {
-            if (!phone) return false;
-            if (!isValidPhilippineNumber(phone)) {
-              console.error("Invalid Philippine phone number:", phone);
+            const response = await fetch(`${SUPABASE_URL}/functions/v1/send-sms`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${SUPABASE_ANON}`
+              },
+              body: JSON.stringify({ number: formatted, message })
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              return data?.sent === true;
+            }
+
+            // 404 means the function is not deployed yet — use the fallback below.
+            // Any other status is a real failure from a deployed function.
+            if (response.status !== 404) {
+              console.warn("send-sms function returned HTTP", response.status);
               return false;
             }
-            const formatted = formatPhilippineNumber(phone);
-            const roleName = type === "midwife" ? "Midwife" : "Admin";
-            const message = `Welcome to INAAGAPAY! An administrator created a ${roleName} account for you. Your temporary password is: ${pwd}\n\nPlease change it on your first login.`;
-            
+          } catch (fnErr) {
+            console.warn("send-sms function unreachable, using direct provider call:", fnErr);
+          }
+
+          return sendCredentialsSmsDirect(formatted, message);
+        }
+
+        // ── LEGACY SMS FALLBACK ─────────────────────────────────────────────
+        // DELETE THIS FUNCTION once the send-sms Edge Function is deployed and a
+        // real SMS has been confirmed to arrive through it, then remove the call
+        // to it above (the last line of sendCredentialsSms).
+        //
+        // The key below is shipped in client-side JavaScript and is readable by
+        // anyone who opens view-source on the deployed portal. Rotating it in the
+        // Semaphore dashboard is necessary but not sufficient — the replacement
+        // would be equally exposed for as long as this block remains.
+        async function sendCredentialsSmsDirect(formattedNumber, message) {
+          try {
             const params = new URLSearchParams();
             params.append("apikey", "a011832dcab9b1b6520910c6dbb16028");
-            params.append("number", formatted);
+            params.append("number", formattedNumber);
             params.append("message", message);
             params.append("sendername", "AGAPAY");
 
@@ -920,6 +971,7 @@
             return false;
           }
         }
+        // ── END LEGACY SMS FALLBACK ─────────────────────────────────────────
 
         /* ── Submit ── */
         document
@@ -950,7 +1002,7 @@
               return showAlert("First name and last name are required.");
             }
             if (!isEmailValid) {
-              return showAlert("Please enter a valid Gmail address (ending in @gmail.com).");
+              return showAlert("Please enter a valid email address.");
             }
             if (!isPhoneValid) {
               return showAlert("Please enter a valid Philippine phone number (starts with 09 and is 11 digits).");
@@ -1126,6 +1178,15 @@
           btn.innerHTML =
             '<i class="fa-solid fa-user-plus"></i> Create Account';
         }
+
+        window.AdminLiveRefresh?.start({
+          db,
+          tables: ["bhc", "health_facilities"],
+          refresh: loadBhc,
+          canRefresh: (source) =>
+            source === "manual" ||
+            !document.getElementById("create-form")?.matches(":focus-within"),
+        });
       })();
     </script>
   </body>

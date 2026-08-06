@@ -226,6 +226,95 @@ img {
   gap: 14px;
 }
 
+.live-sync-control {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition),
+    color var(--transition), transform var(--transition-fast);
+}
+
+.live-sync-control:hover {
+  border-color: var(--brand-primary-30);
+  background: var(--brand-secondary);
+  color: var(--brand-text);
+}
+
+.live-sync-control:active {
+  transform: scale(0.98);
+}
+
+.live-sync-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+}
+
+.live-sync-icon {
+  font-size: 11px;
+}
+
+.live-sync-control[data-state="live"] {
+  color: #318f7d;
+  border-color: rgba(104, 203, 184, 0.35);
+  background: var(--success-10);
+}
+
+.live-sync-control[data-state="live"] .live-sync-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 4px rgba(104, 203, 184, 0.15);
+}
+
+.live-sync-control[data-state="syncing"] {
+  color: var(--brand-text);
+  border-color: var(--brand-primary-30);
+  background: var(--brand-primary-10);
+}
+
+.live-sync-control[data-state="syncing"] .live-sync-dot {
+  background: var(--brand-primary);
+}
+
+.live-sync-control[data-state="syncing"] .live-sync-icon,
+.live-sync-control[data-state="connecting"] .live-sync-icon {
+  animation: liveSyncSpin 0.9s linear infinite;
+}
+
+.live-sync-control[data-state="fallback"] .live-sync-dot,
+.live-sync-control[data-state="connecting"] .live-sync-dot {
+  background: var(--warning);
+}
+
+.live-sync-control[data-state="offline"],
+.live-sync-control[data-state="error"] {
+  color: var(--error);
+  border-color: rgba(229, 115, 115, 0.35);
+  background: var(--error-10);
+}
+
+.live-sync-control[data-state="offline"] .live-sync-dot,
+.live-sync-control[data-state="error"] .live-sync-dot {
+  background: var(--error);
+}
+
+@keyframes liveSyncSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .header-badge {
   background: var(--brand-primary-10);
   color: var(--brand-primary);
@@ -1573,6 +1662,13 @@ table.data-table tbody tr:hover td {
 }
 
 @media (max-width: 576px) {
+  .live-sync-control {
+    min-width: 34px;
+    justify-content: center;
+    padding: 6px 8px;
+  }
+
+  .live-sync-label,
   .header-user-name {
     display: none;
   }
@@ -1603,91 +1699,150 @@ table.data-table tbody tr:hover td {
 
   .stat-value {
     font-size: 20px;
-  }
-
-  .stat-icon {
-    width: 42px;
-    height: 42px;
-    font-size: 18px;
-  }
-
-  .form-row {
-    grid-template-columns: 1fr !important;
-    gap: 12px;
-  }
-
-  .btn {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .page-actions .btn {
-    width: auto;
-    flex: 1;
-  }
-
-  #toast-container {
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-  }
-
-  .toast {
-    min-width: unset;
-    width: 100%;
-  }
-
-  /* Mobile Backdrop Overlay */
-  .sidebar-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
-    z-index: 240;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
-  }
-
-  .sidebar-backdrop.active {
-    opacity: 1;
-    pointer-events: auto;
-  }
+}
+.badge-expiring-warning {
+  background: rgba(255, 181, 98, 0.18);
+  color: #C77700;
+  border: 1px solid rgba(255, 181, 98, 0.35);
+}
+.badge-expiring-good {
+  background: rgba(255, 104, 165, 0.1);
+  color: var(--brand-primary);
+  border: 1px solid var(--brand-primary-30);
 }
 
-/* ── Network Status Banner & Security Alerts ── */
-.network-status-banner {
+/* ── Data Privacy Act & Custom Confirmation Modal ── */
+.rhu-dpa-notice {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--brand-secondary);
+  border: 1px dashed var(--brand-primary-30);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rhu-dpa-notice i {
+  color: var(--brand-primary);
+  font-size: 14px;
+}
+
+.rhu-modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-  padding: 8px 16px;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 600;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(45, 45, 45, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: transform 0.3s ease;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+.rhu-modal-card {
+  background: #FFFFFF;
+  border-radius: var(--radius-dialog, 24px);
+  border: 1px solid var(--border-primary, #F0F0F0);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+  max-width: 480px;
+  width: 100%;
+  overflow: hidden;
+  animation: slideUp 0.2s ease;
+}
+.rhu-modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rhu-modal-header i {
+  font-size: 22px;
+  color: var(--brand-primary);
+}
+.rhu-modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--brand-text);
+  margin: 0;
+}
+.rhu-modal-body {
+  padding: 20px 24px;
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+.rhu-modal-footer {
+  padding: 14px 24px 20px;
+  background: var(--brand-secondary);
+  border-top: 1px solid var(--border-primary);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
-.network-status-banner.offline {
-  background: #f43f5e;
-  color: #ffffff;
+
+/* =====================================================
+   Accessibility
+   ===================================================== */
+
+/* Keyboard focus was previously invisible everywhere: nothing in this stylesheet
+   styled :focus-visible, so tabbing through the portal gave no indication of
+   position. Applies only to keyboard focus, so mouse users see no change. */
+:focus-visible {
+  outline: 3px solid var(--brand-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
-.network-status-banner.online {
-  background: #10b981;
-  color: #ffffff;
+.btn:focus-visible,
+.page-btn:focus-visible,
+.pagination-btn:focus-visible,
+.tab-btn-modern:focus-visible,
+.inventory-tab-btn:focus-visible,
+.view-btn-modern:focus-visible,
+.sidebar-nav a:focus-visible,
+.sidebar-logout:focus-visible,
+.modal-close:focus-visible,
+.header-sidebar-toggle:focus-visible {
+  outline: 3px solid var(--brand-accent);
+  outline-offset: 2px;
 }
 
-.masked-data {
-  letter-spacing: 2px;
-  font-family: monospace;
-  color: var(--text-secondary);
+.form-control:focus-visible,
+.form-select:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+
+/* Skip repeated sidebar/header navigation with the keyboard. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 1000;
+  padding: 12px 20px;
+  background: var(--brand-primary);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 0 0 var(--radius-sm) 0;
+  text-decoration: none;
+}
+.skip-link:focus {
+  left: 0;
+}
+
+/* Respect the OS "reduce motion" setting — the portal animates toasts, tab
+   transitions and card hovers, which can trigger vestibular discomfort. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
