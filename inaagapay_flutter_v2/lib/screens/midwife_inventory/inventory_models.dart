@@ -50,6 +50,7 @@ class InventoryCatalogRecord {
     required this.itemType,
     required this.unit,
     required this.minimumStock,
+    this.isArchived = false,
   });
 
   factory InventoryCatalogRecord.fromJson(Map<String, dynamic> json) {
@@ -59,6 +60,7 @@ class InventoryCatalogRecord {
       itemType: _asString(json['item_type'], fallback: 'other'),
       unit: _asString(json['unit_of_measure'], fallback: 'units'),
       minimumStock: _asInt(json['minimum_stock_threshold'], fallback: 50),
+      isArchived: json['is_archived'] == true,
     );
   }
 
@@ -67,6 +69,7 @@ class InventoryCatalogRecord {
   final String itemType;
   final String unit;
   final int minimumStock;
+  final bool isArchived;
 }
 
 class InventoryBatchRecord {

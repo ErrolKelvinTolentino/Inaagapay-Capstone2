@@ -455,19 +455,34 @@
 
         const SESSION_KEY = "inaagapay_admin_session";
 
-        // If already logged in, redirect
+        // Absolute session lifetime. A stored session with no age check never
+        // expires — reopening the tab days later would still be treated as signed in.
+        const MAX_SESSION_AGE_MS = 12 * 60 * 60 * 1000;
+
+        function isSessionExpired(s) {
+          if (!s || !s.logged_in_at) return true;
+          const issued = new Date(s.logged_in_at).getTime();
+          if (!Number.isFinite(issued)) return true;
+          return Date.now() - issued > MAX_SESSION_AGE_MS;
+        }
+
+        // If already logged in and the session is still valid, redirect
         const existing = localStorage.getItem(SESSION_KEY);
         if (existing) {
           try {
             const s = JSON.parse(existing);
             if (s && s.account_type === "admin") {
-              if (s.is_temporary_password === true) {
+              if (isSessionExpired(s)) {
+                localStorage.removeItem(SESSION_KEY);
+              } else if (s.is_temporary_password === true) {
                 window.location.href = "pages/change-password.html";
               } else {
                 window.location.href = "pages/dashboard.html";
               }
             }
-          } catch (_) {}
+          } catch (_) {
+            localStorage.removeItem(SESSION_KEY);
+          }
         }
 
         // Toggle password visibility with improved icon change
@@ -525,12 +540,26 @@
 
             if (error) throw error;
 
+            // Uniform failure message. Distinguishing "no such account" from
+            // "wrong password" from "suspended" lets an attacker enumerate which
+            // email addresses are registered and which are active.
+            const GENERIC_FAILURE = "Invalid email or password.";
+
             if (!accounts || accounts.length === 0) {
-              showError("Invalid email or password.");
+              showError(GENERIC_FAILURE);
               return;
             }
 
             const user = accounts[0];
+
+            // Verify the password before revealing anything about the account,
+            // so account state is only disclosed to whoever holds the credentials.
+            const bcrypt = dcodeIO.bcrypt;
+            const match = await bcrypt.compare(password, user.password_hash);
+            if (!match) {
+              showError(GENERIC_FAILURE);
+              return;
+            }
 
             if (user.account_type !== "admin") {
               showError("Access Denied: Midwife and Mother accounts must use the INAAGAPAY Mobile App.");
@@ -546,14 +575,6 @@
               showError(
                 "Account is " + user.status + ". Contact system support."
               );
-              return;
-            }
-
-            // Verify password with bcryptjs
-            const bcrypt = dcodeIO.bcrypt;
-            const match = await bcrypt.compare(password, user.password_hash);
-            if (!match) {
-              showError("Incorrect password. Please try again.");
               return;
             }
 

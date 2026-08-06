@@ -1903,3 +1903,66 @@ input[type="password"]::-ms-clear {
   gap: 10px;
 }
 
+
+/* =====================================================
+   Accessibility
+   ===================================================== */
+
+/* Keyboard focus was previously invisible everywhere: nothing in this stylesheet
+   styled :focus-visible, so tabbing through the portal gave no indication of
+   position. Applies only to keyboard focus, so mouse users see no change. */
+:focus-visible {
+  outline: 3px solid var(--brand-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.btn:focus-visible,
+.page-btn:focus-visible,
+.pagination-btn:focus-visible,
+.tab-btn-modern:focus-visible,
+.inventory-tab-btn:focus-visible,
+.view-btn-modern:focus-visible,
+.sidebar-nav a:focus-visible,
+.sidebar-logout:focus-visible,
+.modal-close:focus-visible,
+.header-sidebar-toggle:focus-visible {
+  outline: 3px solid var(--brand-accent);
+  outline-offset: 2px;
+}
+
+.form-control:focus-visible,
+.form-select:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+
+/* Skip repeated sidebar/header navigation with the keyboard. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 1000;
+  padding: 12px 20px;
+  background: var(--brand-primary);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 0 0 var(--radius-sm) 0;
+  text-decoration: none;
+}
+.skip-link:focus {
+  left: 0;
+}
+
+/* Respect the OS "reduce motion" setting — the portal animates toasts, tab
+   transitions and card hovers, which can trigger vestibular discomfort. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

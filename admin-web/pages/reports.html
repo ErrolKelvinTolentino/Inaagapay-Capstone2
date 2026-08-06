@@ -534,15 +534,42 @@
           }
         });
 
+        // Escapes any DB-sourced value before it is interpolated into innerHTML.
+        // Facility and item names are operator-editable, so they are untrusted.
+        function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
+
         function showToast(msg, type = "info") {
           const icons = { success: "fa-circle-check", error: "fa-circle-xmark", warning: "fa-triangle-exclamation", info: "fa-circle-info" };
           const c = document.getElementById("toast-container");
           if (!c) return;
           const t = document.createElement("div");
           t.className = `toast ${type}`;
-          t.innerHTML = `<i class="fa-solid ${icons[type]}"></i><span class="toast-text">${msg}</span><button class="toast-close" onclick="this.closest('.toast').remove()"><i class="fa-solid fa-xmark"></i></button>`;
+          t.innerHTML = `<i class="fa-solid ${icons[type]}"></i><span class="toast-text">${esc(msg)}</span><button class="toast-close" onclick="this.closest('.toast').remove()"><i class="fa-solid fa-xmark"></i></button>`;
           c.appendChild(t);
           setTimeout(() => { t.style.animation = "fadeOut .3s ease forwards"; t.addEventListener("animationend", () => t.remove()); }, 4000);
+        }
+
+        // Charts must show an explicit empty state rather than placeholder numbers —
+        // these figures are read as real health indicators.
+        function showEmptyChart(canvas, message) {
+          const wrap = canvas.parentElement;
+          if (!wrap || wrap.querySelector(".chart-empty-state")) return;
+          canvas.style.display = "none";
+          const el = document.createElement("div");
+          el.className = "chart-empty-state";
+          el.style.cssText =
+            "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;" +
+            "justify-content:center;gap:8px;color:var(--text-secondary);font-size:13px;text-align:center;";
+          el.innerHTML =
+            '<i class="fa-regular fa-chart-bar" style="font-size:28px;opacity:.4;"></i>' +
+            `<span>${esc(message)}</span>`;
+          wrap.appendChild(el);
+        }
+
+        function resetChartCanvas(canvas) {
+          const wrap = canvas.parentElement;
+          wrap?.querySelector(".chart-empty-state")?.remove();
+          canvas.style.display = "";
         }
 
         // Global State Cache
@@ -580,7 +607,7 @@
             if (bData && bData.length) allBhcs = bData;
             else {
               const { data: fData } = await db.from("health_facilities").select("facility_id, name, barangay");
-              allBhcs = (fData || []).map(f => ({ bhc_id: f.facility_id, bhc_name: f.name, barangay: f.barangay || "Santa Cruz" }));
+              allBhcs = (fData || []).map(f => ({ bhc_id: f.facility_id, bhc_name: f.name, barangay: f.barangay || null }));
             }
           } catch (e) { console.warn("BHC fetch warning:", e); }
 
@@ -630,7 +657,7 @@
           const sel = document.getElementById("filter-bhc-select");
           if (!sel) return;
           sel.innerHTML = '<option value="all">All Health Centers (System-wide)</option>' +
-            allBhcs.map(b => `<option value="${b.bhc_id}">${b.bhc_name}</option>`).join("");
+            allBhcs.map(b => `<option value="${esc(b.bhc_id)}">${esc(b.bhc_name)}</option>`).join("");
         }
 
         // Render Reports & Analytics based on Selected BHC filter
@@ -668,8 +695,8 @@
           // KPI 3: Immunization Compliance
           const completedVac = allImmunizations.filter(v => (v.status || "").toLowerCase() === "completed").length;
           const totalVac = allImmunizations.length;
-          const vacRate = totalVac > 0 ? Math.round((completedVac / totalVac) * 100) : 88; // Default realistic fallback
-          document.getElementById("kpi-immunization-rate").textContent = `${vacRate}%`;
+          const vacRate = totalVac > 0 ? Math.round((completedVac / totalVac) * 100) : null;
+          document.getElementById("kpi-immunization-rate").textContent = vacRate === null ? "—" : `${vacRate}%`;
           document.getElementById("kpi-child-count").textContent = `${filteredChildren.length} Infants / Children`;
 
           // KPI 4: Midwives
@@ -736,21 +763,27 @@
         }
 
         function renderBhcWorkloadChart() {
-          const labels = allBhcs.map(b => b.bhc_name.length > 14 ? b.bhc_name.slice(0, 14) + "…" : b.bhc_name);
+          const labels = allBhcs.map(b => {
+            const n = b.bhc_name || "Unnamed BHC";
+            return n.length > 14 ? n.slice(0, 14) + "…" : n;
+          });
           const motherCounts = allBhcs.map(b => allMothers.filter(m => m.assigned_bhc_id === b.bhc_id).length);
           const midwifeCounts = allBhcs.map(b => allMidwives.filter(m => m.assigned_bhc_id === b.bhc_id).length);
 
           const ctx = document.getElementById("chart-bhc-workload");
           if (!ctx) return;
           if (chartBhcInstance) chartBhcInstance.destroy();
+          resetChartCanvas(ctx);
+
+          if (!labels.length) { showEmptyChart(ctx, "No health centers registered"); return; }
 
           chartBhcInstance = new Chart(ctx, {
             type: "bar",
             data: {
-              labels: labels.length ? labels : ["Tiaong BHC", "Tarcan BHC", "Poblacion BHC"],
+              labels,
               datasets: [
-                { label: "Mothers", data: motherCounts.length ? motherCounts : [12, 18, 9], backgroundColor: "#FF68A5", borderRadius: 6 },
-                { label: "Midwives", data: midwifeCounts.length ? midwifeCounts : [2, 3, 2], backgroundColor: "#3B82F6", borderRadius: 6 }
+                { label: "Mothers", data: motherCounts, backgroundColor: "#FF68A5", borderRadius: 6 },
+                { label: "Midwives", data: midwifeCounts, backgroundColor: "#3B82F6", borderRadius: 6 }
               ]
             },
             options: {
@@ -783,7 +816,7 @@
             d.setDate(1);
             const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
             labels.push(d.toLocaleString("en-PH", { month: "short", year: "2-digit" }));
-            values.push(monthMap[key] || Math.floor(Math.random() * 5) + 2);
+            values.push(monthMap[key] || 0);
           }
 
           const ctx = document.getElementById("chart-monthly-trends");
@@ -818,13 +851,16 @@
         }
 
         function renderImmunizationChart(completed, total) {
-          const completedCount = completed || 42;
-          const totalCount = total || 50;
+          const completedCount = completed || 0;
+          const totalCount = total || 0;
           const pendingCount = Math.max(0, totalCount - completedCount);
 
           const ctx = document.getElementById("chart-immunization-status");
           if (!ctx) return;
           if (chartVacInstance) chartVacInstance.destroy();
+          resetChartCanvas(ctx);
+
+          if (totalCount === 0) { showEmptyChart(ctx, "No immunization records yet"); return; }
 
           chartVacInstance = new Chart(ctx, {
             type: "doughnut",
@@ -980,8 +1016,8 @@
 
             return `
               <tr>
-                <td style="font-weight:600; color:var(--text-primary);">${mName}</td>
-                <td><span class="badge badge-admin">${bhcName}</span></td>
+                <td style="font-weight:600; color:var(--text-primary);">${esc(mName)}</td>
+                <td><span class="badge badge-admin">${esc(bhcName)}</span></td>
                 <td><span class="badge badge-high-risk"><i class="fa-solid fa-triangle-exclamation"></i> High Risk</span></td>
                 <td>${edd}</td>
               </tr>
@@ -1002,10 +1038,10 @@
 
           tbody.innerHTML = shortageItems.map(item => `
             <tr>
-              <td style="font-weight:600; color:var(--text-primary);">${item.item_name || 'Medical Item'}</td>
-              <td><span class="badge badge-low">${item.category || 'Supply'}</span></td>
-              <td style="text-align:center; font-weight:700; color:var(--error);">${item.current_quantity || 0} ${item.unit || 'pcs'}</td>
-              <td style="text-align:center; color:var(--text-secondary);">${item.minimum_reorder_level || 10} ${item.unit || 'pcs'}</td>
+              <td style="font-weight:600; color:var(--text-primary);">${esc(item.item_name || 'Medical Item')}</td>
+              <td><span class="badge badge-low">${esc(item.category || 'Supply')}</span></td>
+              <td style="text-align:center; font-weight:700; color:var(--error);">${item.current_quantity || 0} ${esc(item.unit || 'pcs')}</td>
+              <td style="text-align:center; color:var(--text-secondary);">${item.minimum_reorder_level || 10} ${esc(item.unit || 'pcs')}</td>
             </tr>
           `).join("");
         }
@@ -1020,7 +1056,9 @@
           }
 
           const searchTerm = (document.getElementById("bhc-table-search")?.value || "").toLowerCase();
-          const filteredBhcs = allBhcs.filter(b => b.bhc_name.toLowerCase().includes(searchTerm) || (b.barangay && b.barangay.toLowerCase().includes(searchTerm)));
+          const filteredBhcs = allBhcs.filter(b =>
+            (b.bhc_name || "").toLowerCase().includes(searchTerm) ||
+            (b.barangay || "").toLowerCase().includes(searchTerm));
 
           tbody.innerHTML = filteredBhcs.map(b => {
             const bMothers = allMothers.filter(m => m.assigned_bhc_id === b.bhc_id);
@@ -1030,23 +1068,32 @@
             const bMidwives = allMidwives.filter(m => m.assigned_bhc_id === b.bhc_id);
             const bStockShortages = allInventoryItems.filter(i => (i.bhc_id === b.bhc_id || !i.bhc_id) && (i.current_quantity || 0) <= (i.minimum_reorder_level || 10)).length;
 
-            const stockBadge = bStockShortages > 0 
+            // Immunization rate is derived from this BHC's own children, not a
+            // fixed placeholder — this column feeds RHU reporting.
+            const bChildIds = new Set(allChildren.filter(c => motherIds.has(c.mother_id)).map(c => c.child_id));
+            const bImmun = allImmunizations.filter(v => bChildIds.has(v.child_id));
+            const bImmunDone = bImmun.filter(v => (v.status || "").toLowerCase() === "completed").length;
+            const immunBadge = bImmun.length > 0
+              ? `<span class="badge badge-admin">${Math.round((bImmunDone / bImmun.length) * 100)}%</span>`
+              : `<span class="badge badge-inactive" title="No immunization records for this health center">—</span>`;
+
+            const stockBadge = bStockShortages > 0
               ? `<span class="badge badge-low" style="color:var(--error);"><i class="fa-solid fa-triangle-exclamation"></i> ${bStockShortages} Alerts</span>`
               : `<span class="badge badge-teal"><i class="fa-solid fa-circle-check"></i> Stock Healthy</span>`;
 
             return `
               <tr>
-                <td style="font-weight:700; color:var(--brand-text);">${b.bhc_name}</td>
-                <td><i class="fa-solid fa-location-dot" style="color:var(--brand-primary); margin-right:4px;"></i> ${b.barangay || 'Santa Cruz'}</td>
+                <td style="font-weight:700; color:var(--brand-text);">${esc(b.bhc_name)}</td>
+                <td><i class="fa-solid fa-location-dot" style="color:var(--brand-primary); margin-right:4px;"></i> ${esc(b.barangay || '—')}</td>
                 <td style="text-align:center; font-weight:600;">${bMidwives.length}</td>
                 <td style="text-align:center; font-weight:600;">${bMothers.length}</td>
                 <td style="text-align:center; font-weight:600;">${bPregnancies.length}</td>
                 <td style="text-align:center;">
-                  ${bHighRisk > 0 
-                    ? `<span class="badge badge-high-risk">${bHighRisk} High Risk</span>` 
+                  ${bHighRisk > 0
+                    ? `<span class="badge badge-high-risk">${bHighRisk} High Risk</span>`
                     : `<span class="badge badge-low-risk">0 High Risk</span>`}
                 </td>
-                <td style="text-align:center;"><span class="badge badge-admin">92%</span></td>
+                <td style="text-align:center;">${immunBadge}</td>
                 <td style="text-align:center;">${stockBadge}</td>
               </tr>
             `;
