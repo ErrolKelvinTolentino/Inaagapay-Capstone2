@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/secondary_header.dart';
 import '../../widgets/hero_card.dart';
 import '../../widgets/records_display_card.dart';
+import '../../services/immunization_schedule.dart';
 import '../../widgets/status_indicator.dart';
 import '../../services/groq_service.dart';
 import '../../services/growth_calculator.dart';
@@ -192,6 +193,13 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
     } catch (e) {
       return 'Unknown age';
     }
+  }
+
+  /// The child's date of birth, or null when no birth record exists.
+  DateTime? get _birthdate {
+    final raw = birthData?['birthdate']?.toString();
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
   }
 
   int _ageInWeeks(DateTime recordDate) {
@@ -492,15 +500,22 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                     : immunizations.map((imm) {
                         final vaccine = imm['vaccine'] as Map<String, dynamic>?;
                         final doseNum = vaccine?['dose_number'];
+                        // Judged rather than assumed — this was a hardcoded
+                        // onTime, so every dose read on time however late.
+                        final timeliness =
+                            ImmunizationSchedule.timelinessOfRecord(
+                          imm,
+                          birthdate: _birthdate,
+                        );
                         return RecordItem(
                           leadingIcon: Icons.vaccines,
                           label: vaccine?['vaccine_name'] ??
                               _t('Unknown Vaccine', 'Hindi Kilalang Bakuna'),
                           subLabel: doseNum != null ? '${_t('Dose', 'Dose')} $doseNum' : null,
                           value: formatDate(imm['vaccination_date']),
-                          trailingWidget: StatusIndicator(
-                            status: StatusIndicatorType.onTime,
-                          ),
+                          trailingWidget: timeliness == null
+                              ? null
+                              : StatusIndicator(status: timeliness),
                           onTap: () {
                             widget.onViewVaccines();
                           },

@@ -8,6 +8,7 @@ import '../../widgets/secondary_header.dart';
 import '../../widgets/small_description.dart';
 import '../../widgets/hero_card.dart';
 import '../../widgets/records_display_card.dart';
+import '../../services/immunization_schedule.dart';
 import '../../widgets/status_indicator.dart';
 import '../../services/child_service.dart';
 import '../../services/language_service.dart';
@@ -125,9 +126,18 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
     return '$years year${years != 1 ? 's' : ''}';
   }
 
-  StatusIndicatorType _getStatusIcon(ImmunizationRecord record) {
-    // All records in the list are already given (since they're from immunization_record table)
-    return StatusIndicatorType.onTime;
+  /// How timely this dose was.
+  ///
+  /// This previously returned onTime unconditionally, reasoning that every row
+  /// in immunization_records had been given. It had — that is what makes it a
+  /// record. Whether it was *timely* is the question the badge answers, and a
+  /// dose given ten months late was still shown as "On Time".
+  StatusIndicatorType? _getStatusIcon(ImmunizationRecord record) {
+    return ImmunizationSchedule.timelinessOf(
+      birthdate: _birthdate,
+      givenOn: record.vaccinationDate,
+      scheduledAtMonths: record.recommendedAgeMonths,
+    );
   }
 
   @override
@@ -259,9 +269,12 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
                                     leadingIcon: Icons.verified,
                                     label: _t('Status', 'Status'),
                                     value: _t('COMPLETED', 'KUMPLETO'),
-                                    trailingWidget: StatusIndicator(
-                                      status: _getStatusIcon(v),
-                                    ),
+                                    trailingWidget: () {
+                                      final timeliness = _getStatusIcon(v);
+                                      return timeliness == null
+                                          ? null
+                                          : StatusIndicator(status: timeliness);
+                                    }(),
                                   ),
                                   if (v.remarks != null && v.remarks!.isNotEmpty)
                                     RecordItem(

@@ -11,6 +11,7 @@ import '../../widgets/records_display_card.dart';
 import '../../widgets/status_indicator.dart';
 import '../../services/groq_service.dart';
 import '../../services/growth_calculator.dart';
+import '../../services/immunization_schedule.dart';
 import '../../services/supabase_service.dart';
 import 'add_growth_step1.dart';
 import 'add_immunization_choice.dart';
@@ -205,6 +206,13 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
     } catch (e) {
       return 'Unknown age';
     }
+  }
+
+  /// The child's date of birth, or null when no birth record exists.
+  DateTime? get _birthdate {
+    final raw = birthData?['birthdate']?.toString();
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
   }
 
   int _ageInWeeks(DateTime recordDate) {
@@ -704,14 +712,22 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
                     : immunizations.map((imm) {
                         final vaccine = imm['vaccine'] as Map<String, dynamic>?;
                         final doseNum = vaccine?['dose_number'];
+                        // Judged, not assumed. This was previously the literal
+                        // StatusIndicatorType.onTime, so a dose given ten
+                        // months late still read "On Time".
+                        final timeliness =
+                            ImmunizationSchedule.timelinessOfRecord(
+                          imm,
+                          birthdate: _birthdate,
+                        );
                         return RecordItem(
                           leadingIcon: Icons.vaccines,
                           label: vaccine?['vaccine_name'] ?? 'Unknown Vaccine',
                           subLabel: doseNum != null ? 'Dose $doseNum' : null,
                           value: formatDate(imm['vaccination_date']),
-                          trailingWidget: StatusIndicator(
-                            status: StatusIndicatorType.onTime,
-                          ),
+                          trailingWidget: timeliness == null
+                              ? null
+                              : StatusIndicator(status: timeliness),
                           onTap: () {
                             Navigator.push(
                               context,
