@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../theme/app_colors.dart';
+import 'add_immunization_choice.dart';
 import '../../widgets/secondary_header.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/dialog_box.dart';
@@ -46,6 +47,11 @@ class ImmunizationOcrReviewPage extends StatefulWidget {
   final Set<int> takenVaccineIds;
   final DateTime? childBirthdate;
 
+  /// Carried through from the entry choice. A scanned card is a history that
+  /// may span several facilities, so these records must not silently claim
+  /// this centre administered them.
+  final ImmunizationSource source;
+
   const ImmunizationOcrReviewPage({
     super.key,
     required this.childId,
@@ -53,6 +59,7 @@ class ImmunizationOcrReviewPage extends StatefulWidget {
     required this.allVaccines,
     required this.takenVaccineIds,
     this.childBirthdate,
+    this.source = ImmunizationSource.outside,
   });
 
   @override
@@ -269,9 +276,16 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
           'dose_number': (vaccine['dose_number'] as num?)?.toInt() ?? 1,
           'remarks': item.remarks.trim().isEmpty ? null : item.remarks.trim(),
           'created_at': DateTime.now().toIso8601String(),
-          // Canonical column name; this previously wrote a column the table
-          // does not declare.
-          if (midwifeId != null) 'administered_by': midwifeId,
+          'source': widget.source.dbValue,
+          // Who transcribed the card — always this midwife.
+          if (midwifeId != null) 'recorded_by': midwifeId,
+          // Who gave the dose. Only claimed when the card is being recorded
+          // as doses this centre administered.
+          if (midwifeId != null && widget.source == ImmunizationSource.thisBhc)
+            'administered_by': midwifeId,
+          // A scanned card is documentary evidence by definition.
+          if (widget.source == ImmunizationSource.outside)
+            'evidence': 'immunization_card',
         });
       }
 

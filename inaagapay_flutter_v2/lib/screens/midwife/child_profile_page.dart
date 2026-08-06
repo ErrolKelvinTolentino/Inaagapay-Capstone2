@@ -13,7 +13,7 @@ import '../../services/groq_service.dart';
 import '../../services/growth_calculator.dart';
 import '../../services/supabase_service.dart';
 import 'add_growth_step1.dart';
-import 'add_immunization_page.dart';
+import 'add_immunization_choice.dart';
 import 'child_growth_list_page.dart';
 import 'child_immunization_list_page.dart';
 
@@ -474,7 +474,7 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AddImmunizationPage(childId: widget.childId),
+        builder: (_) => AddImmunizationChoicePage(childId: widget.childId),
       ),
     );
     if (result == true && mounted) {
