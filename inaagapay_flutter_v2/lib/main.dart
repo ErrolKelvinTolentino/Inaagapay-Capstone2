@@ -151,7 +151,8 @@ class _InaagapayAppState extends State<InaagapayApp> {
               accountResponse?['is_temporary_password'] == true &&
                   !temporaryPasswordAlreadyChanged;
 
-          if (createdBy == 'midwife') {
+          if (SupabaseService.isMidwifeCreated(
+              createdBy: createdBy, accountId: accountId)) {
             if (!profileComplete) {
               await AuthStorage.saveProfileComplete(true);
             }

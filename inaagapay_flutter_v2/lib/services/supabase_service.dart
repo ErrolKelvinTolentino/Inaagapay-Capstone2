@@ -246,16 +246,22 @@ class SupabaseService {
           };
         }
 
-        final int accountId = existing['account_id'] as int;
+        // Stage the password; do not touch password_hash. The OTP has not been
+        // answered yet, so nothing here proves this person holds the contact.
+        // verifyCode promotes it once the code is matched. Without this, knowing
+        // an unverified account's number is enough to overwrite its password.
+        //
+        // created_by is deliberately left alone. On an existing row it already
+        // records provenance ('self' / the creator's account id), and a
+        // re-registration attempt is not evidence about who created the account.
         await client.from('accounts').update({
-          'password_hash': _hashPassword(password),
+          'pending_password_hash': _hashPassword(password),
           'verification_code': code,
           'verification_expires': expires,
-          'created_by': accountId.toString(),
         }).eq(field, formattedContact);
       } else {
         final data = {
-          'password_hash': _hashPassword(password),
+          'pending_password_hash': _hashPassword(password),
           'account_type': 'mother',
           'verification_code': code,
           'verification_expires': expires,
@@ -320,7 +326,7 @@ class SupabaseService {
     if (isEmail) {
       final account = await client
           .from('accounts')
-          .select('account_id, email_address, phone_number, reset_code, reset_expires, verification_code, verification_expires')
+          .select('account_id, email_address, phone_number, reset_code, reset_expires, verification_code, verification_expires, pending_password_hash')
           .eq('email_address', cleanContact)
           .maybeSingle();
       if (account != null) {
@@ -352,7 +358,7 @@ class SupabaseService {
       
       final account = await client
           .from('accounts')
-          .select('account_id, email_address, phone_number, reset_code, reset_expires, verification_code, verification_expires')
+          .select('account_id, email_address, phone_number, reset_code, reset_expires, verification_code, verification_expires, pending_password_hash')
           .or('phone_number.eq."$format1",phone_number.eq."$format2",phone_number.eq."$format3"')
           .maybeSingle();
           
@@ -438,11 +444,24 @@ class SupabaseService {
       final expires = DateTime.parse(account['verification_expires']);
       if (expires.isBefore(DateTime.now())) return false;
 
-      await client.from('accounts').update({
+      // The code was held, so the password staged at registration can now be
+      // committed. Promote it here and nowhere else.
+      final pending = account['pending_password_hash'] as String?;
+
+      final update = <String, dynamic>{
         'is_verified': true,
         'verification_code': null,
         'verification_expires': null,
-      }).eq(field, value);
+      };
+
+      // Absent staging means this account verified through some other route.
+      // Leave the live hash alone rather than blanking a working password.
+      if (pending != null && pending.isNotEmpty) {
+        update['password_hash'] = pending;
+        update['pending_password_hash'] = null;
+      }
+
+      await client.from('accounts').update(update).eq(field, value);
 
       return true;
     } catch (e) {
@@ -496,6 +515,29 @@ class SupabaseService {
         'message': 'Failed to reset password: ${e.toString()}'
       };
     }
+  }
+
+  /// Whether this account was created by someone else — a midwife at the BHC —
+  /// rather than by the mother registering herself.
+  ///
+  /// `accounts.created_by` carries provenance in one of three shapes:
+  ///
+  ///   'self'                 — self-registered, before an account id existed
+  ///   the row's own id       — self-registered, stamped after insert
+  ///   another account's id   — created by that midwife
+  ///   'midwife'              — created by a midwife whose id could not be read
+  ///
+  /// So "midwife-created" is everything that is neither 'self' nor this row's
+  /// own id. Testing `== 'midwife'` instead catches only the last shape, which
+  /// is the rare fallback — that check was in main.dart and was very nearly
+  /// always false. It decides whether a mother is sent to Complete Profile, so
+  /// it lives here now and both callers share it.
+  static bool isMidwifeCreated({
+    required String? createdBy,
+    required Object? accountId,
+  }) {
+    if (createdBy == null || createdBy.isEmpty) return false;
+    return createdBy != 'self' && createdBy != accountId?.toString();
   }
 
   // LOGIN (supports email or phone)
@@ -1808,7 +1850,10 @@ class SupabaseService {
         accountId = existingAccount['account_id'] as int;
 
         final isTempPass = existingAccount['is_temporary_password'] == true;
-        final createdByMidwife = existingAccount['created_by'] != 'self' && existingAccount['created_by'] != existingAccount['account_id']?.toString();
+        final createdByMidwife = isMidwifeCreated(
+          createdBy: existingAccount['created_by'] as String?,
+          accountId: existingAccount['account_id'],
+        );
 
         if (createdByMidwife && isTempPass) {
           // Re-generate temporary password and send credentials

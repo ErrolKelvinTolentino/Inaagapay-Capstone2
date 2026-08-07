@@ -121,7 +121,8 @@ class _LoginScreenState extends State<LoginScreen> {
           final createdBy = response['user']['created_by'] as String? ?? 'self';
           await AuthStorage.saveTemporaryPasswordChanged(!needsPasswordChange);
           
-          if (createdBy != 'self' && createdBy != response['user']['id']?.toString()) {
+          if (SupabaseService.isMidwifeCreated(
+              createdBy: createdBy, accountId: response['user']['id'])) {
             await AuthStorage.saveProfileComplete(true);
             
             if (needsPasswordChange) {
