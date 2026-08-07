@@ -7,8 +7,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/baby_growth_milestone_data.dart';
 import '../data/pregnancy_growth_data.dart';
 import '../data/pregnancy_health_sample_data.dart';
+import '../models/baby_growth_milestone.dart';
 import '../models/baby_memory.dart';
+import '../models/pregnancy_growth_stage.dart';
 import '../services/asset_pdf_download_service.dart';
+import '../services/baby_book_repository.dart';
 import '../theme/app_colors.dart';
 import '../widgets/baby_memory_photo.dart';
 import '../widgets/baby_book/baby_growth_milestones_section.dart';
@@ -21,7 +24,20 @@ import 'baby_book_memory_gallery_page.dart';
 String _t(String english, String _) => english;
 
 class BabyBookMockupPage extends StatefulWidget {
-  const BabyBookMockupPage({super.key});
+  /// The mother whose Baby Book this is.
+  ///
+  /// When null the page renders the sample pregnancy — the preview mode the
+  /// widget tests and the `/baby-book` route still use while the remaining
+  /// sections are migrated. When set, the pregnancy sections read from the
+  /// database and the sample data is not consulted at all.
+  final int? motherId;
+
+  /// Overridable so the loading and empty states can be exercised without a
+  /// database. Production callers leave this null.
+  @visibleForTesting
+  final BabyBookRepository? repository;
+
+  const BabyBookMockupPage({super.key, this.motherId, this.repository});
 
   @override
   State<BabyBookMockupPage> createState() => _BabyBookMockupPageState();
@@ -41,6 +57,57 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
 
   String? _downloadingPdf;
   final ImagePicker _imagePicker = ImagePicker();
+
+  BabyBookRepository get _repository =>
+      widget.repository ?? const BabyBookRepository();
+
+  /// Null in preview mode, and also for a mother with no ongoing pregnancy —
+  /// the two are told apart by [_isPreview], because they must render
+  /// differently. Showing a real mother a sample "20 weeks pregnant" would be
+  /// alarming and false.
+  CurrentPregnancyState? _pregnancy;
+  List<BabyGrowthMilestone> _milestones = const [];
+  bool _isLoadingPregnancy = false;
+
+  bool get _isPreview => widget.motherId == null;
+
+  CurrentPregnancyState? get _effectivePregnancy =>
+      _isPreview ? demoCurrentPregnancy : _pregnancy;
+
+  List<BabyGrowthMilestone> get _effectiveMilestones =>
+      _isPreview ? babyGrowthMilestoneSampleData : _milestones;
+
+  Future<void> _loadPregnancy() async {
+    setState(() => _isLoadingPregnancy = true);
+
+    final pregnancy = await _repository.loadCurrentPregnancy(widget.motherId!);
+
+    // Milestones are keyed to a pregnancy, so there is nothing to fetch
+    // without one.
+    final pregnancyId = pregnancy?.pregnancyId;
+    final milestones = pregnancyId == null
+        ? const <BabyGrowthMilestone>[]
+        : await _repository.loadPrenatalMilestones(
+            pregnancyId: pregnancyId,
+            currentWeek: pregnancy!.currentWeek,
+          );
+
+    if (!mounted) return;
+    setState(() {
+      _pregnancy = pregnancy;
+      _milestones = milestones;
+      _isLoadingPregnancy = false;
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Preview mode touches no network, which is what keeps the widget tests
+    // synchronous and offline.
+    if (!_isPreview) _loadPregnancy();
+  }
+
   final List<BabyMemory> _memories = <BabyMemory>[
     BabyMemory(
       id: 'sample-ultrasound',
@@ -299,29 +366,42 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _BabyCoverCard(key: _todayKey),
+                      _BabyCoverCard(
+                          key: _todayKey, pregnancy: _effectivePregnancy),
                       const SizedBox(height: 24),
                       const _SectionHeading(
                         eyebrow: 'TODAY',
                         title: 'Your pregnancy today',
                       ),
                       const SizedBox(height: 12),
-                      const _BabyStatsCard(),
+                      _BabyStatsCard(pregnancy: _effectivePregnancy),
                       const SizedBox(height: 14),
                       _AppointmentCard(
                         onTap: () =>
                             _showMockupMessage('Appointment details', ''),
                       ),
                       const SizedBox(height: 32),
-                      PregnancyGrowthJourney(
-                        currentPregnancy: demoCurrentPregnancy,
-                        stages: pregnancyGrowthStages,
-                      ),
-                      const SizedBox(height: 34),
-                      BabyGrowthMilestonesSection(
-                        currentPregnancy: demoCurrentPregnancy,
-                        initialMilestones: babyGrowthMilestoneSampleData,
-                      ),
+                      if (_isLoadingPregnancy)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 48),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_effectivePregnancy == null)
+                        // A mother between pregnancies is a normal state, not
+                        // an error — and never a reason to show her the sample
+                        // pregnancy, which would tell her she is 20 weeks along.
+                        const _NoOngoingPregnancyNotice()
+                      else ...[
+                        PregnancyGrowthJourney(
+                          currentPregnancy: _effectivePregnancy!,
+                          stages: pregnancyGrowthStages,
+                        ),
+                        const SizedBox(height: 34),
+                        BabyGrowthMilestonesSection(
+                          currentPregnancy: _effectivePregnancy!,
+                          initialMilestones: _effectiveMilestones,
+                        ),
+                      ],
                       const SizedBox(height: 34),
                       PregnancyHealthRecordsSection(
                         initialRecords: pregnancyHealthSampleRecords,
@@ -368,6 +448,59 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
   }
 }
 
+/// Shown when a mother has no ongoing pregnancy on record.
+///
+/// Deliberately not an error and not empty space. She may be between
+/// pregnancies, or her record may simply not be set up yet, and neither is
+/// something she did wrong — so this says what is missing and who can add it,
+/// without alarming her.
+class _NoOngoingPregnancyNotice extends StatelessWidget {
+  const _NoOngoingPregnancyNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.brandPrimary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.favorite_outline,
+              size: 40, color: AppColors.brandPrimary.withValues(alpha: 0.7)),
+          const SizedBox(height: 12),
+          Text(
+            _t('No pregnancy recorded yet', 'Wala pang naitalang pagbubuntis'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _t(
+              'Your pregnancy timeline will appear here once your midwife '
+                  'records it at the health center.',
+              'Lalabas dito ang iyong pregnancy timeline kapag naitala na ito '
+                  'ng iyong midwife sa health center.',
+            ),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.5,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MemoryDetails {
   final String title;
   final String caption;
@@ -376,7 +509,12 @@ class _MemoryDetails {
 }
 
 class _BabyCoverCard extends StatelessWidget {
-  const _BabyCoverCard({super.key});
+  const _BabyCoverCard({super.key, this.pregnancy});
+
+  /// Null when there is no ongoing pregnancy. The card then shows the book's
+  /// title without a gestational age, rather than a number belonging to
+  /// nobody.
+  final CurrentPregnancyState? pregnancy;
 
   @override
   Widget build(BuildContext context) {
@@ -406,20 +544,23 @@ class _BabyCoverCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'Currently',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
+                if (pregnancy != null)
+                  const Text(
+                    'Currently',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
                 const SizedBox(height: 2),
-                const Text(
-                  '20 Weeks Pregnant',
+                Text(
+                  pregnancy == null
+                      ? 'Your Baby Book'
+                      : '${pregnancy!.currentWeek} Weeks Pregnant',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 21,
                     height: 1.1,
@@ -428,6 +569,7 @@ class _BabyCoverCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
+                if (pregnancy != null)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -439,7 +581,7 @@ class _BabyCoverCard extends StatelessWidget {
                     const SizedBox(width: 5),
                     Flexible(
                       child: Text(
-                        'Month 5 • Second Trimester',
+                        'Month ${pregnancy!.currentMonth} • ${pregnancy!.trimester}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -534,7 +676,9 @@ class _SectionHeading extends StatelessWidget {
 }
 
 class _BabyStatsCard extends StatelessWidget {
-  const _BabyStatsCard();
+  const _BabyStatsCard({this.pregnancy});
+
+  final CurrentPregnancyState? pregnancy;
 
   @override
   Widget build(BuildContext context) {
@@ -554,7 +698,9 @@ class _BabyStatsCard extends StatelessWidget {
           Expanded(
             child: _StatItem(
               icon: Icons.timelapse_rounded,
-              value: 'Month 5',
+              value: pregnancy == null
+                  ? '—'
+                  : 'Month ${pregnancy!.currentMonth}',
               label: 'Current month',
               color: const Color(0xFF68CBB8),
             ),

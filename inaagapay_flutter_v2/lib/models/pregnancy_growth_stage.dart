@@ -43,6 +43,13 @@ class CurrentPregnancyState {
   final double pregnancyProgress;
   final String trimester;
 
+  /// The `pregnancies` row this was built from.
+  ///
+  /// Null for the sample pregnancy used in preview mode. Anything that writes
+  /// to the database needs it, so a null here means "not a real pregnancy" and
+  /// should stop a write rather than invent an id.
+  final int? pregnancyId;
+
   const CurrentPregnancyState({
     required this.currentWeek,
     required this.currentMonth,
@@ -50,6 +57,7 @@ class CurrentPregnancyState {
     required this.numberOfBabies,
     required this.pregnancyProgress,
     required this.trimester,
+    this.pregnancyId,
   });
 
   bool get isTwinPregnancy => numberOfBabies == 2;
@@ -62,6 +70,7 @@ class CurrentPregnancyState {
     int? numberOfBabies,
     double? pregnancyProgress,
     String? trimester,
+    int? pregnancyId,
   }) {
     return CurrentPregnancyState(
       currentWeek: currentWeek ?? this.currentWeek,
@@ -70,6 +79,7 @@ class CurrentPregnancyState {
       numberOfBabies: numberOfBabies ?? this.numberOfBabies,
       pregnancyProgress: pregnancyProgress ?? this.pregnancyProgress,
       trimester: trimester ?? this.trimester,
+      pregnancyId: pregnancyId ?? this.pregnancyId,
     );
   }
 }

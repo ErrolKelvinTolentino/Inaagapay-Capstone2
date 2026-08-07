@@ -81,6 +81,7 @@ class BabyBookRepository {
     final fetalCount = int.tryParse(row['fetal_count']?.toString() ?? '') ?? 1;
 
     return CurrentPregnancyState(
+      pregnancyId: (row['pregnancy_id'] as num?)?.toInt(),
       currentWeek: currentWeek,
       currentMonth: stage?.month ?? 1,
       estimatedDueDate: effectiveEdd,
