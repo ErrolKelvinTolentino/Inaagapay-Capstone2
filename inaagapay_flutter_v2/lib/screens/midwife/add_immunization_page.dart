@@ -12,6 +12,7 @@ import '../../widgets/main_button.dart';
 import '../../widgets/dialog_box.dart';
 import '../../widgets/confirmation_dialog_box.dart';
 import '../../services/groq_service.dart';
+import '../../services/immunization_schedule.dart';
 import '../../services/sms_service.dart';
 import '../../services/notification_service.dart';
 import 'add_immunization_choice.dart';
@@ -570,6 +571,9 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           .order('vaccine_name');
 
       _vaccines = List<Map<String, dynamic>>.from(response);
+      // Indexes are rebuilt here rather than rescanned per row: the schedule
+      // only changes on load, but the dropdown rebuilds on every keystroke.
+      _rebuildLookups();
 
       if (_vaccines.isEmpty) {
         setState(() {
@@ -596,14 +600,37 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
 
   Future<void> _loadTakenVaccines() async {
     try {
+      // Dates come along too: the minimum interval before a later dose is
+      // measured from when the previous one was actually given.
       final response = await Supabase.instance.client
           .from('immunization_records')
-          .select('vaccine_id')
+          .select('vaccine_id, vaccination_date')
           .eq('child_id', widget.childId);
 
       final taken = List<Map<String, dynamic>>.from(response);
+
+      final ids = <int>{};
+      final dates = <int, DateTime>{};
+      for (final row in taken) {
+        final id = row['vaccine_id'] as int?;
+        if (id == null) continue;
+        ids.add(id);
+
+        final raw = row['vaccination_date']?.toString();
+        final parsed = raw == null ? null : DateTime.tryParse(raw);
+        // Keep the latest, in case a vaccine somehow has more than one record.
+        if (parsed != null &&
+            (dates[id] == null || parsed.isAfter(dates[id]!))) {
+          dates[id] = parsed;
+        }
+      }
+
+      if (!mounted) return;
       setState(() {
-        _takenVaccineIds = taken.map((t) => t['vaccine_id'] as int).toSet();
+        _takenVaccineIds = ids;
+        _givenDateByVaccineId
+          ..clear()
+          ..addAll(dates);
       });
     } catch (e) {
       debugPrint('Error loading taken vaccines: $e');
@@ -612,24 +639,86 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
 
   /// Checks whether the prerequisite dose for a given vaccine has been taken.
   /// For multi-dose vaccines (e.g. Pentavalent 1->2->3), dose N requires dose N-1.
+  // ── Precomputed lookups ────────────────────────────────────────────────────
+  //
+  // Rebuilt once whenever the vaccine list or the recorded doses change, rather
+  // than rescanned per row. Grouping previously ran a linear search over every
+  // vaccine for each vaccine — quadratic on every rebuild of the dropdown, for
+  // data that only changes on load and on save.
+
+  /// Doses of each vaccine, ordered by dose number.
+  final Map<String, List<Map<String, dynamic>>> _dosesByVaccineName = {};
+
+  /// When each recorded dose was administered.
+  final Map<int, DateTime> _givenDateByVaccineId = {};
+
+  /// Vaccines that have more than one dose, so the tile knows when to show it.
+  final Set<String> _multiDoseVaccineNames = {};
+
+  void _rebuildLookups() {
+    _dosesByVaccineName.clear();
+    _multiDoseVaccineNames.clear();
+
+    for (final vaccine in _vaccines) {
+      final name = vaccine['vaccine_name']?.toString() ?? '';
+      _dosesByVaccineName.putIfAbsent(name, () => []).add(vaccine);
+    }
+
+    for (final entry in _dosesByVaccineName.entries) {
+      entry.value.sort((a, b) =>
+          ((a['dose_number'] as num?)?.toInt() ?? 1)
+              .compareTo((b['dose_number'] as num?)?.toInt() ?? 1));
+      if (entry.value.length > 1) _multiDoseVaccineNames.add(entry.key);
+    }
+  }
+
+  /// Whether every earlier dose of this vaccine is already recorded.
+  ///
+  /// Checks *all* preceding doses, not just the one immediately before. Dose 3
+  /// requires both 1 and 2 — checking only dose 2 would let a dose 3 surface
+  /// for a child whose dose 1 was never recorded.
   bool _isPrerequisiteMet(Map<String, dynamic> vaccine) {
     final doseNumber = (vaccine['dose_number'] as num?)?.toInt() ?? 1;
     if (doseNumber <= 1) return true; // first dose has no prerequisite
 
-    final vaccineName = vaccine['vaccine_name']?.toString() ?? '';
+    final siblings = _dosesByVaccineName[vaccine['vaccine_name']?.toString()];
+    if (siblings == null) return true;
 
-    // Find the previous dose for the same vaccine_name
-    final previousDose = _vaccines.where((v) {
-      final vName = v['vaccine_name']?.toString() ?? '';
-      final vDose = (v['dose_number'] as num?)?.toInt() ?? 1;
-      return vName == vaccineName && vDose == doseNumber - 1;
-    }).toList();
+    for (final dose in siblings) {
+      final n = (dose['dose_number'] as num?)?.toInt() ?? 1;
+      if (n >= doseNumber) break; // sorted, so nothing earlier remains
+      if (!_takenVaccineIds.contains(dose['vaccine_id'] as int)) return false;
+    }
+    return true;
+  }
 
-    if (previousDose.isEmpty) return true; // no previous dose found in DB, allow
+  /// When the dose immediately before this one was given, if it was.
+  DateTime? _previousDoseGivenOn(Map<String, dynamic> vaccine) {
+    final doseNumber = (vaccine['dose_number'] as num?)?.toInt() ?? 1;
+    if (doseNumber <= 1) return null;
 
-    // Check if the previous dose vaccine_id is in takenVaccineIds
-    final prevId = previousDose.first['vaccine_id'] as int;
-    return _takenVaccineIds.contains(prevId);
+    final siblings = _dosesByVaccineName[vaccine['vaccine_name']?.toString()];
+    if (siblings == null) return null;
+
+    for (final dose in siblings) {
+      if (((dose['dose_number'] as num?)?.toInt() ?? 1) == doseNumber - 1) {
+        return _givenDateByVaccineId[dose['vaccine_id'] as int];
+      }
+    }
+    return null;
+  }
+
+  /// The earliest date this dose may be given, honouring both the scheduled
+  /// age and the minimum interval since the previous dose.
+  DateTime? _earliestAllowedFor(Map<String, dynamic> vaccine) {
+    return ImmunizationSchedule.earliestAllowedDate(
+      birthdate: _childBirthdate,
+      scheduledAtMonths:
+          (vaccine['recommended_age_months'] as num?)?.toDouble() ?? 0,
+      previousDoseGivenOn: _previousDoseGivenOn(vaccine),
+      minimumIntervalWeeks:
+          (vaccine['minimum_interval_weeks'] as num?)?.toInt(),
+    );
   }
 
   /// Every vaccine in the schedule, unfiltered.
@@ -642,18 +731,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     return _vaccines;
   }
 
-  /// Determines the status of a vaccine for the roadmap display.
-  /// Returns 'given', 'recommended', or 'not_due'.
-  String _getVaccineStatus(Map<String, dynamic> vaccine) {
-    final vaccineId = vaccine['vaccine_id'] as int;
-    if (_takenVaccineIds.contains(vaccineId)) return 'given';
-
-    final recommendedAge = (vaccine['recommended_age_months'] as num?)?.toDouble() ?? 0;
-    final childAgeMonths = _getChildAgeMonths();
-    if (childAgeMonths >= recommendedAge) return 'recommended';
-
-    return 'not_due';
-  }
 
   bool get _isFormValid =>
       _selectedVaccineId != null && _selectedDate != null;
@@ -677,39 +754,10 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     }
   }
 
-  /// Age as it is printed on the DOH card.
-  ///
-  /// The primary series is scheduled in half months — 1½, 2½, 3½ — so rounding
-  /// to whole months showed IPV at "4 months" when the card says 3½, and put
-  /// three different vaccines on ages the midwife could not find on paper.
-  String _formatRecommendedAge(double? months) {
-    if (months == null) return '';
-    if (months == 0) return 'At birth';
-    if (months == 12) return '1 year';
-
-    final whole = months.floor();
-    final hasHalf = (months - whole) >= 0.5;
-
-    if (whole == 0) return '½ month';
-    return hasHalf ? '$whole½ months' : '$whole months';
-  }
-
-  /// Returns a milestone label for grouping vaccines by recommended age.
-  String _getMilestoneLabel(double months) {
-    if (months == 0) return 'At Birth';
-    if (months < 1) {
-      final weeks = (months * 4).round();
-      return '$weeks Weeks';
-    }
-    if (months < 12) {
-      return '${months.toStringAsFixed(0)} Months';
-    }
-    final years = months / 12;
-    if (years == years.roundToDouble()) {
-      return '${years.toStringAsFixed(0)} Year${years > 1 ? 's' : ''}';
-    }
-    return '${months.toStringAsFixed(0)} Months';
-  }
+  /// Age as printed on the DOH card. Shared with the roadmap so both screens
+  /// render the schedule identically.
+  String _formatRecommendedAge(double? months) =>
+      ImmunizationSchedule.formatScheduledAge(months);
 
   /// How late a dose must be before it counts as overdue rather than simply
   /// due, expressed in months.
@@ -726,19 +774,14 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
   /// unrelated situations — a child too young for a dose, and a child old
   /// enough but missing the dose before it. Only the second is a catch-up the
   /// midwife can act on today.
-  ({
-    List<Map<String, dynamic>> pastDue,
-    List<Map<String, dynamic>> due,
-    List<Map<String, dynamic>> needsEarlierDose,
-    List<Map<String, dynamic>> scheduledLater,
-    List<Map<String, dynamic>> noLongerGiven,
-    List<Map<String, dynamic>> given,
-  }) _groupVaccines() {
+  _VaccineGroups _groupVaccines() {
     final childAgeMonths = _getChildAgeMonths();
+    final today = DateTime.now();
 
     final given = <Map<String, dynamic>>[];
     final pastDue = <Map<String, dynamic>>[];
     final due = <Map<String, dynamic>>[];
+    final dueSoon = <Map<String, dynamic>>[];
     final needsEarlierDose = <Map<String, dynamic>>[];
     final scheduledLater = <Map<String, dynamic>>[];
     final noLongerGiven = <Map<String, dynamic>>[];
@@ -769,6 +812,15 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
         continue;
       }
 
+      // Old enough, earlier doses on file — but the previous one may be too
+      // recent. A dose that cannot yet be given is not overdue, however long
+      // ago its scheduled age passed, so this is checked before lateness.
+      final earliest = _earliestAllowedFor(vaccine);
+      if (earliest != null && earliest.isAfter(today)) {
+        dueSoon.add(vaccine);
+        continue;
+      }
+
       if (childAgeMonths - scheduledAt > _overdueAfterMonths) {
         pastDue.add(vaccine);
       } else {
@@ -787,9 +839,11 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
 
     pastDue.sort(byScheduledAge);
     needsEarlierDose.sort(byScheduledAge);
+    dueSoon.sort(byScheduledAge);
 
     return (
       pastDue: pastDue,
+      dueSoon: dueSoon,
       due: due,
       needsEarlierDose: needsEarlierDose,
       scheduledLater: scheduledLater,
@@ -870,17 +924,35 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
                     _buildDropdownSectionHeader('Due now', AppColors.success),
                     ...groups.due.map((v) => _buildVaccineTile(v)),
                   ],
-                  if (groups.needsEarlierDose.isNotEmpty) ...[
+                  // Old enough, but the previous dose is too recent. Shown
+                  // rather than hidden so the midwife can tell the mother when
+                  // to come back.
+                  if (groups.dueSoon.isNotEmpty) ...[
                     _buildDropdownSectionHeader(
-                        'Needs earlier dose', const Color(0xFFB78103)),
-                    ...groups.needsEarlierDose.map((v) => _buildVaccineTile(v)),
+                        'Due soon', AppColors.brandAccent),
+                    ...groups.dueSoon.map((v) => _buildVaccineTile(v)),
                   ],
-
-                  // The remaining groups are rare and long, so they stay behind
-                  // a toggle rather than pushing the actionable ones off screen.
+                  // Doses waiting on an earlier one are no longer offered in
+                  // the main list: a dose 3 cannot be given before dose 2, and
+                  // the right move is to record the earlier dose first — under
+                  // "Given elsewhere" if it happened at another facility. Doing
+                  // that makes the history complete instead of leaving a dose 3
+                  // floating with no 1 or 2 behind it.
+                  //
+                  // They stay reachable under "Show all" rather than being
+                  // removed outright, for the genuine case of a child who
+                  // received a later dose elsewhere and never had the earlier
+                  // one at all.
                   if (_hasCollapsedGroups(groups)) _buildShowAllToggle(groups),
 
                   if (_showAllVaccines) ...[
+                    if (groups.needsEarlierDose.isNotEmpty) ...[
+                      _buildDropdownSectionHeader(
+                          'Waiting on an earlier dose',
+                          const Color(0xFFB78103)),
+                      ...groups.needsEarlierDose
+                          .map((v) => _buildVaccineTile(v)),
+                    ],
                     if (groups.scheduledLater.isNotEmpty) ...[
                       _buildDropdownSectionHeader(
                           'Scheduled later', AppColors.textSecondary),
@@ -914,29 +986,15 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     setState(() => _vaccineDropdownOpen = !_vaccineDropdownOpen);
   }
 
-  bool _hasCollapsedGroups(
-          ({
-            List<Map<String, dynamic>> pastDue,
-            List<Map<String, dynamic>> due,
-            List<Map<String, dynamic>> needsEarlierDose,
-            List<Map<String, dynamic>> scheduledLater,
-            List<Map<String, dynamic>> noLongerGiven,
-            List<Map<String, dynamic>> given,
-          }) groups) =>
+  bool _hasCollapsedGroups(_VaccineGroups groups) =>
+      groups.needsEarlierDose.isNotEmpty ||
       groups.scheduledLater.isNotEmpty ||
       groups.noLongerGiven.isNotEmpty ||
       groups.given.isNotEmpty;
 
-  Widget _buildShowAllToggle(
-      ({
-        List<Map<String, dynamic>> pastDue,
-        List<Map<String, dynamic>> due,
-        List<Map<String, dynamic>> needsEarlierDose,
-        List<Map<String, dynamic>> scheduledLater,
-        List<Map<String, dynamic>> noLongerGiven,
-        List<Map<String, dynamic>> given,
-      }) groups) {
-    final hidden = groups.scheduledLater.length +
+  Widget _buildShowAllToggle(_VaccineGroups groups) {
+    final hidden = groups.needsEarlierDose.length +
+        groups.scheduledLater.length +
         groups.noLongerGiven.length +
         groups.given.length;
 
@@ -1083,23 +1141,32 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     final ageText = _formatRecommendedAge(recommendedAge);
 
     // Only show the dose when the vaccine actually has more than one.
-    final multiDose = _vaccines.any((v) =>
-        v['vaccine_name'] == vaccine['vaccine_name'] &&
-        ((v['dose_number'] as num?)?.toInt() ?? 1) > 1);
+    final multiDose = _multiDoseVaccineNames.contains(vaccineName);
     final label =
         multiDose ? '$vaccineName · Dose $doseNumber' : vaccineName;
 
     // A dose can be blocked by a missing earlier dose AND be months overdue.
     // Grouping it under "needs earlier dose" must not hide how far behind it
     // is — for a defaulter, that is the whole picture.
+    // A dose still inside its minimum interval is not late, however long ago
+    // its scheduled age passed — so the wait is checked before lateness.
+    final earliest = isAlreadyTaken || isPastCeiling
+        ? null
+        : _earliestAllowedFor(vaccine);
+    final waiting = earliest != null && earliest.isAfter(DateTime.now());
+
     final lateness = _overdueBy(vaccine);
-    final isLate = !isAlreadyTaken && !isPastCeiling && lateness.isNotEmpty;
+    final isLate =
+        !isAlreadyTaken && !isPastCeiling && !waiting && lateness.isNotEmpty;
 
     final String subtitle;
     if (isAlreadyTaken) {
       subtitle = '$ageText · already given';
     } else if (isPastCeiling) {
       subtitle = 'Should not be started after this age';
+    } else if (waiting) {
+      // The date is the point: it is what the midwife tells the mother.
+      subtitle = 'Due ${DateFormat('MMMM d, yyyy').format(earliest)}';
     } else if (isLate) {
       subtitle = '$ageText · $lateness';
     } else {
@@ -1111,6 +1178,8 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
       subtitleColor = AppColors.error;
     } else if (isLate) {
       subtitleColor = AppColors.warning;
+    } else if (waiting) {
+      subtitleColor = AppColors.brandAccent;
     } else {
       subtitleColor = Colors.grey.shade500;
     }
@@ -1196,6 +1265,26 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     );
   }
 
+  Future<bool?> _confirmTooSoon(String label, DateTime earliestAllowed) {
+    final due = DateFormat('MMMM d, yyyy').format(earliestAllowed);
+    return showDialog<bool>(
+      context: context,
+      builder: (_) => ConfirmationDialogBox(
+        title: 'Too soon after the last dose',
+        subtitle:
+            '$label is not due until $due — the minimum interval since the '
+            'previous dose has not passed. A dose given too early may not '
+            'count and may need repeating. Record it only if it was genuinely '
+            'given on the date entered.',
+        cancelText: 'Cancel',
+        confirmText: 'Record anyway',
+        accentColor: AppColors.warning,
+        onCancel: () => Navigator.pop(context, false),
+        onConfirm: () => Navigator.pop(context, true),
+      ),
+    );
+  }
+
   Future<bool?> _confirmMissingPrerequisite(String label, int doseNumber) {
     return showDialog<bool>(
       context: context,
@@ -1258,6 +1347,17 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     // to appear in the child's history.
     if (_isPastAgeCeiling(selected, _getChildAgeMonths())) {
       final proceed = await _confirmPastAgeCeiling(vaccineLabel);
+      if (proceed != true) return false;
+    }
+
+    // Given too soon after the previous dose. A dose below the minimum
+    // interval may not count and can need repeating, so this is worth
+    // stopping on — but it stays a warning, because a short-interval dose
+    // given elsewhere still has to be recordable.
+    final earliestAllowed = _earliestAllowedFor(selected);
+    if (earliestAllowed != null && _selectedDate!.isBefore(earliestAllowed)) {
+      final proceed =
+          await _confirmTooSoon(vaccineLabel, earliestAllowed);
       if (proceed != true) return false;
     }
 
@@ -1324,6 +1424,9 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
         // several vaccines without reloading, so a stale set would let the
         // same one through twice.
         _takenVaccineIds.add(_selectedVaccineId!);
+        // Recording the date too means the next dose's minimum interval is
+        // measured correctly without waiting for a reload.
+        _givenDateByVaccineId[_selectedVaccineId!] = _selectedDate!;
       });
 
       return true;
@@ -1462,208 +1565,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     );
   }
 
-  /// Groups vaccines by recommended_age_months for the roadmap display.
-  /// Returns a list of (milestoneLabel, vaccines) pairs sorted by age.
-  List<MapEntry<String, List<Map<String, dynamic>>>> _getGroupedVaccines() {
-    final Map<double, List<Map<String, dynamic>>> grouped = {};
-
-    for (final v in _vaccines) {
-      final age = (v['recommended_age_months'] as num?)?.toDouble() ?? 0;
-      grouped.putIfAbsent(age, () => []);
-      grouped[age]!.add(v);
-    }
-
-    final sortedKeys = grouped.keys.toList()..sort();
-    return sortedKeys.map((age) {
-      return MapEntry(_getMilestoneLabel(age), grouped[age]!);
-    }).toList();
-  }
-
-  /// Builds the immunization roadmap widget.
-  Widget _buildRoadmap() {
-    final groups = _getGroupedVaccines();
-    if (groups.isEmpty) return const SizedBox.shrink();
-
-    final givenCount = _vaccines.where((v) =>
-        _takenVaccineIds.contains(v['vaccine_id'] as int)).length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Header
-        Row(
-          children: [
-            const Icon(Icons.map_outlined, color: AppColors.brandPrimary, size: 20),
-            const SizedBox(width: 8),
-            const Text(
-              'Immunization Roadmap',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              '$givenCount / ${_vaccines.length}',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        // Progress bar
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: _vaccines.isEmpty ? 0 : givenCount / _vaccines.length,
-            backgroundColor: AppColors.borderPrimary,
-            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.success),
-            minHeight: 6,
-          ),
-        ),
-        const SizedBox(height: 4),
-        // Legend
-        Wrap(
-          spacing: 12,
-          runSpacing: 4,
-          children: [
-            _legendDot(AppColors.success, 'Given'),
-            _legendDot(AppColors.warning, 'Recommended'),
-            _legendDot(AppColors.textSecondary, 'Not due yet'),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // Milestone groups
-        ...groups.map((entry) => _buildMilestoneGroup(entry.key, entry.value)),
-      ],
-    );
-  }
-
-  Widget _legendDot(Color color, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMilestoneGroup(String label, List<Map<String, dynamic>> vaccines) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.borderPrimary),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.brandAccent,
-              ),
-            ),
-            const SizedBox(height: 6),
-            ...vaccines.map((v) => _buildVaccineStatusRow(v)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVaccineStatusRow(Map<String, dynamic> vaccine) {
-    final status = _getVaccineStatus(vaccine);
-    final vaccineName = vaccine['vaccine_name']?.toString() ?? '';
-    final doseNumber = vaccine['dose_number']?.toString() ?? '';
-    final notes = vaccine['notes']?.toString() ?? '';
-
-    Color statusColor;
-    IconData statusIcon;
-    String statusLabel;
-
-    switch (status) {
-      case 'given':
-        statusColor = AppColors.success;
-        statusIcon = Icons.check_circle;
-        statusLabel = 'Already given';
-        break;
-      case 'recommended':
-        statusColor = AppColors.warning;
-        statusIcon = Icons.schedule;
-        statusLabel = 'Recommended';
-        break;
-      default: // not_due
-        statusColor = AppColors.textSecondary;
-        statusIcon = Icons.lock_outline;
-        statusLabel = 'Not due yet';
-    }
-
-    final displayText = notes.isNotEmpty
-        ? '$vaccineName (Dose $doseNumber) - $notes'
-        : '$vaccineName (Dose $doseNumber)';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Icon(statusIcon, color: statusColor, size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              displayText,
-              style: TextStyle(
-                fontSize: 12,
-                color: status == 'not_due'
-                    ? AppColors.textSecondary
-                    : AppColors.textPrimary,
-                decoration: status == 'given'
-                    ? TextDecoration.lineThrough
-                    : TextDecoration.none,
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              statusLabel,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                color: statusColor,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   bool get _hasEnteredData =>
       _selectedVaccineId != null ||
@@ -1928,3 +1829,18 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     ) );
   }
 }
+
+/// Vaccines sorted into what the midwife can act on, in one pass.
+///
+/// Named rather than repeated inline: the shape appears in three signatures,
+/// and spelling it out each time meant adding a group required editing all of
+/// them in step.
+typedef _VaccineGroups = ({
+  List<Map<String, dynamic>> pastDue,
+  List<Map<String, dynamic>> due,
+  List<Map<String, dynamic>> dueSoon,
+  List<Map<String, dynamic>> needsEarlierDose,
+  List<Map<String, dynamic>> scheduledLater,
+  List<Map<String, dynamic>> noLongerGiven,
+  List<Map<String, dynamic>> given,
+});

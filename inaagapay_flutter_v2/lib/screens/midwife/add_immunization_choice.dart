@@ -104,13 +104,25 @@ class AddImmunizationChoicePage extends StatelessWidget {
     );
   }
 
-  void _open(BuildContext context, ImmunizationSource source) {
-    Navigator.pushReplacement(
-      context,
+  /// Opens the form and hands its result back to whoever opened this screen.
+  ///
+  /// Deliberately not pushReplacement: replacing this route completes the
+  /// caller's await straight away, with null, before the form has even been
+  /// filled in. The child profile therefore never learned that a record had
+  /// been added and did not refresh. Pushing and then popping this screen with
+  /// the form's result keeps the caller waiting for the real outcome, while the
+  /// midwife still never returns to this choice screen.
+  Future<void> _open(BuildContext context, ImmunizationSource source) async {
+    final navigator = Navigator.of(context);
+
+    final recordAdded = await navigator.push<bool>(
       MaterialPageRoute(
         builder: (_) => AddImmunizationPage(childId: childId, source: source),
       ),
     );
+
+    if (!context.mounted) return;
+    navigator.pop(recordAdded);
   }
 }
 
