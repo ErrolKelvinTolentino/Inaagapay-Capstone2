@@ -2576,6 +2576,86 @@ class _MotherDashboardState extends State<MotherDashboard> {
                                 ),
                               ),
                             ),
+
+                            const SizedBox(height: 16),
+                            GestureDetector(
+                              onTap: () =>
+                                  Navigator.pushNamed(context, '/baby-book'),
+                              child: Container(
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: AppColors.brandPrimary
+                                        .withValues(alpha: 0.15),
+                                    width: 1,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.04),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.brandPrimary
+                                            .withValues(alpha: 0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.auto_stories_rounded,
+                                        color: AppColors.brandPrimary,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _t('📖 Your Baby Book',
+                                                '📖 Ang Iyong Baby Book'),
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppColors.brandText,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            _t(
+                                              'Follow your pregnancy week by week and keep your memories.',
+                                              'Sundan ang iyong pagbubuntis linggo-linggo at itago ang mga alaala.',
+                                            ),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade600,
+                                              height: 1.2,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.arrow_forward_ios_rounded,
+                                      size: 16,
+                                      color: AppColors.brandPrimary,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                             ],
 
                             const SizedBox(height: 20),

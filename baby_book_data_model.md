@@ -80,12 +80,18 @@ For twins: two books, one shared first chapter.
 
 ## 6. Remaining work
 
-- [ ] Seed `milestone_templates` — prenatal set from the existing Dart sample data; postnatal set needs DOH/WHO sourcing with citations
-- [ ] Repository layer reading the three tables
-- [ ] Replace sample data section by section, keeping `demoCurrentPregnancy` as a fallback so the page always renders
+- [x] Seed prenatal `milestone_templates` — `20260808_baby_book_prenatal_templates.sql`, 9 rows
+- [x] Repository layer — `lib/services/baby_book_repository.dart`
+- [x] De-mock the pregnancy sections — cover card, stats card, growth journey, milestone timeline
+- [x] Mother entry point — dashboard card → `/baby-book` → `BabyBookEntry` resolves her `motherId`
+- [ ] De-mock health records (read `mother_medications` + `given_medications`)
+- [ ] De-mock the memory gallery (`baby_memories` exists; gallery still uses asset images)
+- [ ] Seed postnatal templates — **needs DOH/WHO sourcing with citations**
 - [ ] Child-scoped milestones widget
-- [ ] Entry points: child card → child's book; pregnancy detail → prenatal chapter (no bottom-nav change — the mother's four tabs are full)
-- [ ] Rename `baby_book_mockup_page.dart` → `baby_book_page.dart` once it reads real data
+- [ ] Child card → that child's book
+- [ ] Rename `baby_book_mockup_page.dart` → `baby_book_page.dart` once no sample path remains
 - [ ] Birth transition
+
+**On the sample-data fallback.** The original plan kept `demoCurrentPregnancy` as a fallback so the page always rendered. That was dropped: showing a real mother a sample "20 weeks pregnant" when she has no ongoing pregnancy is worse than showing nothing. Sample data is now reachable only when no `motherId` is supplied — the preview path used by widget tests, never by a signed-in mother.
 
 **RLS is disabled** on these three tables, consistent with `notifications` and `device_tokens`. The app authenticates against `accounts` with bcrypt and reaches Postgres with the anon key. This is a capstone-scope decision and belongs in the study's limitations.

@@ -26,7 +26,7 @@ import 'screens/midwife/ultrasound_analyzer_screen.dart';
 import 'screens/midwife/lab_test_analyzer_screen.dart';
 import 'screens/mother/records_screen.dart';
 import 'screens/mother/mother_journal_screen.dart';
-import 'screens/baby_book_mockup_page.dart';
+import 'screens/baby_book_entry.dart';
 import 'screens/mother/mother_children_screen.dart';
 import 'screens/midwife/midwife_mothers_screen.dart';
 import 'screens/midwife/midwife_children_screen.dart';
@@ -271,10 +271,10 @@ class _InaagapayAppState extends State<InaagapayApp> {
             '/mother-records': (context) => const RecordsScreen(),
             '/mother-journal': (context) => const MotherJournalScreen(),
             '/mother-children': (context) => const MotherChildrenScreen(),
-            // Baby Book is registered but not yet linked from any screen: it
-            // still renders sample data, and where it belongs in the mother's
-            // navigation is an open product decision.
-            '/baby-book': (context) => const BabyBookMockupPage(),
+            // Resolves the signed-in mother before opening the book, so the
+            // sample-pregnancy fallback in BabyBookMockupPage stays a preview
+            // path and is never what a real mother is shown.
+            '/baby-book': (context) => const BabyBookEntry(),
             '/settings': (context) => const SettingsScreen(),
             '/midwife-mothers': (context) => const MidwifeMothersScreen(),
             '/midwife-children': (context) => const MidwifeChildrenScreen(),
