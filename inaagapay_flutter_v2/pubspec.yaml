@@ -33,6 +33,7 @@ dependencies:
   record: ^6.2.1
   pdf: ^3.11.1
   printing: ^5.13.2
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:
@@ -45,6 +46,11 @@ flutter:
 
   assets:
   - assets/images/
+  - assets/images/fetal_growth/
+  - assets/pdf/
+  # Keep .env declared. flutter_dotenv loads it as an asset at startup, so
+  # dropping it from this list breaks the app on launch. The baby-book branch
+  # removed it; that removal is deliberately not carried over.
   - .env
 
 flutter_launcher_icons:
