@@ -1290,52 +1290,111 @@ class _MotherDashboardState extends State<MotherDashboard> {
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.all(16),
+        height: 132,
         decoration: BoxDecoration(
-          color: AppColors.brandSecondary,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: AppColors.brandPrimary.withValues(alpha: 0.25)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.brandPrimary.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.pregnant_woman_rounded,
-                  color: AppColors.brandPrimary, size: 24),
+          borderRadius: BorderRadius.circular(20),
+          image: const DecorationImage(
+            // Decoded at 800px, not its native 1823px. The source is a 2.1 MB
+            // illustration rendered into a card about 320px wide; decoding it
+            // at full size costs roughly 6 MB of memory for no visible gain,
+            // which is the kind of waste that shows up as jank on the cheap
+            // phones this app is for.
+            image: ResizeImage(
+              AssetImage('assets/images/current_pregnancy_card.png'),
+              width: 800,
             ),
-            const SizedBox(width: 16),
-            Expanded(
+            fit: BoxFit.cover,
+            alignment: Alignment.centerRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.brandPrimary.withValues(alpha: 0.22),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            // Scrim over the left half only, so the text stays readable while
+            // the illustration keeps its detail on the right.
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.92),
+                      Colors.white.withValues(alpha: 0.72),
+                      Colors.white.withValues(alpha: 0.0),
+                    ],
+                    stops: const [0.0, 0.42, 0.78],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    _t('My Pregnancy', 'Ang Aking Pagbubuntis'),
+                    _t('MY PREGNANCY', 'ANG AKING PAGBUBUNTIS'),
                     style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.brandText,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.3,
+                      color: AppColors.brandPrimary,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _t('Your body, warning signs, and checklists',
-                        'Ang iyong katawan, mga babala, at checklist'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                      height: 1.2,
+                  const SizedBox(height: 5),
+                  SizedBox(
+                    width: 190,
+                    child: Text(
+                      _t('Everything about\nyour journey',
+                          'Lahat tungkol sa\niyong paglalakbay'),
+                      style: const TextStyle(
+                        fontSize: 19,
+                        height: 1.2,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                        color: AppColors.brandText,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  // A pill rather than a filled button: it invites a tap
+                  // without promising that something will be submitted.
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPrimary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _t('Open', 'Buksan'),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        const Icon(Icons.arrow_forward_rounded,
+                            size: 13, color: Colors.white),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios_rounded,
-                size: 16, color: AppColors.brandPrimary),
           ],
         ),
       ),
@@ -1354,34 +1413,39 @@ class _MotherDashboardState extends State<MotherDashboard> {
         ? _firstName.split(' ').first
         : _t('Nanay', 'Nanay');
 
-    return Align(
-      alignment: Alignment.centerLeft,
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 4),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
           // Warmth comes from contrast, not weight. The greeting recedes and
           // her name carries the emphasis — an extra-bold full line reads as
           // a headline announcing her, which is louder than it is kind.
           Text(
-            '$greeting,',
+            greeting,
+            textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w400,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w500,
               height: 1.2,
-              color: AppColors.textSecondary.withValues(alpha: 0.9),
+              letterSpacing: 0.4,
+              color: AppColors.textSecondary.withValues(alpha: 0.85),
             ),
           ),
+          const SizedBox(height: 3),
           Text(
-            '$name 🌸',
+            name,
+            textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              height: 1.25,
+              fontSize: 27,
+              fontWeight: FontWeight.w800,
+              height: 1.2,
+              letterSpacing: -0.4,
               color: AppColors.brandText,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           if (_hasPregnancy && _week > 0)
             Container(
               padding:
