@@ -9,6 +9,7 @@ import '../../widgets/small_description.dart';
 import '../../widgets/hero_card.dart';
 import '../../widgets/small_info_box.dart';
 import '../../widgets/long_info_box.dart';
+import '../../widgets/danger_signs_card.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/app_input_field.dart';
 import '../../models/baby_growth_model.dart';
@@ -2498,6 +2499,17 @@ class _MotherDashboardState extends State<MotherDashboard> {
                               _buildVitalsIncompleteBanner(),
                             ],
 
+                            // Sits outside the `!_isUnlinked` block below on
+                            // purpose. Bleeding does not wait for a health
+                            // centre assignment, and a mother not yet linked
+                            // is if anything more likely to need this. Gated
+                            // only on being pregnant, since the signs are
+                            // pregnancy-specific.
+                            if (_hasPregnancy) ...[
+                              const SizedBox(height: 16),
+                              const DangerSignsCard(),
+                            ],
+
                             if (!_isUnlinked && _nextScheduleDate != null) ...[
                               const SizedBox(height: 16),
                               _buildNextScheduleCard(),
@@ -2704,9 +2716,14 @@ class _MotherDashboardState extends State<MotherDashboard> {
 
                             // Action Buttons
                             MainButton(
-                              label: _t('More Info', 'Karagdagang Impormasyon'),
+                              // Was "More Info", which named the button after
+                              // the act of tapping it rather than what is
+                              // behind it. What is behind it is her whole
+                              // pregnancy — her body, her risk level, her
+                              // checklists — so the label says that.
+                              label: _t('My Pregnancy', 'Ang Aking Pagbubuntis'),
                               showIcons: true,
-                              leftIcon: Icons.info_outline,
+                              leftIcon: Icons.pregnant_woman_rounded,
                               onPressed: () {
                                 if (!_hasPregnancy ||
                                     _week == 0 ||
