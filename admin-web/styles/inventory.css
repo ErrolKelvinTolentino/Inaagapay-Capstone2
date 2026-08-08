@@ -715,6 +715,23 @@ table.inventory-table tbody tr:hover td {
   padding: 20px;
 }
 
+.inventory-drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 20px;
+  border-top: 1px solid #eaecf0;
+  background: #fff;
+}
+
+.inventory-item-modal .modal-body {
+  max-height: min(72vh, 720px);
+  overflow-y: auto;
+}
+
+.inventory-item-modal .modal {
+  overflow: hidden;
+}
+
 .inventory-drawer-section + .inventory-drawer-section {
   margin-top: 22px;
   padding-top: 20px;

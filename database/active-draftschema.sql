@@ -481,6 +481,10 @@ CREATE TABLE public.immunization_records (
 CREATE TABLE public.inventory_items (
     item_id BIGSERIAL PRIMARY KEY,
     name character varying NOT NULL UNIQUE,
+    generic_name character varying(160),
+    item_code character varying(50),
+    strength_description character varying(160),
+    dosage_form character varying(80),
     item_type character varying NOT NULL CHECK (
         item_type = ANY (
             ARRAY ['vaccine', 'supplement', 'medical_device', 'contraceptive']
@@ -488,8 +492,29 @@ CREATE TABLE public.inventory_items (
     ),
     unit_of_measure character varying NOT NULL,
     minimum_stock_threshold integer DEFAULT 50,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT inventory_items_item_code_format_check CHECK (
+        item_code IS NULL OR (
+            item_code = upper(btrim(item_code))
+            AND item_code ~ '^[A-Z0-9][A-Z0-9._/-]{1,49}$'
+        )
+    ),
+    CONSTRAINT inventory_items_strength_description_format_check CHECK (
+        strength_description IS NULL OR (
+            strength_description = btrim(strength_description)
+            AND char_length(strength_description) BETWEEN 1 AND 160
+        )
+    ),
+    CONSTRAINT inventory_items_dosage_form_format_check CHECK (
+        dosage_form IS NULL OR (
+            dosage_form = btrim(dosage_form)
+            AND char_length(dosage_form) BETWEEN 1 AND 80
+        )
+    )
 );
+CREATE UNIQUE INDEX inventory_items_item_code_ci_uidx
+    ON public.inventory_items (lower(item_code))
+    WHERE item_code IS NOT NULL;
 -- Inventory Batches
 CREATE TABLE public.inventory_batches (
     batch_id BIGSERIAL PRIMARY KEY,

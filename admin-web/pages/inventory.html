@@ -488,30 +488,31 @@
           <button type="button" class="inventory-drawer-close" id="close-item-details-btn" aria-label="Close item details"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="inventory-drawer-body" id="item-details-body"></div>
+        <div class="inventory-drawer-footer">
+          <button type="button" class="btn btn-secondary" id="edit-item-details-btn"><i class="fa-solid fa-pen"></i> Edit Item Details</button>
+        </div>
       </aside>
     </div>
 
     <!-- Modal 1: Add Inventory Item -->
-    <div class="modal-overlay" id="modal-item">
-      <div class="modal" style="max-width: 480px;">
+    <div class="modal-overlay inventory-item-modal" id="modal-item">
+      <div class="modal" style="max-width: 640px;">
         <div class="modal-header">
-          <h2 class="modal-title"><i class="fa-solid fa-plus"></i> Add Inventory Item</h2>
+          <h2 class="modal-title" id="item-modal-title"><i class="fa-solid fa-plus"></i> Add Inventory Item</h2>
           <button type="button" class="modal-close" onclick="closeModal('modal-item')" aria-label="Close add item form"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body">
-          <p class="inventory-modal-intro">Create one reusable item record. Manufacturer, lot number, expiration, and quantity are recorded separately for each batch.</p>
+          <p class="inventory-modal-intro" id="item-modal-intro">Create one complete reusable item record. Manufacturer, lot number, expiration, and quantity are recorded separately for each batch.</p>
+          <div id="item-form-alert" class="alert alert-error" style="display:none;margin-bottom:14px;padding:10px;border-radius:6px;"></div>
           <form id="form-item">
-            <div class="form-group" style="margin-bottom: 14px;">
-              <label class="form-label" for="item-name">Display Name <span class="req">*</span></label>
-              <input class="form-control" type="text" id="item-name" placeholder="e.g. Ferrous Sulfate Tablet" required />
-              <span class="form-hint">The familiar name shown throughout the inventory.</span>
-            </div>
-            <div class="form-group" style="margin-bottom: 14px;">
-              <label class="form-label" for="item-generic-name">Generic Name <span class="req">*</span></label>
-              <input class="form-control" type="text" id="item-generic-name" placeholder="e.g. Ferrous Sulfate" required autocomplete="off" />
-              <span class="form-hint">Enter the medicine’s active or non-brand name without the batch or manufacturer.</span>
-            </div>
+            <input type="hidden" id="item-edit-id" />
+            <div class="inventory-form-section-label">Identity</div>
             <div class="form-row" style="margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label" for="item-code">Item Code <span class="req">*</span></label>
+                <input class="form-control" type="text" id="item-code" placeholder="e.g. CAL-500-TAB" maxlength="50" required autocomplete="off" />
+                <span class="form-hint">A short unique code using letters, numbers, dashes, dots, slashes, or underscores.</span>
+              </div>
               <div class="form-group">
                 <label class="form-label" for="item-type">Category Type <span class="req">*</span></label>
                 <select class="form-select" id="item-type" required>
@@ -521,15 +522,56 @@
                   <option value="medical_device">Medical Supply</option>
                 </select>
               </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="item-name">Display Name <span class="req">*</span></label>
+              <input class="form-control" type="text" id="item-name" placeholder="e.g. Calcium Carbonate 500 mg Tablet" maxlength="160" required />
+              <span class="form-hint">The familiar name shown throughout the inventory.</span>
+            </div>
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="item-generic-name">Generic Name <span class="req">*</span></label>
+              <input class="form-control" type="text" id="item-generic-name" placeholder="e.g. Calcium Carbonate" maxlength="160" required autocomplete="off" />
+              <span class="form-hint">Enter the medicine’s active or non-brand name without the batch or manufacturer.</span>
+            </div>
+
+            <div class="inventory-form-section-label">Medicine or supply description</div>
+            <div class="form-row" style="margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label" for="item-strength">Strength / Specification <span class="req">*</span></label>
+                <input class="form-control" type="text" id="item-strength" placeholder="e.g. 500 mg or 0.5 mL capacity" maxlength="160" required />
+                <span class="form-hint">Combination medicines can use one clear description, such as 60 mg iron + 400 mcg folic acid.</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="item-dosage-form">Dosage Form / Item Form <span class="req">*</span></label>
+                <input class="form-control" type="text" id="item-dosage-form" list="item-dosage-form-options" placeholder="e.g. Tablet, Vial, Device" maxlength="80" required autocomplete="off" />
+                <datalist id="item-dosage-form-options">
+                  <option value="Tablet"></option>
+                  <option value="Capsule"></option>
+                  <option value="Vial"></option>
+                  <option value="Injection"></option>
+                  <option value="Oral drops"></option>
+                  <option value="Oral solution"></option>
+                  <option value="Suspension"></option>
+                  <option value="Sachet"></option>
+                  <option value="Cream / Ointment"></option>
+                  <option value="Implant"></option>
+                  <option value="Medical device"></option>
+                </datalist>
+                <span class="form-hint">For non-medicine supplies, use a practical form such as Medical device, Kit, or Consumable.</span>
+              </div>
+            </div>
+
+            <div class="inventory-form-section-label">Stock control</div>
+            <div class="form-row">
               <div class="form-group">
                 <label class="form-label" for="item-uom">Unit of Measure <span class="req">*</span></label>
                 <input class="form-control" type="text" id="item-uom" placeholder="e.g. vials, tablets, doses, boxes" required />
               </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="item-threshold">Low Stock Level</label>
-              <input class="form-control" type="number" id="item-threshold" value="50" min="1" required />
-              <span class="form-hint">Flags this item when usable stock reaches this quantity or lower.</span>
+              <div class="form-group">
+                <label class="form-label" for="item-threshold">Low Stock Level <span class="req">*</span></label>
+                <input class="form-control" type="number" id="item-threshold" value="50" min="1" required />
+                <span class="form-hint">Flags this item when usable stock reaches this quantity or lower.</span>
+              </div>
             </div>
           </form>
         </div>
@@ -925,13 +967,13 @@
 
         function formatItemName(item) {
           if (!item) return "Inventory item";
-          if (item.display_name) return item.display_name;
+          if (item.display_name || item.name) return item.display_name || item.name;
           const standardParts = [
             item.generic_name,
-            item.strength_value && item.strength_unit ? `${item.strength_value} ${item.strength_unit}` : null,
+            item.strength_description,
             item.dosage_form
           ].filter(Boolean);
-          return standardParts.length >= 2 ? standardParts.join(" ") : (item.name || item.generic_name || "Inventory item");
+          return standardParts.length ? standardParts.join(" ") : (item.generic_name || "Inventory item");
         }
 
         function formatItemSecondary(item) {
@@ -1164,7 +1206,7 @@
 
           const filtered = items.filter(item => {
             if (type && item.item_type !== type) return false;
-            const searchable = [item.name, item.generic_name, item.display_name, item.brand_name, item.item_code]
+            const searchable = [item.name, item.generic_name, item.display_name, item.brand_name, item.item_code, item.strength_description, item.dosage_form]
               .filter(Boolean).join(" ").toLowerCase();
             if (q && !searchable.includes(q)) return false;
             const currentStock = calculateStockPerItem(item.item_id);
@@ -1991,10 +2033,40 @@
           document.getElementById("modal-dispense").classList.add("show");
         }
 
-        document.getElementById("open-item-modal-btn").addEventListener("click", () => {
+        function openItemForm(itemId = null) {
           closeMoreActions();
+          const form = document.getElementById("form-item");
+          const item = itemId === null ? null : items.find(entry => Number(entry.item_id) === Number(itemId));
+          const alertEl = document.getElementById("item-form-alert");
+          form.reset();
+          alertEl.style.display = "none";
+          alertEl.textContent = "";
+          document.getElementById("item-edit-id").value = item ? String(item.item_id) : "";
+          document.getElementById("item-modal-title").innerHTML = item
+            ? '<i class="fa-solid fa-pen"></i> Edit Inventory Item'
+            : '<i class="fa-solid fa-plus"></i> Add Inventory Item';
+          document.getElementById("item-modal-intro").textContent = item
+            ? "Complete or correct this reusable catalog record. Existing batches and quantities will not be changed."
+            : "Create one complete reusable item record. Manufacturer, lot number, expiration, and quantity are recorded separately for each batch.";
+          document.getElementById("save-item-btn").innerHTML = item
+            ? '<i class="fa-solid fa-floppy-disk"></i> Save Item Changes'
+            : '<i class="fa-solid fa-floppy-disk"></i> Save Item';
+
+          if (item) {
+            document.getElementById("item-code").value = item.item_code || "";
+            document.getElementById("item-type").value = item.item_type || "vaccine";
+            document.getElementById("item-name").value = item.name || item.display_name || "";
+            document.getElementById("item-generic-name").value = item.generic_name || "";
+            document.getElementById("item-strength").value = item.strength_description || "";
+            document.getElementById("item-dosage-form").value = item.dosage_form || "";
+            document.getElementById("item-uom").value = item.unit_of_measure || "";
+            document.getElementById("item-threshold").value = item.minimum_stock_threshold || 50;
+          }
+
           document.getElementById("modal-item").classList.add("show");
-        });
+        }
+
+        document.getElementById("open-item-modal-btn").addEventListener("click", () => openItemForm());
         document.getElementById("open-batch-modal-btn").addEventListener("click", () => openStockReceivedModal());
         document.getElementById("batches-receive-stock-btn").addEventListener("click", () => openStockReceivedModal());
         document.getElementById("open-dispense-modal-btn").addEventListener("click", () => {
@@ -2025,7 +2097,8 @@
             .sort((a, b) => a.stock - b.stock)[0];
 
           document.getElementById("item-details-title").textContent = formatItemName(item);
-          document.getElementById("item-details-subtitle").textContent = `${formatCategory(item.item_type)} · ${item.unit_of_measure || "Unit not recorded"}`;
+          document.getElementById("item-details-subtitle").textContent = `${formatCategory(item.item_type)} · ${item.dosage_form || item.unit_of_measure || "Item form not encoded"}`;
+          document.getElementById("edit-item-details-btn").dataset.itemId = String(item.item_id);
 
           const batchMarkup = visibleBatches.length
             ? visibleBatches.slice(0, 10).map(batch => {
@@ -2045,12 +2118,12 @@
             <section class="inventory-drawer-section">
               <h3>Item information</h3>
               <div class="inventory-detail-grid">
-                <div class="inventory-detail-field"><span>Item code</span><strong>${esc(item.item_code || "Not recorded")}</strong></div>
+                <div class="inventory-detail-field"><span>Item code</span><strong>${esc(item.item_code || "Not yet encoded")}</strong></div>
                 <div class="inventory-detail-field"><span>Generic name</span><strong>${esc(item.generic_name || item.name || "Not recorded")}</strong></div>
                 <div class="inventory-detail-field"><span>Category</span><strong>${esc(formatCategory(item.item_type))}</strong></div>
                 <div class="inventory-detail-field"><span>Base unit</span><strong>${esc(item.base_unit_of_measure || item.unit_of_measure || "Not recorded")}</strong></div>
-                <div class="inventory-detail-field"><span>Strength</span><strong>${esc(item.strength_value && item.strength_unit ? `${item.strength_value} ${item.strength_unit}` : "Not recorded")}</strong></div>
-                <div class="inventory-detail-field"><span>Dosage form</span><strong>${esc(item.dosage_form || "Not recorded")}</strong></div>
+                <div class="inventory-detail-field"><span>Strength / specification</span><strong>${esc(item.strength_description || "Not yet encoded")}</strong></div>
+                <div class="inventory-detail-field"><span>Dosage / item form</span><strong>${esc(item.dosage_form || "Not yet encoded")}</strong></div>
               </div>
             </section>
             <section class="inventory-drawer-section">
@@ -2090,6 +2163,12 @@
         }
 
         document.getElementById("close-item-details-btn").addEventListener("click", closeItemDetails);
+        document.getElementById("edit-item-details-btn").addEventListener("click", event => {
+          const itemId = Number(event.currentTarget.dataset.itemId);
+          if (!itemId) return;
+          closeItemDetails();
+          openItemForm(itemId);
+        });
         document.getElementById("item-details-drawer").addEventListener("click", event => {
           if (event.target.id === "item-details-drawer") closeItemDetails();
         });
@@ -2128,20 +2207,42 @@
 
         // Form Submit: Add Item
         document.getElementById("save-item-btn").addEventListener("click", async () => {
+          const form = document.getElementById("form-item");
+          const alertEl = document.getElementById("item-form-alert");
+          const editId = Number(document.getElementById("item-edit-id").value) || null;
+          const existingItem = editId ? items.find(item => Number(item.item_id) === editId) : null;
+          const itemCode = document.getElementById("item-code").value.trim().toUpperCase();
           const name = document.getElementById("item-name").value.trim();
           const genericName = document.getElementById("item-generic-name").value.trim();
+          const strengthDescription = document.getElementById("item-strength").value.trim();
+          const dosageForm = document.getElementById("item-dosage-form").value.trim();
           const type = document.getElementById("item-type").value;
           const uom = document.getElementById("item-uom").value.trim();
-          const threshold = parseInt(document.getElementById("item-threshold").value) || 50;
+          const threshold = Number(document.getElementById("item-threshold").value);
+          alertEl.style.display = "none";
 
-          if (!name || !genericName || !uom) {
-            showToast("Display name, generic name, and unit of measure are required.", "warning");
+          if (!form.reportValidity()) {
+            showToast("Complete every required item detail before saving.", "warning");
+            return;
+          }
+          if (!/^[A-Z0-9][A-Z0-9._\/-]{1,49}$/.test(itemCode)) {
+            alertEl.textContent = "Item Code must be 2–50 characters and use only letters, numbers, dashes, dots, slashes, or underscores.";
+            alertEl.style.display = "block";
+            return;
+          }
+          if (!name || !genericName || !strengthDescription || !dosageForm || !uom || !Number.isInteger(threshold) || threshold < 1) {
+            alertEl.textContent = "Enter complete identity, medicine or supply description, and stock-control details.";
+            alertEl.style.display = "block";
             return;
           }
 
           // Client-side uniqueness check
-          if (items.some(item => String(item.name || "").toLowerCase() === name.toLowerCase())) {
+          if (items.some(item => Number(item.item_id) !== editId && String(item.name || "").toLowerCase() === name.toLowerCase())) {
             showToast(`An inventory item named "${name}" already exists.`, "warning");
+            return;
+          }
+          if (items.some(item => Number(item.item_id) !== editId && String(item.item_code || "").toUpperCase() === itemCode)) {
+            showToast(`Item Code "${itemCode}" is already assigned to another inventory item.`, "warning");
             return;
           }
 
@@ -2150,13 +2251,20 @@
           btn.innerHTML = '<div class="btn-loader"></div> Saving...';
 
           try {
-            const { data, error } = await db.from("inventory_items").insert({
+            const itemPayload = {
+              item_code: itemCode,
               name: name,
               generic_name: genericName,
+              strength_description: strengthDescription,
+              dosage_form: dosageForm,
               item_type: type,
               unit_of_measure: uom,
               minimum_stock_threshold: threshold
-            }).select().single();
+            };
+            const query = editId
+              ? db.from("inventory_items").update(itemPayload).eq("item_id", editId)
+              : db.from("inventory_items").insert(itemPayload);
+            const { data, error } = await query.select().single();
 
             if (error) throw error;
 
@@ -2164,26 +2272,37 @@
             try {
               await db.from("audit_trail").insert({
                 account_id: session.account_id,
-                action: "create_inventory_item",
+                action: editId ? "update_inventory_item" : "create_inventory_item",
                 table_name: "inventory_items",
-                description: `Added inventory item "${name}" (generic: ${genericName}; ${type})`,
+                description: editId
+                  ? `Updated inventory item "${name}" (${itemCode}; ${strengthDescription}; ${dosageForm})`
+                  : `Added inventory item "${name}" (${itemCode}; generic: ${genericName}; ${strengthDescription}; ${dosageForm}; ${type})`,
+                old_data: existingItem || null,
                 new_data: data
               });
             } catch (e) {}
 
-            showToast(`Inventory item "${name}" added successfully.`, "success");
+            showToast(`Inventory item "${name}" ${editId ? "updated" : "added"} successfully.`, "success");
             closeModal("modal-item");
-            document.getElementById("form-item").reset();
-            loadInventoryData();
+            form.reset();
+            await loadInventoryData();
           } catch (err) {
-            if (err.message && (err.message.includes("unique constraint") || err.message.includes("already exists"))) {
-              showToast(`An inventory item named "${name}" already exists.`, "error");
+            const errorText = String(err.message || "");
+            if (/item_code|strength_description|dosage_form|schema cache|column/i.test(errorText)) {
+              alertEl.textContent = "Item details need the latest database migration: database/migrations/20260806_inventory_item_details.sql";
+              alertEl.style.display = "block";
+            } else if (err.code === "23505" || /unique constraint|already exists/i.test(errorText)) {
+              alertEl.textContent = "That display name or item code is already in use.";
+              alertEl.style.display = "block";
             } else {
-              showToast("Error creating item: " + err.message, "error");
+              alertEl.textContent = `Could not ${editId ? "update" : "create"} item: ${errorText}`;
+              alertEl.style.display = "block";
             }
           } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Item';
+            btn.innerHTML = editId
+              ? '<i class="fa-solid fa-floppy-disk"></i> Save Item Changes'
+              : '<i class="fa-solid fa-floppy-disk"></i> Save Item';
           }
         });
 
