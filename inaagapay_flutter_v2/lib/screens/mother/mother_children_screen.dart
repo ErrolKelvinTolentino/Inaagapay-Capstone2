@@ -7,6 +7,8 @@ import '../../widgets/app_input_field.dart';
 import '../../services/auth_storage.dart';
 import '../../services/language_service.dart';
 import '../../models/child_model.dart';
+import '../../models/pregnancy_growth_stage.dart';
+import '../../services/baby_book_repository.dart';
 import 'mother_child_stack.dart';
 
 class MotherChildrenScreen extends StatefulWidget {
@@ -24,6 +26,14 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
   bool _loading = true;
   String? _errorMessage;
   int? _motherId;
+
+  /// The pregnancy in progress, if any.
+  ///
+  /// An unborn baby belongs in the answer to "who are my children", and his
+  /// story starts before he has a row in `children` — a heartbeat heard, a
+  /// first kick. The Expecting card is where that story lives until birth,
+  /// and at delivery it simply becomes the child (or, for twins, two).
+  CurrentPregnancyState? _expecting;
 
   @override
   void initState() {
@@ -44,6 +54,8 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
       if (_motherId == null) {
         throw Exception('Mother ID not found');
       }
+      _expecting =
+          await const BabyBookRepository().loadCurrentPregnancy(_motherId!);
       await _fetchChildren();
     } catch (e) {
       if (mounted) {
@@ -347,7 +359,7 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
                               ],
                             ),
                           )
-                        : _filteredChildren.isEmpty
+                        : (_filteredChildren.isEmpty && _expecting == null)
                             ? Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -381,23 +393,30 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
                                   ],
                                 ),
                               )
-                            : ListView.separated(
+                            : ListView(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 20, vertical: 8),
-                                itemCount: _filteredChildren.length,
-                                separatorBuilder: (_, __) =>
+                                children: [
+                                  // The unborn baby comes first: he is the
+                                  // one she is thinking about today.
+                                  if (_expecting != null) ...[
+                                    _ExpectingCard(
+                                      pregnancy: _expecting!,
+                                      onTap: () => Navigator.pushNamed(
+                                          context, '/baby-book'),
+                                    ),
                                     const SizedBox(height: 12),
-                                itemBuilder: (context, index) {
-                                  final child = _filteredChildren[index];
-                                  final age = _localizedAge(child);
-
-                                  return _ChildCard(
-                                    firstName: child.firstName,
-                                    lastName: child.lastName,
-                                    age: age,
-                                    onTap: () => _openChildProfile(child),
-                                  );
-                                },
+                                  ],
+                                  for (final child in _filteredChildren) ...[
+                                    _ChildCard(
+                                      firstName: child.firstName,
+                                      lastName: child.lastName,
+                                      age: _localizedAge(child),
+                                      onTap: () => _openChildProfile(child),
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                ],
                               ),
               ),
             ),
@@ -406,6 +425,118 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
       ),
         );
       },
+    );
+  }
+}
+
+/// The baby on the way, shown above her born children.
+///
+/// Built to the rural-mother rules: an illustration carries the meaning, the
+/// heading is three words, and the only number is the week — large enough to
+/// read at arm's length in poor light. No clinical vocabulary.
+class _ExpectingCard extends StatelessWidget {
+  const _ExpectingCard({required this.pregnancy, required this.onTap});
+
+  final CurrentPregnancyState pregnancy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final expectingMany = pregnancy.isMultiplePregnancy;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Ink(
+        // Deliberately warmer than a child card, so the difference is visible
+        // before any word is read.
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFF1F7), Color(0xFFFFE4EF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+              color: AppColors.brandPrimary.withValues(alpha: 0.25)),
+        ),
+        child: Padding(
+          // 48dp minimum touch target, assuming a thumb.
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.3)),
+                ),
+                child: const Icon(Icons.pregnant_woman_rounded,
+                    color: AppColors.brandPrimary, size: 30),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      expectingMany
+                          ? LanguageService.translate('Your babies', 'Ang iyong mga baby')
+                          : LanguageService.translate('Your baby', 'Ang iyong baby'),
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.brandText,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      LanguageService.translate('${pregnancy.currentWeek} weeks',
+                          '${pregnancy.currentWeek} na linggo'),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    // Status by shape and word, never colour alone.
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.favorite_rounded,
+                              size: 11, color: AppColors.brandPrimary),
+                          const SizedBox(width: 4),
+                          Text(
+                            LanguageService.translate('On the way', 'Paparating na'),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.brandText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios_rounded,
+                  size: 16, color: AppColors.brandPrimary),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -119,14 +119,23 @@ class BabyBookRepository {
   }
 
   /// The prenatal milestone catalogue, in display order.
-  Future<List<MilestoneTemplate>> loadPrenatalTemplates() async {
+  ///
+  /// [owner] selects which book's entries to return. The Baby Book asks for
+  /// the baby's — his heartbeat, his first kick — and leaves the mother's
+  /// checkups and birth plan to the Mother Book. Omit it to get both.
+  Future<List<MilestoneTemplate>> loadPrenatalTemplates({
+    MilestoneOwner? owner,
+  }) async {
     try {
-      final rows = await SupabaseService.client
+      var query = SupabaseService.client
           .from('milestone_templates')
           .select()
           .eq('phase', MilestonePhase.prenatal.dbValue)
-          .eq('is_active', true)
-          .order('sort_order');
+          .eq('is_active', true);
+
+      if (owner != null) query = query.eq('owner', owner.dbValue);
+
+      final rows = await query.order('sort_order');
 
       return (rows as List)
           .map((r) => MilestoneTemplate.fromRow(r as Map<String, dynamic>))
@@ -147,9 +156,10 @@ class BabyBookRepository {
   Future<List<BabyGrowthMilestone>> loadPrenatalMilestones({
     required int pregnancyId,
     required int currentWeek,
+    MilestoneOwner? owner,
   }) async {
     try {
-      final templates = await loadPrenatalTemplates();
+      final templates = await loadPrenatalTemplates(owner: owner);
 
       final rows = await SupabaseService.client
           .from('baby_book_milestones')

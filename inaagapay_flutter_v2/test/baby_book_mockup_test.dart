@@ -183,9 +183,13 @@ void main() {
       find.byKey(const ValueKey('baby-growth-milestones-section')),
       findsOneWidget,
     );
+
+    // Her vaccines and supplements are the Mother Book's, not the baby's, and
+    // records_screen already shows them. The section widget still exists and
+    // is covered on its own further down; it is simply not on this page.
     expect(
       find.byKey(const ValueKey('pregnancy-health-records-section')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
@@ -444,9 +448,11 @@ void main() {
       find.byKey(const ValueKey('milestone-picture-card')),
       findsOneWidget,
     );
+    // health_records_card.png stays bundled — the Mother Book will use it —
+    // but its card is no longer on the baby's page.
     expect(
       find.byKey(const ValueKey('health-records-picture-card')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
@@ -605,16 +611,9 @@ void main() {
     expect(milestoneButton.right, lessThanOrEqualTo(370));
     expect(tester.takeException(), isNull);
 
-    await tester.ensureVisible(find.text('Vaccinations and Supplements'));
-    await tester.pumpAndSettle();
-    expect(find.text('Add Record').hitTestable(), findsOneWidget);
-    final recordButton = tester.getRect(
-      _filledButtonWithText('Add Record'),
-    );
-    expect(recordButton.width, greaterThan(85));
-    expect(recordButton.left, greaterThanOrEqualTo(20));
-    expect(recordButton.right, lessThanOrEqualTo(370));
-    expect(tester.takeException(), isNull);
+    // The Vaccinations and Supplements section moved to the Mother Book. Its
+    // own layout is covered by the _healthRecords() cases above.
+    expect(find.text('Vaccinations and Supplements'), findsNothing);
 
     await tester.ensureVisible(
       find.text('Read or download the official guides'),

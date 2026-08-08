@@ -6,9 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/baby_growth_milestone_data.dart';
 import '../data/pregnancy_growth_data.dart';
-import '../data/pregnancy_health_sample_data.dart';
 import '../models/baby_growth_milestone.dart';
 import '../models/baby_memory.dart';
+import '../models/milestone_template.dart';
 import '../models/pregnancy_growth_stage.dart';
 import '../services/asset_pdf_download_service.dart';
 import '../services/baby_book_repository.dart';
@@ -16,7 +16,6 @@ import '../theme/app_colors.dart';
 import '../widgets/baby_memory_photo.dart';
 import '../widgets/baby_book/baby_growth_milestones_section.dart';
 import '../widgets/baby_book/baby_book_section_components.dart';
-import '../widgets/baby_book/pregnancy_health_records_section.dart';
 import '../widgets/main_header.dart';
 import '../widgets/pregnancy_growth_journey.dart';
 import 'baby_book_memory_gallery_page.dart';
@@ -90,6 +89,10 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
         : await _repository.loadPrenatalMilestones(
             pregnancyId: pregnancyId,
             currentWeek: pregnancy!.currentWeek,
+            // The baby's story only. Her checkups and birth plan are the
+            // Mother Book's, and showing them here is what made this page
+            // duplicate the Records tab.
+            owner: MilestoneOwner.baby,
           );
 
     if (!mounted) return;
@@ -402,10 +405,11 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
                           initialMilestones: _effectiveMilestones,
                         ),
                       ],
-                      const SizedBox(height: 34),
-                      PregnancyHealthRecordsSection(
-                        initialRecords: pregnancyHealthSampleRecords,
-                      ),
+                      // Her vaccines and supplements used to sit here. They
+                      // are her care, not the baby's story, and records_screen
+                      // already reads given_medications — so this was both a
+                      // category error and a second copy. They belong to the
+                      // Mother Book.
                       const SizedBox(height: 34),
                       _MemoryCard(
                         key: _memoriesKey,

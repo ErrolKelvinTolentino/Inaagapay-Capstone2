@@ -13,6 +13,11 @@ class MilestoneTemplate {
   final String key;
   final int templateId;
   final MilestonePhase phase;
+
+  /// Which book this belongs in. Independent of [phase]: an anatomy scan is
+  /// prenatal, but the picture is the baby's and the report is the mother's.
+  final MilestoneOwner owner;
+
   final String category;
   final String titleEn;
   final String? titleFil;
@@ -32,6 +37,7 @@ class MilestoneTemplate {
     required this.key,
     required this.templateId,
     required this.phase,
+    this.owner = MilestoneOwner.baby,
     required this.category,
     required this.titleEn,
     this.titleFil,
@@ -48,6 +54,7 @@ class MilestoneTemplate {
       key: row['template_key']?.toString() ?? '',
       templateId: (row['template_id'] as num).toInt(),
       phase: MilestonePhase.fromDb(row['phase']?.toString()),
+      owner: MilestoneOwner.fromDb(row['owner']?.toString()),
       category: row['category']?.toString() ?? '',
       titleEn: row['title_en']?.toString() ?? '',
       titleFil: row['title_fil']?.toString(),
@@ -87,6 +94,24 @@ enum MilestonePhase {
 
   static MilestonePhase fromDb(String? value) =>
       value == 'postnatal' ? MilestonePhase.postnatal : MilestonePhase.prenatal;
+
+  String get dbValue => name;
+}
+
+/// Whose story a milestone belongs to, and therefore which book shows it.
+///
+/// Not the same question as [MilestonePhase]. Both an anatomy scan report and
+/// the picture from it happen before birth; the report is the mother's and the
+/// picture is the baby's.
+enum MilestoneOwner {
+  /// Her care: checkups, her vaccines and supplements, her birth plan.
+  mother,
+
+  /// The baby's story: his heartbeat, his first kick, his first picture.
+  baby;
+
+  static MilestoneOwner fromDb(String? value) =>
+      value == 'mother' ? MilestoneOwner.mother : MilestoneOwner.baby;
 
   String get dbValue => name;
 }

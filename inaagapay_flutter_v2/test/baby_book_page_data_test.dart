@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inaagapay_flutter_v2/models/baby_growth_milestone.dart';
+import 'package:inaagapay_flutter_v2/models/milestone_template.dart';
 import 'package:inaagapay_flutter_v2/models/pregnancy_growth_stage.dart';
 import 'package:inaagapay_flutter_v2/screens/baby_book_mockup_page.dart';
 import 'package:inaagapay_flutter_v2/services/baby_book_repository.dart';
@@ -25,6 +26,7 @@ class _FakeRepository extends BabyBookRepository {
   Future<List<BabyGrowthMilestone>> loadPrenatalMilestones({
     required int pregnancyId,
     required int currentWeek,
+    MilestoneOwner? owner,
   }) async =>
       milestones;
 }
