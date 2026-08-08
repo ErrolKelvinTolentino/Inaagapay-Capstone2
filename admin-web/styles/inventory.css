@@ -1325,3 +1325,180 @@ table.inventory-table tbody tr:hover td {
     width: 100%;
   }
 }
+
+/* ── Health Status Badges (from admin-web2 merge) ── */
+.badge-health-success {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 1px 7px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 10.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.badge-health-warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 1px 7px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 10.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.badge-health-danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 1px 7px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 10.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.badge-health-muted {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  padding: 1px 7px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 10.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+/* ── Category Type Pills ── */
+.type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 20px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: rgba(255, 104, 165, 0.08);
+  color: var(--brand-accent);
+  border: 1px solid rgba(255, 104, 165, 0.2);
+  white-space: nowrap;
+}
+
+/* ── Pagination Controls ── */
+.pagination-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-card, #ffffff);
+  border-top: 1px solid var(--border-primary, #e5e7eb);
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-secondary, #6b7280);
+}
+.pagination-info { font-weight: 500; }
+.pagination-controls { display: flex; align-items: center; gap: 3px; }
+.pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  background: var(--bg-secondary, #f9fafb);
+  color: var(--text-primary, #111827);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pagination-btn:hover:not(:disabled) {
+  border-color: var(--brand-primary, #ff68a5);
+  color: var(--brand-primary, #ff68a5);
+  background: rgba(255, 104, 165, 0.08);
+}
+.pagination-btn.active {
+  background: var(--brand-primary, #ff68a5);
+  border-color: var(--brand-primary, #ff68a5);
+  color: #ffffff;
+}
+.pagination-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pagination-size-select {
+  padding: 2px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--bg-card, #ffffff);
+  color: var(--text-primary, #111827);
+  cursor: pointer;
+}
+
+/* ── Analytics Insights Panel ── */
+.inventory-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.inventory-insight-card {
+  border-top: 4px solid var(--brand-primary);
+}
+.inventory-insight-card:nth-child(2) { border-top-color: #E6398D; }
+.inventory-insight-card:nth-child(3) { border-top-color: #C73578; }
+
+.inventory-pediatric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+.inventory-pediatric-stat {
+  background: var(--brand-secondary);
+  padding: 14px;
+  border-radius: var(--radius-card-sm);
+  border: 1px solid var(--border-primary);
+}
+.inventory-pediatric-stat .label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.inventory-pediatric-stat .value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--brand-primary);
+}
+
+.inventory-charts-row {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+@media (max-width: 992px) {
+  .inventory-charts-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Disposal Section ── */
+.inventory-disposal-action-btns {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
