@@ -31,52 +31,30 @@ class MyPregnancyBanner extends StatelessWidget {
         // Content drives the height. A fixed height clipped the pill, and
         // would clip far more for a mother using large system text — a
         // setting this audience is more likely than most to have on.
-        constraints: const BoxConstraints(minHeight: 132),
+        constraints: const BoxConstraints(minHeight: 128),
+        padding: const EdgeInsets.fromLTRB(18, 16, 12, 16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          image: const DecorationImage(
-            // Decoded at 800px, not its native 1823px. A 2.1 MB illustration
-            // rendered into a card about 320px wide costs roughly 6 MB of
-            // memory at full decode, for no visible gain — the kind of waste
-            // that shows up as jank on the cheap phones this app is for.
-            image: ResizeImage(
-              AssetImage('assets/images/current_pregnancy_card.png'),
-              width: 800,
-            ),
-            fit: BoxFit.cover,
-            alignment: Alignment.centerRight,
+          // Text and artwork are side by side, not stacked. The first version
+          // laid words over the illustration behind a scrim, and pink type on
+          // a pink drawing stayed muddy however the scrim was tuned. Giving
+          // each its own column removes the problem rather than managing it.
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFF7FB3), Color(0xFFE6398D)],
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.brandPrimary.withValues(alpha: 0.22),
-              blurRadius: 18,
+              color: AppColors.brandAccent.withValues(alpha: 0.28),
+              blurRadius: 16,
               offset: const Offset(0, 8),
             ),
           ],
         ),
-        child: Stack(
+        child: Row(
           children: [
-            // Scrim over the left side only, so the words stay legible while
-            // the illustration keeps its detail on the right.
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.92),
-                      Colors.white.withValues(alpha: 0.72),
-                      Colors.white.withValues(alpha: 0.0),
-                    ],
-                    stops: const [0.0, 0.42, 0.78],
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -84,37 +62,33 @@ class MyPregnancyBanner extends StatelessWidget {
                 children: [
                   Text(
                     t('MY PREGNANCY', 'ANG AKING PAGBUBUNTIS'),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 1.3,
-                      color: AppColors.brandPrimary,
+                      letterSpacing: 1.2,
+                      color: Colors.white.withValues(alpha: 0.85),
                     ),
                   ),
-                  const SizedBox(height: 5),
-                  // Capped rather than fixed, so the text wraps inside the
-                  // clear part of the illustration on a narrow phone instead
-                  // of running under the artwork.
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 195),
-                    child: Text(
-                      t('Everything about your journey',
-                          'Lahat tungkol sa iyong paglalakbay'),
-                      style: const TextStyle(
-                        fontSize: 19,
-                        height: 1.2,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
-                        color: AppColors.brandText,
-                      ),
+                  const SizedBox(height: 6),
+                  Text(
+                    t('Everything about\nyour journey',
+                        'Lahat tungkol sa\niyong paglalakbay'),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      height: 1.25,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                      color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
+                  // White pill on pink: high contrast, and clearly a way in
+                  // rather than a button that submits something.
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 13, vertical: 7),
                     decoration: BoxDecoration(
-                      color: AppColors.brandPrimary,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -125,16 +99,38 @@ class MyPregnancyBanner extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white,
+                            color: AppColors.brandAccent,
                           ),
                         ),
                         const SizedBox(width: 5),
                         const Icon(Icons.arrow_forward_rounded,
-                            size: 13, color: Colors.white),
+                            size: 13, color: AppColors.brandAccent),
                       ],
                     ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // A soft disc behind the cut-out figure lifts her off the pink
+            // without a hard edge, and matches the circular treatment the
+            // hero and baby-size cards already use.
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.22),
+                shape: BoxShape.circle,
+              ),
+              padding: const EdgeInsets.all(4),
+              child: const Image(
+                // 1080px source rendered at 96 logical px; decoding at 300
+                // is ample and saves the rest.
+                image: ResizeImage(
+                  AssetImage('assets/images/pregnant1.png'),
+                  width: 300,
+                ),
+                fit: BoxFit.contain,
               ),
             ),
           ],
