@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/headline.dart';
+import '../../widgets/small_description.dart';
 import '../../widgets/hero_card.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/my_pregnancy_banner.dart';
@@ -1287,86 +1289,40 @@ class _MotherDashboardState extends State<MotherDashboard> {
   }
 
 
-  Widget _buildGreeting() {
-    final hour = DateTime.now().hour;
-    final greeting = hour < 12
-        ? _t('Good morning', 'Magandang umaga')
-        : hour < 18
-            ? _t('Good afternoon', 'Magandang hapon')
-            : _t('Good evening', 'Magandang gabi');
 
+  /// Greeting and pregnancy stage, per the Figma wireframe.
+  ///
+  /// I had replaced this with a time-aware two-line version ("Good morning," /
+  /// name) — a redesign against a design that already existed. This is the
+  /// wireframe: one centred welcome line in brand pink, then the week and
+  /// trimester under a calendar icon.
+  ///
+  /// The pink container the original sat in is gone, which is the one change
+  /// kept: on the wireframe this block sits on the page background, and the
+  /// box made it compete with the cards below it.
+  Widget _buildGreeting() {
     final name = _firstName.isNotEmpty
         ? _firstName.split(' ').first
         : _t('Nanay', 'Nanay');
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Warmth comes from contrast, not weight. The greeting recedes and
-          // her name carries the emphasis — an extra-bold full line reads as
-          // a headline announcing her, which is louder than it is kind.
-          Text(
-            '$greeting,',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w500,
-              height: 1.2,
-              letterSpacing: 0.4,
-              color: AppColors.textSecondary.withValues(alpha: 0.85),
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            name,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 27,
-              fontWeight: FontWeight.w800,
-              height: 1.2,
-              letterSpacing: -0.4,
-              color: AppColors.brandText,
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (_hasPregnancy && _week > 0)
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppColors.brandPrimary.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.calendar_today_rounded,
-                      size: 13, color: AppColors.brandText),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${_t('Week', 'Linggo')} $_week · ${_localizedTrimester()}',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.brandText,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            Text(
-              _t('No active pregnancy', 'Walang aktibong pagbubuntis'),
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
-            ),
-        ],
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Headline(
+          text: '${_t('Welcome', 'Maligayang pagdating')}, $name! 🌸',
+        ),
+        const SizedBox(height: 8),
+        SmallDescription(
+          icon: Icons.calendar_today,
+          rowAlignment: MainAxisAlignment.center,
+          // Darker than the component default: on the wireframe this line
+          // reads as information, not as a caption.
+          color: AppColors.textPrimary,
+          text: _hasPregnancy && _week > 0
+              ? '${_t('Week', 'Linggo')} $_week • ${_localizedTrimester()}'
+              : _t('No active pregnancy', 'Walang aktibong pagbubuntis'),
+        ),
+      ],
     );
   }
 
