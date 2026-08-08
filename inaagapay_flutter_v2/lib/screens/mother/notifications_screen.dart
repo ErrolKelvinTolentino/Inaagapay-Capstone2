@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../services/language_service.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/app_input_field.dart';
+import '../../widgets/secondary_header.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -277,30 +278,78 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final hasUnread = _notifications.any((n) => n['is_read'] == false);
+
     return Scaffold(
       backgroundColor: AppColors.bgPrimary,
-      appBar: AppBar(
-        title: const Text('Notifications'),
-        backgroundColor: AppColors.bgPrimary,
-        elevation: 0,
-        actions: [
-          if (_notifications.any((n) => n['is_read'] == false))
-            TextButton(
-              onPressed: _markAllRead,
-              child: const Text('Mark all read'),
-            ),
+      // SecondaryHeader instead of a bare AppBar: it is the shared header the
+      // rest of the app's inner pages use, so this screen stops looking like
+      // a different application — brand-pink centred title, back arrow on the
+      // left, action on the right.
+      body: Column(
+        children: [
+          SecondaryHeader(
+            title: LanguageService.translate('Notifications', 'Mga Abiso'),
+            onBack: () => Navigator.pop(context),
+            trailing: hasUnread
+                ? TextButton(
+                    onPressed: _markAllRead,
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.brandPrimary,
+                      textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    child: Text(LanguageService.translate(
+                        'Mark all read', 'Markahang basa')),
+                  )
+                : null,
+          ),
+          Expanded(child: _buildBody()),
         ],
       ),
-      body: _loading
+    );
+  }
+
+  Widget _buildBody() {
+    return _loading
           ? const Center(child: CircularProgressIndicator())
           : _notifications.isEmpty
               ? Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(Icons.notifications_off_outlined, size: 48, color: AppColors.textSecondary),
-                      SizedBox(height: 12),
-                      Text('No notifications yet', style: TextStyle(color: AppColors.textSecondary)),
+                    children: [
+                      Container(
+                        width: 88,
+                        height: 88,
+                        decoration: BoxDecoration(
+                          color: AppColors.brandPrimary.withValues(alpha: 0.08),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.notifications_none_rounded,
+                            size: 40, color: AppColors.brandPrimary),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        LanguageService.translate(
+                            'No notifications yet', 'Wala pang abiso'),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        LanguageService.translate(
+                          'Reminders from your health center appear here.',
+                          'Lalabas dito ang mga paalala mula sa health center.',
+                        ),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 13, color: AppColors.textSecondary),
+                      ),
                     ],
                   ),
                 )
@@ -309,13 +358,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   child: ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: _notifications.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final n = _notifications[index];
                       final isRead = n['is_read'] == true;
                       final type = n['type'] as String?;
                       final isUnlinkedBhc = type == 'unlinked_bhc';
                       final isVitalsIncomplete = type == 'vitals_incomplete';
+                      // The two "do something" notices behave alike: they
+                      // carry no timestamp and are never marked read by
+                      // tapping, so they share one flag rather than repeating
+                      // the pair at every branch.
+                      final isAction = isUnlinkedBhc || isVitalsIncomplete;
                       final createdAt = DateTime.tryParse(n['created_at'] ?? '');
                       final timeText = createdAt != null
                           ? DateFormat('MMM d, h:mm a').format(createdAt.toLocal())
@@ -345,21 +399,44 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         child: Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: (isUnlinkedBhc || isVitalsIncomplete)
-                                ? AppColors.warning.withValues(alpha: 0.05)
-                                : (isRead ? Colors.white : AppColors.brandPrimary.withValues(alpha:0.06)),
-                            borderRadius: BorderRadius.circular(14),
+                            // Cards are white, like every other card in the
+                            // app. Unread is carried by the accent bar, the
+                            // dot and the bolder title rather than by tinting
+                            // the whole surface — a page of pink-washed cards
+                            // made everything look equally urgent.
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: (isUnlinkedBhc || isVitalsIncomplete)
-                                  ? AppColors.warning.withValues(alpha: 0.25)
-                                  : (isRead ? Colors.transparent : AppColors.brandPrimary.withValues(alpha:0.15)),
+                              color: isAction
+                                  ? AppColors.warning.withValues(alpha: 0.35)
+                                  : AppColors.brandPrimary
+                                      .withValues(alpha: 0.15),
                             ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.04),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(_iconForType(type), color: _colorForType(type), size: 22),
-                              const SizedBox(width: 12),
+                              // Icon in a tinted disc, the same treatment the
+                              // dashboard and Children cards use.
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: _colorForType(type)
+                                      .withValues(alpha: 0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(_iconForType(type),
+                                    color: _colorForType(type), size: 21),
+                              ),
+                              const SizedBox(width: 13),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -367,42 +444,66 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     Text(
                                       n['title'] ?? 'Notification',
                                       style: TextStyle(
-                                        fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
-                                        fontSize: 14,
+                                        fontWeight: isRead
+                                            ? FontWeight.w600
+                                            : FontWeight.w800,
+                                        fontSize: 14.5,
+                                        height: 1.25,
+                                        color: isRead
+                                            ? AppColors.textPrimary
+                                            : AppColors.brandText,
                                       ),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
                                       n['message'] ?? '',
-                                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        height: 1.35,
+                                        color: AppColors.textSecondary,
+                                      ),
                                     ),
-                                    if (type != 'unlinked_bhc' && type != 'vitals_incomplete') ...[
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        timeText,
-                                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                    if (!isAction) ...[
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                              Icons.schedule_rounded,
+                                              size: 11,
+                                              color: AppColors.textSecondary),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            timeText,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ],
                                 ),
                               ),
-                              if (!isRead && !isUnlinkedBhc && !isVitalsIncomplete)
+                              if (!isRead && !isAction) ...[
+                                const SizedBox(width: 8),
                                 Container(
-                                  width: 8,
-                                  height: 8,
+                                  width: 9,
+                                  height: 9,
+                                  margin: const EdgeInsets.only(top: 5),
                                   decoration: const BoxDecoration(
                                     shape: BoxShape.circle,
                                     color: AppColors.brandPrimary,
                                   ),
                                 ),
+                              ],
                             ],
                           ),
                         ),
                       );
                     },
                   ),
-                ),
-    );
+                );
   }
 
   String _t(String en, String tl) {
