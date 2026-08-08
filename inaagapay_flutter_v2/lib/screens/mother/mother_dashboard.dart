@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/hero_card.dart';
 import '../../widgets/main_button.dart';
+import '../../widgets/my_pregnancy_banner.dart';
 import '../../widgets/app_input_field.dart';
 import '../../models/baby_growth_model.dart';
 import '../../models/weight_gain_models.dart';
@@ -1285,121 +1286,6 @@ class _MotherDashboardState extends State<MotherDashboard> {
     );
   }
 
-  Widget _buildPregnancyBookRow({required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        height: 132,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          image: const DecorationImage(
-            // Decoded at 800px, not its native 1823px. The source is a 2.1 MB
-            // illustration rendered into a card about 320px wide; decoding it
-            // at full size costs roughly 6 MB of memory for no visible gain,
-            // which is the kind of waste that shows up as jank on the cheap
-            // phones this app is for.
-            image: ResizeImage(
-              AssetImage('assets/images/current_pregnancy_card.png'),
-              width: 800,
-            ),
-            fit: BoxFit.cover,
-            alignment: Alignment.centerRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.brandPrimary.withValues(alpha: 0.22),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // Scrim over the left half only, so the text stays readable while
-            // the illustration keeps its detail on the right.
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.92),
-                      Colors.white.withValues(alpha: 0.72),
-                      Colors.white.withValues(alpha: 0.0),
-                    ],
-                    stops: const [0.0, 0.42, 0.78],
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _t('MY PREGNANCY', 'ANG AKING PAGBUBUNTIS'),
-                    style: const TextStyle(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.3,
-                      color: AppColors.brandPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  SizedBox(
-                    width: 190,
-                    child: Text(
-                      _t('Everything about\nyour journey',
-                          'Lahat tungkol sa\niyong paglalakbay'),
-                      style: const TextStyle(
-                        fontSize: 19,
-                        height: 1.2,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
-                        color: AppColors.brandText,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  // A pill rather than a filled button: it invites a tap
-                  // without promising that something will be submitted.
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.brandPrimary,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _t('Open', 'Buksan'),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        const Icon(Icons.arrow_forward_rounded,
-                            size: 13, color: Colors.white),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildGreeting() {
     final hour = DateTime.now().hour;
@@ -1423,7 +1309,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
           // her name carries the emphasis — an extra-bold full line reads as
           // a headline announcing her, which is louder than it is kind.
           Text(
-            greeting,
+            '$greeting,',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13.5,
@@ -2780,9 +2666,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
                             // those two answer one question together. At the
                             // bottom of the page it was invisible.
                             const SizedBox(height: 16),
-                            _buildPregnancyBookRow(
-                              onTap: _openPregnancyDetail,
-                            ),
+                            MyPregnancyBanner(onTap: _openPregnancyDetail),
 
                             if (!_isUnlinked && _nextScheduleDate != null) ...[
                               const SizedBox(height: 16),
