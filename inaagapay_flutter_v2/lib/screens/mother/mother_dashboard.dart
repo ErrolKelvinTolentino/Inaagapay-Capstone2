@@ -1315,9 +1315,9 @@ class _MotherDashboardState extends State<MotherDashboard> {
         SmallDescription(
           icon: Icons.calendar_today,
           rowAlignment: MainAxisAlignment.center,
-          // Darker than the component default: on the wireframe this line
-          // reads as information, not as a caption.
-          color: AppColors.textPrimary,
+          // Soft grey, the SmallDescription default. I had overridden this to
+          // textPrimary; against the pink welcome line above it, black reads
+          // as a second heading rather than a supporting line.
           text: _hasPregnancy && _week > 0
               ? '${_t('Week', 'Linggo')} $_week • ${_localizedTrimester()}'
               : _t('No active pregnancy', 'Walang aktibong pagbubuntis'),
@@ -2580,6 +2580,13 @@ class _MotherDashboardState extends State<MotherDashboard> {
                             // unboxed, it reads as the top of a page and lets
                             // the hero image be the first real card.
                             _buildGreeting(),
+
+                            // The greeting had no gap after it at all, so the
+                            // hero card sat directly under the stage line.
+                            // A banner, when one appears, adds its own 16 on
+                            // top of this — which is right: an exceptional
+                            // state should be set apart, not tucked in.
+                            const SizedBox(height: 20),
 
                             if (_isUnlinked && !_isUnlinkedBannerDismissed) ...[
                               const SizedBox(height: 16),
