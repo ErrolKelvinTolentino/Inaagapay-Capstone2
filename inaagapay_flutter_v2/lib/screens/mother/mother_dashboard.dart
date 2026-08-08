@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/hero_card.dart';
-import '../../widgets/danger_signs_card.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/app_input_field.dart';
 import '../../models/baby_growth_model.dart';
@@ -1259,6 +1258,33 @@ class _MotherDashboardState extends State<MotherDashboard> {
   ///
   /// Given a slightly warmer tint than the plain white rows so it still reads
   /// as the main destination on the page, without becoming a call to action.
+  void _openPregnancyDetail() {
+    if (!_hasPregnancy || _week == 0 || _pregnancyId == 0) {
+      _showSnackBar(_t('No active pregnancy to show details for.',
+          'Walang aktibong pagbubuntis na maaaring tingnan.'));
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PregnancyDetailPage(
+          week: _week,
+          trimester: _trimester,
+          dueDate: _dueDate,
+          weeksLeft: _weeksLeft,
+          babySize: _babySize,
+          babyWeight: _babyWeight,
+          firstName: _firstName,
+          riskLevel: _riskLevel,
+          fetalCount: _fetalCount,
+          pregnancyId: _pregnancyId,
+          riskFactors: _riskFactors,
+          suggestedActions: _suggestedActions,
+        ),
+      ),
+    );
+  }
+
   Widget _buildPregnancyBookRow({required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -1334,13 +1360,25 @@ class _MotherDashboardState extends State<MotherDashboard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Warmth comes from contrast, not weight. The greeting recedes and
+          // her name carries the emphasis — an extra-bold full line reads as
+          // a headline announcing her, which is louder than it is kind.
           Text(
-            '$greeting, $name 🌸',
+            '$greeting,',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w400,
+              height: 1.2,
+              color: AppColors.textSecondary.withValues(alpha: 0.9),
+            ),
+          ),
+          Text(
+            '$name 🌸',
             style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              height: 1.15,
-              color: AppColors.textPrimary,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
+              color: AppColors.brandText,
             ),
           ),
           const SizedBox(height: 8),
@@ -2672,151 +2710,31 @@ class _MotherDashboardState extends State<MotherDashboard> {
                               _buildWeeklyTipCard(),
                             ],
 
+                            // Reads as the natural "tell me more" after the
+                            // week content, rather than a navigation row
+                            // splitting the countdown from the baby size —
+                            // those two answer one question together. At the
+                            // bottom of the page it was invisible.
+                            const SizedBox(height: 16),
+                            _buildPregnancyBookRow(
+                              onTap: _openPregnancyDetail,
+                            ),
+
                             if (!_isUnlinked && _nextScheduleDate != null) ...[
                               const SizedBox(height: 16),
                               _buildNextScheduleCard(),
                             ],
 
-                            if (!_isUnlinked) ...[
-                              const SizedBox(height: 16),
-                              GestureDetector(
-                                onTap: () => Navigator.pushNamed(context, '/immunization-poster'),
-                                child: Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 4),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: AppColors.brandPrimary.withValues(alpha: 0.15),
-                                    width: 1,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.04),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.brandPrimary.withValues(alpha: 0.1),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(
-                                        Icons.campaign_rounded,
-                                        color: AppColors.brandPrimary,
-                                        size: 24,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            _t('📢 BHC Vaccine Poster Schedule', '📢 Iskedyul ng Bakuna sa BHC'),
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
-                                              color: AppColors.brandText,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            _t(
-                                              'Check when free vaccines are offered at local health centers.',
-                                              'Tingnan kung kailan may libreng bakuna sa mga lokal na health center.',
-                                            ),
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey.shade600,
-                                              height: 1.2,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const Icon(
-                                      Icons.arrow_forward_ios_rounded,
-                                      size: 16,
-                                      color: AppColors.brandPrimary,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-
-                            ],
-
-                            const SizedBox(height: 20),
-
-                            // Reference, not an alert. Kept below the
-                            // operational cards so it is findable without
-                            // greeting her with a red box every morning — a
-                            // warning seen daily stops being seen, and by the
-                            // day it matters she looks past it. Outside the
-                            // `!_isUnlinked` gate above: bleeding does not
-                            // wait for a health centre assignment.
-                            if (_hasPregnancy) ...[
-                              const SizedBox(height: 16),
-                              const DangerSignsCard(),
-                            ],
-
-                            // My Vitals Card
+                            // One card, not two. "My Vitals & Weight Gain"
+                            // followed by "Weight Gain Analysis" read as the
+                            // same subject twice, and a mother reasonably
+                            // expects the first title to already contain the
+                            // second card.
                             if (!_isUnlinked && _hasPregnancy) ...[
                               const SizedBox(height: 16),
                               _buildVitalsCard(),
                             ],
 
-                            // Weight Gain Analysis Card
-                            if (!_isUnlinked && _hasPregnancy && _weightGainResult != null) ...[
-                              const SizedBox(height: 16),
-                              _buildWeightGainAnalysisCard(),
-                            ],
-
-
-                            // A destination, not an action. A solid pink CTA
-                            // promises something will happen when tapped —
-                            // submitting, confirming, sending. This opens a
-                            // page to read, so it looks like the other
-                            // navigation cards on this screen and stops
-                            // competing with them for the eye.
-                            _buildPregnancyBookRow(
-                              onTap: () {
-                                if (!_hasPregnancy ||
-                                    _week == 0 ||
-                                    _pregnancyId == 0) {
-                                  _showSnackBar(_t(
-                                      'No active pregnancy to show details for.',
-                                      'Walang aktibong pagbubuntis na maaaring tingnan.'));
-                                  return;
-                                }
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => PregnancyDetailPage(
-                                      week: _week,
-                                      trimester: _trimester,
-                                      dueDate: _dueDate,
-                                      weeksLeft: _weeksLeft,
-                                      babySize: _babySize,
-                                      babyWeight: _babyWeight,
-                                      firstName: _firstName,
-                                      riskLevel: _riskLevel,
-                                      fetalCount: _fetalCount,
-                                      pregnancyId: _pregnancyId,
-                                      riskFactors: _riskFactors,
-                                      suggestedActions: _suggestedActions,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
                             const SizedBox(height: 20),
                           ],
                         ),
@@ -2942,7 +2860,10 @@ class _MotherDashboardState extends State<MotherDashboard> {
           },
           child: Padding(
             padding: const EdgeInsets.all(18),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
@@ -3048,28 +2969,24 @@ class _MotherDashboardState extends State<MotherDashboard> {
                 ),
               ],
             ),
+
+                // The weight-gain evaluation lives inside this card now.
+                // It was a second card immediately below, titled "Weight Gain
+                // Analysis" under a card already called "My Vitals & Weight
+                // Gain" — the same subject announced twice.
+                if (_weightGainResult != null) ...[
+                  const SizedBox(height: 16),
+                  Divider(color: Colors.grey.shade200, height: 1),
+                  const SizedBox(height: 16),
+                  _buildWeightGainSummary(),
+                ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-
-  /// Small neutral pill for a supporting figure.
-  Widget _weightChip(String text) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade800,
-          ),
-        ),
-      );
 
   /// Where her gain sits against the range recommended for her BMI category.
   ///
@@ -3166,289 +3083,107 @@ class _MotherDashboardState extends State<MotherDashboard> {
     );
   }
 
-  Widget _buildWeightGainAnalysisCard() {
+  /// The weight-gain evaluation, without card chrome, for embedding in the
+  /// vitals card.
+  ///
+  /// Both cards previously navigated to the same MotherVitalsPage, so nothing
+  /// is lost by folding one into the other — it was two doors to one room,
+  /// announced with two titles about the same subject.
+  Widget _buildWeightGainSummary() {
     final result = _weightGainResult;
     if (result == null) return const SizedBox.shrink();
 
-    Color statusColor;
-    switch (result.status) {
-      case WeightGainStatus.normal:
-        statusColor = AppColors.success;
-        break;
-      case WeightGainStatus.low:
-        statusColor = AppColors.warning;
-        break;
-      case WeightGainStatus.high:
-        statusColor = AppColors.error;
-        break;
-      case WeightGainStatus.insufficient:
-        statusColor = AppColors.textSecondary;
-        break;
-    }
+    final (statusColor, statusLabel) = switch (result.status) {
+      WeightGainStatus.normal => (
+          AppColors.success,
+          _t('On track', 'Nasa tamang landas')
+        ),
+      WeightGainStatus.low => (
+          AppColors.warning,
+          _t('A little below', 'Bahagyang mababa')
+        ),
+      WeightGainStatus.high => (
+          AppColors.error,
+          _t('A little above', 'Bahagyang mataas')
+        ),
+      WeightGainStatus.insufficient => (
+          AppColors.textSecondary,
+          _t('Not enough data yet', 'Kulang pa ang data')
+        ),
+    };
 
-    String getStatusDisplayLabel(WeightGainStatus status) {
-      switch (status) {
-        case WeightGainStatus.normal:
-          return _t('Within expected monitoring range', 'Nasa loob ng inaasahang saklaw ng pagsubaybay');
-        case WeightGainStatus.low:
-          return _t('Slightly lower than expected monitoring range', 'Bahagyang mas mababa sa inaasahang saklaw');
-        case WeightGainStatus.high:
-          return _t('Slightly above expected monitoring range', 'Bahagyang mas mataas sa inaasahang saklaw');
-        case WeightGainStatus.insufficient:
-          return _t('Insufficient data', 'Kulang na data');
-      }
-    }
-
-    String getBmiCategoryLabel(String category) {
-      switch (category) {
-        case 'Underweight':
-          return _t('Underweight', 'Mababa ang Timbang');
-        case 'Normal':
-          return _t('Normal', 'Normal');
-        case 'Overweight':
-          return _t('Overweight', 'Sobra sa Timbang');
-        case 'Obese':
-          return _t('Obese', 'Mataba');
-        default:
-          return _t(category, category);
-      }
-    }
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.cardColorOf(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () async {
-            final motherId = await AuthStorage.getMotherId();
-            if (motherId == null || !mounted) return;
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => MotherVitalsPage(
-                  motherId: motherId,
-                  pregnancyId: _pregnancyId,
-                  lastMenstrualPeriod: _lmpDate != null ? _dateIso(_lmpDate!) : null,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              _t('Weight gain', 'Dagdag na timbang'),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const Spacer(),
+            // Word plus colour, so the status survives a colour-blind reader.
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                statusLabel,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: statusColor,
                 ),
               ),
-            ).then((_) => _loadDashboardData());
-          },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+          ],
+        ),
+        if (result.actualGain != null) ...[
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
-              // Header
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.08),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16),
-                  ),
-                ),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.monitor_weight_outlined,
-                            color: statusColor, size: 22),
-                        const SizedBox(width: 8),
-                        Text(
-                          _t('Weight Gain Analysis', 'Pagsusuri sa Timbang'),
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                    // Status badge
-                    Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: statusColor.withValues(alpha: 0.3)),
-                      ),
-                      child: Text(
-                        getStatusDisplayLabel(result.status),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: statusColor,
-                        ),
-                      ),
-                    ),
-                  ],
+              Text(
+                '${result.actualGain! >= 0 ? '+' : ''}${result.actualGain!.toStringAsFixed(1)} kg',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                  color: statusColor,
                 ),
               ),
-
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Six label/value rows became one number and one bar.
-                    // "Actual Gain +1.0 kg, Expected Gain 0.0–1.4 kg" asks a
-                    // mother to hold two figures in her head and compare them;
-                    // a mark sitting inside a green band answers the same
-                    // question at a glance. The exact figures are still on the
-                    // detail page for the midwife.
-                    if (result.actualGain != null) ...[
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Text(
-                            '${result.actualGain! >= 0 ? '+' : ''}${result.actualGain!.toStringAsFixed(1)} kg',
-                            style: TextStyle(
-                              fontSize: 30,
-                              fontWeight: FontWeight.w900,
-                              height: 1,
-                              color: statusColor,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _t('gained so far', 'naidagdag hanggang ngayon'),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      if (result.expectedGainMin != null &&
-                          result.expectedGainMax != null)
-                        _weightGainRangeBar(
-                          actual: result.actualGain!,
-                          min: result.expectedGainMin!,
-                          max: result.expectedGainMax!,
-                          statusColor: statusColor,
-                        ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // Supporting figures, kept to one quiet line instead of
-                    // four rows of their own.
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: [
-                        _weightChip(getBmiCategoryLabel(result.bmiCategory)),
-                        if (result.baselineWeight != null)
-                          _weightChip(
-                              '${_t('Before', 'Dati')} ${result.baselineWeight!.toStringAsFixed(1)} kg'),
-                        _weightChip(
-                            '${_t('Now', 'Ngayon')} ${result.currentWeight.toStringAsFixed(1)} kg'),
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-                    // Flags
-                    if (result.hasFlags) ...[
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: result.flags.map((flag) {
-                          String label;
-                          Color flagColor = AppColors.error;
-                          if (flag == 'weight_loss') {
-                            label = _t('⚠️ Weight Loss Detected', '⚠️ May Bawas sa Timbang');
-                          } else if (flag == 'plateau') {
-                            label = _t('ℹ️ Weight Plateau', 'ℹ️ Patag na Timbang');
-                            flagColor = AppColors.warning;
-                          } else if (flag == 'abnormal_spike') {
-                            label = _t('⚠️ Rapid Weight Gain Spike', '⚠️ Mabilis na Pagtaas ng Timbang');
-                          } else {
-                            label = flag.replaceAll('_', ' ').toUpperCase();
-                          }
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: flagColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              label,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: flagColor,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-
-                    // Engine message
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Text(
-                        result.message,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          height: 1.5,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    
-                    // Navigation prompt
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _t('Tap to view details and progression chart →', 'I-tap para makita ang mga detalye at progression chart →'),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.brandPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+              const SizedBox(width: 8),
+              Text(
+                _t('so far', 'hanggang ngayon'),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
           ),
-        ),
-      ),
+          if (result.expectedGainMin != null &&
+              result.expectedGainMax != null) ...[
+            const SizedBox(height: 12),
+            _weightGainRangeBar(
+              actual: result.actualGain!,
+              min: result.expectedGainMin!,
+              max: result.expectedGainMax!,
+              statusColor: statusColor,
+            ),
+          ],
+        ],
+      ],
     );
   }
+
 
 
 

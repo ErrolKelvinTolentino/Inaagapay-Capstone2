@@ -416,6 +416,16 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
                                     ),
                                     const SizedBox(height: 12),
                                   ],
+
+                                  // Moved off the mother's Home tab. It is
+                                  // about childhood vaccines, so it belongs
+                                  // beside her children rather than among the
+                                  // cards about her pregnancy.
+                                  const SizedBox(height: 4),
+                                  _VaccinePosterRow(
+                                    onTap: () => Navigator.pushNamed(
+                                        context, '/immunization-poster'),
+                                  ),
                                 ],
                               ),
               ),
@@ -535,6 +545,72 @@ class _ExpectingCard extends StatelessWidget {
                   size: 16, color: AppColors.brandPrimary),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Link to the BHC vaccine poster schedule.
+///
+/// Was on the mother's Home tab, among cards about her pregnancy. It is about
+/// childhood immunisation, so it sits with her children instead — and Home is
+/// shorter for it.
+class _VaccinePosterRow extends StatelessWidget {
+  const _VaccinePosterRow({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: AppColors.brandPrimary.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.campaign_rounded,
+                  color: AppColors.brandPrimary, size: 21),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    LanguageService.translate(
+                        'Free vaccine schedule', 'Iskedyul ng libreng bakuna'),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.brandText,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    LanguageService.translate('At your health center',
+                        'Sa inyong health center'),
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                size: 15, color: AppColors.brandPrimary),
+          ],
         ),
       ),
     );
