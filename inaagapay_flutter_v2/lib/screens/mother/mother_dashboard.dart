@@ -1428,7 +1428,12 @@ class _MotherDashboardState extends State<MotherDashboard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _t('Next Scheduled Checkup', 'Susunod na Nakatakdang Checkup'),
+                  // "Scheduled" promised an appointment. What is stored is a
+                  // recommended date with no time on it, so the label says
+                  // recommended — a mother should not arrive expecting a slot
+                  // that was never booked.
+                  _t('Recommended Next Visit',
+                      'Inirerekomendang Susunod na Bisita'),
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -2499,15 +2504,29 @@ class _MotherDashboardState extends State<MotherDashboard> {
                               _buildVitalsIncompleteBanner(),
                             ],
 
-                            // Sits outside the `!_isUnlinked` block below on
-                            // purpose. Bleeding does not wait for a health
-                            // centre assignment, and a mother not yet linked
-                            // is if anything more likely to need this. Gated
-                            // only on being pregnant, since the signs are
-                            // pregnancy-specific.
-                            if (_hasPregnancy) ...[
+                            // Her news comes before the clinic's. Greeting,
+                            // week, countdown, baby size — the reason she
+                            // opened the app — then the operational cards.
+                            HeroCard(
+                              image: const AssetImage(
+                                  'assets/images/pregnant1.png'),
+                              week: _hasPregnancy && _week > 0 ? _week : null,
+                              showWeekBadge: _hasPregnancy && _week > 0,
+                              showHeartRow: _hasPregnancy && _week > 0,
+                            ),
+
+                            if (_hasPregnancy &&
+                                _week > 0 &&
+                                _eddDate != null) ...[
                               const SizedBox(height: 16),
-                              const DangerSignsCard(),
+                              _buildCountdownCard(),
+                            ],
+
+                            if (_hasPregnancy && _week > 0) ...[
+                              const SizedBox(height: 16),
+                              _buildBabySizeCard(),
+                              const SizedBox(height: 16),
+                              _buildWeeklyTipCard(),
                             ],
 
                             if (!_isUnlinked && _nextScheduleDate != null) ...[
@@ -2593,32 +2612,16 @@ class _MotherDashboardState extends State<MotherDashboard> {
 
                             const SizedBox(height: 20),
 
-                            HeroCard(
-                              image: const AssetImage(
-                                  'assets/images/pregnant1.png'),
-                              week: _hasPregnancy && _week > 0 ? _week : null,
-                              showWeekBadge: _hasPregnancy && _week > 0,
-                              showHeartRow: _hasPregnancy && _week > 0,
-                            ),
-
-                            // Baby Size Comparison Card
-                            if (_hasPregnancy && _week > 0) ...[
+                            // Reference, not an alert. Kept below the
+                            // operational cards so it is findable without
+                            // greeting her with a red box every morning — a
+                            // warning seen daily stops being seen, and by the
+                            // day it matters she looks past it. Outside the
+                            // `!_isUnlinked` gate above: bleeding does not
+                            // wait for a health centre assignment.
+                            if (_hasPregnancy) ...[
                               const SizedBox(height: 16),
-                              _buildBabySizeCard(),
-                            ],
-
-                            // Tip of the Week
-                            if (_hasPregnancy && _week > 0) ...[
-                              const SizedBox(height: 16),
-                              _buildWeeklyTipCard(),
-                            ],
-
-                            // Pregnancy Countdown Card
-                            if (_hasPregnancy &&
-                                _week > 0 &&
-                                _eddDate != null) ...[
-                              const SizedBox(height: 16),
-                              _buildCountdownCard(),
+                              const DangerSignsCard(),
                             ],
 
                             // My Vitals Card

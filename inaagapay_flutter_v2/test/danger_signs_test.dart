@@ -97,7 +97,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byIcon(Icons.warning_rounded), findsOneWidget);
-      expect(find.text('When to get help fast'), findsOneWidget);
+      expect(find.text('Know the warning signs'), findsOneWidget);
     });
   });
 }
