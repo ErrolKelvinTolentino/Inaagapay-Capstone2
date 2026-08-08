@@ -4,11 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/headline.dart';
-import '../../widgets/small_description.dart';
 import '../../widgets/hero_card.dart';
-import '../../widgets/small_info_box.dart';
-import '../../widgets/long_info_box.dart';
 import '../../widgets/danger_signs_card.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/app_input_field.dart';
@@ -1253,6 +1249,139 @@ class _MotherDashboardState extends State<MotherDashboard> {
     return 'a';
   }
 
+  /// Greeting, name, and where she is in the pregnancy.
+  ///
+  /// Time-aware rather than a flat "Welcome": a mother opening this at 5am
+  /// before a long trip to the health centre and one opening it at night are
+  /// having different days, and greeting both identically is the small kind
+  /// of coldness that adds up.
+  /// Entry to the Mother Book, styled like the other navigation cards.
+  ///
+  /// Given a slightly warmer tint than the plain white rows so it still reads
+  /// as the main destination on the page, without becoming a call to action.
+  Widget _buildPregnancyBookRow({required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.brandSecondary,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: AppColors.brandPrimary.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.brandPrimary.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.pregnant_woman_rounded,
+                  color: AppColors.brandPrimary, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _t('My Pregnancy', 'Ang Aking Pagbubuntis'),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.brandText,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _t('Your body, warning signs, and checklists',
+                        'Ang iyong katawan, mga babala, at checklist'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                size: 16, color: AppColors.brandPrimary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGreeting() {
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12
+        ? _t('Good morning', 'Magandang umaga')
+        : hour < 18
+            ? _t('Good afternoon', 'Magandang hapon')
+            : _t('Good evening', 'Magandang gabi');
+
+    final name = _firstName.isNotEmpty
+        ? _firstName.split(' ').first
+        : _t('Nanay', 'Nanay');
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$greeting, $name 🌸',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              height: 1.15,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (_hasPregnancy && _week > 0)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppColors.brandPrimary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.calendar_today_rounded,
+                      size: 13, color: AppColors.brandText),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${_t('Week', 'Linggo')} $_week · ${_localizedTrimester()}',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.brandText,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Text(
+              _t('No active pregnancy', 'Walang aktibong pagbubuntis'),
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBabySizeCard() {
     final sizeData = _babySizeByWeek[_week];
     final fruitName = sizeData?['fruit'] ?? '';
@@ -1334,15 +1463,50 @@ class _MotherDashboardState extends State<MotherDashboard> {
                     height: 1.3,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${_t('Week', 'Linggo')} $_week',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
+                const SizedBox(height: 8),
+                // The measurements used to live in two separate boxes near
+                // the bottom of the page, far from the fruit they describe.
+                // A mother comparing her baby to a grape wants the numbers in
+                // the same breath, not four cards later.
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _babyMeasureChip(Icons.straighten, _babySize),
+                    _babyMeasureChip(Icons.monitor_weight_outlined, _babyWeight),
+                  ],
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Length or weight, as a small labelled pill.
+  ///
+  /// Icon plus number, no caption: "2.3 cm" beside a ruler needs no sentence,
+  /// and the words "Estimated Baby Size" cost two lines to say nothing extra.
+  Widget _babyMeasureChip(IconData icon, String value) {
+    if (value.isEmpty || value == '—') return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.brandPrimary.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: AppColors.brandPrimary),
+          const SizedBox(width: 5),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
             ),
           ),
         ],
@@ -1394,11 +1558,14 @@ class _MotherDashboardState extends State<MotherDashboard> {
       margin: const EdgeInsets.symmetric(horizontal: 4),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.brandPrimary.withValues(alpha: 0.08),
+        // White like the rest. Only one card on this screen carries a tint —
+        // My Pregnancy, the main destination — so the tint means something.
+        // Two pink-filled cards among six white ones read as noise, not
+        // emphasis.
+        color: AppColors.cardColorOf(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppColors.brandPrimary.withValues(alpha: 0.3),
-          width: 1.5,
+          color: AppColors.brandPrimary.withValues(alpha: 0.15),
         ),
         boxShadow: [
           BoxShadow(
@@ -2381,14 +2548,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.brandPrimary.withValues(alpha: 0.08),
-            AppColors.brandAccent.withValues(alpha: 0.05),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.cardColorOf(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: AppColors.brandPrimary.withValues(alpha: 0.2),
@@ -2469,30 +2629,13 @@ class _MotherDashboardState extends State<MotherDashboard> {
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           children: [
-                            // Welcome Card
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: AppColors.bgSecondary,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                children: [
-                                  Headline(
-                                    text:
-                                        '${_t('Welcome', 'Maligayang pagdating')}, ${_firstName.isNotEmpty ? _firstName.split(' ').first : 'Nanay'}! 🌸',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  SmallDescription(
-                                    icon: Icons.calendar_today,
-                                    text: _hasPregnancy && _week > 0
-                                        ? '${_t('Week', 'Linggo')} $_week • ${_localizedTrimester()}'
-                                        : _t('No active pregnancy',
-                                            'Walang aktibong pagbubuntis'),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            // A page header, not a card. It used to be a pink
+                            // box, which made it compete with the eight cards
+                            // below it and added to a screen where almost
+                            // everything was pink-filled. Left-aligned and
+                            // unboxed, it reads as the top of a page and lets
+                            // the hero image be the first real card.
+                            _buildGreeting(),
 
                             if (_isUnlinked && !_isUnlinkedBannerDismissed) ...[
                               const SizedBox(height: 16),
@@ -2636,98 +2779,15 @@ class _MotherDashboardState extends State<MotherDashboard> {
                               _buildWeightGainAnalysisCard(),
                             ],
 
-                            const SizedBox(height: 20),
 
-                            // Baby Growth Info
-                            if (_hasPregnancy && _week > 0) ...[
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: SmallInfoBox(
-                                      icon: Icons.straighten,
-                                      title: _t('Estimated Baby Size',
-                                          'Inaasahang Sukat ng Sanggol'),
-                                      value: _babySize,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: SmallInfoBox(
-                                      icon: Icons.monitor_weight,
-                                      title: _t('Estimated Baby Weight',
-                                          'Inaasahang Timbang ng Sanggol'),
-                                      value: _babyWeight,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                            ],
-
-                            // Due Date Info
-                            LongInfoBox(
-                              icon: Icons.calendar_month,
-                              text: [
-                                TextSpan(
-                                  text: '${_t('Due Date', 'Takdang Araw')}: ',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: _hasPregnancy && _dueDate != '—'
-                                      ? '$_dueDate\n'
-                                      : '${_t('Not set', 'Hindi nakatakda')}\n',
-                                  style: const TextStyle(
-                                      color: AppColors.textSecondary),
-                                ),
-                                if (_hasPregnancy && _week > 0) ...[
-                                  TextSpan(
-                                    text: '${_t('You are', 'Ikaw ay')} ',
-                                    style: const TextStyle(
-                                        color: AppColors.textSecondary),
-                                  ),
-                                  TextSpan(
-                                    text:
-                                        '$_weeksLeft ${_t('weeks away', 'linggo na lang')}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.brandPrimary,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text:
-                                        _t(' from meeting!', ' bago magkita!'),
-                                    style: const TextStyle(
-                                        color: AppColors.textSecondary),
-                                  ),
-                                ] else if (!_hasPregnancy) ...[
-                                  TextSpan(
-                                    text: _t('No active pregnancy',
-                                        'Walang aktibong pagbubuntis'),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.warning,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            // Action Buttons
-                            MainButton(
-                              // Was "More Info", which named the button after
-                              // the act of tapping it rather than what is
-                              // behind it. What is behind it is her whole
-                              // pregnancy — her body, her risk level, her
-                              // checklists — so the label says that.
-                              label: _t('My Pregnancy', 'Ang Aking Pagbubuntis'),
-                              showIcons: true,
-                              leftIcon: Icons.pregnant_woman_rounded,
-                              onPressed: () {
+                            // A destination, not an action. A solid pink CTA
+                            // promises something will happen when tapped —
+                            // submitting, confirming, sending. This opens a
+                            // page to read, so it looks like the other
+                            // navigation cards on this screen and stops
+                            // competing with them for the eye.
+                            _buildPregnancyBookRow(
+                              onTap: () {
                                 if (!_hasPregnancy ||
                                     _week == 0 ||
                                     _pregnancyId == 0) {
@@ -2994,6 +3054,118 @@ class _MotherDashboardState extends State<MotherDashboard> {
     );
   }
 
+  /// Small neutral pill for a supporting figure.
+  Widget _weightChip(String text) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade800,
+          ),
+        ),
+      );
+
+  /// Where her gain sits against the range recommended for her BMI category.
+  ///
+  /// The green band is the IOM 2009 range for this week; the marker is her.
+  /// Inside the band needs no explanation — that is the point of drawing it.
+  ///
+  /// The track runs to a little past whichever is larger, the top of the range
+  /// or her actual gain, so a mother well above the range still sees her
+  /// marker on the track rather than jammed against the end.
+  Widget _weightGainRangeBar({
+    required double actual,
+    required double min,
+    required double max,
+    required Color statusColor,
+  }) {
+    final upper = (actual > max ? actual : max) * 1.15;
+    final scaleMax = upper <= 0 ? 1.0 : upper;
+
+    double frac(double v) => (v / scaleMax).clamp(0.0, 1.0);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final bandLeft = frac(min < 0 ? 0 : min) * w;
+        final bandWidth = (frac(max) * w) - bandLeft;
+        final markerX = frac(actual < 0 ? 0 : actual) * w;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 26,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Track
+                  Positioned(
+                    top: 9,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  // Recommended band
+                  Positioned(
+                    top: 9,
+                    left: bandLeft,
+                    child: Container(
+                      height: 8,
+                      width: bandWidth < 4 ? 4 : bandWidth,
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  // Her marker — a shape as well as a colour, so the reading
+                  // survives a colour-blind viewer and a washed-out screen.
+                  Positioned(
+                    top: 2,
+                    left: (markerX - 9).clamp(0.0, w - 18),
+                    child: Container(
+                      width: 18,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: statusColor,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.white, width: 2.5),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _t(
+                'Recommended for you: ${min.toStringAsFixed(1)}–${max.toStringAsFixed(1)} kg by week $_week',
+                'Inirerekomenda para sa iyo: ${min.toStringAsFixed(1)}–${max.toStringAsFixed(1)} kg sa linggo $_week',
+              ),
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildWeightGainAnalysisCard() {
     final result = _weightGainResult;
     if (result == null) return const SizedBox.shrink();
@@ -3134,41 +3306,62 @@ class _MotherDashboardState extends State<MotherDashboard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _weightInfoRow(
-                      _t('BMI Category', 'Kategorya ng BMI'),
-                      getBmiCategoryLabel(result.bmiCategory),
+                    // Six label/value rows became one number and one bar.
+                    // "Actual Gain +1.0 kg, Expected Gain 0.0–1.4 kg" asks a
+                    // mother to hold two figures in her head and compare them;
+                    // a mark sitting inside a green band answers the same
+                    // question at a glance. The exact figures are still on the
+                    // detail page for the midwife.
+                    if (result.actualGain != null) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            '${result.actualGain! >= 0 ? '+' : ''}${result.actualGain!.toStringAsFixed(1)} kg',
+                            style: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.w900,
+                              height: 1,
+                              color: statusColor,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _t('gained so far', 'naidagdag hanggang ngayon'),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      if (result.expectedGainMin != null &&
+                          result.expectedGainMax != null)
+                        _weightGainRangeBar(
+                          actual: result.actualGain!,
+                          min: result.expectedGainMin!,
+                          max: result.expectedGainMax!,
+                          statusColor: statusColor,
+                        ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Supporting figures, kept to one quiet line instead of
+                    // four rows of their own.
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        _weightChip(getBmiCategoryLabel(result.bmiCategory)),
+                        if (result.baselineWeight != null)
+                          _weightChip(
+                              '${_t('Before', 'Dati')} ${result.baselineWeight!.toStringAsFixed(1)} kg'),
+                        _weightChip(
+                            '${_t('Now', 'Ngayon')} ${result.currentWeight.toStringAsFixed(1)} kg'),
+                      ],
                     ),
-                    _weightInfoRow(
-                      _t('Current Weight', 'Kasalukuyang Timbang'),
-                      '${result.currentWeight.toStringAsFixed(1)} kg',
-                    ),
-                    if (result.baselineWeight != null)
-                      _weightInfoRow(
-                        result.mode == WeightGainMode.full
-                            ? _t('Pre-Pregnancy Weight', 'Timbang Bago Mabuntis')
-                            : _t('Baseline Weight', 'Baseline na Timbang'),
-                        '${result.baselineWeight!.toStringAsFixed(1)} kg',
-                      ),
-                    if (result.actualGain != null)
-                      _weightInfoRow(
-                        _t('Actual Gain', 'Aktwal na Dagdag'),
-                        '${result.actualGain! >= 0 ? '+' : ''}${result.actualGain!.toStringAsFixed(1)} kg',
-                      ),
-                    if (result.expectedGainMin != null && result.expectedGainMax != null)
-                      _weightInfoRow(
-                        _t('Expected Gain', 'Inaasahang Dagdag'),
-                        '${result.expectedGainMin!.toStringAsFixed(1)} - ${result.expectedGainMax!.toStringAsFixed(1)} kg',
-                      )
-                    else if (result.expectedGain != null)
-                      _weightInfoRow(
-                        _t('Expected Gain', 'Inaasahang Dagdag'),
-                        '${result.expectedGain!.toStringAsFixed(1)} kg',
-                      ),
-                    if (result.weeklyGain != null)
-                      _weightInfoRow(
-                        _t('Weekly Gain Rate', 'Antas ng Lingguhang Dagdag'),
-                        '${result.weeklyGain!.toStringAsFixed(3)} kg/wk',
-                      ),
 
                     const SizedBox(height: 12),
                     // Flags
@@ -3258,25 +3451,6 @@ class _MotherDashboardState extends State<MotherDashboard> {
   }
 
 
-
-  Widget _weightInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-          ),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildErrorView() {
     return Center(
