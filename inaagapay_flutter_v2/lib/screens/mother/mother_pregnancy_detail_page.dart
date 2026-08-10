@@ -1375,8 +1375,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.borderPrimary.withValues(alpha: 0.5)),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFF5E8ED)),
               ),
               child: Row(
                 children: [
@@ -1423,8 +1423,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.borderPrimary.withValues(alpha: 0.5)),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFF5E8ED)),
               ),
               child: Row(
                 children: [
@@ -1812,7 +1812,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                               ? AppColors.brandPrimary
                               : isPast
                                   ? AppColors.brandPrimary.withValues(alpha: 0.1)
-                                  : AppColors.borderPrimary.withValues(alpha: 0.5),
+                                  : const Color(0xFFF5E8ED),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isActive
@@ -1894,7 +1894,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                       decoration: BoxDecoration(
                         color: isPast
                             ? AppColors.brandPrimary.withValues(alpha: 0.4)
-                            : AppColors.borderPrimary.withValues(alpha: 0.5),
+                            : const Color(0xFFF5E8ED),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -2298,7 +2298,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.01),
@@ -2342,9 +2342,9 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: isHighlighted ? const Color(0xFFFFF4F6) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isHighlighted ? const Color(0xFFFFD1D8) : AppColors.borderPrimary.withValues(alpha: 0.5),
+          color: isHighlighted ? const Color(0xFFFFD1D8) : const Color(0xFFF5E8ED),
           width: isHighlighted ? 1.5 : 1.0,
         ),
         boxShadow: [
@@ -2576,7 +2576,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isReported ? AppColors.brandPrimary.withValues(alpha: 0.4) : AppColors.borderPrimary.withValues(alpha: 0.5),
+          color: isReported ? AppColors.brandPrimary.withValues(alpha: 0.4) : const Color(0xFFF5E8ED),
           width: isReported ? 1.5 : 1.0,
         ),
         boxShadow: [
@@ -3353,19 +3353,24 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The Baby Book's panel treatment, applied here so the two pregnancy
+    // screens read as one product: a wider 22px radius, the warm #F5E8ED
+    // border instead of a grey hairline, and a soft plum shadow with enough
+    // blur to lift the card off the page. The structure of this page is
+    // unchanged — only its surface.
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: color ?? Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.borderPrimary.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFF5E8ED)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.01),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: const Color(0xFF69243F).withValues(alpha: 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 7),
           ),
         ],
       ),
@@ -3394,13 +3399,18 @@ class _SectionHeader extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Expanded(
+          // Larger and tighter, matching the Baby Book's section titles.
+          // A heading that sat at the same size as its own body text was
+          // doing none of the work a heading exists to do.
           child: Text(
             title,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 17,
+              height: 1.2,
               fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
               color: AppColors.textPrimary,
             ),
           ),
@@ -3423,8 +3433,8 @@ class _NutritionCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderPrimary.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFF5E8ED)),
       ),
       child: Row(
         children: [

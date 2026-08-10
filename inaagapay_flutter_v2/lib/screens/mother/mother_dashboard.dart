@@ -9,7 +9,7 @@ import '../../widgets/small_description.dart';
 import '../../widgets/hero_card.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/my_pregnancy_banner.dart';
-import '../baby_book_mockup_page.dart';
+import 'mother_pregnancy_detail_page.dart';
 import '../../widgets/app_input_field.dart';
 import '../../models/baby_growth_model.dart';
 import '../../models/weight_gain_models.dart';
@@ -1261,26 +1261,37 @@ class _MotherDashboardState extends State<MotherDashboard> {
   ///
   /// Given a slightly warmer tint than the plain white rows so it still reads
   /// as the main destination on the page, without becoming a call to action.
-  /// Opens the pregnancy book.
+  /// Opens "My Pregnancy" — her week-by-week guide, body changes, risk
+  /// level, warning signs and checklists.
   ///
-  /// Used to open PregnancyDetailPage directly, which made two doors to "my
-  /// pregnancy": this banner, and the Expecting card in Children. Before
-  /// birth those are one experience, so both now land on the same book and
-  /// her own care sits one level inside it.
-  Future<void> _openPregnancyDetail() async {
+  /// Briefly pointed at the pregnancy book instead, which buried all of that
+  /// one level further in. The structure of this page is the one worth
+  /// keeping; what it needed was the book's visual language, not a new home.
+  void _openPregnancyDetail() {
     if (!_hasPregnancy || _week == 0 || _pregnancyId == 0) {
       _showSnackBar(_t('No active pregnancy to show details for.',
           'Walang aktibong pagbubuntis na maaaring tingnan.'));
       return;
     }
-    final motherId = await AuthStorage.getMotherId();
-    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => BabyBookMockupPage(motherId: motherId),
+        builder: (_) => PregnancyDetailPage(
+          week: _week,
+          trimester: _trimester,
+          dueDate: _dueDate,
+          weeksLeft: _weeksLeft,
+          babySize: _babySize,
+          babyWeight: _babyWeight,
+          firstName: _firstName,
+          riskLevel: _riskLevel,
+          fetalCount: _fetalCount,
+          pregnancyId: _pregnancyId,
+          riskFactors: _riskFactors,
+          suggestedActions: _suggestedActions,
+        ),
       ),
-    ).then((_) => _loadDashboardData());
+    );
   }
 
 
