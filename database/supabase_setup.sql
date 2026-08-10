@@ -1820,3 +1820,63 @@ GRANT EXECUTE ON FUNCTION public.receive_inventory_transfer(
 ) TO anon, authenticated;
 
 COMMIT;
+
+BEGIN;
+
+ALTER TABLE public.inventory_items
+  ADD COLUMN IF NOT EXISTS generic_name VARCHAR(160),
+  ADD COLUMN IF NOT EXISTS item_code VARCHAR(50),
+  ADD COLUMN IF NOT EXISTS strength_description VARCHAR(160),
+  ADD COLUMN IF NOT EXISTS dosage_form VARCHAR(80);
+
+UPDATE public.inventory_items
+SET
+  generic_name = NULLIF(BTRIM(generic_name), ''),
+  item_code = NULLIF(UPPER(BTRIM(item_code)), ''),
+  strength_description = NULLIF(BTRIM(strength_description), ''),
+  dosage_form = NULLIF(BTRIM(dosage_form), '');
+
+ALTER TABLE public.inventory_items
+  DROP CONSTRAINT IF EXISTS inventory_items_item_code_format_check,
+  DROP CONSTRAINT IF EXISTS inventory_items_strength_description_format_check,
+  DROP CONSTRAINT IF EXISTS inventory_items_dosage_form_format_check;
+
+ALTER TABLE public.inventory_items
+  ADD CONSTRAINT inventory_items_item_code_format_check
+  CHECK (
+    item_code IS NULL OR (
+      item_code = UPPER(BTRIM(item_code))
+      AND item_code ~ '^[A-Z0-9][A-Z0-9._/-]{1,49}$'
+    )
+  ),
+  ADD CONSTRAINT inventory_items_strength_description_format_check
+  CHECK (
+    strength_description IS NULL OR (
+      strength_description = BTRIM(strength_description)
+      AND CHAR_LENGTH(strength_description) BETWEEN 1 AND 160
+    )
+  ),
+  ADD CONSTRAINT inventory_items_dosage_form_format_check
+  CHECK (
+    dosage_form IS NULL OR (
+      dosage_form = BTRIM(dosage_form)
+      AND CHAR_LENGTH(dosage_form) BETWEEN 1 AND 80
+    )
+  );
+
+CREATE UNIQUE INDEX IF NOT EXISTS inventory_items_item_code_ci_uidx
+  ON public.inventory_items (LOWER(item_code))
+  WHERE item_code IS NOT NULL;
+
+COMMENT ON COLUMN public.inventory_items.item_code
+  IS 'Unique human-facing inventory catalog code.';
+
+COMMENT ON COLUMN public.inventory_items.strength_description
+  IS 'Medicine strength or supply specification, including combination strengths.';
+
+COMMENT ON COLUMN public.inventory_items.dosage_form
+  IS 'Medicine dosage form or practical supply form.';
+
+NOTIFY pgrst, 'reload schema';
+
+COMMIT;
