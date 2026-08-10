@@ -136,10 +136,29 @@ Three tables (`20260808_baby_book_foundation`):
 
 - [x] Tables, scoping constraint, indexes
 - [x] Prenatal templates seeded (9)
+- [x] **Postnatal templates seeded (157)** — DOH ECCD book, birth to 5 years, `20260809_postnatal_milestones_doh`
 - [x] Repository with derived status
 - [x] Pregnancy sections reading real data
 - [x] `owner` split and templates re-sorted
 - [x] Expecting card in the Children tab
+
+### The postnatal source
+
+Department of Health, *Gabay Para sa Bata* — the ECCD home-based record, Cebuano edition, shipped in this repo at `assets/pdf/DOH.pdf` (140 pages). Every milestone is traceable to a page:
+
+| Age | Page | Age | Page | Age | Page |
+|---|---|---|---|---|---|
+| 2 mo | 43–44 | 15 mo | 76–77 | 3 y | 97–98 |
+| 4 mo | 46–47 | 18 mo | 81–82 | 4 y | 103–104 |
+| 6 mo | 51–52 | 2 y | 88–89 | 5 y | 109–110 |
+| 9 mo | 64–65 | 30 mo | 91–92 | | |
+| 12 mo | 68–69 | | | | |
+
+The DOH set is the CDC *Learn the Signs. Act Early.* list adopted for Philippine use; alignment was confirmed at both ends of the range before writing.
+
+**Five domains, not four.** The DOH book carries *Pagtabang sa Kaugalingon* (self-help) alongside the CDC four, used at 2, 3, and 4 years. The category constraint was widened rather than dropping those entries, which would have quietly edited the source.
+
+**Not a screening tool.** The book frames these as what a caregiver may expect, and prompts the parent to ask their health worker. An unrecorded milestone reads "not recorded", never "missed".
 - [x] Supplements removed from the Baby Book
 - [ ] Rename Records tab → **My Health**, organise per pregnancy
 - [ ] Newborn card on Home

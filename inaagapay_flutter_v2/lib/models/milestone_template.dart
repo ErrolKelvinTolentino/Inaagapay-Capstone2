@@ -81,6 +81,20 @@ class MilestoneTemplate {
         // throwing at the mother.
         _ => BabyGrowthMilestoneCategory.development,
       };
+
+  /// Plain-language name for a postnatal domain.
+  ///
+  /// The DOH ECCD book's own groupings, in English rather than the clinical
+  /// term: a mother reads "Playing and feelings", not "socio-emotional".
+  /// `self_help` is the DOH's fifth domain, which the CDC set does not carry.
+  String get postnatalDomainLabel => switch (category) {
+        'motor' => 'Moving and playing',
+        'language' => 'Talking and listening',
+        'social' => 'Playing and feelings',
+        'cognitive' => 'Learning and thinking',
+        'self_help' => 'Doing things alone',
+        _ => 'Growing up',
+      };
 }
 
 /// Which half of the Baby Book a template belongs to.

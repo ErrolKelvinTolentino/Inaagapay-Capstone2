@@ -146,6 +146,39 @@ class BabyBookRepository {
     }
   }
 
+  /// The postnatal milestone catalogue — the DOH ECCD set, birth to five
+  /// years, seeded by `20260809_postnatal_milestones_doh`.
+  ///
+  /// [upToAgeMonths] limits the list to what a child of that age could
+  /// plausibly have reached. A newborn's book should not open on "hops on one
+  /// foot"; passing her age keeps the page about her.
+  Future<List<MilestoneTemplate>> loadPostnatalTemplates({
+    int? upToAgeMonths,
+  }) async {
+    try {
+      var query = SupabaseService.client
+          .from('milestone_templates')
+          .select()
+          .eq('phase', MilestonePhase.postnatal.dbValue)
+          .eq('is_active', true);
+
+      if (upToAgeMonths != null) {
+        // One checkpoint beyond her age, so the next thing to look forward to
+        // is visible. A Baby Book is partly anticipation.
+        query = query.lte('age_months_target', upToAgeMonths + 6);
+      }
+
+      final rows = await query.order('sort_order');
+
+      return (rows as List)
+          .map((r) => MilestoneTemplate.fromRow(r as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) debugPrint('loadPostnatalTemplates failed: $e');
+      return const [];
+    }
+  }
+
   /// The prenatal milestones for [pregnancyId], catalogue merged with what
   /// has actually been recorded.
   ///
