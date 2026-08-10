@@ -338,18 +338,83 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
             ],
           ),
         ),
-        for (final m in entry.value) _milestoneRow(m),
+        ..._domainGroups(entry.value),
         const SizedBox(height: 18),
       ],
     ];
+  }
+
+  /// Milestones of one age, grouped under their domain.
+  ///
+  /// The first version repeated the domain on every row, so "Moving and
+  /// playing" appeared four times running under a single age. One heading per
+  /// group says it once, and gives the icon somewhere to live.
+  List<Widget> _domainGroups(List<ChildMilestone> milestones) {
+    final byDomain = <String, List<ChildMilestone>>{};
+    for (final m in milestones) {
+      byDomain.putIfAbsent(m.template?.category ?? '_own', () => []).add(m);
+    }
+
+    return [
+      for (final group in byDomain.entries) ...[
+        _domainHeader(group.value.first),
+        for (final m in group.value) _milestoneRow(m),
+        const SizedBox(height: 12),
+      ],
+    ];
+  }
+
+  Widget _domainHeader(ChildMilestone sample) {
+    final t = sample.template;
+    final colour = t?.postnatalDomainColour ?? AppColors.brandPrimary;
+    final label = t == null
+        ? _t('Our own moments', 'Aming mga alaala')
+        : (LanguageService.isFilipino
+            ? t.postnatalDomainLabelFil
+            : t.postnatalDomainLabel);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, top: 2),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: colour.withValues(alpha: 0.13),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              t?.postnatalDomainIcon ?? Icons.auto_awesome_rounded,
+              size: 17,
+              color: colour,
+            ),
+          ),
+          const SizedBox(width: 9),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: colour,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _milestoneRow(ChildMilestone m) {
     final kept = m.isRecorded;
     final upcoming = m.status == BabyGrowthMilestoneStatus.upcoming;
 
+    final domainColour =
+        m.template?.postnatalDomainColour ?? AppColors.brandPrimary;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      // Indented under its domain heading, so the grouping is visible as
+      // structure and not only as a repeated word.
+      padding: const EdgeInsets.only(bottom: 8, left: 10),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: kept ? null : () => _toggle(m),
@@ -361,14 +426,16 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
             border: Border.all(
               color: kept
                   ? AppColors.success.withValues(alpha: 0.35)
-                  : AppColors.brandPrimary.withValues(alpha: 0.12),
+                  : domainColour.withValues(alpha: 0.18),
             ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // A shape as well as a colour: a filled tick and an empty circle
-              // differ without relying on green being visible.
+              // differ without relying on green being visible. The empty one
+              // takes the domain's hue so a row still belongs to its group
+              // when scrolled away from the heading.
               Icon(
                 kept
                     ? Icons.check_circle_rounded
@@ -376,34 +443,23 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
                 size: 22,
                 color: kept
                     ? AppColors.success
-                    : AppColors.brandPrimary.withValues(alpha: 0.45),
+                    : domainColour.withValues(alpha: 0.55),
               ),
               const SizedBox(width: 11),
+              // The domain is on the group heading now, so the row carries the
+              // milestone alone — one idea per row, and four fewer repeated
+              // labels under every age.
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      m.title,
-                      style: TextStyle(
-                        fontSize: 14,
-                        height: 1.3,
-                        fontWeight: kept ? FontWeight.w700 : FontWeight.w500,
-                        color: upcoming
-                            ? AppColors.textSecondary
-                            : AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      m.domainLabel,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.brandPrimary.withValues(alpha: 0.8),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  m.title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.3,
+                    fontWeight: kept ? FontWeight.w700 : FontWeight.w500,
+                    color: upcoming
+                        ? AppColors.textSecondary
+                        : AppColors.textPrimary,
+                  ),
                 ),
               ),
               if (upcoming)

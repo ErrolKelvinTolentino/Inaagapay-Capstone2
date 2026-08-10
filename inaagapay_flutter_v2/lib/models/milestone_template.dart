@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 import 'baby_growth_milestone.dart';
 
 /// A row from `milestone_templates` — one entry in the catalogue of
@@ -94,6 +96,42 @@ class MilestoneTemplate {
         'cognitive' => 'Learning and thinking',
         'self_help' => 'Doing things alone',
         _ => 'Growing up',
+      };
+
+  String get postnatalDomainLabelFil => switch (category) {
+        'motor' => 'Paggalaw at paglalaro',
+        'language' => 'Pagsasalita at pakikinig',
+        'social' => 'Paglalaro at damdamin',
+        'cognitive' => 'Pag-aaral at pag-iisip',
+        'self_help' => 'Sariling paggawa',
+        _ => 'Paglaki',
+      };
+
+  /// The picture that carries the domain.
+  ///
+  /// A mother scanning her child's book should be able to tell walking from
+  /// talking without reading either word — the first rule in the design doc,
+  /// which the first version of this screen broke by shipping five kinds of
+  /// milestone as five identical rows of grey text.
+  IconData get postnatalDomainIcon => switch (category) {
+        'motor' => Icons.directions_run_rounded,
+        'language' => Icons.record_voice_over_rounded,
+        'social' => Icons.favorite_rounded,
+        'cognitive' => Icons.lightbulb_rounded,
+        'self_help' => Icons.front_hand_rounded,
+        _ => Icons.child_care_rounded,
+      };
+
+  /// Distinct hues so the domains separate at a glance, and so a long age
+  /// section reads as a few groups rather than one undifferentiated list.
+  /// Never the only signal — the icon and the label carry it too.
+  Color get postnatalDomainColour => switch (category) {
+        'motor' => const Color(0xFFEF8A3C),
+        'language' => const Color(0xFF3D8FD1),
+        'social' => const Color(0xFFE6398D),
+        'cognitive' => const Color(0xFF8C63C9),
+        'self_help' => const Color(0xFF3FA98A),
+        _ => const Color(0xFF8A8A8A),
       };
 }
 

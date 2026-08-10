@@ -180,6 +180,52 @@ void main() {
       expect(find.text('Heart activity documented'), findsOneWidget);
     });
 
+    testWidgets('states each domain once, not once per row', (tester) async {
+      // The first version put the domain on every row, so four motor
+      // milestones under one age printed "Moving and playing" four times.
+      await tester.pumpWidget(page(_FakeRepo(milestones: [
+        for (final t in ['Rolls over', 'Sits up', 'Pushes up', 'Leans'])
+          ChildMilestone(
+            template: _tpl(t, t, 6, 'motor'),
+            title: t,
+            status: BabyGrowthMilestoneStatus.current,
+          ),
+      ])));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Moving and playing'), findsOneWidget);
+      for (final t in ['Rolls over', 'Sits up', 'Pushes up', 'Leans']) {
+        expect(find.text(t), findsOneWidget);
+      }
+    });
+
+    testWidgets('each domain carries its own icon', (tester) async {
+      await tester.pumpWidget(page(_FakeRepo(milestones: [
+        ChildMilestone(
+          template: _tpl('a', 'Runs', 24, 'motor'),
+          title: 'Runs',
+          status: BabyGrowthMilestoneStatus.current,
+        ),
+        ChildMilestone(
+          template: _tpl('b', 'Says two words together', 24, 'language'),
+          title: 'Says two words together',
+          status: BabyGrowthMilestoneStatus.current,
+        ),
+        ChildMilestone(
+          template: _tpl('c', 'Eats with a spoon', 24, 'self_help'),
+          title: 'Eats with a spoon',
+          status: BabyGrowthMilestoneStatus.current,
+        ),
+      ])));
+      await tester.pumpAndSettle();
+
+      // Distinct pictures, so walking and talking are told apart without
+      // reading either word.
+      expect(find.byIcon(Icons.directions_run_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.record_voice_over_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.front_hand_rounded), findsOneWidget);
+    });
+
     testWidgets('a book with nothing in it says so kindly', (tester) async {
       await tester.pumpWidget(page(const _FakeRepo()));
       await tester.pumpAndSettle();
