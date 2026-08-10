@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/baby_growth_milestone.dart';
@@ -72,26 +74,105 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
   }
 
   Future<void> _toggle(ChildMilestone m) async {
-    // Only recording is offered, never un-recording by mistake: tapping an
-    // entry that is already kept opens nothing destructive.
-    if (m.isRecorded || m.template == null) return;
+    if (m.template == null) return;
+    if (m.isRecorded) return _confirmRemove(m);
 
-    final accountId = await AuthStorage.getUserId();
+    // recorded_by is nullable, so failing to read the account id is not a
+    // reason to refuse the save. Losing who logged it is a smaller loss than
+    // losing the milestone.
+    //
+    // Time-boxed rather than merely wrapped in try/catch: this reads the
+    // device keystore, which can hang rather than fail — it does exactly that
+    // under test, where the platform channel has no handler, and a tap on a
+    // milestone simply did nothing. A keystore that is slow on an old phone
+    // would have produced the same silence.
+    int? accountId;
+    try {
+      accountId = await AuthStorage.getUserId()
+          .timeout(const Duration(seconds: 2), onTimeout: () => null);
+    } catch (_) {
+      accountId = null;
+    }
+
     final ok = await _repo.recordChildMilestone(
       childId: widget.childId,
       templateKey: m.template!.key,
       recordedByAccountId: accountId,
     );
     if (!mounted) return;
-    if (ok) {
-      _load();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_t('Saved to the Baby Book', 'Nai-save sa Baby Book')),
-          behavior: SnackBarBehavior.floating,
+    if (!ok) return;
+
+    await _load();
+    if (!mounted) return;
+
+    // Undo on the confirmation itself, which catches the common mistake — a
+    // wrong tap — without making her hunt for how to fix it.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_t('Saved to the Baby Book', 'Nai-save sa Baby Book')),
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: _t('Undo', 'Ibalik'),
+          onPressed: () async {
+            final fresh = _milestones.firstWhere(
+              (x) => x.template?.key == m.template!.key,
+              orElse: () => m,
+            );
+            if (fresh.entryId != null) {
+              await _repo.removeChildMilestone(fresh.entryId!);
+              await _load();
+            }
+          },
         ),
-      );
-    }
+      ),
+    );
+  }
+
+  /// Removing something from a keepsake deserves a question first.
+  ///
+  /// Phrased as a plain choice rather than a warning: she is correcting a
+  /// record, not doing something dangerous, and a red alarm over a mis-tapped
+  /// milestone would be out of proportion.
+  Future<void> _confirmRemove(ChildMilestone m) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          _t('Remove this?', 'Alisin ito?'),
+          style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary),
+        ),
+        content: Text(
+          _t('"${m.title}" will be taken out of the Baby Book. You can add it '
+              'again anytime.',
+              'Aalisin sa Baby Book ang "${m.title}". Maaari mo itong idagdag '
+              'ulit anumang oras.'),
+          style: const TextStyle(
+              fontSize: 14, height: 1.4, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(_t('Keep it', 'Panatilihin')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.brandPrimary),
+            child: Text(_t('Remove', 'Alisin')),
+          ),
+        ],
+      ),
+    );
+
+    if (yes != true || m.entryId == null || !mounted) return;
+    await _repo.removeChildMilestone(m.entryId!);
+    await _load();
   }
 
   /// Milestones grouped by age checkpoint, in order.
@@ -417,7 +498,8 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
       padding: const EdgeInsets.only(bottom: 8, left: 10),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: kept ? null : () => _toggle(m),
+        // Kept rows are tappable too — that is how a mis-tap gets undone.
+        onTap: () => _toggle(m),
         child: Container(
           padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(

@@ -404,6 +404,25 @@ class BabyBookRepository {
     }
   }
 
+  /// Removes a recorded milestone from a child's book.
+  ///
+  /// Recording had no counterpart at first, on the reasoning that a keepsake
+  /// should not be easy to delete. That was the wrong trade: it made a mis-tap
+  /// permanent, and a book you cannot correct is worse than one with a
+  /// confirmable undo. The confirmation lives in the UI; this just deletes.
+  Future<bool> removeChildMilestone(int entryId) async {
+    try {
+      await SupabaseService.client
+          .from('baby_book_milestones')
+          .delete()
+          .eq('entry_id', entryId);
+      return true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('removeChildMilestone failed: $e');
+      return false;
+    }
+  }
+
   BabyGrowthMilestone _fromTemplate(
     MilestoneTemplate template,
     Map<String, dynamic>? row,

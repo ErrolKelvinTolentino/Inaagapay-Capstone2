@@ -34,6 +34,48 @@ class _FakeRepo extends BabyBookRepository {
       chapter;
 }
 
+/// Records what was asked of it, so the screen's behaviour can be checked
+/// without a database.
+class _SpyRepo extends BabyBookRepository {
+  _SpyRepo(this._milestones);
+
+  final List<ChildMilestone> _milestones;
+  final List<int> removed = [];
+  int recordCount = 0;
+
+  @override
+  Future<List<ChildMilestone>> loadChildMilestones({
+    required int childId,
+    required DateTime? birthdate,
+  }) async =>
+      _milestones;
+
+  @override
+  Future<List<BabyGrowthMilestone>> loadChildPrenatalChapter(
+          int childId) async =>
+      const [];
+
+  @override
+  Future<bool> recordChildMilestone({
+    required int childId,
+    String? templateKey,
+    String? title,
+    DateTime? observedOn,
+    String? note,
+    int? recordedByAccountId,
+    int? photoFileId,
+  }) async {
+    recordCount++;
+    return true;
+  }
+
+  @override
+  Future<bool> removeChildMilestone(int entryId) async {
+    removed.add(entryId);
+    return true;
+  }
+}
+
 void main() {
   group('ageInMonths', () {
     test('counts completed months, not started ones', () {
@@ -231,6 +273,105 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('This book is just starting'), findsOneWidget);
+    });
+
+    testWidgets('a kept milestone can be un-kept, after confirming',
+        (tester) async {
+      // The first version made kept rows untappable, so a mis-tap was
+      // permanent. A keepsake you cannot correct is worse than one with a
+      // confirmable undo.
+      final spy = _SpyRepo([
+        ChildMilestone(
+          template: _tpl('a', 'Waves bye-bye', 12, 'language'),
+          title: 'Waves bye-bye',
+          status: BabyGrowthMilestoneStatus.completed,
+          observedOn: DateTime(2026, 3, 1),
+          entryId: 55,
+        ),
+      ]);
+
+      await tester.pumpWidget(MaterialApp(
+        home: ChildBabyBookPage(
+          childId: 7,
+          childName: 'Juan',
+          birthdate: DateTime(2022, 3, 10),
+          repository: spy,
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Waves bye-bye'));
+      await tester.pumpAndSettle();
+
+      // Asks first, and nothing is gone yet.
+      expect(find.text('Remove this?'), findsOneWidget);
+      expect(spy.removed, isEmpty);
+
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+      expect(spy.removed, [55]);
+    });
+
+    testWidgets('backing out of the confirmation removes nothing',
+        (tester) async {
+      final spy = _SpyRepo([
+        ChildMilestone(
+          template: _tpl('a', 'Waves bye-bye', 12, 'language'),
+          title: 'Waves bye-bye',
+          status: BabyGrowthMilestoneStatus.completed,
+          observedOn: DateTime(2026, 3, 1),
+          entryId: 55,
+        ),
+      ]);
+
+      await tester.pumpWidget(MaterialApp(
+        home: ChildBabyBookPage(
+          childId: 7,
+          childName: 'Juan',
+          birthdate: DateTime(2022, 3, 10),
+          repository: spy,
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Waves bye-bye'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Keep it'));
+      await tester.pumpAndSettle();
+
+      expect(spy.removed, isEmpty);
+    });
+
+    testWidgets('saving offers an undo', (tester) async {
+      final spy = _SpyRepo([
+        ChildMilestone(
+          template: _tpl('a', 'Runs', 24, 'motor'),
+          title: 'Runs',
+          status: BabyGrowthMilestoneStatus.current,
+        ),
+      ]);
+
+      await tester.pumpWidget(MaterialApp(
+        home: ChildBabyBookPage(
+          childId: 7,
+          childName: 'Juan',
+          birthdate: DateTime(2022, 3, 10),
+          repository: spy,
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Runs'));
+      // The screen time-boxes its keystore read, and flutter_secure_storage
+      // has no handler under test — so the save waits out that timeout before
+      // it happens. pumpAndSettle alone does not advance it.
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+
+      expect(spy.recordCount, 1);
+      expect(find.text('Undo'), findsOneWidget,
+          reason: 'the fix for a wrong tap should be on the confirmation, '
+              'not something she has to go looking for');
     });
 
     testWidgets('shows the child, not a clinical header', (tester) async {
