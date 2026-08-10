@@ -8,6 +8,7 @@ import '../../services/auth_storage.dart';
 import '../../services/baby_book_repository.dart';
 import '../../services/language_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/baby_book/baby_book_section_components.dart';
 import '../../widgets/secondary_header.dart';
 
 /// One child's Baby Book — the postnatal half.
@@ -397,32 +398,26 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
     final groups = _byAge;
     return [
       for (final entry in groups.entries) ...[
+        // The eyebrow-and-title header from the pregnancy book, so both halves
+        // read as one book rather than two screens that happen to be linked.
         Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Row(
-            children: [
-              Text(
-                ChildMilestone.ageLabel(entry.key),
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.brandText,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Container(
-                  height: 1,
-                  color: AppColors.brandPrimary.withValues(alpha: 0.15),
-                ),
-              ),
-            ],
+          padding: const EdgeInsets.only(bottom: 12),
+          child: BabyBookSectionHeader(
+            eyebrow: _t('AT THIS AGE', 'SA EDAD NA ITO'),
+            title: ChildMilestone.ageLabel(entry.key),
+            description: _keptSummary(entry.value),
           ),
         ),
         ..._domainGroups(entry.value),
-        const SizedBox(height: 18),
+        const SizedBox(height: 22),
       ],
     ];
+  }
+
+  String _keptSummary(List<ChildMilestone> milestones) {
+    final kept = milestones.where((m) => m.isRecorded).length;
+    return _t('$kept of ${milestones.length} kept so far',
+        '$kept sa ${milestones.length} ang naitala');
   }
 
   /// Milestones of one age, grouped under their domain.
@@ -438,8 +433,19 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
 
     return [
       for (final group in byDomain.entries) ...[
-        _domainHeader(group.value.first),
-        for (final m in group.value) _milestoneRow(m),
+        // One panel per domain rather than per milestone. The mockup gave each
+        // milestone its own panel, which works for nine prenatal entries and
+        // would be a very long scroll for a hundred and fifty-seven.
+        BabyBookPanel(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _domainHeader(group.value.first),
+              for (final m in group.value) _milestoneRow(m),
+            ],
+          ),
+        ),
         const SizedBox(height: 12),
       ],
     ];
@@ -493,23 +499,21 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
         m.template?.postnatalDomainColour ?? AppColors.brandPrimary;
 
     return Padding(
-      // Indented under its domain heading, so the grouping is visible as
-      // structure and not only as a repeated word.
-      padding: const EdgeInsets.only(bottom: 8, left: 10),
+      padding: const EdgeInsets.only(bottom: 6),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         // Kept rows are tappable too — that is how a mis-tap gets undone.
         onTap: () => _toggle(m),
         child: Container(
-          padding: const EdgeInsets.all(13),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
           decoration: BoxDecoration(
-            color: Colors.white,
+            // The mockup's treatment for a current item: a soft pink fill so
+            // the thing happening now stands out inside its group without
+            // needing a badge.
+            color: m.status == BabyGrowthMilestoneStatus.current && !kept
+                ? const Color(0xFFFFF4F8)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: kept
-                  ? AppColors.success.withValues(alpha: 0.35)
-                  : domainColour.withValues(alpha: 0.18),
-            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,21 +548,22 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
                   ),
                 ),
               ),
-              if (upcoming)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _t('Soon', 'Malapit na'),
-                    style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.grey.shade700),
-                  ),
+              // The mockup's status pill, at a size a mother can actually
+              // read. Theirs is 8px; on a cheap screen in daylight that is
+              // decoration rather than information.
+              if (kept)
+                const _Pill(
+                  label: 'Kept',
+                  labelFil: 'Naitala',
+                  colour: AppColors.success,
+                  icon: Icons.check_rounded,
+                )
+              else if (upcoming)
+                const _Pill(
+                  label: 'Soon',
+                  labelFil: 'Malapit na',
+                  colour: Color(0xFF8A6780),
+                  icon: Icons.schedule_rounded,
                 ),
             ],
           ),
@@ -597,6 +602,51 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
             textAlign: TextAlign.center,
             style:
                 const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The mockup's BabyBookStatusPill, resized.
+///
+/// Same shape and the same 12%-tint treatment, but at 11px rather than 8.
+/// Eight-point type is decoration on a cheap screen in daylight, and the
+/// design doc's rules exist because that is the screen this app meets.
+class _Pill extends StatelessWidget {
+  const _Pill({
+    required this.label,
+    required this.labelFil,
+    required this.colour,
+    required this.icon,
+  });
+
+  final String label;
+  final String labelFil;
+  final Color colour;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: colour.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: colour),
+          const SizedBox(width: 4),
+          Text(
+            LanguageService.translate(label, labelFil),
+            style: TextStyle(
+              color: colour,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       ),
