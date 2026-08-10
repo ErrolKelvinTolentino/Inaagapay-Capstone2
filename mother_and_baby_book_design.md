@@ -158,6 +158,19 @@ The DOH set is the CDC *Learn the Signs. Act Early.* list adopted for Philippine
 
 **Five domains, not four.** The DOH book carries *Pagtabang sa Kaugalingon* (self-help) alongside the CDC four, used at 2, 3, and 4 years. The category constraint was widened rather than dropping those entries, which would have quietly edited the source.
 
+Verified in the database, not counted from the file:
+
+| Domain | Shown as | Rows |
+|---|---|---|
+| social | Playing and feelings | 42 |
+| language | Talking and listening | 39 |
+| motor | Moving and playing | 38 |
+| cognitive | Learning and thinking | 34 |
+| self_help | Doing things alone | 4 |
+| | | **157** |
+
+The commit message on `b9ffe26` reports each domain one higher. Those figures came from grepping the migration file, which also matched each domain name inside the `CHECK` constraint's `ARRAY[...]`. The total of 157 was right because it came from counting row starts, which is why the inconsistency did not show.
+
 **Not a screening tool.** The book frames these as what a caregiver may expect, and prompts the parent to ask their health worker. An unrecorded milestone reads "not recorded", never "missed".
 - [x] Supplements removed from the Baby Book
 - [ ] Rename Records tab → **My Health**, organise per pregnancy
