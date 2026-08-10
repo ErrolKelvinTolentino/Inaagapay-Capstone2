@@ -8,7 +8,14 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/small_info_box.dart';
 import '../../services/language_service.dart';
+import '../../data/pregnancy_growth_data.dart';
+import '../../models/baby_growth_milestone.dart';
+import '../../models/milestone_template.dart';
+import '../../models/pregnancy_growth_stage.dart';
+import '../../services/baby_book_repository.dart';
 import '../../services/supabase_service.dart';
+import '../../widgets/baby_book/baby_growth_milestones_section.dart';
+import '../../widgets/pregnancy_growth_journey.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // ============================================
@@ -736,6 +743,35 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     _tabController = TabController(length: 5, vsync: this);
     _data = _trimesterForWeek(widget.week);
     _loadPersonalizedData();
+    _loadBabyMilestones();
+  }
+
+  /// The Baby Book sections need a CurrentPregnancyState, which this page
+  /// already holds the parts of. Built once rather than per rebuild.
+  CurrentPregnancyState get _pregnancyState => CurrentPregnancyState(
+        pregnancyId: widget.pregnancyId,
+        currentWeek: widget.week,
+        currentMonth: BabyBookRepository.stageForWeek(widget.week)?.month ?? 1,
+        estimatedDueDate:
+            DateTime.now().add(Duration(days: widget.weeksLeft * 7)),
+        numberOfBabies: widget.fetalCount <= 0 ? 1 : widget.fetalCount,
+        pregnancyProgress: (widget.week / 40).clamp(0.0, 1.0),
+        trimester: widget.trimester,
+      );
+
+  List<BabyGrowthMilestone> _babyMilestones = const [];
+
+  Future<void> _loadBabyMilestones() async {
+    if (widget.pregnancyId == 0) return;
+    // The baby's own moments only — her checkups and birth plan belong to
+    // this page's other sections, not to a timeline about him.
+    final list = await const BabyBookRepository().loadPrenatalMilestones(
+      pregnancyId: widget.pregnancyId,
+      currentWeek: widget.week,
+      owner: MilestoneOwner.baby,
+    );
+    if (!mounted) return;
+    setState(() => _babyMilestones = list);
   }
 
   Future<void> _loadPersonalizedData() async {
@@ -1274,7 +1310,28 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
         _buildSecondaryStatsRow(language),
         const SizedBox(height: 12),
         _buildRiskSummaryCard(language),
-        const SizedBox(height: 16),
+
+        // The Baby Book's month browser: illustration, approximate length and
+        // weight, size comparison, and what is developing this month. Placed
+        // here rather than on a separate screen because it answers the same
+        // question as the cards above it — how is my baby right now — and a
+        // mother should not have to change pages to finish the thought.
+        const SizedBox(height: 20),
+        PregnancyGrowthJourney(
+          currentPregnancy: _pregnancyState,
+          stages: pregnancyGrowthStages,
+        ),
+
+        // The pregnancy timeline: recorded moments from early pregnancy to
+        // birth preparation, reading the same baby_book_milestones rows the
+        // child's Baby Book will inherit after delivery.
+        const SizedBox(height: 20),
+        BabyGrowthMilestonesSection(
+          currentPregnancy: _pregnancyState,
+          initialMilestones: _babyMilestones,
+        ),
+
+        const SizedBox(height: 20),
         _SectionHeader(
           title: _translate('Trimester Journey', 'Paglalakbay ng Trimester', language),
           icon: Icons.timeline_rounded,

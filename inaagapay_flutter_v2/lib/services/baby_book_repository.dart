@@ -105,8 +105,9 @@ class BabyBookRepository {
   ///
   /// Read from `pregnancyGrowthStages` rather than a second month/week table.
   /// The mapping exists once; a copy here would be free to drift from what
-  /// the timeline actually draws.
-  @visibleForTesting
+  /// the timeline actually draws — which is also why this is public: the
+  /// My Pregnancy page needs the same week-to-month answer, and a second
+  /// implementation there would be free to disagree with this one.
   static PregnancyGrowthStage? stageForWeek(int week) {
     for (final stage in pregnancyGrowthStages) {
       if (week >= stage.startWeek && week <= stage.endWeek) return stage;
