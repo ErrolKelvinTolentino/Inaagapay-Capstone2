@@ -1,7 +1,7 @@
 # Mother Book & Baby Book — Information Architecture and Data Model
 
-**Last updated:** 2026-08-08
-**Migrations:** `20260808_baby_book_foundation`, `20260808_baby_book_prenatal_templates`, `20260808_milestone_owner`
+**Last updated:** 2026-08-09
+**Migrations:** `20260808_baby_book_foundation`, `20260808_baby_book_prenatal_templates`, `20260808_milestone_owner`, `20260809_postnatal_milestones_doh`
 
 ---
 
@@ -162,9 +162,8 @@ The DOH set is the CDC *Learn the Signs. Act Early.* list adopted for Philippine
 - [x] Supplements removed from the Baby Book
 - [ ] Rename Records tab → **My Health**, organise per pregnancy
 - [ ] Newborn card on Home
-- [ ] Postnatal templates — **needs DOH/WHO sourcing with citations**
-- [ ] Child-scoped Baby Book screen
-- [ ] Birth transition
+- [x] Child-scoped Baby Book screen — `child_baby_book_page.dart`
+- [x] Birth transition — a child's book opens with the chapter read through `children.pregnancy_id`
 - [ ] Memory gallery on `baby_memories` instead of asset images
 
 **RLS is disabled** on these tables, consistent with `notifications` and `device_tokens`. The app authenticates against `accounts` with bcrypt and uses the anon key. A capstone-scope decision that belongs in the study's limitations.

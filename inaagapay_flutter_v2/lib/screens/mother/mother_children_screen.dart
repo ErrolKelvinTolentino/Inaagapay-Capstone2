@@ -9,6 +9,7 @@ import '../../services/language_service.dart';
 import '../../models/child_model.dart';
 import '../../models/pregnancy_growth_stage.dart';
 import '../../services/baby_book_repository.dart';
+import 'child_baby_book_page.dart';
 import 'mother_child_stack.dart';
 
 class MotherChildrenScreen extends StatefulWidget {
@@ -200,6 +201,19 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
       return '$count ${count == 1 ? 'Anak' : 'Mga Anak'}!';
     }
     return '$count Beautiful ${count == 1 ? 'Child' : 'Children'}!';
+  }
+
+  void _openBabyBook(ChildModel child) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChildBabyBookPage(
+          childId: child.childId,
+          childName: child.fullName,
+          birthdate: child.birthdate,
+        ),
+      ),
+    );
   }
 
   void _openChildProfile(ChildModel child) {
@@ -413,6 +427,12 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
                                       lastName: child.lastName,
                                       age: _localizedAge(child),
                                       onTap: () => _openChildProfile(child),
+                                      // The health record and the keepsake are
+                                      // different things and get different
+                                      // doors. Tapping the card opens her
+                                      // records; the book is its own row.
+                                      onOpenBabyBook: () =>
+                                          _openBabyBook(child),
                                     ),
                                     const SizedBox(height: 12),
                                   ],
@@ -622,12 +642,14 @@ class _ChildCard extends StatelessWidget {
   final String lastName;
   final String age;
   final VoidCallback onTap;
+  final VoidCallback? onOpenBabyBook;
 
   const _ChildCard({
     required this.firstName,
     required this.lastName,
     required this.age,
     required this.onTap,
+    this.onOpenBabyBook,
   });
 
   String get fullName => '$firstName $lastName'.trim();
@@ -715,6 +737,26 @@ class _ChildCard extends StatelessWidget {
                       ],
                     ),
                   ),
+
+                  // Her keepsake, on its own target. Small, so the card still
+                  // reads as one thing, but a separate tap — the book and the
+                  // health record are different places to end up.
+                  if (onOpenBabyBook != null)
+                    IconButton(
+                      onPressed: onOpenBabyBook,
+                      tooltip: LanguageService.translate(
+                          'Baby Book', 'Baby Book'),
+                      visualDensity: VisualDensity.compact,
+                      icon: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.auto_stories_rounded,
+                            size: 18, color: AppColors.brandPrimary),
+                      ),
+                    ),
 
                   // Arrow
                   const Icon(

@@ -112,6 +112,53 @@ enum MilestonePhase {
   String get dbValue => name;
 }
 
+/// One postnatal milestone as it stands for a particular child.
+///
+/// A separate type from [BabyGrowthMilestone] rather than a reuse of it.
+/// That model is prenatal-shaped — it carries gestational weeks and a
+/// pregnancy month — and squeezing a child's milestone through it dropped the
+/// two things the child's screen needs most: the age checkpoint to group by,
+/// and the domain to label.
+class ChildMilestone {
+  const ChildMilestone({
+    required this.title,
+    required this.status,
+    this.template,
+    this.observedOn,
+    this.note,
+    this.entryId,
+  });
+
+  /// Null for a milestone the mother added herself.
+  final MilestoneTemplate? template;
+
+  final String title;
+  final BabyGrowthMilestoneStatus status;
+  final DateTime? observedOn;
+  final String? note;
+  final int? entryId;
+
+  bool get isCustom => template == null;
+  bool get isRecorded => observedOn != null;
+
+  /// The age checkpoint this belongs under. Null for a mother's own entry,
+  /// which belongs to the day it happened rather than to a checkpoint.
+  int? get ageMonths => template?.ageMonthsTarget;
+
+  String get domainLabel =>
+      template?.postnatalDomainLabel ?? 'Our own moment';
+
+  /// "6 months", "2 years" — the heading a mother reads, not "24".
+  static String ageLabel(int? months) {
+    if (months == null) return 'Our own moments';
+    if (months < 12) return '$months months';
+    final years = months ~/ 12;
+    final rest = months % 12;
+    final y = years == 1 ? '1 year' : '$years years';
+    return rest == 0 ? y : '$y $rest months';
+  }
+}
+
 /// Whose story a milestone belongs to, and therefore which book shows it.
 ///
 /// Not the same question as [MilestonePhase]. Both an anatomy scan report and

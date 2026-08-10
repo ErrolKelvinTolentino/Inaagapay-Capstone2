@@ -225,6 +225,185 @@ class BabyBookRepository {
     }
   }
 
+  /// Completed months since [birthdate].
+  ///
+  /// Public rather than test-only: the child's book shows her age in its
+  /// header, and a second implementation there would be free to disagree with
+  /// the one deciding which milestones to show.
+  static int ageInMonths(DateTime birthdate, {DateTime? asOf}) {
+    final now = asOf ?? DateTime.now();
+    var months =
+        (now.year - birthdate.year) * 12 + (now.month - birthdate.month);
+    if (now.day < birthdate.day) months -= 1;
+    return months < 0 ? 0 : months;
+  }
+
+  /// Where a postnatal milestone stands for a child of [childAgeMonths].
+  ///
+  /// Mirrors the prenatal rule, on the age axis instead of the gestational
+  /// one, and keeps its most important property: nothing is ever "missed".
+  /// The DOH book frames these as what a caregiver may expect and points the
+  /// parent at their health worker; telling a mother her child has failed a
+  /// milestone is not this screen's job and would be wrong as often as not.
+  @visibleForTesting
+  static BabyGrowthMilestoneStatus postnatalStatusFor({
+    required DateTime? observedOn,
+    required int? targetMonths,
+    required int childAgeMonths,
+  }) {
+    if (observedOn != null) return BabyGrowthMilestoneStatus.completed;
+    if (targetMonths == null) return BabyGrowthMilestoneStatus.notRecorded;
+    if (childAgeMonths < targetMonths) {
+      return BabyGrowthMilestoneStatus.upcoming;
+    }
+    // The checkpoint is a guide, not a deadline. A window of a few months
+    // around it is what "around now" honestly means for development.
+    if (childAgeMonths <= targetMonths + 3) {
+      return BabyGrowthMilestoneStatus.current;
+    }
+    return BabyGrowthMilestoneStatus.notRecorded;
+  }
+
+  /// One child's own milestones — the DOH catalogue merged with what has been
+  /// recorded for them.
+  Future<List<ChildMilestone>> loadChildMilestones({
+    required int childId,
+    required DateTime? birthdate,
+  }) async {
+    try {
+      final ageMonths = birthdate == null ? 0 : ageInMonths(birthdate);
+
+      final templates =
+          await loadPostnatalTemplates(upToAgeMonths: ageMonths);
+
+      final rows = await SupabaseService.client
+          .from('baby_book_milestones')
+          .select('entry_id, template_id, title, observed_on, note')
+          .eq('child_id', childId);
+
+      final recorded = <int, Map<String, dynamic>>{};
+      final custom = <Map<String, dynamic>>[];
+      for (final r in (rows as List).cast<Map<String, dynamic>>()) {
+        final templateId = (r['template_id'] as num?)?.toInt();
+        if (templateId == null) {
+          custom.add(r);
+        } else {
+          recorded[templateId] = r;
+        }
+      }
+
+      return [
+        for (final t in templates)
+          _childMilestone(t, recorded[t.templateId], ageMonths),
+        for (final r in custom)
+          ChildMilestone(
+            title: r['title']?.toString() ?? 'Milestone',
+            status: BabyGrowthMilestoneStatus.completed,
+            observedOn: _parseDate(r['observed_on']),
+            note: r['note']?.toString(),
+            entryId: (r['entry_id'] as num?)?.toInt(),
+          ),
+      ];
+    } catch (e) {
+      if (kDebugMode) debugPrint('loadChildMilestones failed: $e');
+      return const [];
+    }
+  }
+
+  ChildMilestone _childMilestone(
+    MilestoneTemplate template,
+    Map<String, dynamic>? row,
+    int childAgeMonths,
+  ) {
+    final observedOn = _parseDate(row?['observed_on']);
+    return ChildMilestone(
+      template: template,
+      title: template.titleEn,
+      observedOn: observedOn,
+      note: row?['note']?.toString(),
+      entryId: (row?['entry_id'] as num?)?.toInt(),
+      status: postnatalStatusFor(
+        observedOn: observedOn,
+        targetMonths: template.ageMonthsTarget,
+        childAgeMonths: childAgeMonths,
+      ),
+    );
+  }
+
+  /// The chapter a child inherits from the pregnancy that carried them.
+  ///
+  /// Read through `children.pregnancy_id` rather than copied, so twins share
+  /// one set of before-birth entries instead of owning duplicates.
+  Future<List<BabyGrowthMilestone>> loadChildPrenatalChapter(
+      int childId) async {
+    try {
+      final child = await SupabaseService.client
+          .from('children')
+          .select('pregnancy_id')
+          .eq('child_id', childId)
+          .maybeSingle();
+
+      final pregnancyId = (child?['pregnancy_id'] as num?)?.toInt();
+      if (pregnancyId == null) return const [];
+
+      // Everything is in the past by now, so the window is closed: 42 weeks
+      // means no entry is left reading "upcoming" in a book about someone
+      // already born.
+      return loadPrenatalMilestones(
+        pregnancyId: pregnancyId,
+        currentWeek: 42,
+        owner: MilestoneOwner.baby,
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('loadChildPrenatalChapter failed: $e');
+      return const [];
+    }
+  }
+
+  /// Records a milestone against a child.
+  Future<bool> recordChildMilestone({
+    required int childId,
+    String? templateKey,
+    String? title,
+    DateTime? observedOn,
+    String? note,
+    int? recordedByAccountId,
+    int? photoFileId,
+  }) async {
+    try {
+      int? templateId;
+      if (templateKey != null) {
+        final t = await SupabaseService.client
+            .from('milestone_templates')
+            .select('template_id')
+            .eq('template_key', templateKey)
+            .maybeSingle();
+        templateId = (t?['template_id'] as num?)?.toInt();
+      }
+
+      if (templateId == null && (title == null || title.trim().isEmpty)) {
+        return false;
+      }
+
+      await SupabaseService.client.from('baby_book_milestones').insert({
+        'child_id': childId,
+        // pregnancy_id stays unset: this is the child's side, and setting both
+        // is rejected by baby_book_milestones_scope_check.
+        'template_id': templateId,
+        'title': title?.trim(),
+        'observed_on':
+            (observedOn ?? DateTime.now()).toIso8601String().split('T').first,
+        'note': note,
+        'recorded_by': recordedByAccountId,
+        'photo_file_id': photoFileId,
+      });
+      return true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('recordChildMilestone failed: $e');
+      return false;
+    }
+  }
+
   BabyGrowthMilestone _fromTemplate(
     MilestoneTemplate template,
     Map<String, dynamic>? row,
