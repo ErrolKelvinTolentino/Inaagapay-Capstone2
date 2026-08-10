@@ -47,7 +47,7 @@ void main() {
     expect(find.text('No pregnancy recorded yet'), findsOneWidget);
 
     // The sample pregnancy must not leak through.
-    expect(find.text('Currently 20 Weeks Pregnant'), findsNothing);
+    expect(find.text('20 Weeks Pregnant'), findsNothing);
     expect(find.textContaining('Weeks Pregnant'), findsNothing);
   });
 
@@ -69,8 +69,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('Currently 30 Weeks Pregnant'), findsOneWidget);
-    expect(find.text('Currently 20 Weeks Pregnant'), findsNothing);
+    expect(find.text('30 Weeks Pregnant'), findsOneWidget);
+    expect(find.text('20 Weeks Pregnant'), findsNothing);
     expect(find.text('No pregnancy recorded yet'), findsNothing);
   });
 
@@ -80,7 +80,7 @@ void main() {
     await tester.pumpWidget(page());
     await tester.pumpAndSettle();
 
-    expect(find.text('Currently 20 Weeks Pregnant'), findsOneWidget);
+    expect(find.text('20 Weeks Pregnant'), findsOneWidget);
     expect(find.text('No pregnancy recorded yet'), findsNothing);
   });
 

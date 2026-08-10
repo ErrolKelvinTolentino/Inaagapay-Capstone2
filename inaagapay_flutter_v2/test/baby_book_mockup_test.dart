@@ -103,7 +103,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Your Baby’s Growth Journey'), findsOneWidget);
-    expect(find.text('Currently 20 Weeks Pregnant'), findsOneWidget);
+    // The journey no longer restates the week. The page states how far along
+    // she is once, in the cover card; this section is for browsing months.
+    expect(find.textContaining('Weeks Pregnant'), findsNothing);
     expect(find.byKey(const ValueKey('pregnancy-month-5')), findsOneWidget);
     expect(find.text('Month 5 — Weeks 18–22'), findsOneWidget);
     expect(find.text('YOUR CURRENT STAGE'), findsOneWidget);

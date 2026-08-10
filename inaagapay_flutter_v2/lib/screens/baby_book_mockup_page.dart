@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -12,6 +13,7 @@ import '../models/milestone_template.dart';
 import '../models/pregnancy_growth_stage.dart';
 import '../services/asset_pdf_download_service.dart';
 import '../services/baby_book_repository.dart';
+import 'mother/mother_pregnancy_detail_page.dart';
 import '../theme/app_colors.dart';
 import '../widgets/baby_memory_photo.dart';
 import '../widgets/baby_book/baby_growth_milestones_section.dart';
@@ -109,6 +111,33 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
     // Preview mode touches no network, which is what keeps the widget tests
     // synchronous and offline.
     if (!_isPreview) _loadPregnancy();
+  }
+
+  /// Opens the deeper page about her own body — risk level, warning signs,
+  /// checklists, nutrition. Reached from inside this book rather than from a
+  /// competing card on Home.
+  void _openMyCare() {
+    final p = _effectivePregnancy;
+    if (p == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PregnancyDetailPage(
+          week: p.currentWeek,
+          trimester: p.trimester,
+          dueDate: DateFormat('MMMM d, y').format(p.estimatedDueDate),
+          weeksLeft: (40 - p.currentWeek).clamp(0, 40),
+          babySize: '',
+          babyWeight: '',
+          firstName: '',
+          riskLevel: '',
+          fetalCount: p.numberOfBabies,
+          pregnancyId: p.pregnancyId ?? 0,
+          riskFactors: const [],
+          suggestedActions: const [],
+        ),
+      ),
+    );
   }
 
   final List<BabyMemory> _memories = <BabyMemory>[
@@ -410,6 +439,16 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
                       // already reads given_medications — so this was both a
                       // category error and a second copy. They belong to the
                       // Mother Book.
+                      // Her own care, one level in rather than behind a
+                      // second door on Home. Before birth "my pregnancy" and
+                      // "my baby" are one experience; the split only becomes
+                      // meaningful afterwards, when the baby is a separate
+                      // person with a book of their own.
+                      if (_effectivePregnancy != null) ...[
+                        const SizedBox(height: 34),
+                        _MyCareRow(onTap: _openMyCare),
+                      ],
+
                       const SizedBox(height: 34),
                       _MemoryCard(
                         key: _memoriesKey,
@@ -690,10 +729,17 @@ class _BabyStatsCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 18),
       child: Row(
         children: [
+          // All three were hardcoded: 'Dec 8, 2026' and '50%' never touched
+          // the pregnancy at all, so a real mother was shown a fabricated due
+          // date beside her own week. Same failure as the sample "20 Weeks
+          // Pregnant" that leaked earlier — a page half-migrated to real data
+          // is worse than one honestly full of samples.
           Expanded(
             child: _StatItem(
               icon: Icons.calendar_month_rounded,
-              value: 'Dec 8, 2026',
+              value: pregnancy == null
+                  ? '—'
+                  : DateFormat('MMM d, y').format(pregnancy!.estimatedDueDate),
               label: 'Estimated due date',
               color: const Color(0xFFFF68A5),
             ),
@@ -702,10 +748,13 @@ class _BabyStatsCard extends StatelessWidget {
           Expanded(
             child: _StatItem(
               icon: Icons.timelapse_rounded,
+              // Was "Current month", which the cover card already states.
+              // Weeks remaining is the one thing on this card she cannot read
+              // anywhere else on the page.
               value: pregnancy == null
                   ? '—'
-                  : 'Month ${pregnancy!.currentMonth}',
-              label: 'Current month',
+                  : '${(40 - pregnancy!.currentWeek).clamp(0, 40)}',
+              label: 'Weeks to go',
               color: const Color(0xFF68CBB8),
             ),
           ),
@@ -713,7 +762,9 @@ class _BabyStatsCard extends StatelessWidget {
           Expanded(
             child: _StatItem(
               icon: Icons.donut_large_rounded,
-              value: '50%',
+              value: pregnancy == null
+                  ? '—'
+                  : '${(pregnancy!.pregnancyProgress * 100).round()}%',
               label: 'Pregnancy progress',
               color: const Color(0xFFFFA85A),
             ),
@@ -2045,6 +2096,70 @@ class _WhiteCard extends StatelessWidget {
         ],
       ),
       child: child,
+    );
+  }
+}
+
+/// Way into the deeper page about the mother's own care.
+///
+/// Sits inside the pregnancy book rather than as a second banner on Home.
+/// Two doors to "my pregnancy" made a mother choose between them without
+/// knowing what was behind either.
+class _MyCareRow extends StatelessWidget {
+  const _MyCareRow({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return BabyBookPanel(
+      padding: const EdgeInsets.all(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.favorite_rounded,
+                  color: AppColors.brandPrimary, size: 23),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _t('Your body and your care', 'Ang iyong katawan at pag-aalaga'),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.brandText,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _t('Changes, warning signs, and checklists',
+                        'Mga pagbabago, babala, at checklist'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.3,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                size: 16, color: AppColors.brandPrimary),
+          ],
+        ),
+      ),
     );
   }
 }

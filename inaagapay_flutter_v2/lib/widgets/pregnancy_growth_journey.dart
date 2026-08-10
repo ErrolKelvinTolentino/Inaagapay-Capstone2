@@ -194,23 +194,12 @@ class _CurrentPregnancySummary extends StatelessWidget {
                   const BabyBookTwinPregnancyBadge(light: true),
               ],
             ),
+            // The week and the trimester used to be restated here, directly
+            // under a cover card already showing both. Six statements of one
+            // fact across this screen is noise, not emphasis — the page says
+            // how far along she is once, at the top, and this section gets on
+            // with what it is actually for: browsing the months.
             const SizedBox(height: 9),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 250),
-              child: Text(
-                'Currently ${pregnancy.currentWeek} Weeks Pregnant',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  height: 1.15,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
             Text(
               'Month ${pregnancy.currentMonth} • ${pregnancy.trimester}',
               style: TextStyle(
