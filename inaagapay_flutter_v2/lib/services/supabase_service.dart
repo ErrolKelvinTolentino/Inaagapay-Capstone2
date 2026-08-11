@@ -1816,7 +1816,20 @@ class SupabaseService {
     List<Map<String, dynamic>> allergies = const [],
     List<Map<String, dynamic>> pastPregnancies = const [],
     int fetalCount = 1,
+
+    /// Her actual weight before pregnancy, as she reported it. Null when she
+    /// does not know it.
+    ///
+    /// Must never carry a back-calculated estimate. WeightGainEngine.evaluate
+    /// switches to trend mode when this is null — comparing real measurements
+    /// against each other instead of against a guideline. Filling it with an
+    /// estimate derived *from* that guideline makes the later comparison
+    /// circular, and it then reports every such mother as gaining normally.
     double? prePregnancyWeight,
+
+    /// Pre-pregnancy BMI, which may be estimated by back-calculation. Kept
+    /// separate precisely so an estimate never masquerades as a measurement.
+    double? prePregnancyBmi,
     List<String> riskFactors = const [],
     bool isUnderageNoLogin = false,
   }) async {
@@ -2040,6 +2053,7 @@ class SupabaseService {
               'last_menstrual_period': lmp.toIso8601String().split('T')[0],
               'expected_date_of_delivery': edd.toIso8601String().split('T')[0],
               'pre_pregnancy_weight': prePregnancyWeight,
+              'pre_pregnancy_bmi': prePregnancyBmi,
               'pregnancy_risk_level': riskFactors.isNotEmpty ? 'high' : 'low',
             }).eq('pregnancy_id', pregnancyId);
             
@@ -2081,6 +2095,7 @@ class SupabaseService {
                 'last_menstrual_period': lmp.toIso8601String().split('T')[0],
                 'expected_date_of_delivery': edd.toIso8601String().split('T')[0],
                 'pre_pregnancy_weight': prePregnancyWeight,
+                'pre_pregnancy_bmi': prePregnancyBmi,
                 'status': 'ongoing',
                 'pregnancy_risk_level': riskFactors.isNotEmpty ? 'high' : 'low',
               })
