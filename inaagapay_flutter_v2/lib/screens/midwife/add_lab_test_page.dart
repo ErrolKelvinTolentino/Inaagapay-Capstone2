@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../models/blood_type.dart';
 import '../../services/auth_storage.dart';
 import '../../services/groq_service.dart';
 import '../../services/supabase_service.dart';
@@ -76,6 +77,26 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
   String? _workerNameError;
   String? _institutionError;
 
+  /// What the mother's record already says, read once when the page opens.
+  String? _bloodTypeOnFile;
+
+  /// What the attached report says, once OCR has read it.
+  String? _bloodTypeFromReport;
+
+  /// What will be saved. Starts as whatever is on file, so an OCR reading never
+  /// replaces a recorded blood type on its own — the midwife has to choose it.
+  String? _selectedBloodType;
+
+  /// True when the report and the record disagree and neither is blank.
+  ///
+  /// Usually an OCR misread or someone else's document attached to the wrong
+  /// mother. Either way it is a question for a person: silently rewriting a
+  /// blood type is how the wrong blood gets ordered later.
+  bool get _bloodTypeConflicts =>
+      _bloodTypeOnFile != null &&
+      _bloodTypeFromReport != null &&
+      _bloodTypeOnFile != _bloodTypeFromReport;
+
   static String? _workingBucket;
 
   static const List<String> _labTestTypes = [
@@ -143,6 +164,21 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
       }
     } catch (e) {
       if (kDebugMode) debugPrint('[AddLabTest] User profile load error: $e');
+    }
+
+    // Read before OCR runs, so a reading from the report can be compared
+    // against what is already recorded rather than just landing on top of it.
+    try {
+      final mother = await Supabase.instance.client
+          .from('mothers')
+          .select('blood_type')
+          .eq('mother_id', widget.motherId)
+          .maybeSingle();
+
+      _bloodTypeOnFile = BloodType.parse(mother?['blood_type']?.toString());
+      _selectedBloodType = _bloodTypeOnFile;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[AddLabTest] Blood type load note: $e');
     }
 
     try {
@@ -329,6 +365,10 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                 _remarksCtrl.clear();
                 _customLabTypeCtrl.clear();
                 _selectedLabType = 'Complete Blood Count (CBC)';
+                // Anything read off a document that turned out not to be a lab
+                // report is void. Fall back to the recorded value.
+                _bloodTypeFromReport = null;
+                _selectedBloodType = _bloodTypeOnFile;
               });
             } else {
               setState(() {
@@ -386,6 +426,17 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                 }
                 if (_isValidFieldValue(data['remarks'])) {
                   _remarksCtrl.text = data['remarks'].toString().trim();
+                }
+
+                // Blood type is offered, never applied. It fills the field
+                // only when the record has none; where the record already has
+                // one, the stored value stands and the disagreement is shown
+                // instead. Submitting the form is the midwife's confirmation.
+                final readFromReport =
+                    BloodType.parse(data['blood_type']?.toString());
+                _bloodTypeFromReport = readFromReport;
+                if (readFromReport != null && _bloodTypeOnFile == null) {
+                  _selectedBloodType = readFromReport;
                 }
 
                 _ocrExtracted = true;
@@ -688,8 +739,40 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
 
       await Supabase.instance.client.from('lab_tests').insert(labTestData);
 
+      // 3. Blood type, only when the midwife's selection differs from what is
+      // stored. Written after the lab test itself so the record that justifies
+      // the value is already saved and can be produced if anyone asks where the
+      // blood type came from. A failure here must not lose the lab result, so
+      // it reports rather than throwing.
+      final bool bloodTypeChanged = BloodType.isValid(_selectedBloodType) &&
+          _selectedBloodType != _bloodTypeOnFile;
+      bool bloodTypeSaved = false;
+
+      if (bloodTypeChanged) {
+        try {
+          await Supabase.instance.client
+              .from('mothers')
+              .update({'blood_type': _selectedBloodType})
+              .eq('mother_id', widget.motherId);
+          bloodTypeSaved = true;
+        } catch (e) {
+          if (kDebugMode) debugPrint('[AddLabTest] Blood type update failed: $e');
+        }
+      }
+
       if (mounted) {
-        AppSnackbar.show(context, 'Lab test record saved successfully', type: AppSnackType.success);
+        AppSnackbar.show(
+          context,
+          bloodTypeChanged && bloodTypeSaved
+              ? 'Lab test saved. Blood type recorded as $_selectedBloodType.'
+              : (bloodTypeChanged
+                  ? 'Lab test saved, but the blood type could not be updated. '
+                      'Please set it on the mother\'s profile.'
+                  : 'Lab test record saved successfully'),
+          type: bloodTypeChanged && !bloodTypeSaved
+              ? AppSnackType.warning
+              : AppSnackType.success,
+        );
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -699,6 +782,117 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  /// Blood type, shown whether or not the report mentioned one.
+  ///
+  /// Always visible on purpose: a midwife holding a paper result the OCR could
+  /// not read still needs somewhere to put it, and a field that appears only on
+  /// a successful extraction teaches her the app cannot be told directly.
+  ///
+  /// There is no way to clear a stored blood type from here. Correcting one is
+  /// picking the right value; emptying it is not something a lab report can
+  /// justify.
+  Widget _buildBloodTypeField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.bloodtype_outlined,
+                size: 16, color: AppColors.brandPrimary),
+            const SizedBox(width: 6),
+            const Text(
+              'Blood type',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              _bloodTypeOnFile == null ? '(not yet on record)' : '(on record)',
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        AppDropdownField<String>(
+          hintText: 'Select if shown on the report',
+          leadingIcon: Icons.bloodtype_outlined,
+          value: _selectedBloodType,
+          options: BloodType.values,
+          displayStringForOption: (val) => val,
+          onSelected: (val) => setState(() => _selectedBloodType = val),
+        ),
+        if (_bloodTypeConflicts) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.warning_amber_rounded,
+                    size: 18, color: AppColors.warning),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'This report reads $_bloodTypeFromReport, but the record '
+                        'says $_bloodTypeOnFile.',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          height: 1.4,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Keeping $_bloodTypeOnFile unless you change it above. '
+                        'Check that this report belongs to this mother before '
+                        'overwriting.',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          height: 1.35,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ] else if (_bloodTypeFromReport != null &&
+            _bloodTypeFromReport == _selectedBloodType) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome, size: 13, color: AppColors.success),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _bloodTypeOnFile == null
+                      ? 'Read from the report. Saving this form records it on '
+                          'the mother\'s profile.'
+                      : 'The report agrees with what is already on record.',
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
   }
 
   Widget _sectionCard({required String title, required Widget child}) {
@@ -858,6 +1052,8 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                                 contentPadding: const EdgeInsets.all(16),
                               ),
                             ),
+                            const SizedBox(height: 16),
+                            _buildBloodTypeField(),
                           ],
                         ),
                       ),

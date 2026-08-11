@@ -321,6 +321,7 @@ You are a precise document OCR data extractor for laboratory test reports. Perfo
   "location_facility": "Hi-Precision Diagnostics, San Fernando, Pampanga",
   "health_worker_name": "Maria Santos, RMT",
   "health_worker_profession": "Medical Technologist",
+  "blood_type": "O Positive",
   "remarks": "Hemoglobin: 12.5 g/dL (Normal), WBC: 7.2 (Normal), Blood Type: O Positive"
 }
 
@@ -332,6 +333,7 @@ Guidance:
 - For institution_name: Extract ONLY the laboratory, clinic, or hospital name (e.g. Flabs, Hi-Precision Diagnostics).
 - For location_facility: Extract the facility name or address.
 - For health_worker_name: Look for the Pathologist, Medical Technologist, Doctor, or Examiner signature printed at the bottom or header.
+- For blood_type: Return the ABO and Rh result ONLY if the document explicitly prints one, copied exactly as it appears (e.g. "O Positive", "AB-", "B Rh(D) Negative"). Return null if the document does not state a blood type, if only the ABO group is shown without the Rh factor, or if the result is illegible. NEVER infer, guess, or carry over a blood type from any other value on the report — a blood type that is not printed on the document does not exist.
 - For remarks: Extract a clean summary of the main lab values, blood type, or impression lines visible on the document. Do NOT interpret or diagnose.
 
 CRITICAL: Extract ONLY actual text printed on the document image. DO NOT write conversational explanations or reasoning notes.

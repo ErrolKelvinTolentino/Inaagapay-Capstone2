@@ -25,18 +25,10 @@ import '../../widgets/mother_qr_code.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/app_dropdown_field.dart';
 
-// Blood type options
-const List<String> _bloodTypeOptions = [
-  'A+',
-  'A-',
-  'B+',
-  'B-',
-  'AB+',
-  'AB-',
-  'O+',
-  'O-',
-  'Unknown'
-];
+// Blood type is no longer chosen on this screen, so the option list that used
+// to back a dropdown here is gone. It listed 'Unknown' as a ninth choice, which
+// the mothers.blood_type CHECK constraint would have rejected on save.
+// lib/models/blood_type.dart now owns the eight storable values.
 
 const List<String> _commonConditions = [
   'Anemia',
@@ -125,7 +117,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   final Map<String, TextEditingController> _addressControllers = {};
 
   // Dropdown selections for editing
-  String _editingBloodType = '';
 
   // Editable medical conditions & allergies
   bool _isEditingConditions = false;
@@ -3183,21 +3174,23 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     _personalControllers['pre_pregnancy_weight'] =
         TextEditingController(text: ppw?.toString() ?? '');
 
-    _editingBloodType = profile['blood_type'] ?? '';
+    _personalControllers['blood_type'] =
+        TextEditingController(text: profile['blood_type']?.toString() ?? '');
   }
 
+  /// Saves the one field on this sheet that is the midwife's to set.
+  ///
+  /// Height, weight and blood type are shown but not editable here. Blood type
+  /// in particular is written only by the Add Lab Test screen, from a report
+  /// attached in the same action — so this no longer touches `mothers`, and a
+  /// recorded blood type cannot be changed by a screen that holds no evidence
+  /// for the new value.
   Future<void> _savePersonalInfo() async {
-    final bloodType = _editingBloodType;
     final ppwText = _personalControllers['pre_pregnancy_weight']?.text.trim() ?? '';
     final double? ppw = ppwText.isEmpty ? null : double.tryParse(ppwText);
 
     try {
-      // 1. Update blood type in mothers table
-      await SupabaseService.client.from('mothers').update({
-        'blood_type': bloodType.isEmpty ? null : bloodType,
-      }).eq('mother_id', widget.motherId);
-
-      // 2. Update pre-pregnancy weight in pregnancies table for ongoing pregnancy
+      // Update pre-pregnancy weight in pregnancies table for ongoing pregnancy
       final ongoingPregnancy = await SupabaseService.client
           .from('pregnancies')
           .select('pregnancy_id')
@@ -5268,12 +5261,15 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           ],
         ),
         const SizedBox(height: 12),
-        AppDropdownField<String>(
-          hintText: 'Blood Type',
-          options: _bloodTypeOptions,
-          displayStringForOption: (type) => type,
-          value: _editingBloodType.isEmpty ? null : _editingBloodType,
-          onSelected: (value) => setState(() => _editingBloodType = value),
+        // Read-only, like height and weight above it. Blood type is a
+        // transcribed lab finding, not a judgement call — it is recorded from
+        // a lab report on the Add Lab Test screen, where the document that
+        // proves it is attached in the same action. Typing it freely here
+        // would create a value with nothing behind it.
+        AppInputField(
+          controller: _personalControllers['blood_type']!,
+          hintText: 'Blood Type (from lab results)',
+          readOnly: true,
         ),
       ],
     );
