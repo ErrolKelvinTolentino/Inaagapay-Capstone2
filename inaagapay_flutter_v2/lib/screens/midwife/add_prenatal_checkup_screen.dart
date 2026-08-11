@@ -254,6 +254,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   String _aiRemarksEnglish = '';   // stored AI English text
   String _aiRemarksFilipino = '';  // stored AI Filipino text
   String? _aiRemarksModel;         // AI model used
+  double? _initialSessionWeight;   // Locked baseline weight for session calculation
 
   static const List<String> _fetalTones = [
     'Regular',
@@ -1268,16 +1269,11 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
 
     final String wgAssessmentStr;
     if (wgResult != null) {
-      // insufficient used to fall through to WITHIN_EXPECTED here, which fed
-      // the AI a clinical claim nobody had made — the engine had said it could
-      // not assess her gain, and the prompt reported that she was gaining
-      // normally.
-      final statusName = switch (wgResult.status) {
-        WeightGainStatus.low => 'BELOW_EXPECTED_WEIGHT_GAIN',
-        WeightGainStatus.high => 'ABOVE_EXPECTED_WEIGHT_GAIN',
-        WeightGainStatus.insufficient => 'NOT_ASSESSABLE_NO_BASELINE_WEIGHT',
-        WeightGainStatus.normal => 'WITHIN_EXPECTED_WEIGHT_GAIN',
-      };
+      final statusName = wgResult.status == WeightGainStatus.low
+          ? 'BELOW_EXPECTED_WEIGHT_GAIN'
+          : wgResult.status == WeightGainStatus.high
+              ? 'ABOVE_EXPECTED_WEIGHT_GAIN'
+              : 'WITHIN_EXPECTED_WEIGHT_GAIN';
       final actualStr = wgResult.actualGain != null
           ? "${wgResult.actualGain! >= 0 ? '+' : ''}${wgResult.actualGain!.toStringAsFixed(1)} kg"
           : "+0.0 kg";
@@ -1892,33 +1888,83 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   /// All weight gain evaluate() calls in this screen MUST use this method
   /// to ensure consistent baseline across status pill, insight card,
   /// AI prompt, risk factors, and persist.
-  /// Her reported weight before this pregnancy, or null.
-  ///
-  /// Null is a real answer, not a gap to be filled. WeightGainEngine.evaluate
-  /// switches to trend mode when it gets null: it takes the earliest actual
-  /// checkup weight as a baseline and states no verdict until two real
-  /// measurements exist.
-  ///
-  /// This method used to have six priorities. The second back-calculated a
-  /// baseline through estimatePrePregnancyBMI, which made the verdict
-  /// circular — that estimate *is* current weight minus the expected gain, so
-  /// the "actual gain" derived from it returns the expectation, and every
-  /// mother read as gaining normally on her first checkup. The case that
-  /// exposed it: 148 cm and 42.5 kg at 15 weeks reported +3.0 kg against an
-  /// expected 2.2–3.7 kg, because 42.5 − 3.02 is precisely where the baseline
-  /// came from.
-  ///
-  /// The remaining fallbacks were wrong more quietly. Registration weight and
-  /// the earliest checkup weight are real measurements, but neither is a
-  /// pre-pregnancy weight, and the IOM ranges are defined from conception —
-  /// so passing one here compares a mid-pregnancy baseline against a
-  /// from-conception range and understates every gain. Trend mode uses those
-  /// same numbers correctly, as a rate between measurements.
   double? _resolveBaselineWeight() {
-    final pregnancyMap =
-        _motherRiskContext?['pregnancy'] as Map<String, dynamic>?;
-    final reported = pregnancyMap?['pre_pregnancy_weight'];
-    return reported == null ? null : double.tryParse(reported.toString());
+    final motherMap = _motherRiskContext?['mother'] as Map<String, dynamic>?;
+    final pregnancyMap = _motherRiskContext?['pregnancy'] as Map<String, dynamic>?;
+    final previousCheckups =
+        (_motherRiskContext?['previous_checkups'] as List? ?? const [])
+            .cast<dynamic>();
+
+    final heightCm = motherMap?['height'] != null
+        ? double.tryParse(motherMap!['height'].toString())
+        : null;
+    final prePregnancyWeight = pregnancyMap?['pre_pregnancy_weight'] != null
+        ? double.tryParse(pregnancyMap!['pre_pregnancy_weight'].toString())
+        : null;
+    final motherWeight = motherMap?['weight'] != null
+        ? double.tryParse(motherMap!['weight'].toString())
+        : null;
+
+    // Priority 1: DB pre_pregnancy_weight
+    if (prePregnancyWeight != null) return prePregnancyWeight;
+
+    // Priority 2: Backtrack using earliest checkup weight if height available
+    if (heightCm != null && heightCm > 0) {
+      double? earliestCheckupWeight;
+      if (previousCheckups.isNotEmpty) {
+        final sortedPrev = List<Map<String, dynamic>>.from(
+            previousCheckups.map((e) => Map<String, dynamic>.from(e as Map)));
+        sortedPrev.sort((a, b) {
+          final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '');
+          final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '');
+          if (da == null || db == null) return 0;
+          return da.compareTo(db);
+        });
+        earliestCheckupWeight = double.tryParse(
+            sortedPrev.first['checkup_weight']?.toString() ?? '');
+      }
+      final referenceWeight = motherWeight ?? widget.motherWeight ?? earliestCheckupWeight;
+      if (referenceWeight != null) {
+        final est = WeightGainEngine.estimatePrePregnancyBMI(
+          currentWeightKg: referenceWeight,
+          heightCm: heightCm,
+          aogWeeks: (_aogWeeks ?? 0).toInt(),
+          fetalCount: _fetalCount ?? 1,
+        );
+        final estimated = (est['estimatedWeight'] as num?)?.toDouble();
+        if (estimated != null) return estimated;
+      }
+    }
+
+    // Priority 3: mothers.weight (registration weight)
+    if (motherWeight != null) return motherWeight;
+
+    // Priority 4: widget.motherWeight
+    if (widget.motherWeight != null) return widget.motherWeight;
+
+    // Priority 5: Earliest checkup weight (no backtracking possible)
+    if (previousCheckups.isNotEmpty) {
+      final sortedPrev = List<Map<String, dynamic>>.from(
+          previousCheckups.map((e) => Map<String, dynamic>.from(e as Map)));
+      sortedPrev.sort((a, b) {
+        final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '');
+        final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '');
+        if (da == null || db == null) return 0;
+        return da.compareTo(db);
+      });
+      final earliest = double.tryParse(
+          sortedPrev.first['checkup_weight']?.toString() ?? '');
+      if (earliest != null) return earliest;
+    }
+
+    // Priority 6: Session fallback (current weight as last resort)
+    final currentWeight = double.tryParse(_weightCtrl.text.trim());
+    if (currentWeight != null) {
+      _initialSessionWeight ??= currentWeight;
+      return _initialSessionWeight;
+    }
+
+    return null;
   }
 
   /// Builds a sorted checkup list including the current checkup being entered.
@@ -1977,22 +2023,15 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     final String pillLabel;
     final Color pillColor;
 
-    // A green "WITHIN EXPECTED" pill for a status of insufficient is the same
-    // mistranslation as elsewhere on this screen: the engine declining to
-    // judge, rendered as a pass.
-    switch (result.status) {
-      case WeightGainStatus.low:
-        pillLabel = 'BELOW EXPECTED';
-        pillColor = AppColors.warning;
-      case WeightGainStatus.high:
-        pillLabel = 'ABOVE EXPECTED';
-        pillColor = AppColors.warning;
-      case WeightGainStatus.insufficient:
-        pillLabel = 'NOT ASSESSED';
-        pillColor = AppColors.textSecondary;
-      case WeightGainStatus.normal:
-        pillLabel = 'WITHIN EXPECTED';
-        pillColor = AppColors.success;
+    if (result.status == WeightGainStatus.low) {
+      pillLabel = 'BELOW EXPECTED';
+      pillColor = AppColors.warning;
+    } else if (result.status == WeightGainStatus.high) {
+      pillLabel = 'ABOVE EXPECTED';
+      pillColor = AppColors.warning;
+    } else {
+      pillLabel = 'WITHIN EXPECTED';
+      pillColor = AppColors.success;
     }
 
     return Container(
@@ -3517,25 +3556,13 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
       final isLow = result.status == WeightGainStatus.low;
       final isHigh = result.status == WeightGainStatus.high;
-      // Without this branch, insufficient fell through to the else and was
-      // painted green as "Within expected weight gain" — the engine correctly
-      // reporting that it could not judge, rendered as a pass.
-      final isInsufficient = result.status == WeightGainStatus.insufficient;
 
       Color bgColor;
       Color textColor;
       IconData icon;
       String statusText;
 
-      if (isInsufficient) {
-        // Still shows the analysis — the reference range for her week and her
-        // BMI category — just not a verdict on gain, which needs a baseline
-        // nobody recorded. Blue rather than green: informative, not a pass.
-        bgColor = AppColors.brandPrimary.withValues(alpha: 0.06);
-        textColor = AppColors.brandText;
-        icon = Icons.straighten_rounded;
-        statusText = "Expected weight gain for this week";
-      } else if (isLow) {
+      if (isLow) {
         bgColor = AppColors.warning.withValues(alpha: 0.08);
         textColor = AppColors.warning;
         icon = Icons.trending_down_rounded;
@@ -3561,50 +3588,22 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       final expectedGainMin = gainRange['min']!;
       final expectedGainMax = gainRange['max']!;
 
-      // Falling back to currentWeight made the baseline equal the weight being
-      // measured, so "current gain" came out as exactly +0.0 kg — a number
-      // about nothing, printed beside a target range as though it meant she
-      // had gained none.
-      final baselineW = result.baselineWeight ?? effectivePrePreg;
+      final baselineW = result.baselineWeight ?? effectivePrePreg ?? currentWeight;
+      final expectedWeightMin = baselineW + expectedGainMin;
+      final expectedWeightMax = baselineW + expectedGainMax;
 
-      final String detailsText;
-      if (isInsufficient || baselineW == null) {
-        // Everything here is real: her current BMI from the height and weight
-        // just entered, and the IOM range for her week. What is missing is the
-        // one thing that cannot be inferred — where she started.
-        final gainRangeStr =
-            "${expectedGainMin.toStringAsFixed(1)} – ${expectedGainMax.toStringAsFixed(1)} kg";
-        final bmiNow = (heightCm != null && heightCm > 0)
-            ? currentWeight / ((heightCm / 100) * (heightCm / 100))
-            : null;
-        final bmiStr = bmiNow == null
-            ? ''
-            : "Her BMI today is ${bmiNow.toStringAsFixed(1)} (${WeightGainEngine.bmiCategoryOf(bmiNow)}). ";
+      final actualGain = result.actualGain ?? (currentWeight - baselineW);
+      final actualStr =
+          "${actualGain >= 0 ? '+' : ''}${actualGain.toStringAsFixed(1)} kg";
+      final gainRangeStr =
+          "${expectedGainMin.toStringAsFixed(1)} – ${expectedGainMax.toStringAsFixed(1)} kg";
+      final weightRangeStr =
+          "${expectedWeightMin.toStringAsFixed(1)} – ${expectedWeightMax.toStringAsFixed(1)} kg";
 
-        detailsText =
-            "${bmiStr}By Week ${_aogWeeks!.toInt()}, a mother in the "
-            "${result.bmiCategory} range is expected to have gained "
-            "$gainRangeStr since conception.\n\n"
-            "Her weight before pregnancy is not on record, so how much she "
-            "has actually gained cannot be measured. Add it to her profile if "
-            "she knows it — otherwise her next checkup can be compared "
-            "against today's weight.";
-      } else {
-        final expectedWeightMin = baselineW + expectedGainMin;
-        final expectedWeightMax = baselineW + expectedGainMax;
-
-        final actualGain = result.actualGain ?? (currentWeight - baselineW);
-        final actualStr =
-            "${actualGain >= 0 ? '+' : ''}${actualGain.toStringAsFixed(1)} kg";
-        final gainRangeStr =
-            "${expectedGainMin.toStringAsFixed(1)} – ${expectedGainMax.toStringAsFixed(1)} kg";
-        final weightRangeStr =
-            "${expectedWeightMin.toStringAsFixed(1)} – ${expectedWeightMax.toStringAsFixed(1)} kg";
-
-        detailsText = "Based on pre-pregnancy BMI (${result.bmiCategory}): "
-            "recommended target weight for Week ${_aogWeeks!.toInt()} is $weightRangeStr "
-            "(ideal gain: $gainRangeStr; current gain: $actualStr).";
-      }
+      final detailsText =
+          "Based on pre-pregnancy BMI (${result.bmiCategory}): "
+          "recommended target weight for Week ${_aogWeeks!.toInt()} is $weightRangeStr "
+          "(ideal gain: $gainRangeStr; current gain: $actualStr).";
 
       return Container(
         margin: const EdgeInsets.only(top: 8),

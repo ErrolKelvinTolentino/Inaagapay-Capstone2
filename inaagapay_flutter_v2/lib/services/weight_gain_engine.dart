@@ -544,13 +544,6 @@ class WeightGainEngine {
   }
 
   /// Converts numeric BMI to category string.
-  /// Public view of the BMI classification.
-  ///
-  /// Same thresholds, exposed so a screen can label a BMI it computed without
-  /// copying the cut-offs. Adds no logic — the second copy of a threshold is
-  /// where the two quietly stop agreeing.
-  static String bmiCategoryOf(double bmi) => _bmiToCategory(bmi);
-
   static String _bmiToCategory(double bmi) {
     if (bmi < 18.5) return 'Underweight';
     if (bmi < 25.0) return 'Normal';
@@ -639,18 +632,8 @@ class WeightGainEngine {
     final weeksPast13 = aogWeeks - 13;
     final bool latePregnancy = aogWeeks > 28;
 
-    // Collect every self-consistent category rather than returning the first.
-    //
-    // Roughly 8% of realistic height/weight/AOG combinations satisfy more than
-    // one — a 140 cm mother at 41 kg and 20 weeks is consistent with both
-    // Normal and Underweight. Returning the first match made the answer depend
-    // on the order of this list, which began with Normal, so every ambiguous
-    // case resolved to Normal. That is the wrong direction twice over: it
-    // hides an underweight mother, and Normal carries a lower expected gain
-    // (11.5-16 kg against 12.5-18), so the same mother gaining too little then
-    // reads as adequate.
-    const categoriesToTry = ['Underweight', 'Normal', 'Overweight', 'Obese'];
-    final consistent = <Map<String, dynamic>>[];
+    // Try categories in order: Normal (most common), Overweight, Underweight, Obese
+    final categoriesToTry = ['Normal', 'Overweight', 'Underweight', 'Obese'];
 
     for (final candidateCategory in categoriesToTry) {
       final g = guidelines[candidateCategory];
@@ -672,38 +655,16 @@ class WeightGainEngine {
 
       // Check self-consistency: does the BMI land in the category we guessed?
       if (resultCategory == candidateCategory) {
-        consistent.add({
-          'weight': candidatePreWeight,
-          'bmi': candidateBMI,
+        return {
+          'estimatedWeight': double.parse(candidatePreWeight.toStringAsFixed(1)),
+          'bmi': double.parse(candidateBMI.toStringAsFixed(1)),
           'category': resultCategory,
-        });
+          'confidence': latePregnancy ? 'low' : 'medium',
+          'method': 'backtracked',
+          'isEstimated': true,
+          'latePregnancyCaveat': latePregnancy,
+        };
       }
-    }
-
-    if (consistent.isNotEmpty) {
-      // The list is ordered lightest-first, so the first hit is the most
-      // cautious reading. Where two categories fit, over-flagging a mother as
-      // needing nutritional attention costs a conversation; under-flagging her
-      // costs the thing the screening exists to catch.
-      final chosen = consistent.first;
-      final ambiguous = consistent.length > 1;
-
-      return {
-        'estimatedWeight':
-            double.parse((chosen['weight'] as double).toStringAsFixed(1)),
-        'bmi': double.parse((chosen['bmi'] as double).toStringAsFixed(1)),
-        'category': chosen['category'],
-        // An ambiguous estimate is a weaker claim and should not read as
-        // though the arithmetic settled it.
-        'confidence': (latePregnancy || ambiguous) ? 'low' : 'medium',
-        'method': 'backtracked',
-        'isEstimated': true,
-        'latePregnancyCaveat': latePregnancy,
-        'ambiguous': ambiguous,
-        'alternativeCategories': ambiguous
-            ? consistent.skip(1).map((c) => c['category']).toList()
-            : const [],
-      };
     }
 
     // Fallback: If no category is self-consistent (very rare),

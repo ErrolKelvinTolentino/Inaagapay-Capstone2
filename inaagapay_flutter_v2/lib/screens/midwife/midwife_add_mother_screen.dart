@@ -1765,11 +1765,11 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
           allergies: _allergies.map((a) => a.toMap()).toList(),
           pastPregnancies: _pastPregnancies.map((p) => p.toMap()).toList(),
           fetalCount: int.tryParse(_fetalCountCtrl.text.trim()) ?? 1,
-          // Same rule on the update path: an estimate never enters the column
-          // that means "her measured weight before pregnancy".
           prePregnancyWeight: _knowsPrePregnancyWeight
               ? double.tryParse(_prePregnancyWeightCtrl.text.trim())
-              : null,
+              : (_bmiEstimation != null
+                  ? (_bmiEstimation!['estimatedWeight'] as num?)?.toDouble()
+                  : null),
           riskFactors: _evaluatePregnancyRisk(),
         );
       } else {
@@ -1801,26 +1801,11 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
           allergies: _allergies.map((a) => a.toMap()).toList(),
           pastPregnancies: _pastPregnancies.map((p) => p.toMap()).toList(),
           fetalCount: int.tryParse(_fetalCountCtrl.text.trim()) ?? 1,
-          // Only a weight she actually reported. The back-calculated estimate
-          // used to be stored here, which made the later weight-gain
-          // evaluation circular: the baseline was derived by subtracting the
-          // expected gain from her current weight, so her "actual gain" came
-          // back equal to the expectation every time, and every such mother
-          // was reported as gaining normally.
-          //
-          // Worked example, 148 cm and 40 kg at 15 weeks: baseline estimated
-          // at 36.98, actual gain 3.02, expected range 2.88–3.16 — the exact
-          // midpoint, by construction. Meanwhile her BMI is 16.9 and the
-          // screen said "within expected monitoring range".
-          //
-          // Left null, WeightGainEngine.evaluate switches to trend mode and
-          // compares real measurements against each other instead.
           prePregnancyWeight: _knowsPrePregnancyWeight
               ? double.tryParse(_prePregnancyWeightCtrl.text.trim())
-              : null,
-          // The estimate still has value for choosing which IOM range applies
-          // — it just goes in the column that admits to being an estimate.
-          prePregnancyBmi: (_bmiEstimation?['bmi'] as num?)?.toDouble(),
+              : (_bmiEstimation != null
+                  ? (_bmiEstimation!['estimatedWeight'] as num?)?.toDouble()
+                  : null),
           riskFactors: _evaluatePregnancyRisk(),
           isUnderageNoLogin: _calculatedAge != null && _calculatedAge! < 13,
         );
