@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
+import '../../models/midwife_analytics.dart';
 import '../../services/auth_storage.dart';
+import '../../services/midwife_analytics_service.dart';
 import '../../services/supabase_service.dart';
+import '../../widgets/analytics/analytics_card.dart';
 import '../../widgets/midwife_statistics_card.dart';
 import '../../widgets/midwife_history_card.dart';
 import '../../widgets/chart_card.dart';
@@ -14,13 +17,22 @@ import '../../widgets/app_input_field.dart';
 import '../../widgets/app_snackbar.dart';
 import '../shared/record_detail_screen.dart';
 import '../../services/mother_profile_service.dart';
+import 'midwife_shell.dart';
 
 class MidwifeDashboard extends StatefulWidget {
   final ValueNotifier<int>? refreshNotifier;
 
+  /// Switches the surrounding shell to another tab.
+  ///
+  /// Supplied by [MidwifeShell]. Without it the dashboard can only push routes,
+  /// and pushing a tab's route stacks it on top of the shell — losing the
+  /// header and the navigation bar that live there.
+  final ValueChanged<int>? onNavigateToTab;
+
   const MidwifeDashboard({
     super.key,
     this.refreshNotifier,
+    this.onNavigateToTab,
   });
 
   @override
@@ -43,9 +55,6 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
   // Dashboard data
   int _registeredMothers = 0;
   int _registeredChildren = 0;
-  int _ferrousGiven = 0;
-  int _calciumGiven = 0;
-  int _tdDosesGiven = 0;
 
   // Pregnancy statistics
   int _totalPregnancies = 0;
@@ -56,8 +65,21 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
   // Recent visits
   List<MidwifeVisitItem> _recentVisits = [];
 
-  // Priority Tasks
-  List<PriorityTask> _priorityTasks = [];
+  /// Analytics section. Loaded after the header and stats have already
+  /// rendered — it is the slowest part of the screen and the least urgent, so
+  /// it must never be what the midwife waits on to see her caseload.
+  MidwifeAnalytics _analytics = const MidwifeAnalytics.empty();
+  bool _analyticsLoading = true;
+
+  /// Which of Mothers / Children / Supplies is showing.
+  ///
+  /// One group at a time. All twelve cards in a single column is the same
+  /// information at four times the scroll, and a dashboard that has to be
+  /// scrolled that far stops being looked at.
+  int _analyticsTab = 0;
+
+  /// Guards against a slow analytics load landing after a newer one.
+  int _analyticsRequestId = 0;
 
   // Search data
   List<Map<String, dynamic>> _allMothers = [];
@@ -372,6 +394,11 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         });
       }
 
+      // Never awaited. The analytics section runs its own queries and paints
+      // itself when they return, so the rest of the dashboard does not wait on
+      // the heaviest thing on the screen.
+      _loadAnalytics(assignedBhcId);
+
       // Started here but awaited below, so it runs alongside the stage-two
       // queries instead of delaying them. It must resolve before recent visits
       // are built, since those render the patient number.
@@ -385,7 +412,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
       // Get registered children count and load for search
       if (_motherIds.isNotEmpty) {
-        // Parallelize initial children, pregnancies, and given medications queries
+        // Parallelize initial children and pregnancies queries
         final responses = await Future.wait([
           SupabaseService.client
               .from('children')
@@ -405,26 +432,6 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 debugPrint('Dashboard pregnancies query note: $e');
                 return <Map<String, dynamic>>[];
               }),
-          SupabaseService.client
-              .from('given_medications')
-              .select('given_medication_id')
-              .eq('given_medication_name', 'Ferrous FA')
-              .inFilter('mother_id', _motherIds)
-              .timeout(const Duration(seconds: 8))
-              .catchError((e) {
-                debugPrint('Dashboard ferrous query note: $e');
-                return <Map<String, dynamic>>[];
-              }),
-          SupabaseService.client
-              .from('given_medications')
-              .select('given_medication_id')
-              .eq('given_medication_name', 'Calcium')
-              .inFilter('mother_id', _motherIds)
-              .timeout(const Duration(seconds: 8))
-              .catchError((e) {
-                debugPrint('Dashboard calcium query note: $e');
-                return <Map<String, dynamic>>[];
-              }),
         ]);
 
         // Ran concurrently with the batch above. Applied here, before recent
@@ -440,13 +447,9 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
         final childrenResponse = responses[0] as List<dynamic>;
         final allPregnanciesResponse = responses[1] as List<dynamic>;
-        final ferrousResponse = responses[2] as List<dynamic>;
-        final calciumResponse = responses[3] as List<dynamic>;
 
         _registeredChildren = childrenResponse.length;
         _allChildren = List<Map<String, dynamic>>.from(childrenResponse);
-        _ferrousGiven = ferrousResponse.length;
-        _calciumGiven = calciumResponse.length;
 
         final pregnanciesResponse = allPregnanciesResponse
             .where((p) => p['status'] == 'ongoing')
@@ -509,7 +512,6 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         List<dynamic> recentCheckups = [];
         List<dynamic> recentUltrasounds = [];
         List<dynamic> recentLabTests = [];
-        List<dynamic> tdResponse = [];
         List<dynamic> chartCheckups = [];
         List<dynamic> checkupsData = [];
         List<dynamic> ultrasoundsData = [];
@@ -517,22 +519,6 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
         if (allPregnancyIds.isNotEmpty) {
           final clinicalResponses = await Future.wait([
-            // TD Vaccine doses
-            if (pregnancyIds.isNotEmpty)
-              SupabaseService.client
-                  .from('clinical_encounters')
-                  .select('prenatal_checkups!inner(prenatal_checkup_id)')
-                  .inFilter('pregnancy_id', pregnancyIds)
-                  .eq('encounter_type', 'checkup')
-                  .not('prenatal_checkups.td_vaccine_dose', 'is', null)
-                  .timeout(const Duration(seconds: 8))
-                  .catchError((e) {
-                    debugPrint('Dashboard TD query note: $e');
-                    return <Map<String, dynamic>>[];
-                  })
-            else
-              Future.value([]),
-
             // Recent visits
             SupabaseService.client
                 .from('clinical_encounters')
@@ -663,19 +649,18 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 }),
           ]);
 
-          tdResponse = clinicalResponses[0];
-          final List recentCheckupsRaw = clinicalResponses[1];
-          recentUltrasounds = (clinicalResponses[2]).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-          recentLabTests = (clinicalResponses[3]).map((e) {
+          final List recentCheckupsRaw = clinicalResponses[0];
+          recentUltrasounds = (clinicalResponses[1]).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          recentLabTests = (clinicalResponses[2]).map((e) {
             final map = Map<String, dynamic>.from(e as Map);
             map['lab_test_date'] = map['created_at'];
             map['remarks'] = map['lab_test_type'];
             return map;
           }).toList();
-          final List chartCheckupsRaw = clinicalResponses[4];
-          final List checkupsDataRaw = clinicalResponses[5];
-          ultrasoundsData = (clinicalResponses[6]).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-          labTestsData = (clinicalResponses[7]).map((e) {
+          final List chartCheckupsRaw = clinicalResponses[3];
+          final List checkupsDataRaw = clinicalResponses[4];
+          ultrasoundsData = (clinicalResponses[5]).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          labTestsData = (clinicalResponses[6]).map((e) {
             final map = Map<String, dynamic>.from(e as Map);
             map['lab_test_date'] = map['created_at'];
             map['remarks'] = map['lab_test_type'];
@@ -741,8 +726,6 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
             }
           }
         }
-
-        _tdDosesGiven = tdResponse.length;
 
         // Process recent visits (based solely on checkups, with optional lab/ultrasound labels)
         _recentVisits = [];
@@ -837,20 +820,13 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         _allCheckups = List<Map<String, dynamic>>.from(checkupsData);
         _allUltrasounds = List<Map<String, dynamic>>.from(ultrasoundsData);
         _allLabTests = List<Map<String, dynamic>>.from(labTestsData);
-
-        // Load priority tasks
-        await _loadPriorityTasks(pregnancyIds);
       } else {
         _registeredChildren = 0;
-        _ferrousGiven = 0;
-        _calciumGiven = 0;
-        _tdDosesGiven = 0;
         _totalPregnancies = 0;
         _firstTrimester = 0;
         _secondTrimester = 0;
         _thirdTrimester = 0;
         _recentVisits = [];
-        _priorityTasks = [];
         _bhcVisitValues = List.filled(7, 0.0);
         _bhcVisitDays = List.generate(7, (i) => '');
         _allCheckups = [];
@@ -875,108 +851,68 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     }
   }
 
-  Future<void> _loadPriorityTasks(List<int> pregnancyIds) async {
-    _priorityTasks = [];
+  /// Loads the analytics section, out of step with the rest of the dashboard.
+  ///
+  /// Deliberately not awaited by [_loadDashboardData]: it is the widest fetch
+  /// on the screen, and the midwife's caseload header should never be held back
+  /// by a stock forecast. A pull-to-refresh part way through an earlier load
+  /// would otherwise let the slower response overwrite the newer one, so each
+  /// run carries a token and only the newest is allowed to land.
+  Future<void> _loadAnalytics(int bhcId) async {
+    final int requestId = ++_analyticsRequestId;
 
-    if (pregnancyIds.isEmpty) return;
+    if (mounted) setState(() => _analyticsLoading = true);
 
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final analytics = await MidwifeAnalyticsService.load(bhcId: bhcId);
 
-    try {
-      // Fetch both queries concurrently
-      final taskResults = await Future.wait([
-        // [0] Upcoming checkups
-        SupabaseService.client
-            .from('prenatal_checkups')
-            .select('''
-            prenatal_checkup_id,
-            next_schedule,
-            pregnancy_id
-          ''')
-            .inFilter('pregnancy_id', pregnancyIds)
-            .not('next_schedule', 'is', null)
-            .gte('next_schedule', today.toIso8601String().split('T')[0]),
-        // [1] High-risk pregnancies
-        SupabaseService.client
-            .from('pregnancies')
-            .select('''
-            pregnancy_id,
-            pregnancy_risk_level,
-            mother_id
-          ''')
-            .inFilter('pregnancy_id', pregnancyIds)
-            .eq('pregnancy_risk_level', 'high'),
-      ]);
+    if (!mounted || requestId != _analyticsRequestId) return;
+    setState(() {
+      _analytics = analytics;
+      _analyticsLoading = false;
+    });
+  }
 
-      final upcomingCheckups = taskResults[0] as List<dynamic>;
-      final highRiskPregnancies = taskResults[1] as List<dynamic>;
-
-      for (var checkup in upcomingCheckups) {
-        final nextDate = DateTime.parse(checkup['next_schedule']);
-        final daysUntil = nextDate.difference(today).inDays;
-
-        if (daysUntil <= 7) {
-          String urgency = daysUntil == 0
-              ? 'urgent'
-              : (daysUntil <= 2 ? 'warning' : 'normal');
-
-          final pregId = checkup['pregnancy_id'] as int?;
-          final motherInfo = pregId != null ? _pregnancyToMotherMap[pregId] : null;
-
-          if (motherInfo != null && motherInfo.isNotEmpty) {
-            final name = motherInfo.isNotEmpty
-                ? '${motherInfo['first_name']} ${motherInfo['last_name']}'
-                    .trim()
-                : 'Unknown Mother';
-
-            _priorityTasks.add(PriorityTask(
-              id: checkup['prenatal_checkup_id'],
-              motherId: motherInfo['mother_id'] as int,
-              title: 'Prenatal Checkup Scheduled',
-              description:
-                  '$name has a checkup scheduled for ${DateFormat('MMM d, yyyy').format(nextDate)}',
-              urgency: urgency,
-              type: 'checkup',
-              action: 'View Schedule',
-            ));
-          }
-        }
-      }
-
-      for (var pregnancy in highRiskPregnancies) {
-        final motherInfo = _allMothers.firstWhere(
-          (m) => m['mother_id'] == pregnancy['mother_id'],
-          orElse: () => {},
-        );
-
-        final name = motherInfo.isNotEmpty
-            ? '${motherInfo['first_name']} ${motherInfo['last_name']}'.trim()
-            : 'Unknown Mother';
-
-        _priorityTasks.add(PriorityTask(
-          id: pregnancy['pregnancy_id'],
-          motherId: pregnancy['mother_id'] as int,
-          title: 'High-Risk Pregnancy',
-          description: '$name requires close monitoring and follow-up',
-          urgency: 'urgent',
-          type: 'high_risk',
-          action: 'View Details',
-        ));
-      }
-
-      // Sort tasks by urgency
-      _priorityTasks.sort((a, b) {
-        final urgencyOrder = {'urgent': 0, 'warning': 1, 'normal': 2};
-        return urgencyOrder[a.urgency]!.compareTo(urgencyOrder[b.urgency]!);
-      });
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error loading priority tasks: $e');
-      }
+  /// Sends the midwife where a card's action says she should go.
+  ///
+  /// Mothers, children and schedules are tabs of [MidwifeShell], so they are
+  /// reached by switching tabs, not by pushing their routes. Pushing put a bare
+  /// screen over the shell: no header, no navigation bar, and no way back
+  /// except the system gesture.
+  ///
+  /// Inventory is genuinely a separate destination — it is not a tab and brings
+  /// its own header — so that one is still pushed.
+  ///
+  /// Screens, not deep links with filters: the destinations already carry their
+  /// own search and sorting, and a prescription that lands somewhere she can
+  /// work is worth more than one that promises a filter this screen cannot set.
+  void _onAnalyticsAction(AnalyticsAction action) {
+    switch (action) {
+      case AnalyticsAction.viewMothers:
+        _goToTab(MidwifeShell.mothersTab, '/midwife-mothers');
+        break;
+      case AnalyticsAction.viewChildren:
+        _goToTab(MidwifeShell.childrenTab, '/midwife-children');
+        break;
+      case AnalyticsAction.viewSchedules:
+        _goToTab(MidwifeShell.schedulesTab, '/midwife-schedules');
+        break;
+      case AnalyticsAction.viewInventory:
+        Navigator.pushNamed(context, '/midwife-inventory');
+        break;
+      case AnalyticsAction.none:
+        break;
     }
+  }
 
-    setState(() {});
+  /// Switches the shell to [tabIndex], falling back to the route when the
+  /// dashboard is shown outside the shell and has no tabs to switch.
+  void _goToTab(int tabIndex, String fallbackRoute) {
+    final navigateToTab = widget.onNavigateToTab;
+    if (navigateToTab != null) {
+      navigateToTab(tabIndex);
+    } else {
+      Navigator.pushNamed(context, fallbackRoute);
+    }
   }
 
   void _clearSearch() {
@@ -1704,6 +1640,60 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     );
   }
 
+  /// The analytics block: one group of cards at a time.
+  ///
+  /// The switcher is the whole reason this fits on a phone. Mothers, children
+  /// and supplies are three different questions, and a midwife asking one of
+  /// them should not have to scroll past the other two to finish reading.
+  List<Widget> _buildAnalyticsSection() {
+    final sections = _analytics.sections;
+    final tabIndex = _analyticsTab.clamp(0, sections.length - 1);
+    final metrics = sections[tabIndex].metrics;
+
+    return [
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: const [
+          Icon(Icons.insights, color: AppColors.brandPrimary, size: 22),
+          SizedBox(width: 8),
+          Text(
+            'Analytics',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      AnalyticsSegmentedControl(
+        labels: [for (final section in sections) section.title],
+        selectedIndex: tabIndex,
+        onChanged: (index) => setState(() => _analyticsTab = index),
+      ),
+      const SizedBox(height: 16),
+      if (_analyticsLoading && _analytics.isEmpty)
+        _buildSectionLoadingCard('Reading this month\'s records...')
+      else if (metrics.isEmpty)
+        AnalyticsCard(
+          metric: AnalyticsMetric.empty(
+            title: sections[tabIndex].title,
+            message: 'Nothing to analyse here yet. Cards appear as records '
+                'are added at this health centre.',
+          ),
+        )
+      else
+        for (int i = 0; i < metrics.length; i++) ...[
+          if (i > 0) const SizedBox(height: 16),
+          AnalyticsCard(
+            metric: metrics[i],
+            onAction: _onAnalyticsAction,
+          ),
+        ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1991,6 +1981,17 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                             const SizedBox(height: 16),
                           ],
 
+                          const SizedBox(height: 20),
+
+                          // What needs doing, before what has happened. The
+                          // numbers further down describe the caseload; this
+                          // is the part of the screen she can act on today.
+                          AnalyticsPriorityBoard(
+                            priorities: _analytics.priorities,
+                            isLoading: _analyticsLoading,
+                            onAction: _onAnalyticsAction,
+                          ),
+
                           const SizedBox(height: 24),
 
                           // Health Center Overview Title
@@ -2052,36 +2053,6 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                             thirdTrimester: _thirdTrimester,
                           ),
 
-                          const SizedBox(height: 20),
-
-                          // Medication Statistics
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildStatCard(
-                                  value: _ferrousGiven,
-                                  label: 'Ferrous FA\ngiven',
-                                  iconData: Icons.medication,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildStatCard(
-                                  value: _calciumGiven,
-                                  label: 'Calcium\ngiven',
-                                  iconData: Icons.local_pharmacy,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildStatCard(
-                                  value: _tdDosesGiven,
-                                  label: 'TD Vaccine\ndoses given',
-                                  iconData: Icons.vaccines,
-                                ),
-                              ),
-                            ],
-                          ),
                           const SizedBox(height: 20),
 
                           // Recent Visits
@@ -2187,142 +2158,22 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                               ),
                             ),
 
+                          const SizedBox(height: 28),
+
+                          // Analytics sits last on purpose. Above it is what
+                          // happened — caseload, recent visits, this week's
+                          // chart. This is the part she scrolls to when she
+                          // wants to know why, and it replaced three tiles
+                          // counting every Ferrous, Calcium and TD dose ever
+                          // recorded: totals that only ever rose, and so could
+                          // never show a gap.
+                          ..._buildAnalyticsSection(),
+
                           const SizedBox(height: 32),
                         ],
                       ),
                     ),
                   ),
-      ),
-    );
-  }
-}
-
-// Priority Task Model
-class PriorityTask {
-  final int id;
-  final int motherId;
-  final String title;
-  final String description;
-  final String urgency;
-  final String type;
-  final String action;
-
-  PriorityTask({
-    required this.id,
-    required this.motherId,
-    required this.title,
-    required this.description,
-    required this.urgency,
-    required this.type,
-    required this.action,
-  });
-}
-
-// Priority Task Tile Widget
-class _PriorityTaskTile extends StatelessWidget {
-  final PriorityTask task;
-  final VoidCallback? onTap;
-
-  const _PriorityTaskTile({required this.task}) : onTap = null;
-
-  Color _getUrgencyColor() {
-    switch (task.urgency) {
-      case 'urgent':
-        return AppColors.error;
-      case 'warning':
-        return AppColors.warning;
-      default:
-        return AppColors.info;
-    }
-  }
-
-  IconData _getTaskIcon() {
-    switch (task.type) {
-      case 'checkup':
-        return Icons.medical_services;
-      case 'high_risk':
-        return Icons.warning_amber;
-      case 'vaccine':
-        return Icons.vaccines;
-      default:
-        return Icons.task_alt;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final urgencyColor = _getUrgencyColor();
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                  color: AppColors.borderPrimary.withValues(alpha: 0.5)),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: urgencyColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(_getTaskIcon(), color: urgencyColor, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      task.title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      task.description,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: urgencyColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  task.urgency.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: urgencyColor,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(Icons.chevron_right,
-                  size: 18, color: AppColors.textSecondary),
-            ],
-          ),
-        ),
       ),
     );
   }
