@@ -544,6 +544,13 @@ class WeightGainEngine {
   }
 
   /// Converts numeric BMI to category string.
+  /// Public view of the BMI classification.
+  ///
+  /// Same thresholds, exposed so a screen can label a BMI it computed without
+  /// copying the cut-offs. Adds no logic — the second copy of a threshold is
+  /// where the two quietly stop agreeing.
+  static String bmiCategoryOf(double bmi) => _bmiToCategory(bmi);
+
   static String _bmiToCategory(double bmi) {
     if (bmi < 18.5) return 'Underweight';
     if (bmi < 25.0) return 'Normal';

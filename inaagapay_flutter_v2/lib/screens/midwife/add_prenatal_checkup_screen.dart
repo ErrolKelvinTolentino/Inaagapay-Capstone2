@@ -3528,10 +3528,13 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       String statusText;
 
       if (isInsufficient) {
-        bgColor = AppColors.textSecondary.withValues(alpha: 0.07);
-        textColor = AppColors.textSecondary;
-        icon = Icons.info_outline_rounded;
-        statusText = "Weight gain not assessed yet";
+        // Still shows the analysis — the reference range for her week and her
+        // BMI category — just not a verdict on gain, which needs a baseline
+        // nobody recorded. Blue rather than green: informative, not a pass.
+        bgColor = AppColors.brandPrimary.withValues(alpha: 0.06);
+        textColor = AppColors.brandText;
+        icon = Icons.straighten_rounded;
+        statusText = "Expected weight gain for this week";
       } else if (isLow) {
         bgColor = AppColors.warning.withValues(alpha: 0.08);
         textColor = AppColors.warning;
@@ -3566,11 +3569,26 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
       final String detailsText;
       if (isInsufficient || baselineW == null) {
+        // Everything here is real: her current BMI from the height and weight
+        // just entered, and the IOM range for her week. What is missing is the
+        // one thing that cannot be inferred — where she started.
+        final gainRangeStr =
+            "${expectedGainMin.toStringAsFixed(1)} – ${expectedGainMax.toStringAsFixed(1)} kg";
+        final bmiNow = (heightCm != null && heightCm > 0)
+            ? currentWeight / ((heightCm / 100) * (heightCm / 100))
+            : null;
+        final bmiStr = bmiNow == null
+            ? ''
+            : "Her BMI today is ${bmiNow.toStringAsFixed(1)} (${WeightGainEngine.bmiCategoryOf(bmiNow)}). ";
+
         detailsText =
-            "Her weight before pregnancy is not on record, so gain cannot be "
-            "measured from it. Add it to her profile if she knows it, or "
-            "record a second checkup — two measured weights can be compared "
-            "to each other.";
+            "${bmiStr}By Week ${_aogWeeks!.toInt()}, a mother in the "
+            "${result.bmiCategory} range is expected to have gained "
+            "$gainRangeStr since conception.\n\n"
+            "Her weight before pregnancy is not on record, so how much she "
+            "has actually gained cannot be measured. Add it to her profile if "
+            "she knows it — otherwise her next checkup can be compared "
+            "against today's weight.";
       } else {
         final expectedWeightMin = baselineW + expectedGainMin;
         final expectedWeightMax = baselineW + expectedGainMax;
