@@ -1503,6 +1503,11 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         setState(() {
           _firstNameError = firstNameEmpty ? 'First name is required' : null;
           _lastNameError = lastNameEmpty ? 'Last name is required' : null;
+          // Phone and birthdate blocked Next without ever saying so. The
+          // midwife tapped the button, nothing moved, and the screen offered
+          // no reason — with a mother sitting in front of her.
+          if (phoneEmpty) _phoneError = 'Contact number is required';
+          if (birthdateEmpty) _birthdateError = 'Birthdate is required';
         });
         return !firstNameEmpty &&
             !lastNameEmpty &&
@@ -1541,19 +1546,24 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                     _provinceCtrl.text.trim().isNotEmpty));
 
       case 3:
+        // Every branch here used to return false in silence — this step could
+        // refuse to advance without a single word on screen.
+        String? missing;
         if (_gestationMethod == _GestationMethod.lmp && _lmp == null) {
-          return false;
-        }
-        if (_gestationMethod == _GestationMethod.edd && _edd == null) {
-          return false;
-        }
-        if (_gestationMethod == _GestationMethod.aog &&
+          missing = 'Select the last menstrual period date';
+        } else if (_gestationMethod == _GestationMethod.edd && _edd == null) {
+          missing = 'Select the expected date of delivery';
+        } else if (_gestationMethod == _GestationMethod.aog &&
             _aogWeeksCtrl.text.trim().isEmpty &&
             _aogDaysCtrl.text.trim().isEmpty) {
+          missing = 'Enter the age of gestation in weeks or days';
+        }
+
+        if (missing != null) {
+          setState(() => _gestationError = missing);
           return false;
         }
-        if (_gestationError != null) return false;
-        return true;
+        return _gestationError == null;
 
       case 4:
         final hVal = double.tryParse(_heightCtrl.text.trim());
@@ -1594,7 +1604,53 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
             curve: Curves.easeInOut);
         setState(() => _step++);
       }
+      return;
     }
+
+    // A blocked Next used to do nothing at all. Field errors help only if the
+    // field is on screen, and these steps scroll — so say it once, plainly,
+    // where she is already looking.
+    _showBlockedMessage();
+  }
+
+  /// Names what is missing on the current step.
+  ///
+  /// Deliberately specific rather than "Please complete all fields": on a
+  /// nine-step form that phrasing sends a midwife hunting through a page she
+  /// has already filled in.
+  void _showBlockedMessage() {
+    final missing = <String>[
+      if (_firstNameError != null) 'first name',
+      if (_lastNameError != null) 'last name',
+      if (_phoneError != null) 'contact number',
+      if (_birthdateError != null) 'birthdate',
+      if (_emailError != null) 'email address',
+      if (_houseError != null) 'house number',
+      if (_streetError != null) 'street',
+      if (_barangayError != null) 'barangay',
+      if (_cityError != null) 'city or municipality',
+      if (_provinceError != null) 'province',
+      if (_heightError != null) 'height',
+      if (_weightError != null) 'weight',
+      if (_prePregnancyWeightError != null) 'pre-pregnancy weight',
+    ];
+
+    final text = _gestationError != null
+        ? _gestationError!
+        : missing.isEmpty
+            ? 'Please complete this step before continuing.'
+            : 'Still needed: ${missing.join(', ')}.';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(text),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
   }
 
   void _goBack() {
@@ -6137,6 +6193,20 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
               child: Column(
                 children: [
+                  // A progress bar shows how far along she is but not how far
+                  // is left. On a nine-step form that matters: a midwife
+                  // deciding whether to start now or after the checkup needs
+                  // the denominator.
+                  Text(
+                    'Step ${_step + 1} of $_totalSteps',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                      color: AppColors.brandPrimary.withValues(alpha: 0.85),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   Text(_stepTitles[_step],
                       style: const TextStyle(
                           fontSize: 20,
