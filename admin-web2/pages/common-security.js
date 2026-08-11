@@ -218,10 +218,15 @@
       </div>
     `;
     document.body.appendChild(overlay);
+    document.body.classList.add("modal-open");
 
-    document.getElementById("rhu-confirm-cancel-btn").addEventListener("click", () => overlay.remove());
-    document.getElementById("rhu-confirm-action-btn").addEventListener("click", () => {
+    function closeConfirmOverlay() {
       overlay.remove();
+      syncModalScrollLock();
+    }
+    document.getElementById("rhu-confirm-cancel-btn").addEventListener("click", closeConfirmOverlay);
+    document.getElementById("rhu-confirm-action-btn").addEventListener("click", () => {
+      closeConfirmOverlay();
       if (typeof opts.onConfirm === "function") opts.onConfirm();
     });
   };
@@ -266,6 +271,7 @@
         </div>
       `;
       document.body.appendChild(overlay);
+      document.body.classList.add("modal-open");
 
       const input = document.getElementById("rhu-reason-input");
       input.focus();
@@ -273,6 +279,7 @@
       function close(value) {
         document.removeEventListener("keydown", onKey);
         overlay.remove();
+        syncModalScrollLock();
         resolve(value);
       }
       function submit() {
@@ -301,5 +308,27 @@
     const open = [...document.querySelectorAll(".modal-overlay.show")].pop();
     if (open) open.classList.remove("show");
   });
+
+  // 9. Body scroll-lock — keeps body.modal-open in sync with any open modal.
+  //    A MutationObserver covers every page without needing per-page changes:
+  //    • .modal-overlay.show  (class-based modals across all pages)
+  //    • .rhu-modal-overlay   (dynamically appended confirmation / reason modals)
+  function syncModalScrollLock() {
+    const hasClassModal = document.querySelector(".modal-overlay.show") !== null;
+    const hasRhuModal   = document.querySelector(".rhu-modal-overlay") !== null;
+    document.body.classList.toggle("modal-open", hasClassModal || hasRhuModal);
+  }
+
+  // Expose so the rhu-modal close helpers above can call it.
+  window.syncModalScrollLock = syncModalScrollLock;
+
+  const _scrollLockObserver = new MutationObserver(syncModalScrollLock);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      _scrollLockObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    });
+  } else {
+    _scrollLockObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+  }
 })();
 

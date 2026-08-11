@@ -992,6 +992,11 @@ table.data-table tbody tr:hover td {
   align-items: center;
 }
 
+/* ── Body scroll-lock when any modal is open ─────── */
+body.modal-open {
+  overflow: hidden;
+}
+
 /* ── Modals / Dialogs ─────────────────────────────── */
 .modal-overlay {
   position: fixed;
@@ -1000,9 +1005,10 @@ table.data-table tbody tr:hover td {
   backdrop-filter: blur(3px);
   z-index: 1000;
   display: flex;
-  align-items: center;
+  align-items: flex-start;  /* allow overlay to scroll instead of clipping */
   justify-content: center;
   padding: 20px;
+  overflow-y: auto;          /* overlay scrolls, not the background page */
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.25s ease, visibility 0.25s ease;
@@ -1019,8 +1025,7 @@ table.data-table tbody tr:hover td {
   box-shadow: var(--shadow-dialog);
   width: 100%;
   max-width: 520px;
-  max-height: 90vh;
-  overflow-y: auto;
+  margin: auto;              /* keeps it centered when content fits in viewport */
   transform: scale(0.95) translateY(-10px);
   transition: transform 0.25s ease;
 }
@@ -1653,8 +1658,6 @@ table.data-table tbody tr:hover td {
   .modal {
     width: 92vw;
     max-width: 520px;
-    max-height: 88vh;
-    overflow-y: auto;
     margin: 12px auto;
     padding: 16px 18px;
     border-radius: var(--radius-card-sm);
@@ -1736,9 +1739,10 @@ table.data-table tbody tr:hover td {
   backdrop-filter: blur(4px);
   z-index: 9999;
   display: flex;
-  align-items: center;
+  align-items: flex-start;   /* allow overlay to scroll when card is tall */
   justify-content: center;
   padding: 20px;
+  overflow-y: auto;           /* overlay scrolls, not the background page */
   animation: fadeIn 0.2s ease;
 }
 .rhu-modal-card {
@@ -1748,7 +1752,7 @@ table.data-table tbody tr:hover td {
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
   max-width: 480px;
   width: 100%;
-  overflow: hidden;
+  margin: auto;               /* keeps card centered when it fits in viewport */
   animation: slideUp 0.2s ease;
 }
 .rhu-modal-header {
