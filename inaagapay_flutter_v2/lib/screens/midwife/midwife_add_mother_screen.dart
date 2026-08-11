@@ -878,6 +878,23 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
           factors.add('Pre-pregnancy obesity (BMI ≥ 30 kg/m²)');
         }
       }
+
+      // 6b. Short stature and low maternal weight — separate from BMI.
+      //
+      // BMI can read Normal while the mother still carries recognised
+      // obstetric risk, because BMI is a ratio and these are absolutes. A
+      // woman of 148 cm and 46 kg has a BMI of 21.0 — Normal under WHO and
+      // under the stricter Asian cut-offs — yet short stature raises the
+      // chance of cephalopelvic disproportion and low maternal weight raises
+      // the chance of a low-birth-weight baby. Neither shows up in a BMI
+      // category, which is why this section exists alongside it rather than
+      // by moving the BMI thresholds.
+      if (heightCm > 0 && heightCm < 145) {
+        factors.add('Short stature (< 145 cm) — risk of obstructed labour');
+      }
+      if (weightKg > 0 && weightKg < 45) {
+        factors.add('Low maternal weight (< 45 kg)');
+      }
     }
 
     // 7. Clinical Alert: Drug/Material Allergies
@@ -921,6 +938,21 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         if (bmi < 18.5) {
           insights.add(
               'Low pre-pregnancy BMI — nutritional monitoring recommended');
+        }
+
+        // Borderline stature and weight. Above the risk thresholds but close
+        // enough that a midwife should have it in mind — which is the honest
+        // reading of a 148 cm, 46 kg mother whose BMI is a healthy 21.0.
+        // Monitoring rather than risk: saying "underweight" of a normal BMI
+        // would be wrong, and saying nothing would miss what a clinician
+        // notices looking at her.
+        if (heightCm >= 145 && heightCm < 150) {
+          insights.add(
+              'Height 145–150 cm — monitor for cephalopelvic disproportion');
+        }
+        if (weightKg >= 45 && weightKg < 50) {
+          insights.add(
+              'Maternal weight under 50 kg — nutritional monitoring recommended');
         }
       }
     }
