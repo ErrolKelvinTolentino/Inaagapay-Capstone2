@@ -150,6 +150,46 @@ void main() {
     });
   });
 
+  group('the case reported from the prenatal checkup screen', () {
+    // 148 cm, 42.5 kg at 15 weeks, no reported pre-pregnancy weight. The
+    // screen showed "Within expected weight gain … current gain +3.0 kg"
+    // because its baseline resolver back-calculated 39.5 kg first.
+    test('the old backtracked baseline forced a normal verdict', () {
+      final backtracked =
+          (WeightGainEngine.estimatePrePregnancyBMI(
+        currentWeightKg: 42.5,
+        heightCm: 148,
+        aogWeeks: 15,
+      )['estimatedWeight'] as num)
+              .toDouble();
+
+      // This is where the 39.5 on the screen came from.
+      expect(backtracked, closeTo(39.5, 0.1));
+
+      final result = WeightGainEngine.evaluate(
+        currentWeight: 42.5,
+        aogWeeks: 15,
+        allCheckups: const [],
+        prePregnancyWeight: backtracked,
+        heightCm: 148,
+      );
+      expect(result.status, WeightGainStatus.normal);
+    });
+
+    test('with no reported baseline it now declines to judge', () {
+      final result = WeightGainEngine.evaluate(
+        currentWeight: 42.5,
+        aogWeeks: 15,
+        allCheckups: const [],
+        prePregnancyWeight: null,
+        heightCm: 148,
+      );
+
+      expect(result.mode, WeightGainMode.trend);
+      expect(result.status, isNot(WeightGainStatus.normal));
+    });
+  });
+
   group('a measured pre-pregnancy weight is still evaluated properly', () {
     test('flags a mother genuinely gaining too little', () {
       // Reported 37 kg before pregnancy and now 37.5 at 15 weeks: half a kilo

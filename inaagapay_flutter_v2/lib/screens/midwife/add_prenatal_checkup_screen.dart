@@ -254,7 +254,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   String _aiRemarksEnglish = '';   // stored AI English text
   String _aiRemarksFilipino = '';  // stored AI Filipino text
   String? _aiRemarksModel;         // AI model used
-  double? _initialSessionWeight;   // Locked baseline weight for session calculation
 
   static const List<String> _fetalTones = [
     'Regular',
@@ -1888,83 +1887,33 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   /// All weight gain evaluate() calls in this screen MUST use this method
   /// to ensure consistent baseline across status pill, insight card,
   /// AI prompt, risk factors, and persist.
+  /// Her reported weight before this pregnancy, or null.
+  ///
+  /// Null is a real answer, not a gap to be filled. WeightGainEngine.evaluate
+  /// switches to trend mode when it gets null: it takes the earliest actual
+  /// checkup weight as a baseline and states no verdict until two real
+  /// measurements exist.
+  ///
+  /// This method used to have six priorities. The second back-calculated a
+  /// baseline through estimatePrePregnancyBMI, which made the verdict
+  /// circular — that estimate *is* current weight minus the expected gain, so
+  /// the "actual gain" derived from it returns the expectation, and every
+  /// mother read as gaining normally on her first checkup. The case that
+  /// exposed it: 148 cm and 42.5 kg at 15 weeks reported +3.0 kg against an
+  /// expected 2.2–3.7 kg, because 42.5 − 3.02 is precisely where the baseline
+  /// came from.
+  ///
+  /// The remaining fallbacks were wrong more quietly. Registration weight and
+  /// the earliest checkup weight are real measurements, but neither is a
+  /// pre-pregnancy weight, and the IOM ranges are defined from conception —
+  /// so passing one here compares a mid-pregnancy baseline against a
+  /// from-conception range and understates every gain. Trend mode uses those
+  /// same numbers correctly, as a rate between measurements.
   double? _resolveBaselineWeight() {
-    final motherMap = _motherRiskContext?['mother'] as Map<String, dynamic>?;
-    final pregnancyMap = _motherRiskContext?['pregnancy'] as Map<String, dynamic>?;
-    final previousCheckups =
-        (_motherRiskContext?['previous_checkups'] as List? ?? const [])
-            .cast<dynamic>();
-
-    final heightCm = motherMap?['height'] != null
-        ? double.tryParse(motherMap!['height'].toString())
-        : null;
-    final prePregnancyWeight = pregnancyMap?['pre_pregnancy_weight'] != null
-        ? double.tryParse(pregnancyMap!['pre_pregnancy_weight'].toString())
-        : null;
-    final motherWeight = motherMap?['weight'] != null
-        ? double.tryParse(motherMap!['weight'].toString())
-        : null;
-
-    // Priority 1: DB pre_pregnancy_weight
-    if (prePregnancyWeight != null) return prePregnancyWeight;
-
-    // Priority 2: Backtrack using earliest checkup weight if height available
-    if (heightCm != null && heightCm > 0) {
-      double? earliestCheckupWeight;
-      if (previousCheckups.isNotEmpty) {
-        final sortedPrev = List<Map<String, dynamic>>.from(
-            previousCheckups.map((e) => Map<String, dynamic>.from(e as Map)));
-        sortedPrev.sort((a, b) {
-          final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '');
-          final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '');
-          if (da == null || db == null) return 0;
-          return da.compareTo(db);
-        });
-        earliestCheckupWeight = double.tryParse(
-            sortedPrev.first['checkup_weight']?.toString() ?? '');
-      }
-      final referenceWeight = motherWeight ?? widget.motherWeight ?? earliestCheckupWeight;
-      if (referenceWeight != null) {
-        final est = WeightGainEngine.estimatePrePregnancyBMI(
-          currentWeightKg: referenceWeight,
-          heightCm: heightCm,
-          aogWeeks: (_aogWeeks ?? 0).toInt(),
-          fetalCount: _fetalCount ?? 1,
-        );
-        final estimated = (est['estimatedWeight'] as num?)?.toDouble();
-        if (estimated != null) return estimated;
-      }
-    }
-
-    // Priority 3: mothers.weight (registration weight)
-    if (motherWeight != null) return motherWeight;
-
-    // Priority 4: widget.motherWeight
-    if (widget.motherWeight != null) return widget.motherWeight;
-
-    // Priority 5: Earliest checkup weight (no backtracking possible)
-    if (previousCheckups.isNotEmpty) {
-      final sortedPrev = List<Map<String, dynamic>>.from(
-          previousCheckups.map((e) => Map<String, dynamic>.from(e as Map)));
-      sortedPrev.sort((a, b) {
-        final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '');
-        final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '');
-        if (da == null || db == null) return 0;
-        return da.compareTo(db);
-      });
-      final earliest = double.tryParse(
-          sortedPrev.first['checkup_weight']?.toString() ?? '');
-      if (earliest != null) return earliest;
-    }
-
-    // Priority 6: Session fallback (current weight as last resort)
-    final currentWeight = double.tryParse(_weightCtrl.text.trim());
-    if (currentWeight != null) {
-      _initialSessionWeight ??= currentWeight;
-      return _initialSessionWeight;
-    }
-
-    return null;
+    final pregnancyMap =
+        _motherRiskContext?['pregnancy'] as Map<String, dynamic>?;
+    final reported = pregnancyMap?['pre_pregnancy_weight'];
+    return reported == null ? null : double.tryParse(reported.toString());
   }
 
   /// Builds a sorted checkup list including the current checkup being entered.
