@@ -95,6 +95,7 @@ class _AppDropdownFieldState<T extends Object> extends State<AppDropdownField<T>
   OverlayEntry _createOverlayEntry() {
     final RenderBox renderBox = context.findRenderObject() as RenderBox;
     final Size size = renderBox.size;
+    String searchQuery = '';
 
     return OverlayEntry(
       builder: (context) => Stack(
@@ -118,38 +119,99 @@ class _AppDropdownFieldState<T extends Object> extends State<AppDropdownField<T>
               clipBehavior: Clip.hardEdge,
               color: Colors.white,
               shadowColor: Colors.black.withAlpha(20),
-              child: Container(
-                width: size.width,
-                constraints: const BoxConstraints(maxHeight: 250),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.borderPrimary, width: 1.5),
-                ),
-                child: ListView(
-                  padding: EdgeInsets.zero,
-                  shrinkWrap: true,
-                  children: widget.options.map((T option) {
-                    final isSelected = widget.value == option;
-                    return InkWell(
-                      onTap: () {
-                        _closeDropdown();
-                        widget.onSelected(option);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        color: isSelected ? AppColors.brandPrimary.withAlpha(15) : null,
-                        child: Text(
-                          widget.displayStringForOption(option),
-                          style: TextStyle(
-                            color: isSelected ? AppColors.brandPrimary : AppColors.textPrimary,
-                            fontSize: 14,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+              child: StatefulBuilder(
+                builder: (context, setOverlayState) {
+                  final filteredOptions = widget.options.where((T option) {
+                    if (searchQuery.trim().isEmpty) return true;
+                    final text = widget.displayStringForOption(option).toLowerCase();
+                    return text.contains(searchQuery.trim().toLowerCase());
+                  }).toList();
+
+                  return Container(
+                    width: size.width,
+                    constraints: const BoxConstraints(maxHeight: 280),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.borderPrimary, width: 1.5),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (widget.options.length > 4)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 10, 10, 4),
+                            child: TextField(
+                              autofocus: true,
+                              style: const TextStyle(fontSize: 13),
+                              decoration: InputDecoration(
+                                hintText: 'Type to search items...',
+                                hintStyle: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.brandPrimary),
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                filled: true,
+                                fillColor: const Color(0xFFF8FAFC),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.borderPrimary),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.borderPrimary),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.brandPrimary),
+                                ),
+                              ),
+                              onChanged: (val) {
+                                setOverlayState(() {
+                                  searchQuery = val;
+                                });
+                              },
+                            ),
                           ),
+                        Flexible(
+                          child: filteredOptions.isEmpty
+                              ? const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Text(
+                                    'No matching items found',
+                                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: filteredOptions.length,
+                                  itemBuilder: (context, index) {
+                                    final T option = filteredOptions[index];
+                                    final isSelected = widget.value == option;
+                                    return InkWell(
+                                      onTap: () {
+                                        _closeDropdown();
+                                        widget.onSelected(option);
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                        color: isSelected ? AppColors.brandPrimary.withAlpha(15) : null,
+                                        child: Text(
+                                          widget.displayStringForOption(option),
+                                          style: TextStyle(
+                                            color: isSelected ? AppColors.brandPrimary : AppColors.textPrimary,
+                                            fontSize: 13,
+                                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
                         ),
-                      ),
-                    );
-                  }).toList(),
-                ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
           ),

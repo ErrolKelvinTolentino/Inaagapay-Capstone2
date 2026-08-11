@@ -140,7 +140,7 @@ class InventoryRepository {
             .from('inventory_items')
             .select(
               'item_id, name, item_type, unit_of_measure, '
-              'minimum_stock_threshold',
+              'minimum_stock_threshold, is_archived',
             )
             .order('name'),
         _client
@@ -167,7 +167,7 @@ class InventoryRepository {
 
       final catalog = _rows(results[0])
           .map(InventoryCatalogRecord.fromJson)
-          .where((item) => item.itemId > 0)
+          .where((item) => item.itemId > 0 && !item.isArchived)
           .toList();
       final batches = _rows(results[1])
           .map(InventoryBatchRecord.fromJson)

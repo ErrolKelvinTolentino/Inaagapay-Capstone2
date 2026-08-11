@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>InaAgapay — Admin Login</title>
-    <meta name="description" content="InaAgapay Admin Portal Login" />
+    <title>InaAgapay — RHU Portal Login</title>
+    <meta name="description" content="InaAgapay RHU Portal Login" />
     <link rel="icon" type="image/png" href="images/logo_icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -361,24 +361,18 @@
       <!-- Left decorative panel -->
       <div class="login-left">
         <div class="left-brand">
-          <img src="images/logo_with_label.png" alt="InaAgapay" />
+          <img src="images/logo_with_label.png" alt="InaAgapay Logo" style="height: 48px; object-fit: contain;" />
         </div>
         <div class="left-content">
-          <h1>Maternal &amp; Child Health Admin Portal</h1>
-          <p>
-            Manage midwives, monitor health records, and oversee the InaAgapay
-            health information system.
-          </p>
+          <h1>Maternal &amp; Child Health Monitoring System</h1>
+          <p>Streamlined healthcare monitoring and inventory distribution for RHUs and BHCs.</p>
         </div>
         <div class="left-footer">
           <span class="left-chip"
-            ><i class="fa-solid fa-shield-halved"></i> Secure</span
+            ><i class="fa-solid fa-shield-halved"></i> Data Privacy Compliant</span
           >
           <span class="left-chip"
-            ><i class="fa-solid fa-database"></i> Supabase</span
-          >
-          <span class="left-chip"
-            ><i class="fa-solid fa-heart"></i> Healthcare</span
+            ><i class="fa-solid fa-heart"></i> RHU Portal</span
           >
         </div>
       </div>
@@ -388,7 +382,7 @@
         <div class="login-form-header">
           <img src="images/logo_icon.png" alt="InaAgapay Icon" />
           <h2>Welcome back</h2>
-          <p>Sign in with your admin credentials to continue.</p>
+          <p>Sign in with your RHU portal credentials to continue.</p>
         </div>
 
         <div id="login-alert" class="alert-error hidden">
@@ -405,7 +399,7 @@
                 type="email"
                 id="email"
                 name="email"
-                placeholder="admin@inaagapay.ph"
+                placeholder="rhu@inaagapay.ph"
                 required
                 autocomplete="username"
               />
@@ -441,8 +435,8 @@
         </form>
 
         <p class="login-footer-note">
-          For authorized administrators only.<br />
-          Contact system support if you need access.
+          For authorized RHU personnel only.<br />
+          Protected under Data Privacy Act of 2012 (RA 10173).
         </p>
       </div>
     </div>
@@ -461,19 +455,34 @@
 
         const SESSION_KEY = "inaagapay_admin_session";
 
-        // If already logged in, redirect
+        // Absolute session lifetime. A stored session with no age check never
+        // expires — reopening the tab days later would still be treated as signed in.
+        const MAX_SESSION_AGE_MS = 12 * 60 * 60 * 1000;
+
+        function isSessionExpired(s) {
+          if (!s || !s.logged_in_at) return true;
+          const issued = new Date(s.logged_in_at).getTime();
+          if (!Number.isFinite(issued)) return true;
+          return Date.now() - issued > MAX_SESSION_AGE_MS;
+        }
+
+        // If already logged in and the session is still valid, redirect
         const existing = localStorage.getItem(SESSION_KEY);
         if (existing) {
           try {
             const s = JSON.parse(existing);
             if (s && s.account_type === "admin") {
-              if (s.is_temporary_password === true) {
+              if (isSessionExpired(s)) {
+                localStorage.removeItem(SESSION_KEY);
+              } else if (s.is_temporary_password === true) {
                 window.location.href = "pages/change-password.html";
               } else {
                 window.location.href = "pages/dashboard.html";
               }
             }
-          } catch (_) {}
+          } catch (_) {
+            localStorage.removeItem(SESSION_KEY);
+          }
         }
 
         // Toggle password visibility with improved icon change
@@ -531,12 +540,26 @@
 
             if (error) throw error;
 
+            // Uniform failure message. Distinguishing "no such account" from
+            // "wrong password" from "suspended" lets an attacker enumerate which
+            // email addresses are registered and which are active.
+            const GENERIC_FAILURE = "Invalid email or password.";
+
             if (!accounts || accounts.length === 0) {
-              showError("Invalid email or password.");
+              showError(GENERIC_FAILURE);
               return;
             }
 
             const user = accounts[0];
+
+            // Verify the password before revealing anything about the account,
+            // so account state is only disclosed to whoever holds the credentials.
+            const bcrypt = dcodeIO.bcrypt;
+            const match = await bcrypt.compare(password, user.password_hash);
+            if (!match) {
+              showError(GENERIC_FAILURE);
+              return;
+            }
 
             if (user.account_type !== "admin") {
               showError("Access Denied: Midwife and Mother accounts must use the INAAGAPAY Mobile App.");
@@ -552,14 +575,6 @@
               showError(
                 "Account is " + user.status + ". Contact system support."
               );
-              return;
-            }
-
-            // Verify password with bcryptjs
-            const bcrypt = dcodeIO.bcrypt;
-            const match = await bcrypt.compare(password, user.password_hash);
-            if (!match) {
-              showError("Incorrect password. Please try again.");
               return;
             }
 

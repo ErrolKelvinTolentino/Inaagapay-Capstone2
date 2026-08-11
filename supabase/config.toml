@@ -1,0 +1,19 @@
+# Supabase CLI configuration.
+#
+# Only needed if you deploy Edge Functions from the terminal instead of the
+# dashboard:
+#
+#   supabase login
+#   supabase link --project-ref krooorixhjwygcsdoomg
+#   supabase functions deploy send-sms
+#
+# Secrets are set separately and are never stored in this repo:
+#
+#   supabase secrets set SEMAPHORE_API_KEY=... SEMAPHORE_SENDER_NAME=AGAPAY
+
+project_id = "krooorixhjwygcsdoomg"
+
+[functions.send-sms]
+# The admin portal calls this with the public anon key as a bearer token, which
+# is a valid JWT, so the default verification is left on.
+verify_jwt = true

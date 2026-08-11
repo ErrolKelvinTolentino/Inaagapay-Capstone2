@@ -488,6 +488,7 @@ CREATE TABLE public.inventory_items (
     ),
     unit_of_measure character varying NOT NULL,
     minimum_stock_threshold integer DEFAULT 50,
+    is_archived boolean DEFAULT false,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 -- Inventory Batches
