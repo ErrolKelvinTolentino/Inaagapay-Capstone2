@@ -38,6 +38,38 @@ void main() {
     });
   });
 
+  group('when two categories both fit', () {
+    // Roughly 8% of realistic combinations are consistent with more than one
+    // category. 140 cm at 41 kg and 20 weeks fits both Normal and Underweight.
+    final ambiguous = WeightGainEngine.estimatePrePregnancyBMI(
+      currentWeightKg: 41,
+      heightCm: 140,
+      aogWeeks: 20,
+    );
+
+    test('takes the more cautious reading, not the first in the list', () {
+      // Ordering used to begin with Normal and return the first hit, so every
+      // ambiguous mother resolved to Normal — hiding the underweight one, and
+      // handing her the lower expected-gain range as well.
+      expect(ambiguous['category'], 'Underweight');
+    });
+
+    test('says so, instead of presenting a guess as settled', () {
+      expect(ambiguous['ambiguous'], isTrue);
+      expect(ambiguous['confidence'], 'low');
+      expect(ambiguous['alternativeCategories'], contains('Normal'));
+    });
+
+    test('an unambiguous estimate is not marked ambiguous', () {
+      final clear = WeightGainEngine.estimatePrePregnancyBMI(
+        currentWeightKg: 75,
+        heightCm: 160,
+        aogWeeks: 20,
+      );
+      expect(clear['ambiguous'], isFalse);
+    });
+  });
+
   group('feeding the estimate back in', () {
     test('produces a gain that sits exactly on the expectation', () {
       final estimated =
