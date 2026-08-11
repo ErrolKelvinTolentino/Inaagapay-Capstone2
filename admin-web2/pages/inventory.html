@@ -419,6 +419,107 @@
         color: var(--text-primary, #111827);
         cursor: pointer;
       }
+      /* Delivery Safety Check Card & Transit Timing Styles */
+      .inventory-safety-card {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border: 1px solid #eaecf0;
+        border-radius: 12px;
+        background: #f9fafb;
+      }
+      .inventory-safety-card.is-safe {
+        border-color: #abefc6;
+        background: #f6fef9;
+      }
+      .inventory-safety-card.is-warning {
+        border-color: #fedf89;
+        background: #fffcf5;
+      }
+      .inventory-safety-card.is-critical {
+        border-color: #fecdca;
+        background: #fff8f7;
+      }
+      .inventory-safety-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .inventory-safety-eyebrow {
+        display: block;
+        margin-bottom: 2px;
+        color: #667085;
+        font-size: 9.5px;
+        font-weight: 800;
+        letter-spacing: 0.055em;
+        text-transform: uppercase;
+      }
+      .inventory-safety-head h3 {
+        margin: 0;
+        color: var(--text-primary);
+        font-size: 13px;
+      }
+      .inventory-safety-card > p {
+        margin: 8px 0 0;
+        color: #475467;
+        font-size: 11px;
+        line-height: 1.45;
+      }
+      .inventory-safety-metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+        margin-top: 10px;
+      }
+      .inventory-safety-metric {
+        min-width: 0;
+        padding: 6px 8px;
+        border: 1px solid rgba(152, 162, 179, 0.22);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.85);
+      }
+      .inventory-safety-metric span {
+        display: block;
+        color: #667085;
+        font-size: 9px;
+        font-weight: 750;
+        text-transform: uppercase;
+      }
+      .inventory-safety-metric strong {
+        display: block;
+        margin-top: 2px;
+        color: var(--text-primary);
+        font-size: 11.5px;
+      }
+      .inventory-delivery-plan-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(140px, 0.7fr);
+        gap: 12px;
+      }
+      .inventory-delivery-estimate {
+        display: flex;
+        justify-content: center;
+        flex-direction: column;
+        padding: 8px 10px;
+        border: 1px solid #eaecf0;
+        border-radius: 8px;
+        background: #f9fafb;
+      }
+      .inventory-delivery-estimate span {
+        color: #667085;
+        font-size: 9.5px;
+        font-weight: 750;
+        text-transform: uppercase;
+      }
+      .inventory-delivery-estimate strong {
+        color: var(--text-primary);
+        font-size: 13px;
+      }
+      .inventory-delivery-estimate small {
+        margin-top: 2px;
+        color: #667085;
+        font-size: 9.5px;
+      }
     </style>
   </head>
   <body>
@@ -711,13 +812,18 @@
                 <p style="margin:4px 0 0;color:var(--text-secondary);font-size:12.5px;">Review requested items from BHC midwives, approve requested quotas, and dispatch central warehouse batches.</p>
               </div>
               <div class="filter-group">
-                <select class="form-select" id="request-filter-status" style="width:auto;">
+                <select class="form-select" id="request-filter-status" style="width:auto;" onchange="renderStockRequests()">
                   <option value="">All Request Statuses</option>
                   <option value="pending">Pending</option>
                   <option value="approved">Approved</option>
                   <option value="issued">Issued</option>
                   <option value="received">Received</option>
                   <option value="rejected">Rejected</option>
+                </select>
+                <select class="form-select" id="requests-filter-archived" style="width:auto;" onchange="renderStockRequests()">
+                  <option value="active">Active Requests Only</option>
+                  <option value="archived">Archived Requests Only</option>
+                  <option value="all">All Requests</option>
                 </select>
                 <button class="btn btn-secondary btn-sm" id="refresh-requests-btn" onclick="loadInventoryData()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
               </div>
@@ -1216,7 +1322,7 @@
 
     <!-- Modal 5: Issue Stock to BHC -->
     <div class="modal-overlay" id="modal-issue">
-      <div class="modal" style="max-width: 500px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
+      <div class="modal" style="max-width: 580px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
         <div class="modal-header" style="padding: 18px 24px 14px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
           <h2 class="modal-title" style="font-size: 16px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-truck-ramp-box" style="color:#8b5cf6;"></i> Issue Stock to BHC</h2>
           <button class="modal-close" onclick="closeModal('modal-issue')"><i class="fa-solid fa-xmark"></i></button>
@@ -1226,25 +1332,54 @@
           <form id="form-issue" onsubmit="return false;">
             <input type="hidden" id="issue-request-id" />
             <div id="issue-request-context" style="display:none; margin-bottom:14px; padding:10px 14px; border-radius:8px; background:#f8fafc; border:1px solid #e2e8f0; font-size:12.5px; color:#1e293b;"></div>
+            
             <div class="form-group" style="margin-bottom: 14px;">
               <label class="form-label" for="issue-source-batch" style="font-weight: 600; font-size: 12.5px;">Select Source Batch (Central Warehouse) <span class="req" style="color:#dc2626;">*</span></label>
               <select class="form-select" id="issue-source-batch" required style="width:100%; border-radius: 8px;">
                 <option value="">— Select Central Batch —</option>
               </select>
             </div>
-            <div class="form-group" style="margin-bottom: 14px;">
-              <label class="form-label" for="issue-target-bhc" style="font-weight: 600; font-size: 12.5px;">Destination Barangay Health Center (BHC) <span class="req" style="color:#dc2626;">*</span></label>
-              <select class="form-select" id="issue-target-bhc" required style="width:100%; border-radius: 8px;">
-                <option value="">— Select Target BHC —</option>
-              </select>
-            </div>
-            <div class="form-row" style="display:flex; gap:12px; margin-bottom: 14px;">
-              <div class="form-group" style="flex:1;">
+            
+            <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label" for="issue-target-bhc" style="font-weight: 600; font-size: 12.5px;">Destination BHC <span class="req" style="color:#dc2626;">*</span></label>
+                <select class="form-select" id="issue-target-bhc" required style="width:100%; border-radius: 8px;" onchange="applySuggestedDeliveryEstimate(true)">
+                  <option value="">— Select Target BHC —</option>
+                </select>
+              </div>
+              <div class="form-group">
                 <label class="form-label" for="issue-qty" style="font-weight: 600; font-size: 12.5px;">Quantity to Issue <span class="req" style="color:#dc2626;">*</span></label>
-                <input class="form-control" type="number" id="issue-qty" min="1" placeholder="e.g. 20" required style="width:100%; border-radius: 8px;" />
+                <input class="form-control" type="number" id="issue-qty" min="1" placeholder="e.g. 20" required style="width:100%; border-radius: 8px;" oninput="updateIssueSafetyCheck()" />
               </div>
             </div>
-            <div class="form-group" style="margin-bottom: 0;">
+
+            <div class="inventory-delivery-plan-grid" style="margin-bottom:14px;">
+              <div class="form-group">
+                <label class="form-label" for="issue-expected-date" style="font-weight: 600; font-size: 12.5px;">Expected Arrival Date <span class="req" style="color:#dc2626;">*</span></label>
+                <input class="form-control" type="date" id="issue-expected-date" required style="border-radius: 8px;" onchange="updateIssueSafetyCheck()" />
+                <span class="form-hint" id="issue-delivery-source" style="font-size:11px; color:var(--text-secondary); margin-top:3px; display:block;">Select agreed arrival date.</span>
+              </div>
+              <div class="inventory-delivery-estimate">
+                <span>Expected Arrival</span>
+                <strong id="issue-expected-arrival">—</strong>
+                <small id="issue-delivery-duration-copy">Choose date to estimate duration.</small>
+              </div>
+            </div>
+
+            <section class="inventory-safety-card is-empty" id="issue-safety-check">
+              <div class="inventory-safety-head">
+                <div>
+                  <span class="inventory-safety-eyebrow">Before Sending</span>
+                  <h3 id="issue-safety-title" style="font-size:13px; font-weight:700;">Delivery & Expiry Check</h3>
+                </div>
+                <span class="inventory-status neutral" id="issue-safety-status"><i class="fa-solid fa-list-check"></i> Waiting for details</span>
+              </div>
+              <p id="issue-safety-message" style="margin:6px 0 0; font-size:11.5px;">Select batch, destination, quantity, and arrival date to run automated safety check.</p>
+              <div class="inventory-safety-metrics" id="issue-safety-metrics" style="display:none;"></div>
+              <div class="inventory-process-line" id="issue-process-line" style="display:none;"></div>
+            </section>
+
+            <div class="form-group" style="margin-top: 14px; margin-bottom: 0;">
               <label class="form-label" for="issue-reference" style="font-weight: 600; font-size: 12.5px;">Reference / Remarks</label>
               <input class="form-control" type="text" id="issue-reference" placeholder="e.g. Monthly allocation for BHC" style="width:100%; border-radius: 8px;" />
             </div>
@@ -1533,11 +1668,347 @@
 
         // Batch Expiry Check
         function isBatchExpired(b) {
-          if (!b.expiration_date) return false;
+          if (!b || !b.expiration_date) return false;
           const exp = new Date(b.expiration_date); exp.setHours(0,0,0,0);
           const today = new Date(); today.setHours(0,0,0,0);
           return exp <= today;
         }
+
+        function daysUntil(dateValue) {
+          if (!dateValue) return Infinity;
+          const target = new Date(dateValue); target.setHours(0,0,0,0);
+          const today = new Date(); today.setHours(0,0,0,0);
+          return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+        }
+
+        function asLocalDate(dateValue) {
+          if (!dateValue) return null;
+          if (dateValue instanceof Date) return dateValue;
+          const dateStr = String(dateValue).split("T")[0];
+          const parts = dateStr.split("-");
+          if (parts.length !== 3) return null;
+          return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        }
+
+        function addLocalDays(dateValue, days) {
+          const base = asLocalDate(dateValue) || new Date();
+          const d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+          d.setDate(d.getDate() + Number(days || 0));
+          return d;
+        }
+
+        function calendarDaysBetween(startValue, endValue) {
+          const start = asLocalDate(startValue);
+          const end = asLocalDate(endValue);
+          if (!start || !end) return null;
+          start.setHours(0,0,0,0);
+          end.setHours(0,0,0,0);
+          return Math.round((end - start) / (1000 * 60 * 60 * 24));
+        }
+
+        function durationLabel(days) {
+          if (days === null || days === undefined) return "—";
+          if (days === 0) return "Same-day";
+          if (days === 1) return "1 day";
+          return `${days} days`;
+        }
+
+        function formatShortDate(dateValue) {
+          const d = asLocalDate(dateValue);
+          if (!d) return "—";
+          return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+        }
+
+        function isUsableBatch(batch) {
+          if (!batch || batch.status !== "active" || isBatchExpired(batch)) return false;
+          return Number(batch.quantity_remaining || 0) > 0;
+        }
+
+        function batchMatchesFacility(batch, facilityFilter) {
+          if (!facilityFilter || facilityFilter === "all" || facilityFilter === "") return true;
+          if (facilityFilter === "central") {
+            return batch.facility_id === null || batch.facility_id === 0 || batch.facility_id === undefined || String(batch.facility_id) === "null";
+          }
+          return String(batch.facility_id) === String(facilityFilter);
+        }
+
+        function getItemBatches(itemId, facilityFilter = "all") {
+          return batches.filter(batch => batch.item_id === itemId && batchMatchesFacility(batch, facilityFilter));
+        }
+
+        function getNearestUsableBatch(itemId, facilityFilter = "all") {
+          return getItemBatches(itemId, facilityFilter)
+            .filter(isUsableBatch)
+            .sort((a, b) => String(a.expiration_date || "9999-12-31").localeCompare(String(b.expiration_date || "9999-12-31")))[0] || null;
+        }
+
+        function calculateFacilityUsableStock(itemId, facilityId) {
+          return batches
+            .filter(batch =>
+              batch.item_id === itemId &&
+              isUsableBatch(batch) &&
+              String(batch.facility_id) === String(facilityId)
+            )
+            .reduce((sum, batch) => sum + Number(batch.quantity_remaining || 0), 0);
+        }
+
+        function isTransferInTransit(transfer) {
+          return !["received", "cancelled", "returned"].includes(String(transfer?.status || "").toLowerCase());
+        }
+
+        function calculateInTransitPerItem(itemId, facilityId) {
+          if (!facilityId || facilityId === "central") return 0;
+          return (inventoryTransfers || [])
+            .filter(transfer => {
+              if (!isTransferInTransit(transfer)) return false;
+              if (String(transfer.destination_facility_id) !== String(facilityId)) return false;
+              const source = batches.find(batch => batch.batch_id === transfer.source_batch_id);
+              return source?.item_id === itemId;
+            })
+            .reduce((sum, transfer) => sum + Number(transfer.quantity_issued || 0), 0);
+        }
+
+        function getHistoricalDeliveryEstimate(facilityId) {
+          const samples = (inventoryTransfers || [])
+            .filter(transfer =>
+              transfer.status === "received" &&
+              String(transfer.destination_facility_id) === String(facilityId) &&
+              transfer.issued_at && transfer.received_at
+            )
+            .map(transfer => calendarDaysBetween(transfer.issued_at, transfer.received_at))
+            .filter(days => days !== null && days >= 0)
+            .sort((a, b) => a - b);
+
+          if (samples.length < 3) return { available: false, samples: samples.length };
+          const middle = Math.floor(samples.length / 2);
+          const median = samples.length % 2
+            ? samples[middle]
+            : Math.round((samples[middle - 1] + samples[middle]) / 2);
+          return { available: true, days: median, samples: samples.length };
+        }
+
+        function applySuggestedDeliveryEstimate(force = false) {
+          const facilityId = document.getElementById("issue-target-bhc")?.value;
+          const input = document.getElementById("issue-expected-date");
+          const hint = document.getElementById("issue-delivery-source");
+          if (!input || !hint) return;
+
+          input.min = localDateKey();
+          if (!facilityId) {
+            input.dataset.estimateSource = "";
+            hint.textContent = "Select destination and choose agreed arrival date.";
+            updateIssueSafetyCheck();
+            return;
+          }
+
+          const estimate = getHistoricalDeliveryEstimate(facilityId);
+          if (estimate.available) {
+            if (!input.value || input.dataset.estimateSource === "history" || force) {
+              input.value = localDateKey(addLocalDays(new Date(), estimate.days));
+              input.dataset.estimateSource = "history";
+            }
+            hint.textContent = `Suggested arrival from ${estimate.samples} completed deliveries (${estimate.days} days avg).`;
+          } else {
+            const historyCopy = estimate.samples
+              ? `Only ${estimate.samples} completed deliver${estimate.samples === 1 ? "y" : "ies"} recorded.`
+              : "No delivery history recorded for this BHC yet.";
+            hint.textContent = `${historyCopy} Select agreed arrival date.`;
+          }
+          updateIssueSafetyCheck();
+        }
+
+        function resetIssueSafetyCheck() {
+          const card = document.getElementById("issue-safety-check");
+          const status = document.getElementById("issue-safety-status");
+          if (!card || !status) return;
+          card.className = "inventory-safety-card is-empty";
+          status.className = "inventory-status neutral";
+          status.innerHTML = '<i class="fa-solid fa-list-check"></i> Waiting for details';
+          const title = document.getElementById("issue-safety-title");
+          if (title) title.textContent = "Delivery & Expiry Check";
+          const msg = document.getElementById("issue-safety-message");
+          if (msg) msg.textContent = "Select batch, destination, quantity, and arrival date to run automated safety check.";
+          const metrics = document.getElementById("issue-safety-metrics");
+          if (metrics) { metrics.style.display = "none"; metrics.innerHTML = ""; }
+          const procLine = document.getElementById("issue-process-line");
+          if (procLine) { procLine.style.display = "none"; procLine.innerHTML = ""; }
+          const saveBtn = document.getElementById("save-issue-btn");
+          if (saveBtn) { saveBtn.disabled = false; saveBtn.dataset.safetyBlocked = "false"; }
+        }
+
+        function updateIssueSafetyCheck() {
+          const batchId = Number(document.getElementById("issue-source-batch")?.value);
+          const facilityId = document.getElementById("issue-target-bhc")?.value;
+          const quantity = Number(document.getElementById("issue-qty")?.value);
+          const expectedDateVal = document.getElementById("issue-expected-date")?.value;
+          const selectedArrival = asLocalDate(expectedDateVal);
+          const deliveryDays = selectedArrival ? calendarDaysBetween(new Date(), selectedArrival) : null;
+
+          const expectedArrivalEl = document.getElementById("issue-expected-arrival");
+          if (expectedArrivalEl) expectedArrivalEl.textContent = selectedArrival ? formatShortDate(selectedArrival) : "—";
+          const durationCopy = document.getElementById("issue-delivery-duration-copy");
+          if (durationCopy) {
+            durationCopy.textContent = selectedArrival && deliveryDays !== null && deliveryDays >= 0
+              ? `${durationLabel(deliveryDays)} from today`
+              : "Choose date to estimate duration.";
+          }
+
+          const sourceBatch = (batches || []).find(b => Number(b.batch_id) === batchId);
+          if (!sourceBatch || !facilityId || !Number.isFinite(quantity) || quantity <= 0 || !selectedArrival) {
+            resetIssueSafetyCheck();
+            return;
+          }
+
+          const item = (items || []).find(i => Number(i.item_id) === Number(sourceBatch.item_id));
+          const requestId = Number(document.getElementById("issue-request-id")?.value);
+          const request = requestId ? (stockRequests || []).find(r => Number(r.request_id) === requestId) : null;
+
+          const quantityConflict = quantity > Number(sourceBatch.quantity_remaining || 0);
+          const requestConflict = Boolean(request && (
+            String(request.item_id) !== String(sourceBatch.item_id) ||
+            String(request.facility_id) !== String(facilityId)
+          ));
+          const shelfLifeAtArrival = calendarDaysBetween(selectedArrival, sourceBatch.expiration_date);
+          const destinationStock = calculateFacilityUsableStock(sourceBatch.item_id, facilityId);
+          const existingIncoming = calculateInTransitPerItem(sourceBatch.item_id, String(facilityId));
+          const expectedStockAfterReceipt = destinationStock + existingIncoming + quantity;
+
+          const expiryConflict = shelfLifeAtArrival === null || shelfLifeAtArrival <= 0;
+          const warnings = [];
+          if (!expiryConflict && shelfLifeAtArrival <= 30) {
+            warnings.push(`Only ${shelfLifeAtArrival} days of shelf life will remain upon arrival. Consider selecting a later-expiring batch.`);
+          }
+          if (destinationStock === 0 && deliveryDays > 0) {
+            warnings.push(`Destination BHC currently has 0 usable stock. Confirm whether transit time should be expedited.`);
+          }
+
+          const card = document.getElementById("issue-safety-check");
+          const status = document.getElementById("issue-safety-status");
+          const title = document.getElementById("issue-safety-title");
+          const message = document.getElementById("issue-safety-message");
+          const metricsEl = document.getElementById("issue-safety-metrics");
+          const saveBtn = document.getElementById("save-issue-btn");
+
+          if (!card || !status || !title || !message || !saveBtn) return;
+
+          if (quantityConflict || requestConflict) {
+            card.className = "inventory-safety-card is-critical";
+            status.className = "inventory-status critical";
+            status.innerHTML = '<i class="fa-solid fa-ban"></i> Fix details';
+            title.textContent = quantityConflict ? "Quantity exceeds available batch stock" : "Batch item does not match request";
+            message.textContent = quantityConflict
+              ? `Batch has ${sourceBatch.quantity_remaining} ${item?.unit_of_measure || "units"} available, but ${quantity} entered.`
+              : `Stock request #${requestId} was for ${item?.name || 'requested item'}. Selected batch item must match request.`;
+            saveBtn.disabled = true;
+            saveBtn.dataset.safetyBlocked = "true";
+          } else if (expiryConflict) {
+            card.className = "inventory-safety-card is-critical";
+            status.className = "inventory-status critical";
+            status.innerHTML = '<i class="fa-solid fa-ban"></i> Expiry Warning';
+            title.textContent = "Batch will expire before expected arrival date";
+            message.textContent = `Expected arrival is ${formatShortDate(selectedArrival)}, but batch expires ${formatShortDate(sourceBatch.expiration_date)}.`;
+            saveBtn.disabled = true;
+            saveBtn.dataset.safetyBlocked = "true";
+          } else if (warnings.length > 0) {
+            card.className = "inventory-safety-card is-warning";
+            status.className = "inventory-status warning";
+            status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Review before issuing';
+            title.textContent = "Delivery & Expiry Warning";
+            message.textContent = warnings.join(" ");
+            saveBtn.disabled = false;
+            saveBtn.dataset.safetyBlocked = "false";
+          } else {
+            card.className = "inventory-safety-card is-safe";
+            status.className = "inventory-status success";
+            status.innerHTML = '<i class="fa-solid fa-circle-check"></i> Safe to transfer';
+            title.textContent = "Valid delivery and shelf-life check";
+            message.textContent = `Batch will arrive with ${shelfLifeAtArrival} days of shelf-life remaining. Destination stock will increase to ${expectedStockAfterReceipt} ${item?.unit_of_measure || 'units'}.`;
+            saveBtn.disabled = false;
+            saveBtn.dataset.safetyBlocked = "false";
+          }
+
+          if (metricsEl) {
+            metricsEl.style.display = "grid";
+            metricsEl.innerHTML = `
+              <div class="inventory-safety-metric">
+                <span>Transit Time</span>
+                <strong>${durationLabel(deliveryDays)}</strong>
+              </div>
+              <div class="inventory-safety-metric">
+                <span>Shelf Life @ Receipt</span>
+                <strong style="color:${shelfLifeAtArrival <= 30 ? '#d97706' : '#059669'}">${shelfLifeAtArrival !== null ? `${shelfLifeAtArrival} days` : '—'}</strong>
+              </div>
+              <div class="inventory-safety-metric">
+                <span>BHC Current Stock</span>
+                <strong>${destinationStock} ${item?.unit_of_measure || ''}</strong>
+              </div>
+              <div class="inventory-safety-metric">
+                <span>Expected Total</span>
+                <strong>${expectedStockAfterReceipt} ${item?.unit_of_measure || ''}</strong>
+              </div>
+            `;
+          }
+        }
+
+        function buildTransferTiming(transfer, sourceBatch) {
+          const expirationDate = sourceBatch?.expiration_date || null;
+          let planExpectedDate = null;
+
+          if (transfer.remarks && transfer.remarks.includes("Expected delivery:")) {
+            const match = transfer.remarks.match(/Expected delivery:\s*([\d]{4}-[\d]{2}-[\d]{2})/);
+            if (match) planExpectedDate = match[1];
+          }
+
+          if (transfer.status === "received" && transfer.issued_at && transfer.received_at) {
+            const actualDays = calendarDaysBetween(transfer.issued_at, transfer.received_at);
+            const shelfAtReceipt = expirationDate ? calendarDaysBetween(transfer.received_at, expirationDate) : null;
+            const tone = shelfAtReceipt !== null && shelfAtReceipt <= 0 ? "danger" : (shelfAtReceipt !== null && shelfAtReceipt <= 30 ? "warning" : "success");
+            const shelfCopy = shelfAtReceipt === null ? "" : (shelfAtReceipt <= 0 ? "Expired at receipt" : `${shelfAtReceipt}d shelf life at receipt`);
+            return `
+              <div class="inventory-transfer-timing" style="font-size:11px;">
+                <span class="badge-health-${tone}" style="padding:1px 6px;font-size:10px;"><i class="fa-solid fa-route"></i> ${durationLabel(actualDays)} delivery</span>
+                ${shelfCopy ? `<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">${esc(shelfCopy)}</div>` : ''}
+              </div>`;
+          }
+
+          if (planExpectedDate) {
+            const shelfAtArrival = expirationDate ? calendarDaysBetween(planExpectedDate, expirationDate) : null;
+            const daysPastPlan = calendarDaysBetween(planExpectedDate, new Date());
+            const overdue = transfer.status !== "cancelled" && daysPastPlan !== null && daysPastPlan > 0;
+            const tone = shelfAtArrival !== null && shelfAtArrival <= 0 ? "danger" : (overdue || (shelfAtArrival !== null && shelfAtArrival <= 30) ? "warning" : "info");
+            const label = shelfAtArrival !== null && shelfAtArrival <= 0 ? "Expiry conflict" : (overdue ? `${daysPastPlan}d overdue` : `Expected ${formatShortDate(planExpectedDate)}`);
+            return `
+              <div class="inventory-transfer-timing" style="font-size:11px;">
+                <span class="badge-health-${tone === 'info' ? 'warning' : tone}" style="padding:1px 6px;font-size:10px;"><i class="fa-solid fa-clock"></i> ${esc(label)}</span>
+              </div>`;
+          }
+
+          return '—';
+        }
+
+        // Global Request Archive/Unarchive Handlers
+        window.archiveStockRequest = async function(requestId) {
+          if (!confirm(`Are you sure you want to archive stock request #${requestId}?`)) return;
+          try {
+            const { error } = await db.from("stock_requests").update({ is_archived: true }).eq("request_id", requestId);
+            if (error) throw error;
+            showToast(`Archived stock request #${requestId}`, "success");
+            await loadInventoryData();
+          } catch (err) {
+            showToast("Failed to archive request: " + err.message, "error");
+          }
+        };
+
+        window.unarchiveStockRequest = async function(requestId) {
+          try {
+            const { error } = await db.from("stock_requests").update({ is_archived: false }).eq("request_id", requestId);
+            if (error) throw error;
+            showToast(`Restored stock request #${requestId}`, "success");
+            await loadInventoryData();
+          } catch (err) {
+            showToast("Failed to restore request: " + err.message, "error");
+          }
+        };
 
         // Calculate Stock Metrics per Item & Facility Filter
         function getItemStockMetrics(itemId, facilityFilter) {
@@ -1987,14 +2458,22 @@
             const countdownBadge = getExpiryCountdownBadge(b.expiration_date, b.status);
 
             let locName = "Central Warehouse";
+            let locFilter = "central";
             if (b.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
               locName = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
+              locFilter = String(b.facility_id);
             }
+
+            const nearestUsable = getNearestUsableBatch(b.item_id, locFilter);
+            const isFefoFirst = nearestUsable && b.batch_id === nearestUsable.batch_id;
 
             return `
               <tr>
-                <td><strong style="font-family:monospace;">${esc(b.batch_number)}</strong></td>
+                <td>
+                  <strong style="font-family:monospace;">${esc(b.batch_number)}</strong>
+                  ${isFefoFirst ? `<span class="badge-health-success" style="font-size:9.5px;padding:1px 5px;margin-left:4px;" title="Earliest expiring usable batch (FEFO)"><i class="fa-solid fa-star"></i> Use First</span>` : ''}
+                </td>
                 <td class="col-item-details">
                   <div style="display:flex;align-items:center;gap:4px;">
                     <strong style="color:var(--text-primary);cursor:pointer;" onclick="openItemDetails(${b.item_id})">${esc(item ? item.name : 'Unknown Item')}</strong>
@@ -2117,7 +2596,14 @@
         // Render Stock Requests Table
         function renderStockRequests() {
           const statusFilter = document.getElementById("request-filter-status")?.value || "";
-          const filtered = stockRequests.filter(r => !statusFilter || r.status === statusFilter);
+          const archivedFilter = document.getElementById("requests-filter-archived")?.value || "active";
+
+          const filtered = stockRequests.filter(r => {
+            if (statusFilter && r.status !== statusFilter) return false;
+            if (archivedFilter === "active" && r.is_archived) return false;
+            if (archivedFilter === "archived" && !r.is_archived) return false;
+            return true;
+          });
 
           const tbody = document.getElementById("requests-tbody");
           if (!tbody) return;
@@ -2141,27 +2627,35 @@
             const bhc = bhcs.find(b => String(b.bhc_id) === String(request.facility_id));
             const requester = accountMap[request.requested_by] || `Account #${request.requested_by}`;
             const submitted = request.created_at ? new Date(request.created_at).toLocaleString("en-PH") : "—";
+            
+            const archiveBtn = request.is_archived
+              ? `<button class="btn btn-xs btn-outline-pink" onclick="unarchiveStockRequest(${request.request_id})" style="padding:2px 6px;font-size:10.5px;color:#059669;border-color:#bbf7d0;"><i class="fa-solid fa-rotate-left"></i> Restore</button>`
+              : (['received', 'completed', 'rejected', 'issued'].includes(request.status) ? `<button class="btn btn-xs btn-secondary" onclick="archiveStockRequest(${request.request_id})" title="Archive Request" style="padding:2px 6px;font-size:10.5px;color:#dc2626;"><i class="fa-solid fa-box-archive"></i></button>` : '');
+
             let actions = "—";
-            if (request.status === "pending") {
+            if (request.status === "pending" && !request.is_archived) {
               actions = `
                 <div style="display:flex;justify-content:center;gap:3px;flex-wrap:nowrap;">
                   <button class="btn btn-xs btn-primary" onclick="openApproveModal(${request.request_id})" style="padding:2px 8px;font-size:11px;border-radius:5px;"><i class="fa-solid fa-check"></i> Approve</button>
                   <button class="btn btn-xs btn-secondary" onclick="rejectStockRequest(${request.request_id})" style="padding:2px 8px;font-size:11px;border-radius:5px;color:#dc2626;border-color:#fca5a5;"><i class="fa-solid fa-xmark"></i> Reject</button>
                 </div>`;
-            } else if (request.status === "approved") {
+            } else if (request.status === "approved" && !request.is_archived) {
               actions = `<button class="btn btn-xs btn-primary" onclick="openIssueForRequest(${request.request_id})" style="padding:2px 10px;font-size:11px;border-radius:5px;white-space:nowrap;"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock</button>`;
-            } else if (request.status === "issued") {
-              actions = '<span style="font-size:11px;color:var(--brand-primary);font-weight:600;"><i class="fa-solid fa-hourglass-half"></i> In-Transit</span>';
+            } else if (request.status === "issued" && !request.is_archived) {
+              actions = `<div style="display:flex;align-items:center;justify-content:center;gap:4px;"><span style="font-size:11px;color:var(--brand-primary);font-weight:600;"><i class="fa-solid fa-hourglass-half"></i> In-Transit</span> ${archiveBtn}</div>`;
+            } else {
+              actions = archiveBtn || "—";
             }
 
             let statusBadge = `<span class="badge-health-warning"><i class="fa-solid fa-clock"></i> Pending</span>`;
-            if (request.status === 'approved') statusBadge = `<span class="badge-health-success"><i class="fa-solid fa-check"></i> Approved</span>`;
-            if (request.status === 'issued') statusBadge = `<span class="badge-health-warning"><i class="fa-solid fa-truck"></i> Issued</span>`;
-            if (request.status === 'received' || request.status === 'completed') statusBadge = `<span class="badge-health-success"><i class="fa-solid fa-circle-check"></i> Received</span>`;
-            if (request.status === 'rejected') statusBadge = `<span class="badge-health-danger"><i class="fa-solid fa-xmark"></i> Rejected</span>`;
+            if (request.is_archived) statusBadge = `<span class="badge-health-muted"><i class="fa-solid fa-box-archive"></i> Archived</span>`;
+            else if (request.status === 'approved') statusBadge = `<span class="badge-health-success"><i class="fa-solid fa-check"></i> Approved</span>`;
+            else if (request.status === 'issued') statusBadge = `<span class="badge-health-warning"><i class="fa-solid fa-truck"></i> Issued</span>`;
+            else if (request.status === 'received' || request.status === 'completed') statusBadge = `<span class="badge-health-success"><i class="fa-solid fa-circle-check"></i> Received</span>`;
+            else if (request.status === 'rejected') statusBadge = `<span class="badge-health-danger"><i class="fa-solid fa-xmark"></i> Rejected</span>`;
 
             return `
-              <tr>
+              <tr style="${request.is_archived ? 'opacity:0.75;background:#fafafa;' : ''}">
                 <td><strong>#${request.request_id}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${submitted}</div></td>
                 <td><strong>${esc(bhc?.bhc_name || `BHC #${request.facility_id}`)}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${esc(requester)}</div></td>
                 <td class="col-item-details">
@@ -2209,7 +2703,8 @@
             const bhc = bhcs.find(b => String(b.bhc_id) === String(transfer.destination_facility_id));
             const issued = transfer.issued_at ? new Date(transfer.issued_at).toLocaleString("en-PH") : "—";
             const received = transfer.received_at ? new Date(transfer.received_at).toLocaleString("en-PH") : null;
-            
+            const timingBadge = buildTransferTiming(transfer, source);
+
             let status = transfer.status === "received"
               ? `<span class="badge-health-success"><i class="fa-solid fa-circle-check"></i> Received</span>${received ? `<div style="font-size:10.5px;color:var(--text-secondary);margin-top:4px;">${received}</div>` : ''}`
               : transfer.status === "cancelled"
@@ -2234,7 +2729,7 @@
                   <div style="font-size:10px;color:var(--text-secondary);font-family:monospace;">Batch: ${esc(source?.batch_number || `#${transfer.source_batch_id}`)}</div>
                 </td>
                 <td style="text-align:right;font-weight:700;">${transfer.quantity_issued}</td>
-                <td style="text-align:center;">${status}</td>
+                <td style="text-align:center;">${status}<div style="margin-top:4px;">${timingBadge}</div></td>
                 <td><div>${esc(transfer.remarks || '—')}</div>${actionBtn !== '—' ? `<div style="margin-top:6px;">${actionBtn}</div>` : ''}</td>
               </tr>`;
           }).join("");
@@ -3022,11 +3517,15 @@
             if (alertEl) alertEl.style.display = "none";
 
             ensureBhcDropdownPopulated();
-            if (targetBhcId) {
-              const bhcSel = document.getElementById("issue-target-bhc");
-              if (bhcSel) bhcSel.value = targetBhcId;
+            const bhcSel = document.getElementById("issue-target-bhc");
+            if (bhcSel) {
+              bhcSel.disabled = false;
+              bhcSel.style.background = "";
+              if (targetBhcId) bhcSel.value = targetBhcId;
             }
             populateIssueBatchDropdown(null);
+            applySuggestedDeliveryEstimate(true);
+            resetIssueSafetyCheck();
           } catch (err) {
             console.error("Error setting up general issue modal:", err);
           }
@@ -3053,9 +3552,11 @@
             const bhcSel = document.getElementById("issue-target-bhc");
             if (bhcSel) {
               bhcSel.value = request.facility_id;
+              bhcSel.disabled = true;
+              bhcSel.style.background = "#f8fafc";
             }
 
-            // Filter issue batch dropdown to ONLY batches matching the requested item
+            // Filter issue batch dropdown strictly to ONLY batches matching the requested item
             populateIssueBatchDropdown(request.item_id);
 
             const centralBatches = (batches || []).filter(b =>
@@ -3068,6 +3569,7 @@
 
             if (centralBatches.length === 0) {
               showToast(`No active central warehouse batches available for ${item?.name || 'requested item'}.`, "warning");
+              resetIssueSafetyCheck();
               return;
             }
 
@@ -3084,16 +3586,22 @@
             const qtyInput = document.getElementById("issue-qty");
             if (qtyInput) qtyInput.value = fulfilQty;
 
+            const bhcObj = (bhcs || []).find(b => String(b.bhc_id) === String(request.facility_id));
+            const bhcName = bhcObj ? bhcObj.bhc_name : `BHC #${request.facility_id}`;
+
             const context = document.getElementById("issue-request-context");
             if (context) {
               const partialNote = request.approved_quantity != null && request.approved_quantity !== request.requested_quantity
                 ? ` (partially approved from ${request.requested_quantity})`
                 : "";
-              context.innerHTML = `<i class="fa-solid fa-clipboard-check" style="color:#8b5cf6;margin-right:6px;"></i> Fulfilling Request #${requestId}: <strong>${fulfilQty} ${esc(item?.unit_of_measure || 'units')}</strong> of <strong>${esc(item?.name || 'item')}</strong>${partialNote}.`;
+              context.innerHTML = `<i class="fa-solid fa-clipboard-check" style="color:#8b5cf6;margin-right:6px;"></i> Fulfilling Request #${requestId}: <strong>${fulfilQty} ${esc(item?.unit_of_measure || 'units')}</strong> of <strong>${esc(item?.name || 'item')}</strong> for <strong>${esc(bhcName)}</strong>${partialNote}.`;
               context.style.display = "block";
             }
             const alertEl = document.getElementById("issue-form-alert");
             if (alertEl) alertEl.style.display = "none";
+
+            applySuggestedDeliveryEstimate(true);
+            updateIssueSafetyCheck();
           } catch (err) {
             console.error("Error setting up issue request modal:", err);
           }
@@ -3612,6 +4120,48 @@
           });
         }
 
+        // Helper to Populate Central Issue Source Batch Dropdown (Supports filtering by item_id for request fulfillment)
+        function populateIssueBatchDropdown(targetItemId = null) {
+          const issueBatchSel = document.getElementById("issue-source-batch");
+          if (!issueBatchSel) return;
+
+          const centralActiveBatches = batches.filter(b => {
+            if (b.status !== 'active' || isBatchExpired(b) || b.quantity_remaining <= 0) return false;
+            if (b.facility_id !== null && b.facility_id !== 0 && b.facility_id !== undefined && String(b.facility_id) !== "null") return false;
+            const parentItem = items.find(i => String(i.item_id) === String(b.item_id));
+            if (!parentItem || parentItem.is_archived) return false;
+            if (targetItemId != null && String(b.item_id) !== String(targetItemId)) return false;
+            return true;
+          });
+
+          issueBatchSel.innerHTML = `<option value="">— Select Central Batch —</option>` + centralActiveBatches.map(b => {
+            const item = items.find(i => String(i.item_id) === String(b.item_id));
+            return `<option value="${b.batch_id}">${formatBatchOption(item?.name, b.batch_number, b.quantity_remaining)}</option>`;
+          }).join('');
+
+          const targetItem = targetItemId ? items.find(i => String(i.item_id) === String(targetItemId)) : null;
+
+          const issueOpts = centralActiveBatches.map(b => {
+            const item = items.find(i => String(i.item_id) === String(b.item_id));
+            return {
+              value: b.batch_id,
+              name: item?.name || 'Item',
+              genericName: item?.generic_name || '',
+              batchNo: b.batch_number,
+              qty: b.quantity_remaining,
+              location: 'Central Warehouse',
+              label: `${item?.name || 'Item'} — Batch ${b.batch_number} (${b.quantity_remaining} avail)`,
+              richChipHtml: `<span class="select-chip chip-batch"><i class="fa-solid fa-barcode"></i> Batch ${esc(b.batch_number)}</span> <span class="select-chip chip-qty"><i class="fa-solid fa-boxes-stacked"></i> ${b.quantity_remaining} avail</span>`
+            };
+          });
+          createSearchableSelect({
+            elementId: "issue-source-batch",
+            placeholder: targetItem ? `Search matching ${targetItem.name} batch...` : "Search central batch...",
+            options: issueOpts
+          });
+        }
+        window.populateIssueBatchDropdown = populateIssueBatchDropdown;
+
         // Dropdown Population Helper
         function populateDropdowns() {
           const activeItems = items.filter(i => !i.is_archived);
@@ -3677,47 +4227,6 @@
 
           // 3. Central Issue Batch Select
           populateIssueBatchDropdown(null);
-
-        // Helper to Populate Central Issue Source Batch Dropdown (Supports filtering by item_id for request fulfillment)
-        function populateIssueBatchDropdown(targetItemId = null) {
-          const issueBatchSel = document.getElementById("issue-source-batch");
-          if (!issueBatchSel) return;
-
-          const centralActiveBatches = batches.filter(b => {
-            if (b.status !== 'active' || isBatchExpired(b) || b.quantity_remaining <= 0) return false;
-            if (b.facility_id !== null && b.facility_id !== 0 && b.facility_id !== undefined && String(b.facility_id) !== "null") return false;
-            const parentItem = items.find(i => String(i.item_id) === String(b.item_id));
-            if (!parentItem || parentItem.is_archived) return false;
-            if (targetItemId != null && String(b.item_id) !== String(targetItemId)) return false;
-            return true;
-          });
-
-          issueBatchSel.innerHTML = `<option value="">— Select Central Batch —</option>` + centralActiveBatches.map(b => {
-            const item = items.find(i => String(i.item_id) === String(b.item_id));
-            return `<option value="${b.batch_id}">${formatBatchOption(item?.name, b.batch_number, b.quantity_remaining)}</option>`;
-          }).join('');
-
-          const targetItem = targetItemId ? items.find(i => String(i.item_id) === String(targetItemId)) : null;
-
-          const issueOpts = centralActiveBatches.map(b => {
-            const item = items.find(i => String(i.item_id) === String(b.item_id));
-            return {
-              value: b.batch_id,
-              name: item?.name || 'Item',
-              genericName: item?.generic_name || '',
-              batchNo: b.batch_number,
-              qty: b.quantity_remaining,
-              location: 'Central Warehouse',
-              label: `${item?.name || 'Item'} — Batch ${b.batch_number} (${b.quantity_remaining} avail)`,
-              richChipHtml: `<span class="select-chip chip-batch"><i class="fa-solid fa-barcode"></i> Batch ${esc(b.batch_number)}</span> <span class="select-chip chip-qty"><i class="fa-solid fa-boxes-stacked"></i> ${b.quantity_remaining} avail</span>`
-            };
-          });
-          createSearchableSelect({
-            elementId: "issue-source-batch",
-            placeholder: targetItem ? `Search matching ${targetItem.name} batch...` : "Search central batch...",
-            options: issueOpts
-          });
-        }
 
           // 4. Allocation Item Select
           const allocSel = document.getElementById("allocation-item-select");
@@ -4138,6 +4647,11 @@
           try {
             const targetBhcName = bhcs.find(b => String(b.bhc_id) === String(targetBhcId))?.bhc_name || `BHC #${targetBhcId}`;
             const parsedActorId = parseInt(actorId) || actorId;
+            const expectedDateVal = document.getElementById("issue-expected-date")?.value;
+            let combinedRemarks = ref;
+            if (expectedDateVal) {
+              combinedRemarks = `Expected delivery: ${expectedDateVal}.${ref ? ' ' + ref : ''}`;
+            }
 
             let { error: issueError } = await db.rpc("issue_inventory_transfer", {
               p_source_batch_id: sourceBatchId,
@@ -4145,7 +4659,7 @@
               p_quantity: qtyInput,
               p_issued_by: parsedActorId,
               p_request_id: requestId,
-              p_remarks: ref || null
+              p_remarks: combinedRemarks || null
             });
 
             if (issueError && (issueError.code === "PGRST202" || isMissingSchemaError(issueError))) {
@@ -4177,27 +4691,37 @@
         });
 
         // Search & Filter Listeners with Page Reset
-        ["catalog-search", "catalog-filter-type", "catalog-filter-stock"].forEach(id => {
+        ["catalog-search", "catalog-filter-type", "catalog-filter-stock", "catalog-filter-archived"].forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
           const handler = () => { paginationState.catalog.currentPage = 1; renderCatalog(); };
-          document.getElementById(id).addEventListener("input", handler);
-          document.getElementById(id).addEventListener("change", handler);
+          el.addEventListener("input", handler);
+          el.addEventListener("change", handler);
         });
 
         ["batches-search", "batches-filter-status"].forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
           const handler = () => { paginationState.batches.currentPage = 1; renderBatches(); };
-          document.getElementById(id).addEventListener("input", handler);
-          document.getElementById(id).addEventListener("change", handler);
+          el.addEventListener("input", handler);
+          el.addEventListener("change", handler);
         });
 
         ["tx-search", "tx-filter-type"].forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
           const handler = () => { paginationState.tx.currentPage = 1; renderTransactions(); };
-          document.getElementById(id).addEventListener("input", handler);
-          document.getElementById(id).addEventListener("change", handler);
+          el.addEventListener("input", handler);
+          el.addEventListener("change", handler);
         });
 
-        document.getElementById("request-filter-status").addEventListener("change", () => {
-          paginationState.requests.currentPage = 1;
-          renderStockRequests();
+        ["request-filter-status", "requests-filter-archived"].forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener("change", () => {
+            paginationState.requests.currentPage = 1;
+            renderStockRequests();
+          });
         });
 
         // Initial Page Boot
