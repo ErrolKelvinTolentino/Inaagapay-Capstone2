@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../theme/app_colors.dart';
@@ -26,7 +27,8 @@ class MidwifeInventoryMockPage extends StatefulWidget {
       _MidwifeInventoryMockPageState();
 }
 
-class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
+class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
+    with WidgetsBindingObserver {
   static const double _pullUpRefreshThreshold = 56;
 
   final TextEditingController _stockSearchController = TextEditingController();
@@ -38,6 +40,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
   final List<live.InventoryNotificationRecord> _inventoryNotifications = [];
 
   int _selectedTab = 0;
+  String _stockFilter = 'all';
   bool _isLoading = true;
   bool _isRefreshing = false;
   bool _workflowAvailable = false;
@@ -51,30 +54,66 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
   RealtimeChannel? _notificationChannel;
   Timer? _notificationPollingTimer;
   Timer? _notificationRefreshDebounce;
+  Timer? _facilityRefreshDebounce;
+  Timer? _expiryRolloverTimer;
   int? _notificationAccountId;
+  int? _subscribedFacilityId;
   bool _notificationsInitialized = false;
   bool _notificationRefreshInFlight = false;
   bool _notificationRealtimeConnected = false;
+  bool _inventoryRealtimeConnected = false;
+  bool _stockActivityAvailable = true;
+  String? _stockActivityMessage;
+  RealtimeChannel? _facilityInventoryChannel;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _scheduleExpiryRollover();
     _loadLiveInventory();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_isLoading) {
+      unawaited(_loadLiveInventory(refresh: true));
+      _scheduleExpiryRollover();
+    }
   }
 
   @override
   void dispose() {
     _notificationPollingTimer?.cancel();
     _notificationRefreshDebounce?.cancel();
+    _facilityRefreshDebounce?.cancel();
+    _expiryRolloverTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     final notificationChannel = _notificationChannel;
     if (notificationChannel != null) {
       unawaited(_repository.removeRealtimeChannel(notificationChannel));
+    }
+    final facilityChannel = _facilityInventoryChannel;
+    if (facilityChannel != null) {
+      unawaited(_repository.removeRealtimeChannel(facilityChannel));
     }
     _stockSearchController.dispose();
     super.dispose();
   }
 
+  void _scheduleExpiryRollover() {
+    _expiryRolloverTimer?.cancel();
+    final now = DateTime.now();
+    final nextDay = DateTime(now.year, now.month, now.day + 1, 0, 0, 2);
+    _expiryRolloverTimer = Timer(nextDay.difference(now), () {
+      if (!mounted) return;
+      unawaited(_loadLiveInventory(refresh: true));
+      _scheduleExpiryRollover();
+    });
+  }
+
   Future<void> _loadLiveInventory({bool refresh = false}) async {
+    if (refresh && _isRefreshing) return;
     if (mounted) {
       setState(() {
         if (refresh && _inventory.isNotEmpty) {
@@ -99,11 +138,16 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
             (stock) => InventoryItem(
               itemId: stock.catalog.itemId,
               name: stock.catalog.name,
+              genericName: stock.catalog.genericName,
+              itemCode: stock.catalog.itemCode,
+              strengthDescription: stock.catalog.strengthDescription,
+              dosageForm: stock.catalog.dosageForm,
               category: _categoryLabel(stock.catalog.itemType),
               unit: stock.catalog.unit.toLowerCase(),
               quantity: stock.quantity,
               minimumStock: stock.catalog.minimumStock,
               batchNumber: stock.batchLabel,
+              batches: stock.batches,
               icon: _itemIcon(stock.catalog.itemType),
             ),
           )
@@ -212,6 +256,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
         _loadError = null;
       });
       unawaited(_ensureInventoryNotifications(snapshot.context));
+      unawaited(_ensureFacilityInventoryRealtime(snapshot.context));
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -230,19 +275,58 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
     final title = switch (type) {
       'receipt' => 'Stock receipt recorded',
       'dispense' => 'Stock dispensed',
-      'expiry_disposal' => 'Expired stock disposed',
+      'expiry_disposal' => 'Unusable stock reported',
       'adjustment' => 'Stock adjusted',
       _ => isIncoming ? 'Stock added' : 'Stock deducted',
     };
     return InventoryEvent(
       title: title,
       details:
-          '${transaction.quantity > 0 ? '+' : ''}${transaction.quantity} ${transaction.unit.toLowerCase()} • ${transaction.itemName} • ${transaction.batchNumber}',
+          '${transaction.quantity > 0 ? '+' : ''}${transaction.quantity} ${transaction.unit.toLowerCase()} • ${transaction.itemName} • ${transaction.batchNumber}${transaction.referenceType.isEmpty ? '' : ' • ${transaction.referenceType}'}',
       occurredAt: transaction.loggedAt,
-      icon: isIncoming
-          ? Icons.add_circle_outline_rounded
-          : Icons.remove_circle_outline_rounded,
-      color: isIncoming ? AppColors.success : AppColors.info,
+      icon: type == 'expiry_disposal'
+          ? Icons.report_outlined
+          : isIncoming
+              ? Icons.add_circle_outline_rounded
+              : Icons.remove_circle_outline_rounded,
+      color: type == 'expiry_disposal'
+          ? AppColors.error
+          : isIncoming
+              ? AppColors.success
+              : AppColors.info,
+    );
+  }
+
+  Future<void> _ensureFacilityInventoryRealtime(
+    live.MidwifeInventoryContext context,
+  ) async {
+    if (_subscribedFacilityId == context.facilityId &&
+        _facilityInventoryChannel != null) {
+      return;
+    }
+
+    final previousChannel = _facilityInventoryChannel;
+    if (previousChannel != null) {
+      await _repository.removeRealtimeChannel(previousChannel);
+    }
+
+    _subscribedFacilityId = context.facilityId;
+    _inventoryRealtimeConnected = false;
+    _facilityInventoryChannel = _repository.subscribeToFacilityInventory(
+      context: context,
+      onInventoryChanged: () {
+        _facilityRefreshDebounce?.cancel();
+        _facilityRefreshDebounce = Timer(
+          const Duration(milliseconds: 650),
+          () {
+            if (mounted) unawaited(_loadLiveInventory(refresh: true));
+          },
+        );
+      },
+      onConnectionChanged: (connected) {
+        if (!mounted || _subscribedFacilityId != context.facilityId) return;
+        setState(() => _inventoryRealtimeConnected = connected);
+      },
     );
   }
 
@@ -291,6 +375,29 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
 
   List<InventoryItem> get _lowStockItems =>
       _inventory.where((item) => item.isLowStock).toList();
+
+  List<InventoryItem> get _expiryAttentionItems {
+    final items = _inventory
+        .where(
+          (item) => item.expiredQuantity > 0 || item.expiringSoonQuantity > 0,
+        )
+        .toList();
+    items.sort((first, second) {
+      if (first.expiredQuantity != second.expiredQuantity) {
+        return second.expiredQuantity.compareTo(first.expiredQuantity);
+      }
+      final firstDays = first.nearestExpiryDays ?? 999999;
+      final secondDays = second.nearestExpiryDays ?? 999999;
+      return firstDays.compareTo(secondDays);
+    });
+    return items;
+  }
+
+  List<InventoryItem> get _dispensableItems =>
+      _inventory.where((item) => item.quantity > 0).toList();
+
+  List<InventoryItem> get _reportableItems =>
+      _inventory.where((item) => item.reportableBatches.isNotEmpty).toList();
 
   bool _handleInventoryScroll(ScrollNotification notification) {
     if (notification.depth != 0) return false;
@@ -450,6 +557,9 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
       case live.InventoryNotificationKind.issued:
         AppSnackbar.info(context, notification.message);
         break;
+      case live.InventoryNotificationKind.lowStock:
+        AppSnackbar.warning(context, notification.message);
+        break;
     }
 
     _notificationRefreshDebounce?.cancel();
@@ -603,6 +713,10 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
                                     _buildWorkflowBanner(),
                                     const SizedBox(height: 14),
                                   ],
+                                  if (!_stockActivityAvailable) ...[
+                                    _buildStockActivityBanner(),
+                                    const SizedBox(height: 14),
+                                  ],
                                   _buildTabSelector(),
                                   const SizedBox(height: 20),
                                   page!,
@@ -683,6 +797,17 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
       title: 'Request and receipt migration required',
       message: _workflowMessage ??
           'Live stock is connected, but Supabase does not have the request and transfer workflow yet. Writes are disabled to protect inventory totals.',
+    );
+  }
+
+  Widget _buildStockActivityBanner() {
+    return _buildStateBanner(
+      icon: Icons.inventory_outlined,
+      color: AppColors.warning,
+      title: 'Stock activity migration required',
+      message: _stockActivityMessage ??
+          'Run the midwife stock-activity migration in Supabase to enable '
+              'dispensing and unusable-stock reports.',
     );
   }
 
@@ -877,13 +1002,17 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
             const SizedBox(width: 10),
             Expanded(
               child: OverviewInfo(
-                value: _inventory.length,
-                label: 'Catalog\nitems',
-                icon: Icons.medical_information_outlined,
+                value: _expiryAttentionItems.length,
+                label: 'Expiry\nalerts',
+                icon: Icons.event_busy_outlined,
               ),
             ),
           ],
         ),
+        const SizedBox(height: 26),
+        _sectionHeading('TODAY\'S STOCK ACTIONS'),
+        const SizedBox(height: 12),
+        _buildStockActionsCard(),
         const SizedBox(height: 26),
         _sectionHeading('INCOMING FROM RHU MAIN'),
         const SizedBox(height: 12),
@@ -896,6 +1025,22 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
               child: _buildIncomingShipmentCard(shipment),
             ),
           ),
+        const SizedBox(height: 26),
+        _sectionHeading(
+          'EXPIRY ATTENTION',
+          actionLabel: 'Review stock',
+          onAction: () => setState(() => _selectedTab = 1),
+        ),
+        const SizedBox(height: 12),
+        if (_expiryAttentionItems.isEmpty)
+          _buildExpiryClearCard()
+        else
+          ..._expiryAttentionItems.take(2).map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _buildExpiryAttentionCard(item),
+                ),
+              ),
         const SizedBox(height: 26),
         _sectionHeading(
           'LOW-STOCK ATTENTION',
@@ -1108,7 +1253,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
                             child: Text(
                               _lastSyncedAt == null
                                   ? 'RHU issue → Receive → BHC stock update'
-                                  : 'Synced ${_dateTimeLabel(_lastSyncedAt!)}',
+                                  : 'Synced ${_dateTimeLabel(_lastSyncedAt!)}${_inventoryRealtimeConnected ? ' • LIVE' : ''}',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
@@ -1125,6 +1270,261 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildStockActionsCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.bgSecondary,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.account_tree_outlined,
+                  color: AppColors.brandText,
+                  size: 19,
+                ),
+                SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    'Choose an action → confirm the batch → review the new balance. Every movement is shared with RHU Main.',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                      height: 1.4,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildStockActionButton(
+            icon: Icons.medication_liquid_outlined,
+            color: AppColors.brandPrimary,
+            title: 'Dispense stock',
+            subtitle: 'Record medicine or vaccine used during a service.',
+            badge: 'Earliest-expiring batch selected',
+            onTap: _stockActivityAvailable && _dispensableItems.isNotEmpty
+                ? _showDispenseSheet
+                : null,
+          ),
+          const SizedBox(height: 10),
+          _buildStockActionButton(
+            icon: Icons.report_gmailerrorred_rounded,
+            color: AppColors.error,
+            title: 'Report expired / unusable',
+            subtitle: 'Remove affected stock and alert RHU with an audit note.',
+            badge:
+                '${_expiryAttentionItems.length} expiry alert${_expiryAttentionItems.length == 1 ? '' : 's'}',
+            onTap: _stockActivityAvailable && _reportableItems.isNotEmpty
+                ? _showUnusableSheet
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStockActionButton({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required String badge,
+    required VoidCallback? onTap,
+  }) {
+    return Material(
+      color: color.withValues(alpha: 0.07),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withValues(alpha: 0.18)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: onTap == null ? 0.07 : 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  icon,
+                  color: onTap == null ? AppColors.textSecondary : color,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: onTap == null
+                            ? AppColors.textSecondary
+                            : AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.88),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        badge,
+                        style: TextStyle(
+                          color:
+                              onTap == null ? AppColors.textSecondary : color,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: onTap == null ? AppColors.borderPrimary : color,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpiryClearCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(),
+      child: const Row(
+        children: [
+          Icon(Icons.event_available_rounded, color: AppColors.success),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'No active batch expires within the next 90 days.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpiryAttentionCard(InventoryItem item) {
+    final hasExpired = item.expiredQuantity > 0;
+    final color = hasExpired ? AppColors.error : AppColors.warning;
+    final message = hasExpired
+        ? '${item.expiredQuantity} ${item.unit} must not be dispensed'
+        : '${item.expiringSoonQuantity} ${item.unit} expire within 90 days • nearest ${item.nearestExpiryLabel.toLowerCase()}';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+      decoration: _cardDecoration(),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.13),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              hasExpired ? Icons.event_busy_rounded : Icons.timer_outlined,
+              color: color,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  message,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: hasExpired
+                ? _stockActivityAvailable
+                    ? () => _showUnusableSheet(item)
+                    : null
+                : () {
+                    setState(() {
+                      _stockFilter = 'expiring';
+                      _selectedTab = 1;
+                    });
+                  },
+            child: Text(hasExpired ? 'Report' : 'Review'),
+          ),
+        ],
       ),
     );
   }
@@ -1480,20 +1880,38 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
     final query = _stockSearchController.text.trim().toLowerCase();
     final visibleItems = _inventory
         .where(
-          (item) =>
-              item.name.toLowerCase().contains(query) ||
-              item.category.toLowerCase().contains(query) ||
-              item.batchNumber.toLowerCase().contains(query),
-        )
-        .toList()
+      (item) =>
+          item.name.toLowerCase().contains(query) ||
+          item.genericName.toLowerCase().contains(query) ||
+          item.itemCode.toLowerCase().contains(query) ||
+          item.category.toLowerCase().contains(query) ||
+          item.batchNumber.toLowerCase().contains(query),
+    )
+        .where((item) {
+      return switch (_stockFilter) {
+        'expiring' => item.expiringSoonQuantity > 0,
+        'expired' => item.expiredQuantity > 0,
+        'low' => item.isLowStock,
+        _ => true,
+      };
+    }).toList()
       ..sort((first, second) {
+        if (first.expiredQuantity != second.expiredQuantity) {
+          return second.expiredQuantity.compareTo(first.expiredQuantity);
+        }
+        if ((first.expiringSoonQuantity > 0) !=
+            (second.expiringSoonQuantity > 0)) {
+          return first.expiringSoonQuantity > 0 ? -1 : 1;
+        }
         if (first.isLowStock != second.isLowStock) {
           return first.isLowStock ? -1 : 1;
         }
         return first.name.toLowerCase().compareTo(second.name.toLowerCase());
       });
-    final visibleLowStockCount =
-        visibleItems.where((item) => item.isLowStock).length;
+    final expiringCount =
+        _inventory.where((item) => item.expiringSoonQuantity > 0).length;
+    final expiredCount =
+        _inventory.where((item) => item.expiredQuantity > 0).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1509,7 +1927,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
         ),
         const SizedBox(height: 5),
         const Text(
-          'Your on-hand count updates only after you confirm receipt from RHU Main.',
+          'Usable totals exclude expired batches. The earliest-expiring stock is selected first (FEFO).',
           style: TextStyle(
             color: AppColors.textSecondary,
             fontSize: 12,
@@ -1519,7 +1937,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
         const SizedBox(height: 18),
         AppInputField(
           controller: _stockSearchController,
-          hintText: 'Search item, category, or batch',
+          hintText: 'Search item, code, category, or batch',
           leadingIcon: Icons.search_rounded,
           trailingIcon:
               _stockSearchController.text.isEmpty ? null : Icons.close_rounded,
@@ -1528,6 +1946,40 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
             setState(() {});
           },
           onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _buildStockFilterChip(
+                value: 'all',
+                label: 'All stock',
+                icon: Icons.inventory_2_outlined,
+              ),
+              const SizedBox(width: 8),
+              _buildStockFilterChip(
+                value: 'expiring',
+                label: 'Expires ≤90d',
+                icon: Icons.timer_outlined,
+                color: AppColors.warning,
+              ),
+              const SizedBox(width: 8),
+              _buildStockFilterChip(
+                value: 'expired',
+                label: 'Expired',
+                icon: Icons.event_busy_outlined,
+                color: AppColors.error,
+              ),
+              const SizedBox(width: 8),
+              _buildStockFilterChip(
+                value: 'low',
+                label: 'Low stock',
+                icon: Icons.warning_amber_rounded,
+                color: AppColors.warning,
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 18),
         Container(
@@ -1546,8 +1998,9 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
                 child: _InventoryCountLabel(
                   icon: Icons.inventory_2_outlined,
                   value: visibleItems.length,
-                  label: query.isEmpty ? 'Catalog items' : 'Search results',
+                  label: 'Items shown',
                   color: AppColors.brandText,
+                  compact: true,
                 ),
               ),
               Container(
@@ -1557,14 +2010,25 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
               ),
               Expanded(
                 child: _InventoryCountLabel(
-                  icon: visibleLowStockCount == 0
-                      ? Icons.check_circle_outline_rounded
-                      : Icons.warning_amber_rounded,
-                  value: visibleLowStockCount,
-                  label: 'Need attention',
-                  color: visibleLowStockCount == 0
-                      ? AppColors.success
-                      : AppColors.warning,
+                  icon: Icons.timer_outlined,
+                  value: expiringCount,
+                  label: 'Expiring',
+                  color: AppColors.warning,
+                  compact: true,
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 34,
+                color: AppColors.borderPrimary,
+              ),
+              Expanded(
+                child: _InventoryCountLabel(
+                  icon: Icons.event_busy_outlined,
+                  value: expiredCount,
+                  label: 'Expired',
+                  color: AppColors.error,
+                  compact: true,
                 ),
               ),
             ],
@@ -1580,7 +2044,11 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
               child: _buildStockCard(item),
             ),
           ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 12),
+        _sectionHeading('RECENT DISPENSING & UNUSABLE STOCK'),
+        const SizedBox(height: 10),
+        _buildStockOutActivityCard(),
+        const SizedBox(height: 18),
         MainButton(
           label: 'Request stocks from RHU Main',
           leftIcon: Icons.add_shopping_cart_outlined,
@@ -1590,9 +2058,112 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
     );
   }
 
+  Widget _buildStockOutActivityCard() {
+    final activities = _events
+        .where(
+          (event) =>
+              event.title == 'Stock dispensed' ||
+              event.title == 'Unusable stock reported',
+        )
+        .take(5)
+        .toList();
+    if (activities.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: _cardDecoration(),
+        child: const Row(
+          children: [
+            Icon(Icons.history_rounded, color: AppColors.textSecondary),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Dispensing and unusable-stock records will remain visible here.',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          for (int index = 0; index < activities.length; index++) ...[
+            _ActivityTile(
+              event: activities[index],
+              dateLabel: _dateTimeLabel,
+            ),
+            if (index != activities.length - 1)
+              const Padding(
+                padding: EdgeInsets.only(left: 64),
+                child: Divider(height: 1, color: AppColors.borderPrimary),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStockFilterChip({
+    required String value,
+    required String label,
+    required IconData icon,
+    Color color = AppColors.brandPrimary,
+  }) {
+    final selected = _stockFilter == value;
+    final selectedForeground =
+        color == AppColors.warning ? AppColors.textPrimary : Colors.white;
+    return FilterChip(
+      selected: selected,
+      onSelected: (_) => setState(() => _stockFilter = value),
+      avatar: Icon(
+        icon,
+        size: 16,
+        color: selected ? selectedForeground : color,
+      ),
+      label: Text(label),
+      labelStyle: TextStyle(
+        color: selected ? selectedForeground : AppColors.textPrimary,
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+      ),
+      selectedColor: color,
+      backgroundColor: Colors.white,
+      side: BorderSide(
+        color: selected ? color : color.withValues(alpha: 0.25),
+      ),
+      showCheckmark: false,
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+    );
+  }
+
   Widget _buildStockCard(InventoryItem item) {
-    final Color statusColor =
-        item.isLowStock ? AppColors.warning : AppColors.success;
+    final bool hasExpired = item.expiredQuantity > 0;
+    final bool hasExpiring = item.expiringSoonQuantity > 0;
+    final Color statusColor = hasExpired
+        ? AppColors.error
+        : hasExpiring || item.isLowStock
+            ? AppColors.warning
+            : AppColors.success;
+    final String statusLabel = hasExpired
+        ? 'Expiry alert'
+        : item.quantity == 0
+            ? 'Out of stock'
+            : hasExpiring
+                ? 'Expiring'
+                : item.isLowStock
+                    ? 'Low stock'
+                    : 'Available';
     final int shortfall = item.minimumStock - item.quantity;
     final int progressTarget =
         item.minimumStock > 0 ? item.minimumStock * 2 : 1;
@@ -1632,8 +2203,21 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
                       ),
                     ),
                     const SizedBox(height: 3),
+                    if (item.catalogSubtitle.isNotEmpty) ...[
+                      Text(
+                        item.catalogSubtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.brandText,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                    ],
                     Text(
-                      '${item.category} • Batch ${item.batchNumber}',
+                      '${item.category} • ${item.usableBatches.length} usable batch${item.usableBatches.length == 1 ? '' : 'es'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -1645,11 +2229,13 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
                 ),
               ),
               _StatusChip(
-                label: item.isLowStock ? 'Low stock' : 'Available',
+                label: statusLabel,
                 color: statusColor,
-                icon: item.isLowStock
-                    ? Icons.warning_amber_rounded
-                    : Icons.check_circle_rounded,
+                icon: hasExpired
+                    ? Icons.event_busy_outlined
+                    : hasExpiring || item.isLowStock
+                        ? Icons.warning_amber_rounded
+                        : Icons.check_circle_rounded,
               ),
             ],
           ),
@@ -1659,14 +2245,14 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
               Expanded(
                 child: _DetailValue(
                   label: 'ON HAND',
-                  value: '${item.quantity} ${item.unit}',
+                  value: '${item.quantity} ${item.unit} usable',
                   valueColor: AppColors.textPrimary,
                 ),
               ),
               Expanded(
                 child: _DetailValue(
-                  label: 'RE-ORDER AT',
-                  value: '${item.minimumStock} ${item.unit}',
+                  label: 'NEXT EXPIRY',
+                  value: item.nearestExpiryLabel,
                 ),
               ),
             ],
@@ -1703,11 +2289,124 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
               backgroundColor: statusColor.withValues(alpha: 0.14),
             ),
           ),
-          if (item.isLowStock) ...[
-            const Padding(
-              padding: EdgeInsets.only(top: 14),
-              child: Divider(height: 1, color: AppColors.borderPrimary),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+              color: (item.nearestUsableBatch == null
+                      ? AppColors.error
+                      : AppColors.info)
+                  .withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: (item.nearestUsableBatch == null
+                        ? AppColors.error
+                        : AppColors.info)
+                    .withValues(alpha: 0.14),
+              ),
             ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  item.nearestUsableBatch == null
+                      ? Icons.block_rounded
+                      : Icons.low_priority_rounded,
+                  size: 17,
+                  color: item.nearestUsableBatch == null
+                      ? AppColors.error
+                      : AppColors.info,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    item.nearestUsableBatch == null
+                        ? 'No usable batch is available. Expired stock is excluded.'
+                        : 'Use first: Batch ${item.nearestUsableBatch!.batchNumber} • ${item.nearestExpiryLabel}',
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 11,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (hasExpired) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Text(
+                '${item.expiredQuantity} ${item.unit} in expired batches need reporting and cannot be dispensed.',
+                style: const TextStyle(
+                  color: AppColors.error,
+                  fontSize: 11,
+                  height: 1.3,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+          const Padding(
+            padding: EdgeInsets.only(top: 14, bottom: 12),
+            child: Divider(height: 1, color: AppColors.borderPrimary),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _stockActivityAvailable && item.quantity > 0
+                      ? () => _showDispenseSheet(item)
+                      : null,
+                  icon: const Icon(Icons.medication_outlined, size: 17),
+                  label: const Text('Dispense'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.brandText,
+                    side: BorderSide(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.45),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    textStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _stockActivityAvailable &&
+                          item.reportableBatches.isNotEmpty
+                      ? () => _showUnusableSheet(item)
+                      : null,
+                  icon: const Icon(Icons.report_outlined, size: 17),
+                  label: const Text('Report unusable'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: BorderSide(
+                      color: AppColors.error.withValues(alpha: 0.4),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    textStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (item.isLowStock) ...[
+            const SizedBox(height: 5),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton.icon(
@@ -2252,247 +2951,963 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
     );
   }
 
-  Future<void> _showRequestSheet([InventoryItem? suggestedItem]) async {
-    final quantityController = TextEditingController();
-    final reasonController = TextEditingController();
-    final remarksController = TextEditingController();
-    InventoryItem? selectedItem = suggestedItem;
+  void _showDispenseSheet([InventoryItem? suggestedItem]) {
+    unawaited(
+      _showStockActivitySheet(
+        live.InventoryStockActivityType.dispense,
+        suggestedItem,
+      ),
+    );
+  }
+
+  void _showUnusableSheet([InventoryItem? suggestedItem]) {
+    unawaited(
+      _showStockActivitySheet(
+        live.InventoryStockActivityType.unusable,
+        suggestedItem,
+      ),
+    );
+  }
+
+  Future<void> _showStockActivitySheet(
+    live.InventoryStockActivityType activityType,
+    InventoryItem? suggestedItem,
+  ) async {
+    final isDispense = activityType == live.InventoryStockActivityType.dispense;
+    final availableItems = isDispense ? _dispensableItems : _reportableItems;
+    if (availableItems.isEmpty) {
+      AppSnackbar.warning(
+        context,
+        isDispense
+            ? 'No usable stock is available to dispense.'
+            : 'No batch with remaining stock is available to report.',
+      );
+      return;
+    }
+
+    InventoryItem? selectedItem = suggestedItem != null &&
+            availableItems.any((item) => item.itemId == suggestedItem.itemId)
+        ? suggestedItem
+        : null;
+    live.InventoryBatchRecord? selectedBatch;
+    String? selectedReason;
     String? itemError;
+    String? batchError;
     String? quantityError;
     String? reasonError;
+    String? notesError;
     bool isSubmitting = false;
+    String? operationKey;
 
-    await showModalBottomSheet<void>(
+    const dispenseReasons = <String>[
+      'Prenatal service',
+      'Immunization',
+      'Postpartum service',
+      'Family planning',
+      'Other service',
+    ];
+    const unusableReasons = <String>[
+      'Expired',
+      'Damaged',
+      'Broken seal',
+      'Cold-chain failure',
+      'Contaminated',
+      'Recalled',
+      'Other',
+    ];
+    final allReasons = isDispense ? dispenseReasons : unusableReasons;
+
+    List<live.InventoryBatchRecord> batchesFor(InventoryItem? item) {
+      if (item == null) return const [];
+      return isDispense
+          ? item.usableBatches.take(1).toList()
+          : item.reportableBatches;
+    }
+
+    void chooseDefaultBatch([TextEditingController? quantityController]) {
+      final batches = batchesFor(selectedItem);
+      selectedBatch = batches.isEmpty ? null : batches.first;
+      if (!isDispense && selectedBatch != null) {
+        selectedReason = selectedBatch!.isExpiredOn() ? 'Expired' : 'Damaged';
+        if (selectedReason == 'Expired') {
+          quantityController?.text = '${selectedBatch!.quantityRemaining}';
+        }
+      }
+      operationKey = null;
+    }
+
+    if (selectedItem != null) chooseDefaultBatch();
+    final initialQuantity = selectedReason == 'Expired' && selectedBatch != null
+        ? '${selectedBatch!.quantityRemaining}'
+        : '';
+
+    final successMessage = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setModalState) {
-            final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
-
-            Future<void> submitRequest() async {
-              if (isSubmitting || !_workflowAvailable) return;
-              final int? quantity =
-                  int.tryParse(quantityController.text.trim());
-              final bool isItemValid = selectedItem != null;
-              final bool isQuantityValid = quantity != null && quantity > 0;
-              final bool isReasonValid =
-                  reasonController.text.trim().isNotEmpty;
-
-              setModalState(() {
-                itemError = isItemValid ? null : 'Choose an inventory item.';
-                quantityError = isQuantityValid
+        return _InventoryFormControllerHost(
+          initialValues: [initialQuantity, ''],
+          builder: (sheetContext, controllers) {
+            final quantityController = controllers[0];
+            final notesController = controllers[1];
+            return StatefulBuilder(
+              builder: (sheetContext, setModalState) {
+                final bottomInset =
+                    MediaQuery.viewInsetsOf(sheetContext).bottom;
+                final batchOptions = batchesFor(selectedItem);
+                final batch = selectedBatch;
+                final parsedQuantity =
+                    int.tryParse(quantityController.text.trim());
+                final afterQuantity = batch == null || parsedQuantity == null
                     ? null
-                    : 'Enter a quantity greater than zero.';
-                reasonError =
-                    isReasonValid ? null : 'Tell RHU Main why this is needed.';
-              });
+                    : batch.quantityRemaining - parsedQuantity;
+                final fullBatchReport = !isDispense &&
+                    ((selectedReason == 'Expired' &&
+                            batch?.isExpiredOn() == true) ||
+                        selectedReason == 'Recalled');
+                final reasons = isDispense
+                    ? allReasons
+                    : batch?.isExpiredOn() == true
+                        ? const <String>['Expired']
+                        : allReasons
+                            .where((reason) => reason != 'Expired')
+                            .toList();
+                final requiresNotes = selectedReason == 'Other service' ||
+                    (!isDispense &&
+                        selectedReason != null &&
+                        selectedReason != 'Expired');
 
-              if (!isItemValid || !isQuantityValid || !isReasonValid) return;
-              final contextRecord = _liveContext;
-              if (contextRecord == null) return;
+                Future<void> submitActivity() async {
+                  if (isSubmitting || !_stockActivityAvailable) return;
+                  final contextRecord = _liveContext;
+                  final quantity = int.tryParse(quantityController.text.trim());
+                  final itemValid = selectedItem != null;
+                  final batchValid = batch != null;
+                  final quantityValid = quantity != null &&
+                      quantity > 0 &&
+                      batch != null &&
+                      quantity <= batch.quantityRemaining;
+                  final reasonValid = selectedReason != null;
+                  final notesValid =
+                      !requiresNotes || notesController.text.trim().isNotEmpty;
+                  final reportRuleValid = isDispense ||
+                      (selectedReason != 'Expired' &&
+                          selectedReason != 'Recalled') ||
+                      (batch != null &&
+                          (selectedReason == 'Expired'
+                              ? batch.isExpiredOn() &&
+                                  quantity == batch.quantityRemaining
+                              : quantity == batch.quantityRemaining));
 
-              setModalState(() => isSubmitting = true);
-              try {
-                await _repository.submitStockRequest(
-                  context: contextRecord,
-                  itemId: selectedItem!.itemId,
-                  quantity: quantity,
-                  reason: reasonController.text.trim(),
-                  remarks: remarksController.text.trim(),
-                );
-                if (!mounted || !sheetContext.mounted) return;
-                Navigator.of(sheetContext).pop();
-                setState(() => _selectedTab = 2);
-                await _loadLiveInventory(refresh: true);
-                if (!mounted) return;
-                AppSnackbar.success(
-                  context,
-                  '${selectedItem!.name} request sent to RHU Main.',
-                );
-              } catch (error) {
-                if (!sheetContext.mounted) return;
-                setModalState(() => isSubmitting = false);
-                if (error is live.InventoryWorkflowUnavailableException &&
-                    mounted) {
-                  setState(() {
-                    _workflowAvailable = false;
-                    _workflowMessage = error.message;
+                  setModalState(() {
+                    itemError = itemValid ? null : 'Choose an inventory item.';
+                    batchError = batchValid ? null : 'Choose a stock batch.';
+                    quantityError = !quantityValid
+                        ? batch == null
+                            ? 'Choose a batch first.'
+                            : 'Enter 1–${batch.quantityRemaining} ${selectedItem?.unit ?? 'units'}.'
+                        : !reportRuleValid
+                            ? selectedReason == 'Recalled'
+                                ? 'A recall must cover the full remaining batch.'
+                                : batch.isExpiredOn()
+                                    ? 'An expired report must cover the full expired batch.'
+                                    : 'This batch has not expired. Choose another reason.'
+                            : null;
+                    reasonError =
+                        reasonValid ? null : 'Choose a purpose or reason.';
+                    notesError =
+                        notesValid ? null : 'Add a short note for this reason.';
                   });
-                }
-                AppSnackbar.error(sheetContext, error.toString());
-              }
-            }
 
-            return SafeArea(
-              top: false,
-              child: Container(
-                padding: EdgeInsets.fromLTRB(20, 12, 20, bottomInset + 22),
-                decoration: const BoxDecoration(
-                  color: AppColors.bgPrimary,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 42,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: AppColors.borderPrimary,
-                            borderRadius: BorderRadius.circular(8),
+                  if (contextRecord == null ||
+                      !itemValid ||
+                      !batchValid ||
+                      !quantityValid ||
+                      !reasonValid ||
+                      !notesValid ||
+                      !reportRuleValid) {
+                    return;
+                  }
+
+                  final confirmed = await showDialog<bool>(
+                    context: sheetContext,
+                    builder: (dialogContext) => ConfirmationDialogBox(
+                      title: isDispense
+                          ? 'Confirm stock dispense?'
+                          : 'Confirm unusable stock report?',
+                      subtitle: isDispense
+                          ? 'Purpose: $selectedReason. Deduct $quantity ${selectedItem!.unit} of ${selectedItem!.name} from Batch ${batch.batchNumber} (${_batchExpiryLabel(batch)}). Balance: ${batch.quantityRemaining} → $afterQuantity ${selectedItem!.unit}.${notesController.text.trim().isEmpty ? '' : ' Note: ${notesController.text.trim()}'}'
+                          : 'Reason: $selectedReason. Remove $quantity ${selectedItem!.unit} of ${selectedItem!.name} from usable stock in Batch ${batch.batchNumber} (${_batchExpiryLabel(batch)}). Balance: ${batch.quantityRemaining} → $afterQuantity.${notesController.text.trim().isEmpty ? '' : ' Note: ${notesController.text.trim()}'}',
+                      confirmText: isDispense ? 'Dispense' : 'Submit report',
+                      cancelText: 'Review again',
+                      onCancel: () => Navigator.of(dialogContext).pop(false),
+                      onConfirm: () => Navigator.of(dialogContext).pop(true),
+                    ),
+                  );
+                  if (confirmed != true || !sheetContext.mounted) return;
+
+                  setModalState(() => isSubmitting = true);
+                  final requestOperationKey = operationKey ??=
+                      'midwife-${contextRecord.accountId}-${batch.batchId}-${activityType.name}-${DateTime.now().microsecondsSinceEpoch}';
+                  try {
+                    await _repository.recordStockActivity(
+                      context: contextRecord,
+                      batchId: batch.batchId,
+                      activityType: activityType,
+                      quantity: quantity,
+                      reason: _stockActivityReasonCode(selectedReason!),
+                      notes: notesController.text,
+                      operationKey: requestOperationKey,
+                    );
+                    if (!sheetContext.mounted) return;
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    Navigator.of(sheetContext).pop(
+                      isDispense
+                          ? '$quantity ${selectedItem!.unit} dispensed from Batch ${batch.batchNumber}. Admin inventory is now synchronized.'
+                          : 'Unusable stock reported. RHU Main can see the batch, reason, and updated balance.',
+                    );
+                  } catch (error) {
+                    if (error is live.InventoryWorkflowUnavailableException &&
+                        mounted) {
+                      setState(() {
+                        _stockActivityAvailable = false;
+                        _stockActivityMessage = error.message;
+                      });
+                    }
+                    if (mounted) AppSnackbar.error(context, error.toString());
+                    if (sheetContext.mounted) {
+                      setModalState(() => isSubmitting = false);
+                    }
+                  }
+                }
+
+                return SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: bottomInset),
+                    child: FractionallySizedBox(
+                      heightFactor: 0.93,
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                        decoration: const BoxDecoration(
+                          color: AppColors.bgPrimary,
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(28),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          const Expanded(
-                            child: Column(
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: AppColors.borderPrimary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'REQUEST STOCK',
-                                  style: TextStyle(
-                                    color: AppColors.brandText,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.4,
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: (isDispense
+                                            ? AppColors.brandPrimary
+                                            : AppColors.error)
+                                        .withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(13),
+                                  ),
+                                  child: Icon(
+                                    isDispense
+                                        ? Icons.medication_outlined
+                                        : Icons.report_gmailerrorred_rounded,
+                                    color: isDispense
+                                        ? AppColors.brandPrimary
+                                        : AppColors.error,
                                   ),
                                 ),
-                                SizedBox(height: 4),
-                                Text(
-                                  'Send a replenishment request to RHU Main.',
-                                  style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 12,
+                                const SizedBox(width: 11),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        isDispense
+                                            ? 'DISPENSE STOCK'
+                                            : 'REPORT UNUSABLE STOCK',
+                                        style: const TextStyle(
+                                          color: AppColors.brandText,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.4,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        isDispense
+                                            ? 'Record stock used in a health service — no patient name is needed.'
+                                            : 'This immediately removes the affected quantity from usable stock and records the reason for RHU.',
+                                        style: const TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 11,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ],
                                   ),
+                                ),
+                                IconButton(
+                                  onPressed: isSubmitting
+                                      ? null
+                                      : () => Navigator.of(sheetContext).pop(),
+                                  icon: const Icon(Icons.close_rounded),
                                 ),
                               ],
                             ),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.of(sheetContext).pop(),
-                            icon: const Icon(
-                              Icons.close_rounded,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 22),
-                      const _FormLabel('Medicine or vaccine'),
-                      const SizedBox(height: 7),
-                      AppDropdownField<InventoryItem>(
-                        hintText: 'Select from BHC catalog',
-                        leadingIcon: Icons.medication_outlined,
-                        options: _inventory,
-                        value: selectedItem,
-                        displayStringForOption: (item) => item.name,
-                        errorText: itemError,
-                        onSelected: (item) {
-                          setModalState(() {
-                            selectedItem = item;
-                            itemError = null;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      const _FormLabel('Requested quantity'),
-                      const SizedBox(height: 7),
-                      AppInputField(
-                        controller: quantityController,
-                        hintText: selectedItem == null
-                            ? 'Enter quantity'
-                            : 'Quantity in ${selectedItem!.unit}',
-                        isRequired: true,
-                        leadingIcon: Icons.numbers_rounded,
-                        keyboardType: TextInputType.number,
-                        errorText: quantityError,
-                        onChanged: (_) {
-                          if (quantityError != null) {
-                            setModalState(() => quantityError = null);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      const _FormLabel('Reason for request'),
-                      const SizedBox(height: 7),
-                      AppInputField(
-                        controller: reasonController,
-                        hintText: 'Why is this stock needed?',
-                        isRequired: true,
-                        leadingIcon: Icons.notes_rounded,
-                        errorText: reasonError,
-                        onChanged: (_) {
-                          if (reasonError != null) {
-                            setModalState(() => reasonError = null);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      const _FormLabel('Remarks (optional)'),
-                      const SizedBox(height: 7),
-                      AppInputField(
-                        controller: remarksController,
-                        hintText: 'Add any handling or batch notes',
-                        leadingIcon: Icons.chat_bubble_outline_rounded,
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.bgSecondary,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.info_outline_rounded,
-                              size: 18,
-                              color: AppColors.brandText,
-                            ),
-                            SizedBox(width: 8),
+                            const SizedBox(height: 14),
+                            _buildActivityFlowSteps(isDispense: isDispense),
+                            const SizedBox(height: 14),
                             Expanded(
-                              child: Text(
-                                'RHU Main will review this as Pending. Your BHC stock changes only after RHU issues the stock and you confirm receipt.',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 11,
-                                  height: 1.35,
-                                ),
+                              child: ListView(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                children: [
+                                  const _FormLabel('1. INVENTORY ITEM'),
+                                  const SizedBox(height: 7),
+                                  AppDropdownField<InventoryItem>(
+                                    value: selectedItem,
+                                    hintText: 'Choose an item',
+                                    leadingIcon:
+                                        Icons.medical_information_outlined,
+                                    options: availableItems,
+                                    displayStringForOption: (item) =>
+                                        '${item.name} • ${item.quantity} ${item.unit} usable',
+                                    errorText: itemError,
+                                    onSelected: (item) {
+                                      setModalState(() {
+                                        selectedItem = item;
+                                        itemError = null;
+                                        batchError = null;
+                                        quantityError = null;
+                                        quantityController.clear();
+                                        chooseDefaultBatch();
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const _FormLabel('2. STOCK BATCH'),
+                                  const SizedBox(height: 7),
+                                  AppDropdownField<live.InventoryBatchRecord>(
+                                    value: selectedBatch,
+                                    hintText: selectedItem == null
+                                        ? 'Choose an item first'
+                                        : isDispense
+                                            ? 'Earliest-expiring batch selected'
+                                            : 'Choose a batch',
+                                    leadingIcon: Icons.qr_code_2_rounded,
+                                    options: batchOptions,
+                                    displayStringForOption: (option) =>
+                                        'Batch ${option.batchNumber} • ${option.quantityRemaining} left • ${_batchExpiryLabel(option)}',
+                                    errorText: batchError,
+                                    onSelected: (value) {
+                                      setModalState(() {
+                                        selectedBatch = value;
+                                        batchError = null;
+                                        quantityError = null;
+                                        operationKey = null;
+                                        quantityController.clear();
+                                        if (!isDispense) {
+                                          selectedReason = value.isExpiredOn()
+                                              ? 'Expired'
+                                              : 'Damaged';
+                                          if (selectedReason == 'Expired') {
+                                            quantityController.text =
+                                                '${value.quantityRemaining}';
+                                          }
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  if (batch != null) ...[
+                                    const SizedBox(height: 10),
+                                    _buildSelectedBatchSummary(
+                                      item: selectedItem!,
+                                      batch: batch,
+                                      isDispense: isDispense,
+                                    ),
+                                  ],
+                                  const SizedBox(height: 16),
+                                  _FormLabel(
+                                    isDispense
+                                        ? '3. SERVICE PURPOSE'
+                                        : '3. ISSUE REASON',
+                                  ),
+                                  const SizedBox(height: 7),
+                                  AppDropdownField<String>(
+                                    value: selectedReason,
+                                    hintText: isDispense
+                                        ? 'Choose the health service'
+                                        : 'Choose why stock is unusable',
+                                    leadingIcon: isDispense
+                                        ? Icons.health_and_safety_outlined
+                                        : Icons.fact_check_outlined,
+                                    options: reasons,
+                                    displayStringForOption: (value) => value,
+                                    errorText: reasonError,
+                                    onSelected: (value) {
+                                      setModalState(() {
+                                        selectedReason = value;
+                                        reasonError = null;
+                                        notesError = null;
+                                        operationKey = null;
+                                        if (!isDispense &&
+                                            batch != null &&
+                                            ((value == 'Expired' &&
+                                                    batch.isExpiredOn()) ||
+                                                value == 'Recalled')) {
+                                          quantityController.text =
+                                              '${batch.quantityRemaining}';
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const _FormLabel('4. QUANTITY'),
+                                  const SizedBox(height: 7),
+                                  AppInputField(
+                                    controller: quantityController,
+                                    hintText: batch == null
+                                        ? 'Choose a batch first'
+                                        : 'Quantity (max ${batch.quantityRemaining})',
+                                    leadingIcon: Icons.numbers_rounded,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    readOnly: fullBatchReport,
+                                    errorText: quantityError,
+                                    onChanged: (_) {
+                                      setModalState(() {
+                                        quantityError = null;
+                                        operationKey = null;
+                                      });
+                                    },
+                                  ),
+                                  if (fullBatchReport) ...[
+                                    const SizedBox(height: 7),
+                                    const Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(horizontal: 12),
+                                      child: Text(
+                                        'Expiry and recall apply to the whole batch, so the full remaining quantity is selected.',
+                                        style: TextStyle(
+                                          color: AppColors.error,
+                                          fontSize: 10,
+                                          height: 1.35,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 16),
+                                  _FormLabel(
+                                    requiresNotes
+                                        ? '5. NOTE (REQUIRED)'
+                                        : '5. NOTE (OPTIONAL)',
+                                  ),
+                                  const SizedBox(height: 7),
+                                  AppInputField(
+                                    controller: notesController,
+                                    hintText: isDispense
+                                        ? 'Service note — do not enter a patient name'
+                                        : 'What happened? Do not enter patient details',
+                                    leadingIcon: Icons.notes_rounded,
+                                    inputFormatters: [
+                                      LengthLimitingTextInputFormatter(1000),
+                                    ],
+                                    errorText: notesError,
+                                    onChanged: (_) {
+                                      setModalState(() {
+                                        notesError = null;
+                                        operationKey = null;
+                                      });
+                                    },
+                                  ),
+                                  if (batch != null &&
+                                      parsedQuantity != null &&
+                                      parsedQuantity > 0 &&
+                                      afterQuantity != null) ...[
+                                    const SizedBox(height: 16),
+                                    _buildMovementPreview(
+                                      item: selectedItem!,
+                                      batch: batch,
+                                      quantity: parsedQuantity,
+                                      remaining: afterQuantity,
+                                      isDispense: isDispense,
+                                    ),
+                                  ],
+                                ],
                               ),
+                            ),
+                            const SizedBox(height: 10),
+                            MainButton(
+                              label: isSubmitting
+                                  ? 'Saving activity...'
+                                  : isDispense
+                                      ? 'Review & dispense'
+                                      : 'Review & submit report',
+                              leftIcon: isSubmitting
+                                  ? Icons.sync_rounded
+                                  : Icons.fact_check_outlined,
+                              onPressed: isSubmitting ? null : submitActivity,
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),
-                      MainButton(
-                        label: isSubmitting
-                            ? 'Submitting request...'
-                            : 'Submit request to RHU Main',
-                        leftIcon: Icons.send_rounded,
-                        onPressed: isSubmitting ? null : submitRequest,
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             );
           },
         );
       },
     );
 
-    quantityController.dispose();
-    reasonController.dispose();
-    remarksController.dispose();
+    if (successMessage == null || !mounted) return;
+    await _loadLiveInventory(refresh: true);
+    if (!mounted) return;
+    AppSnackbar.success(context, successMessage);
+  }
+
+  Widget _buildActivityFlowSteps({required bool isDispense}) {
+    final color = isDispense ? AppColors.brandPrimary : AppColors.error;
+    const labels = ['Choose stock', 'Enter details', 'Confirm'];
+    const icons = [
+      Icons.touch_app_outlined,
+      Icons.qr_code_scanner_rounded,
+      Icons.check_circle_outline_rounded,
+    ];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        children: [
+          for (int index = 0; index < labels.length; index++) ...[
+            Expanded(
+              child: Column(
+                children: [
+                  Icon(icons[index], color: color, size: 17),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${index + 1}. ${labels[index]}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (index != labels.length - 1)
+              Icon(Icons.chevron_right_rounded, color: color, size: 17),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedBatchSummary({
+    required InventoryItem item,
+    required live.InventoryBatchRecord batch,
+    required bool isDispense,
+  }) {
+    final expired = batch.isExpiredOn();
+    final color = expired ? AppColors.error : AppColors.info;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            expired ? Icons.event_busy_rounded : Icons.low_priority_rounded,
+            color: color,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              expired
+                  ? '${_batchExpiryLabel(batch)}. This batch is blocked from dispensing.'
+                  : isDispense
+                      ? 'Earliest-expiring batch • up to ${batch.quantityRemaining} ${item.unit} in this record • ${_batchExpiryLabel(batch)}.${item.quantity > batch.quantityRemaining ? ' Save once, then repeat for the next batch if more is needed.' : ''}'
+                      : '${batch.quantityRemaining} ${item.unit} remain in this batch • ${_batchExpiryLabel(batch)}.',
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 11,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMovementPreview({
+    required InventoryItem item,
+    required live.InventoryBatchRecord batch,
+    required int quantity,
+    required int remaining,
+    required bool isDispense,
+  }) {
+    final color = remaining < 0
+        ? AppColors.error
+        : isDispense
+            ? AppColors.brandPrimary
+            : AppColors.error;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            remaining < 0 ? 'QUANTITY TOO HIGH' : 'BALANCE PREVIEW',
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              Expanded(
+                child: _DetailValue(
+                  label: 'BEFORE',
+                  value: '${batch.quantityRemaining} ${item.unit}',
+                ),
+              ),
+              Icon(Icons.arrow_forward_rounded, color: color, size: 18),
+              Expanded(
+                child: _DetailValue(
+                  label: isDispense ? 'AFTER DISPENSE' : 'AFTER REPORT',
+                  value: '$remaining ${item.unit}',
+                  valueColor: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            '$quantity ${item.unit} will be recorded against Batch ${batch.batchNumber}.',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _stockActivityReasonCode(String label) {
+    return label.trim().toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
+  }
+
+  String _batchExpiryLabel(live.InventoryBatchRecord batch) {
+    final days = batch.daysUntilExpiration();
+    if (days == null) return 'Expiry not recorded';
+    if (days < 0) return 'Expired ${-days} day${days == -1 ? '' : 's'} ago';
+    if (days == 0) return 'Expired today';
+    if (days == 1) return 'Expires tomorrow';
+    if (days <= 90) return 'Expires in $days days';
+    final expiration = batch.expirationDate!;
+    return 'Expires ${_shortDate(expiration)}, ${expiration.year}';
+  }
+
+  Future<void> _showRequestSheet([InventoryItem? suggestedItem]) async {
+    InventoryItem? selectedItem = suggestedItem;
+    String? itemError;
+    String? quantityError;
+    String? reasonError;
+    bool isSubmitting = false;
+
+    final submitted = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return _InventoryFormControllerHost(
+          initialValues: const ['', '', ''],
+          builder: (sheetContext, controllers) {
+            final quantityController = controllers[0];
+            final reasonController = controllers[1];
+            final remarksController = controllers[2];
+            return StatefulBuilder(
+              builder: (sheetContext, setModalState) {
+                final bottomInset =
+                    MediaQuery.viewInsetsOf(sheetContext).bottom;
+
+                Future<void> submitRequest() async {
+                  if (isSubmitting || !_workflowAvailable) return;
+                  final int? quantity =
+                      int.tryParse(quantityController.text.trim());
+                  final bool isItemValid = selectedItem != null;
+                  final bool isQuantityValid = quantity != null && quantity > 0;
+                  final bool isReasonValid =
+                      reasonController.text.trim().isNotEmpty;
+
+                  setModalState(() {
+                    itemError =
+                        isItemValid ? null : 'Choose an inventory item.';
+                    quantityError = isQuantityValid
+                        ? null
+                        : 'Enter a quantity greater than zero.';
+                    reasonError = isReasonValid
+                        ? null
+                        : 'Tell RHU Main why this is needed.';
+                  });
+
+                  if (!isItemValid || !isQuantityValid || !isReasonValid) {
+                    return;
+                  }
+                  final contextRecord = _liveContext;
+                  if (contextRecord == null) return;
+
+                  setModalState(() => isSubmitting = true);
+                  try {
+                    await _repository.submitStockRequest(
+                      context: contextRecord,
+                      itemId: selectedItem!.itemId,
+                      quantity: quantity,
+                      reason: reasonController.text.trim(),
+                      remarks: remarksController.text.trim(),
+                    );
+                    if (!sheetContext.mounted) return;
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    Navigator.of(sheetContext).pop(true);
+                  } catch (error) {
+                    if (!sheetContext.mounted) return;
+                    setModalState(() => isSubmitting = false);
+                    if (error is live.InventoryWorkflowUnavailableException &&
+                        mounted) {
+                      setState(() {
+                        _workflowAvailable = false;
+                        _workflowMessage = error.message;
+                      });
+                    }
+                    AppSnackbar.error(sheetContext, error.toString());
+                  }
+                }
+
+                return SafeArea(
+                  top: false,
+                  child: Container(
+                    padding: EdgeInsets.fromLTRB(20, 12, 20, bottomInset + 22),
+                    decoration: const BoxDecoration(
+                      color: AppColors.bgPrimary,
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(28)),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 42,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: AppColors.borderPrimary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'REQUEST STOCK',
+                                      style: TextStyle(
+                                        color: AppColors.brandText,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.4,
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Send a replenishment request to RHU Main.',
+                                      style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () =>
+                                        Navigator.of(sheetContext).pop(false),
+                                icon: const Icon(
+                                  Icons.close_rounded,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 22),
+                          const _FormLabel('Medicine or vaccine'),
+                          const SizedBox(height: 7),
+                          AppDropdownField<InventoryItem>(
+                            hintText: 'Select from BHC catalog',
+                            leadingIcon: Icons.medication_outlined,
+                            options: _inventory,
+                            value: selectedItem,
+                            displayStringForOption: (item) => item.name,
+                            errorText: itemError,
+                            onSelected: (item) {
+                              setModalState(() {
+                                selectedItem = item;
+                                itemError = null;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          const _FormLabel('Requested quantity'),
+                          const SizedBox(height: 7),
+                          AppInputField(
+                            controller: quantityController,
+                            hintText: selectedItem == null
+                                ? 'Enter quantity'
+                                : 'Quantity in ${selectedItem!.unit}',
+                            isRequired: true,
+                            leadingIcon: Icons.numbers_rounded,
+                            keyboardType: TextInputType.number,
+                            errorText: quantityError,
+                            onChanged: (_) {
+                              if (quantityError != null) {
+                                setModalState(() => quantityError = null);
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          const _FormLabel('Reason for request'),
+                          const SizedBox(height: 7),
+                          AppInputField(
+                            controller: reasonController,
+                            hintText: 'Why is this stock needed?',
+                            isRequired: true,
+                            leadingIcon: Icons.notes_rounded,
+                            errorText: reasonError,
+                            onChanged: (_) {
+                              if (reasonError != null) {
+                                setModalState(() => reasonError = null);
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          const _FormLabel('Remarks (optional)'),
+                          const SizedBox(height: 7),
+                          AppInputField(
+                            controller: remarksController,
+                            hintText: 'Add any handling or batch notes',
+                            leadingIcon: Icons.chat_bubble_outline_rounded,
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.bgSecondary,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.info_outline_rounded,
+                                  size: 18,
+                                  color: AppColors.brandText,
+                                ),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'RHU Main will review this as Pending. Your BHC stock changes only after RHU issues the stock and you confirm receipt.',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 11,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          MainButton(
+                            label: isSubmitting
+                                ? 'Submitting request...'
+                                : 'Submit request to RHU Main',
+                            leftIcon: Icons.send_rounded,
+                            onPressed: isSubmitting ? null : submitRequest,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+
+    if (submitted != true || !mounted || selectedItem == null) return;
+    setState(() => _selectedTab = 2);
+    await _loadLiveInventory(refresh: true);
+    if (!mounted) return;
+    AppSnackbar.success(
+      context,
+      '${selectedItem!.name} request sent to RHU Main.',
+    );
   }
 
   void _confirmReceive(IncomingShipment shipment) {
@@ -2643,7 +4058,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
                   ),
                   const SizedBox(height: 5),
                   const Text(
-                    'Approved, rejected, and issued updates from RHU Main appear here automatically.',
+                    'RHU request updates and low-stock changes appear here automatically.',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 11,
@@ -2675,10 +4090,12 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
                               onTap: () {
                                 Navigator.pop(sheetContext);
                                 setState(() {
-                                  _selectedTab = notification.kind ==
-                                          live.InventoryNotificationKind.issued
-                                      ? 0
-                                      : 2;
+                                  _selectedTab = switch (notification.kind) {
+                                    live.InventoryNotificationKind.issued => 0,
+                                    live.InventoryNotificationKind.lowStock =>
+                                      1,
+                                    _ => 2,
+                                  };
                                 });
                               },
                             ),
@@ -2749,6 +4166,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
         Icons.check_circle_outline_rounded,
       live.InventoryNotificationKind.rejected => Icons.cancel_outlined,
       live.InventoryNotificationKind.issued => Icons.local_shipping_outlined,
+      live.InventoryNotificationKind.lowStock => Icons.warning_amber_rounded,
     };
   }
 
@@ -2757,6 +4175,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage> {
       live.InventoryNotificationKind.approved => AppColors.success,
       live.InventoryNotificationKind.rejected => AppColors.error,
       live.InventoryNotificationKind.issued => AppColors.brandPrimary,
+      live.InventoryNotificationKind.lowStock => AppColors.warning,
     };
   }
 
@@ -2932,24 +4351,137 @@ class InventoryItem {
   InventoryItem({
     required this.itemId,
     required this.name,
+    required this.genericName,
+    required this.itemCode,
+    required this.strengthDescription,
+    required this.dosageForm,
     required this.category,
     required this.unit,
     required this.quantity,
     required this.minimumStock,
     required this.batchNumber,
+    required this.batches,
     required this.icon,
   });
 
   final int itemId;
   final String name;
+  final String genericName;
+  final String itemCode;
+  final String strengthDescription;
+  final String dosageForm;
   final String category;
   final String unit;
-  int quantity;
+  final int quantity;
   final int minimumStock;
   final String batchNumber;
+  final List<live.InventoryBatchRecord> batches;
   final IconData icon;
 
   bool get isLowStock => quantity <= minimumStock;
+
+  List<live.InventoryBatchRecord> get usableBatches {
+    final result = batches.where((batch) => batch.isUsableOn()).toList();
+    result.sort(_compareBatchesByExpiry);
+    return result;
+  }
+
+  List<live.InventoryBatchRecord> get reportableBatches {
+    final result = batches
+        .where(
+          (batch) =>
+              batch.quantityRemaining > 0 &&
+              batch.status.toLowerCase() != 'discarded',
+        )
+        .toList();
+    result.sort((first, second) {
+      if (first.isExpiredOn() != second.isExpiredOn()) {
+        return first.isExpiredOn() ? -1 : 1;
+      }
+      return _compareBatchesByExpiry(first, second);
+    });
+    return result;
+  }
+
+  live.InventoryBatchRecord? get nearestUsableBatch {
+    final batches = usableBatches;
+    return batches.isEmpty ? null : batches.first;
+  }
+
+  int get expiredQuantity => batches
+      .where(
+        (batch) =>
+            batch.quantityRemaining > 0 &&
+            batch.status.toLowerCase() != 'discarded' &&
+            (batch.isExpiredOn() || batch.status.toLowerCase() == 'expired'),
+      )
+      .fold(0, (total, batch) => total + batch.quantityRemaining);
+
+  int get expiringSoonQuantity => batches
+      .where(
+        (batch) => batch.isUsableOn() && batch.isExpiringWithin(90),
+      )
+      .fold(0, (total, batch) => total + batch.quantityRemaining);
+
+  int? get nearestExpiryDays => nearestUsableBatch?.daysUntilExpiration();
+
+  String get nearestExpiryLabel {
+    final batch = nearestUsableBatch;
+    if (batch == null) return 'No usable batch';
+    final days = batch.daysUntilExpiration();
+    if (days == null) return 'Expiry not recorded';
+    if (days <= 0) return 'Expired';
+    if (days == 1) return 'Expires tomorrow';
+    if (days <= 90) return 'Expires in $days days';
+    return 'Expires ${_shortBatchDate(batch.expirationDate!)}';
+  }
+
+  String get catalogSubtitle {
+    final details = <String>[
+      if (genericName.isNotEmpty &&
+          genericName.toLowerCase() != name.toLowerCase())
+        genericName,
+      if (strengthDescription.isNotEmpty) strengthDescription,
+      if (dosageForm.isNotEmpty) dosageForm,
+      if (itemCode.isNotEmpty) itemCode,
+    ];
+    return details.join(' • ');
+  }
+
+  static int _compareBatchesByExpiry(
+    live.InventoryBatchRecord first,
+    live.InventoryBatchRecord second,
+  ) {
+    final firstExpiry = first.expirationDay;
+    final secondExpiry = second.expirationDay;
+    if (firstExpiry == null && secondExpiry == null) {
+      return first.batchNumber.compareTo(second.batchNumber);
+    }
+    if (firstExpiry == null) return 1;
+    if (secondExpiry == null) return -1;
+    final dateOrder = firstExpiry.compareTo(secondExpiry);
+    return dateOrder != 0
+        ? dateOrder
+        : first.batchNumber.compareTo(second.batchNumber);
+  }
+
+  static String _shortBatchDate(DateTime value) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[value.month - 1]} ${value.day}, ${value.year}';
+  }
 }
 
 class IncomingShipment {
@@ -3170,6 +4702,8 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final foreground =
+        color == AppColors.warning ? const Color(0xFF925000) : color;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
@@ -3179,13 +4713,13 @@ class _StatusChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: color),
+          Icon(icon, size: 13, color: foreground),
           const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
-              color: color,
-              fontSize: 10,
+              color: foreground,
+              fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -3294,6 +4828,49 @@ class _ActivityTile extends StatelessWidget {
       ),
     );
   }
+}
+
+typedef _InventoryFormControllerBuilder = Widget Function(
+  BuildContext context,
+  List<TextEditingController> controllers,
+);
+
+class _InventoryFormControllerHost extends StatefulWidget {
+  const _InventoryFormControllerHost({
+    required this.initialValues,
+    required this.builder,
+  });
+
+  final List<String> initialValues;
+  final _InventoryFormControllerBuilder builder;
+
+  @override
+  State<_InventoryFormControllerHost> createState() =>
+      _InventoryFormControllerHostState();
+}
+
+class _InventoryFormControllerHostState
+    extends State<_InventoryFormControllerHost> {
+  late final List<TextEditingController> _controllers;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = widget.initialValues
+        .map((value) => TextEditingController(text: value))
+        .toList(growable: false);
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _controllers) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _controllers);
 }
 
 class _FormLabel extends StatelessWidget {

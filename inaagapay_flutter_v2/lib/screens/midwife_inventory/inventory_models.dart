@@ -12,10 +12,39 @@ String _asString(Object? value, {String fallback = ''}) {
   return result.isEmpty ? fallback : result;
 }
 
-DateTime? _asDateTime(Object? value) {
-  if (value is DateTime) return value;
+DateTime? _asDate(Object? value) {
+  if (value is DateTime) {
+    return DateTime(value.year, value.month, value.day);
+  }
   final text = value?.toString();
-  return text == null || text.isEmpty ? null : DateTime.tryParse(text);
+  final parsed = text == null || text.isEmpty ? null : DateTime.tryParse(text);
+  return parsed == null
+      ? null
+      : DateTime(parsed.year, parsed.month, parsed.day);
+}
+
+DateTime? _asTimestamp(Object? value) {
+  if (value is DateTime) return value.isUtc ? value.toLocal() : value;
+  final text = value?.toString().trim();
+  if (text == null || text.isEmpty) return null;
+  final parsed = DateTime.tryParse(text);
+  if (parsed == null) return null;
+
+  final hasExplicitZone = RegExp(r'(Z|[+-]\d{2}:?\d{2})$').hasMatch(text);
+  if (hasExplicitZone) return parsed.toLocal();
+
+  // Supabase stores several audit timestamps as UTC in timestamp-without-zone
+  // columns. Treat a zone-less value as UTC before formatting on the device.
+  return DateTime.utc(
+    parsed.year,
+    parsed.month,
+    parsed.day,
+    parsed.hour,
+    parsed.minute,
+    parsed.second,
+    parsed.millisecond,
+    parsed.microsecond,
+  ).toLocal();
 }
 
 Map<String, dynamic>? _asMap(Object? value) {
@@ -47,6 +76,10 @@ class InventoryCatalogRecord {
   const InventoryCatalogRecord({
     required this.itemId,
     required this.name,
+    required this.genericName,
+    required this.itemCode,
+    required this.strengthDescription,
+    required this.dosageForm,
     required this.itemType,
     required this.unit,
     required this.minimumStock,
@@ -56,6 +89,10 @@ class InventoryCatalogRecord {
     return InventoryCatalogRecord(
       itemId: _asInt(json['item_id']),
       name: _asString(json['name'], fallback: 'Inventory item'),
+      genericName: _asString(json['generic_name']),
+      itemCode: _asString(json['item_code']),
+      strengthDescription: _asString(json['strength_description']),
+      dosageForm: _asString(json['dosage_form']),
       itemType: _asString(json['item_type'], fallback: 'other'),
       unit: _asString(json['unit_of_measure'], fallback: 'units'),
       minimumStock: _asInt(json['minimum_stock_threshold'], fallback: 50),
@@ -64,6 +101,10 @@ class InventoryCatalogRecord {
 
   final int itemId;
   final String name;
+  final String genericName;
+  final String itemCode;
+  final String strengthDescription;
+  final String dosageForm;
   final String itemType;
   final String unit;
   final int minimumStock;
@@ -92,10 +133,10 @@ class InventoryBatchRecord {
       batchNumber: _asString(json['batch_number'], fallback: 'Unspecified'),
       quantityReceived: _asInt(json['quantity_received']),
       quantityRemaining: _asInt(json['quantity_remaining']),
-      receivedDate: _asDateTime(json['received_date']),
-      expirationDate: _asDateTime(json['expiration_date']),
+      receivedDate: _asDate(json['received_date']),
+      expirationDate: _asDate(json['expiration_date']),
       manufacturer: _asString(json['manufacturer']),
-      status: _asString(json['status'], fallback: 'active'),
+      status: _asString(json['status'], fallback: 'unknown'),
     );
   }
 
@@ -111,6 +152,35 @@ class InventoryBatchRecord {
   final String status;
 
   bool get isActive => status.toLowerCase() == 'active';
+
+  DateTime? get expirationDay {
+    final value = expirationDate;
+    if (value == null) return null;
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  int? daysUntilExpiration([DateTime? from]) {
+    final expiration = expirationDay;
+    if (expiration == null) return null;
+    final source = from ?? DateTime.now();
+    final today = DateTime(source.year, source.month, source.day);
+    return expiration.difference(today).inDays;
+  }
+
+  bool isExpiredOn([DateTime? day]) {
+    final remainingDays = daysUntilExpiration(day);
+    // Match the admin portal: stock dated today is already treated as expired.
+    return remainingDays != null && remainingDays <= 0;
+  }
+
+  bool isExpiringWithin(int days, [DateTime? from]) {
+    final remainingDays = daysUntilExpiration(from);
+    return remainingDays != null && remainingDays > 0 && remainingDays <= days;
+  }
+
+  bool isUsableOn([DateTime? day]) {
+    return isActive && quantityRemaining > 0 && !isExpiredOn(day);
+  }
 }
 
 class FacilityInventoryRecord {
@@ -122,16 +192,88 @@ class FacilityInventoryRecord {
   final InventoryCatalogRecord catalog;
   final List<InventoryBatchRecord> batches;
 
-  int get quantity => batches
-      .where((batch) => batch.isActive)
+  int quantityOn([DateTime? day]) => batches
+      .where((batch) => batch.isUsableOn(day))
       .fold(0, (total, batch) => total + batch.quantityRemaining);
 
-  String get batchLabel {
-    final active = batches.where((batch) => batch.isActive).toList();
-    if (active.isEmpty) return 'No active batch';
-    if (active.length == 1) return active.first.batchNumber;
-    return '${active.first.batchNumber} +${active.length - 1} more';
+  int get quantity => quantityOn();
+
+  int expiredQuantityOn([DateTime? day]) => batches
+      .where(
+        (batch) =>
+            batch.quantityRemaining > 0 &&
+            (batch.isExpiredOn(day) || batch.status.toLowerCase() == 'expired'),
+      )
+      .fold(0, (total, batch) => total + batch.quantityRemaining);
+
+  int expiringQuantityOn(int days, [DateTime? from]) => batches
+      .where((batch) =>
+          batch.isUsableOn(from) && batch.isExpiringWithin(days, from))
+      .fold(0, (total, batch) => total + batch.quantityRemaining);
+
+  List<InventoryBatchRecord> usableBatchesOn([DateTime? day]) {
+    final result = batches.where((batch) => batch.isUsableOn(day)).toList();
+    result.sort((first, second) {
+      final firstExpiry = first.expirationDay;
+      final secondExpiry = second.expirationDay;
+      if (firstExpiry == null && secondExpiry == null) {
+        return first.batchNumber.compareTo(second.batchNumber);
+      }
+      if (firstExpiry == null) return 1;
+      if (secondExpiry == null) return -1;
+      final expiryOrder = firstExpiry.compareTo(secondExpiry);
+      return expiryOrder != 0
+          ? expiryOrder
+          : first.batchNumber.compareTo(second.batchNumber);
+    });
+    return result;
   }
+
+  InventoryBatchRecord? get nextUsableBatch {
+    final usable = usableBatchesOn();
+    return usable.isEmpty ? null : usable.first;
+  }
+
+  String get batchLabel {
+    final usable = usableBatchesOn();
+    if (usable.isEmpty) return 'No usable batch';
+    if (usable.length == 1) return usable.first.batchNumber;
+    return '${usable.first.batchNumber} +${usable.length - 1} more';
+  }
+}
+
+enum InventoryStockActivityType { dispense, unusable }
+
+class InventoryStockActivityResult {
+  const InventoryStockActivityResult({
+    required this.transactionId,
+    required this.batchId,
+    required this.quantityChanged,
+    required this.quantityRemaining,
+    required this.batchStatus,
+    required this.loggedAt,
+    required this.reportId,
+  });
+
+  factory InventoryStockActivityResult.fromJson(Map<String, dynamic> json) {
+    return InventoryStockActivityResult(
+      transactionId: _asInt(json['transaction_id']),
+      batchId: _asInt(json['batch_id']),
+      quantityChanged: _asInt(json['quantity_changed'] ?? json['quantity']),
+      quantityRemaining: _asInt(json['quantity_remaining']),
+      batchStatus: _asString(json['batch_status'], fallback: 'active'),
+      loggedAt: _asTimestamp(json['logged_at']) ?? DateTime.now(),
+      reportId: json['report_id'] == null ? null : _asInt(json['report_id']),
+    );
+  }
+
+  final int transactionId;
+  final int batchId;
+  final int quantityChanged;
+  final int quantityRemaining;
+  final String batchStatus;
+  final DateTime loggedAt;
+  final int? reportId;
 }
 
 class InventoryStockRequestRecord {
@@ -173,11 +315,11 @@ class InventoryStockRequestRecord {
       remarks: _asString(json['remarks']),
       adminRemarks: _asString(json['admin_remarks']),
       status: status,
-      requestedAt: _asDateTime(
+      requestedAt: _asTimestamp(
             json['requested_at'] ?? json['submitted_at'] ?? json['created_at'],
           ) ??
           DateTime.now(),
-      completedAt: _asDateTime(
+      completedAt: _asTimestamp(
         json['completed_at'] ??
             json['received_at'] ??
             (isTerminal ? json['updated_at'] : null),
@@ -197,7 +339,7 @@ class InventoryStockRequestRecord {
   final DateTime? completedAt;
 }
 
-enum InventoryNotificationKind { approved, rejected, issued }
+enum InventoryNotificationKind { approved, rejected, issued, lowStock }
 
 class InventoryNotificationRecord {
   const InventoryNotificationRecord({
@@ -226,6 +368,8 @@ class InventoryNotificationRecord {
     } else if (normalizedTitle == 'stock request update' &&
         normalizedMessage.contains('not approved')) {
       kind = InventoryNotificationKind.rejected;
+    } else if (normalizedTitle == 'low stock after activity') {
+      kind = InventoryNotificationKind.lowStock;
     } else {
       kind = null;
     }
@@ -239,7 +383,7 @@ class InventoryNotificationRecord {
       message: message,
       kind: kind,
       isRead: json['is_read'] == true,
-      createdAt: _asDateTime(json['created_at']) ?? DateTime.now(),
+      createdAt: _asTimestamp(json['created_at']) ?? DateTime.now(),
     );
   }
 
@@ -255,6 +399,7 @@ class InventoryNotificationRecord {
         InventoryNotificationKind.approved => 'Stock request approved',
         InventoryNotificationKind.rejected => 'Stock request rejected',
         InventoryNotificationKind.issued => 'Stocks issued by RHU Main',
+        InventoryNotificationKind.lowStock => 'BHC stock is now low',
       };
 
   InventoryNotificationRecord copyWith({bool? isRead}) {
@@ -325,9 +470,9 @@ class InventoryTransferRecord {
                 ),
       status: _asString(json['status'], fallback: 'pending_acceptance'),
       remarks: _asString(json['remarks']),
-      issuedAt: _asDateTime(json['issued_at'] ?? json['created_at']) ??
+      issuedAt: _asTimestamp(json['issued_at'] ?? json['created_at']) ??
           DateTime.now(),
-      receivedAt: _asDateTime(json['received_at']),
+      receivedAt: _asTimestamp(json['received_at']),
       issuedByName: _asString(
         json['issued_by_name'],
         fallback: 'RHU Main',
@@ -391,7 +536,7 @@ class InventoryTransactionRecord {
           _asString(json['transaction_type'], fallback: 'movement'),
       quantity: _asInt(json['quantity']),
       referenceType: _asString(json['reference_type']),
-      loggedAt: _asDateTime(json['logged_at']) ?? DateTime.now(),
+      loggedAt: _asTimestamp(json['logged_at']) ?? DateTime.now(),
       itemId: _asInt(
         nestedItem?['item_id'] ??
             nestedBatch?['item_id'] ??
