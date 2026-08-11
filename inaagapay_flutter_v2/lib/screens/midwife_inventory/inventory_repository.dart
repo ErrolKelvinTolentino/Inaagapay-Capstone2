@@ -139,8 +139,9 @@ class InventoryRepository {
         _client
             .from('inventory_items')
             .select(
-              'item_id, name, item_type, unit_of_measure, '
-              'minimum_stock_threshold, is_archived',
+              'item_id, name, generic_name, item_code, '
+              'strength_description, dosage_form, item_type, '
+              'unit_of_measure, minimum_stock_threshold',
             )
             .order('name'),
         _client
@@ -167,7 +168,7 @@ class InventoryRepository {
 
       final catalog = _rows(results[0])
           .map(InventoryCatalogRecord.fromJson)
-          .where((item) => item.itemId > 0 && !item.isArchived)
+          .where((item) => item.itemId > 0)
           .toList();
       final batches = _rows(results[1])
           .map(InventoryBatchRecord.fromJson)
@@ -380,6 +381,61 @@ class InventoryRepository {
     }
   }
 
+  Future<InventoryStockActivityResult> recordStockActivity({
+    required MidwifeInventoryContext context,
+    required int batchId,
+    required InventoryStockActivityType activityType,
+    required int quantity,
+    required String reason,
+    required String operationKey,
+    String? notes,
+  }) async {
+    if (quantity <= 0) {
+      throw const InventoryRepositoryException(
+        'Quantity must be a positive whole number.',
+      );
+    }
+
+    try {
+      final response = await _client.rpc(
+        'record_midwife_inventory_activity',
+        params: {
+          'p_performed_by': context.accountId,
+          'p_batch_id': batchId,
+          'p_activity_type': switch (activityType) {
+            InventoryStockActivityType.dispense => 'dispense',
+            InventoryStockActivityType.unusable => 'unusable',
+          },
+          'p_quantity': quantity,
+          'p_reason': reason.trim(),
+          'p_operation_key': operationKey.trim(),
+          'p_notes':
+              (notes == null || notes.trim().isEmpty) ? null : notes.trim(),
+        },
+      );
+      final row = _singleRow(response);
+      if (row == null) {
+        throw const InventoryRepositoryException(
+          'Supabase did not return the recorded stock activity.',
+        );
+      }
+      return InventoryStockActivityResult.fromJson(row);
+    } catch (error) {
+      if (_isMissingWorkflow(error)) {
+        throw InventoryWorkflowUnavailableException(
+          'Install the midwife dispensing and expiry-report migration in '
+          'Supabase before recording stock activity.',
+          cause: error,
+        );
+      }
+      if (error is InventoryRepositoryException) rethrow;
+      throw InventoryRepositoryException(
+        _friendlyError(error),
+        cause: error,
+      );
+    }
+  }
+
   Future<List<InventoryNotificationRecord>> loadInventoryNotifications({
     required MidwifeInventoryContext context,
     int limit = 40,
@@ -445,6 +501,41 @@ class InventoryRepository {
             final notification =
                 InventoryNotificationRecord.tryFromJson(payload.newRecord);
             if (notification != null) onNotification(notification);
+          },
+        )
+        .subscribe((status, _) {
+      onConnectionChanged?.call(
+        status == RealtimeSubscribeStatus.subscribed,
+      );
+    });
+  }
+
+  RealtimeChannel subscribeToFacilityInventory({
+    required MidwifeInventoryContext context,
+    required void Function() onInventoryChanged,
+    void Function(bool connected)? onConnectionChanged,
+  }) {
+    return _client
+        .channel('facility-inventory-${context.facilityId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          // This feed contains only a table name, operation and timestamp. It
+          // avoids publishing raw stock rows through Realtime; the app reloads
+          // its normal facility-filtered queries after a relevant signal.
+          table: 'admin_change_events',
+          callback: (payload) {
+            final tableName = payload.newRecord['table_name']?.toString();
+            if (const {
+              'inventory_items',
+              'inventory_batches',
+              'inventory_transactions',
+              'inventory_stock_requests',
+              'inventory_transfers',
+              'inventory_unusable_stock_reports',
+            }.contains(tableName)) {
+              onInventoryChanged();
+            }
           },
         )
         .subscribe((status, _) {

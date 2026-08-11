@@ -2755,7 +2755,7 @@
             const batch = batches.find(b => b.batch_id === t.batch_id);
             const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
             const user = accountMap[t.performed_by] || "";
-            const searchStr = `${batch?.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""} ${user} ${t.reference_type || ""}`.toLowerCase();
+            const searchStr = `${batch?.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""} ${user} ${t.reference_type || ""} ${t.activity_reason || ""} ${t.activity_notes || ""}`.toLowerCase();
             if (q && !searchStr.includes(q)) return false;
             return true;
           });
@@ -2784,6 +2784,17 @@
             const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
             const dateStr = t.logged_at ? new Date(t.logged_at).toLocaleString("en-PH") : "—";
             const qtyStr = t.quantity > 0 ? `+${t.quantity}` : `${t.quantity}`;
+            const isBhcUnusableRecord = t.transaction_type === "expiry_disposal" &&
+              !!t.client_operation_key &&
+              String(t.reference_type || "").startsWith("BHC unusable report");
+            const movementBadge = isBhcUnusableRecord
+              ? `<span class="badge-health-danger"><i class="fa-solid fa-triangle-exclamation"></i> BHC Unusable</span>`
+              : (typeBadges[t.transaction_type] || t.transaction_type);
+            const activityDetails = isBhcUnusableRecord
+              ? `<div>${esc(t.reference_type || "BHC unusable stock")}</div>
+                 <div style="font-size:10.5px;color:var(--text-primary);margin-top:3px;"><strong>Reason:</strong> ${esc(String(t.activity_reason || "not recorded").replaceAll("_", " "))}</div>
+                 ${t.activity_notes ? `<div style="font-size:10.5px;margin-top:2px;"><strong>Midwife note:</strong> ${esc(t.activity_notes)}</div>` : ""}`
+              : `${esc(t.reference_type || "")} ${esc(t.reference_id ? '#' + t.reference_id : '')}`;
 
             let locName = "Central Warehouse";
             if (t.facility_id) {
@@ -2795,7 +2806,7 @@
               <tr>
                 <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap;">${dateStr}</td>
                 <td style="font-size:12.5px;font-weight:600;color:var(--text-primary);">${esc(locName)}</td>
-                <td>${typeBadges[t.transaction_type] || t.transaction_type}</td>
+                <td>${movementBadge}</td>
                 <td class="col-item-details">
                   <div style="display:flex;align-items:center;gap:4px;">
                     <strong style="color:var(--text-primary);cursor:pointer;" onclick="openItemDetails(${item?.item_id || 0})">${esc(item?.name || "Item")}</strong>
@@ -2806,7 +2817,7 @@
                 </td>
                 <td style="text-align:right;font-weight:700;color:${t.quantity < 0 ? '#dc2626' : '#059669'};">${qtyStr}</td>
                 <td>${esc(accountMap[t.performed_by] || "System / Admin")}</td>
-                <td style="font-size:12px;color:var(--text-secondary);">${esc(t.reference_type || "")} ${esc(t.reference_id ? '#' + t.reference_id : '')}</td>
+                <td style="font-size:12px;color:var(--text-secondary);">${activityDetails}</td>
               </tr>
             `;
           }).join('');
@@ -2828,6 +2839,12 @@
 
           tbody.innerHTML = expiredOrDamagedBatches.map(b => {
             const item = items.find(i => i.item_id === b.item_id);
+            const bhcUnusableRecord = transactions.find(t =>
+              t.batch_id === b.batch_id &&
+              t.transaction_type === "expiry_disposal" &&
+              !!t.client_operation_key &&
+              String(t.reference_type || "").startsWith("BHC unusable report")
+            );
             let locName = "Central Warehouse";
             if (b.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
@@ -2836,8 +2853,16 @@
 
             let statusBadge = `<span class="badge-health-danger"><i class="fa-solid fa-ban"></i> Expired</span>`;
             if (b.status === 'discarded') {
-              statusBadge = `<span class="badge-health-muted"><i class="fa-solid fa-check-double"></i> Disposed &amp; Logged</span>`;
+              statusBadge = bhcUnusableRecord
+                ? `<span class="badge-health-muted"><i class="fa-solid fa-mobile-screen-button"></i> BHC Write-off Logged</span>`
+                : `<span class="badge-health-muted"><i class="fa-solid fa-check-double"></i> Disposed &amp; Logged</span>`;
             }
+
+            const actionButton = b.status !== 'discarded'
+              ? `<button class="btn btn-sm btn-primary" onclick="openDisposalModal(${b.batch_id})"><i class="fa-solid fa-trash-can"></i> Record Disposal</button>`
+              : bhcUnusableRecord
+                ? `<button class="btn btn-sm btn-secondary" onclick="openBhcUnusableRecord(${b.batch_id})"><i class="fa-solid fa-clipboard-list"></i> View BHC Record</button>`
+                : `<button class="btn btn-sm btn-secondary" onclick="viewDisposalCert(${b.batch_id})"><i class="fa-solid fa-certificate"></i> View Certificate</button>`;
 
             return `
               <tr>
@@ -2853,13 +2878,24 @@
                 <td style="text-align:right;font-weight:700;color:#dc2626;">${b.quantity_remaining}</td>
                 <td>${b.expiration_date}</td>
                 <td style="text-align:center;">${statusBadge}</td>
-                <td style="text-align:center;">
-                  ${b.status !== 'discarded' ? `<button class="btn btn-sm btn-primary" onclick="openDisposalModal(${b.batch_id})"><i class="fa-solid fa-trash-can"></i> Record Disposal</button>` : `<button class="btn btn-sm btn-secondary" onclick="viewDisposalCert(${b.batch_id})"><i class="fa-solid fa-certificate"></i> View Certificate</button>`}
-                </td>
+                <td style="text-align:center;">${actionButton}</td>
               </tr>
             `;
           }).join('');
         }
+
+        window.openBhcUnusableRecord = function(batchId) {
+          const batch = batches.find(row => row.batch_id === Number(batchId));
+          switchTab('transactions');
+          const search = document.getElementById("tx-search");
+          const type = document.getElementById("tx-filter-type");
+          if (search) search.value = batch?.batch_number || "";
+          if (type) type.value = "expiry_disposal";
+          paginationState.tx.currentPage = 1;
+          renderTransactions();
+          document.getElementById("tab-transactions")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          showToast("Showing the BHC unusable-stock record in the movement ledger.", "info");
+        };
 
         // Export Disposal Log CSV
         window.exportDisposalLog = function() {
@@ -3139,7 +3175,9 @@
 
               const qty = Math.abs(t.quantity || 0);
               if (t.transaction_type === 'receipt') totalReceivedMonth += qty;
-              if (t.transaction_type === 'dispense' || t.transaction_type === 'transfer' || t.transaction_type === 'expiry_disposal') {
+              // Patient/service dispensing is the demand signal. Transfers only
+              // relocate stock, and unusable write-offs must not inflate usage.
+              if (t.transaction_type === 'dispense') {
                 totalDispensedMonth += qty;
                 const batch = batches.find(b => b.batch_id === t.batch_id);
                 if (batch) {

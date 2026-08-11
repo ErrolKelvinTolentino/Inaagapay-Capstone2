@@ -1,0 +1,101 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:inaagapay_flutter_v2/screens/midwife_inventory/inventory_models.dart';
+
+void main() {
+  const catalog = InventoryCatalogRecord(
+    itemId: 7,
+    name: 'Iron + Folic Acid Tablet',
+    genericName: 'Ferrous Sulfate + Folic Acid',
+    itemCode: 'SUP-IFA-TAB',
+    strengthDescription: '60 mg + 400 mcg',
+    dosageForm: 'Tablet',
+    itemType: 'supplement',
+    unit: 'tablets',
+    minimumStock: 100,
+  );
+
+  InventoryBatchRecord batch({
+    required int id,
+    required int quantity,
+    required String expiration,
+    String status = 'active',
+  }) {
+    return InventoryBatchRecord.fromJson({
+      'batch_id': id,
+      'item_id': catalog.itemId,
+      'facility_id': 3,
+      'batch_number': 'IFA-$id',
+      'quantity_received': quantity,
+      'quantity_remaining': quantity,
+      'received_date': '2026-01-01',
+      'expiration_date': expiration,
+      'status': status,
+    });
+  }
+
+  group('BHC usable stock', () {
+    final today = DateTime(2026, 8, 11);
+
+    test('excludes batches expiring today and past dates', () {
+      final stock = FacilityInventoryRecord(
+        catalog: catalog,
+        batches: [
+          batch(id: 1, quantity: 10, expiration: '2026-08-10'),
+          batch(id: 2, quantity: 20, expiration: '2026-08-11'),
+          batch(id: 3, quantity: 30, expiration: '2026-08-12'),
+        ],
+      );
+
+      expect(stock.quantityOn(today), 30);
+      expect(stock.expiredQuantityOn(today), 30);
+    });
+
+    test('uses earliest-expiring usable batch first (FEFO)', () {
+      final stock = FacilityInventoryRecord(
+        catalog: catalog,
+        batches: [
+          batch(id: 10, quantity: 50, expiration: '2027-04-01'),
+          batch(id: 11, quantity: 25, expiration: '2026-10-01'),
+          batch(id: 12, quantity: 15, expiration: '2026-08-11'),
+        ],
+      );
+
+      final usable = stock.usableBatchesOn(today);
+      expect(usable.map((value) => value.batchId), [11, 10]);
+    });
+
+    test('counts only usable stock inside the 90-day expiry window', () {
+      final stock = FacilityInventoryRecord(
+        catalog: catalog,
+        batches: [
+          batch(id: 20, quantity: 25, expiration: '2026-08-21'),
+          batch(id: 21, quantity: 40, expiration: '2026-11-20'),
+          batch(id: 22, quantity: 5, expiration: '2026-08-10'),
+        ],
+      );
+
+      expect(stock.expiringQuantityOn(90, today), 25);
+    });
+
+    test('treats a legacy null batch status as unusable', () {
+      final legacyBatch = InventoryBatchRecord.fromJson({
+        'batch_id': 30,
+        'item_id': catalog.itemId,
+        'facility_id': 3,
+        'batch_number': 'IFA-30',
+        'quantity_received': 50,
+        'quantity_remaining': 50,
+        'received_date': '2026-01-01',
+        'expiration_date': '2027-01-01',
+        'status': null,
+      });
+      final stock = FacilityInventoryRecord(
+        catalog: catalog,
+        batches: [legacyBatch],
+      );
+
+      expect(legacyBatch.status, 'unknown');
+      expect(stock.quantityOn(today), 0);
+    });
+  });
+}
