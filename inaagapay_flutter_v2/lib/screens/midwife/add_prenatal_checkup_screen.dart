@@ -1268,11 +1268,16 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
 
     final String wgAssessmentStr;
     if (wgResult != null) {
-      final statusName = wgResult.status == WeightGainStatus.low
-          ? 'BELOW_EXPECTED_WEIGHT_GAIN'
-          : wgResult.status == WeightGainStatus.high
-              ? 'ABOVE_EXPECTED_WEIGHT_GAIN'
-              : 'WITHIN_EXPECTED_WEIGHT_GAIN';
+      // insufficient used to fall through to WITHIN_EXPECTED here, which fed
+      // the AI a clinical claim nobody had made — the engine had said it could
+      // not assess her gain, and the prompt reported that she was gaining
+      // normally.
+      final statusName = switch (wgResult.status) {
+        WeightGainStatus.low => 'BELOW_EXPECTED_WEIGHT_GAIN',
+        WeightGainStatus.high => 'ABOVE_EXPECTED_WEIGHT_GAIN',
+        WeightGainStatus.insufficient => 'NOT_ASSESSABLE_NO_BASELINE_WEIGHT',
+        WeightGainStatus.normal => 'WITHIN_EXPECTED_WEIGHT_GAIN',
+      };
       final actualStr = wgResult.actualGain != null
           ? "${wgResult.actualGain! >= 0 ? '+' : ''}${wgResult.actualGain!.toStringAsFixed(1)} kg"
           : "+0.0 kg";
@@ -1972,15 +1977,22 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     final String pillLabel;
     final Color pillColor;
 
-    if (result.status == WeightGainStatus.low) {
-      pillLabel = 'BELOW EXPECTED';
-      pillColor = AppColors.warning;
-    } else if (result.status == WeightGainStatus.high) {
-      pillLabel = 'ABOVE EXPECTED';
-      pillColor = AppColors.warning;
-    } else {
-      pillLabel = 'WITHIN EXPECTED';
-      pillColor = AppColors.success;
+    // A green "WITHIN EXPECTED" pill for a status of insufficient is the same
+    // mistranslation as elsewhere on this screen: the engine declining to
+    // judge, rendered as a pass.
+    switch (result.status) {
+      case WeightGainStatus.low:
+        pillLabel = 'BELOW EXPECTED';
+        pillColor = AppColors.warning;
+      case WeightGainStatus.high:
+        pillLabel = 'ABOVE EXPECTED';
+        pillColor = AppColors.warning;
+      case WeightGainStatus.insufficient:
+        pillLabel = 'NOT ASSESSED';
+        pillColor = AppColors.textSecondary;
+      case WeightGainStatus.normal:
+        pillLabel = 'WITHIN EXPECTED';
+        pillColor = AppColors.success;
     }
 
     return Container(
@@ -3505,13 +3517,22 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
       final isLow = result.status == WeightGainStatus.low;
       final isHigh = result.status == WeightGainStatus.high;
+      // Without this branch, insufficient fell through to the else and was
+      // painted green as "Within expected weight gain" — the engine correctly
+      // reporting that it could not judge, rendered as a pass.
+      final isInsufficient = result.status == WeightGainStatus.insufficient;
 
       Color bgColor;
       Color textColor;
       IconData icon;
       String statusText;
 
-      if (isLow) {
+      if (isInsufficient) {
+        bgColor = AppColors.textSecondary.withValues(alpha: 0.07);
+        textColor = AppColors.textSecondary;
+        icon = Icons.info_outline_rounded;
+        statusText = "Weight gain not assessed yet";
+      } else if (isLow) {
         bgColor = AppColors.warning.withValues(alpha: 0.08);
         textColor = AppColors.warning;
         icon = Icons.trending_down_rounded;
@@ -3537,22 +3558,35 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       final expectedGainMin = gainRange['min']!;
       final expectedGainMax = gainRange['max']!;
 
-      final baselineW = result.baselineWeight ?? effectivePrePreg ?? currentWeight;
-      final expectedWeightMin = baselineW + expectedGainMin;
-      final expectedWeightMax = baselineW + expectedGainMax;
+      // Falling back to currentWeight made the baseline equal the weight being
+      // measured, so "current gain" came out as exactly +0.0 kg — a number
+      // about nothing, printed beside a target range as though it meant she
+      // had gained none.
+      final baselineW = result.baselineWeight ?? effectivePrePreg;
 
-      final actualGain = result.actualGain ?? (currentWeight - baselineW);
-      final actualStr =
-          "${actualGain >= 0 ? '+' : ''}${actualGain.toStringAsFixed(1)} kg";
-      final gainRangeStr =
-          "${expectedGainMin.toStringAsFixed(1)} – ${expectedGainMax.toStringAsFixed(1)} kg";
-      final weightRangeStr =
-          "${expectedWeightMin.toStringAsFixed(1)} – ${expectedWeightMax.toStringAsFixed(1)} kg";
+      final String detailsText;
+      if (isInsufficient || baselineW == null) {
+        detailsText =
+            "Her weight before pregnancy is not on record, so gain cannot be "
+            "measured from it. Add it to her profile if she knows it, or "
+            "record a second checkup — two measured weights can be compared "
+            "to each other.";
+      } else {
+        final expectedWeightMin = baselineW + expectedGainMin;
+        final expectedWeightMax = baselineW + expectedGainMax;
 
-      final detailsText =
-          "Based on pre-pregnancy BMI (${result.bmiCategory}): "
-          "recommended target weight for Week ${_aogWeeks!.toInt()} is $weightRangeStr "
-          "(ideal gain: $gainRangeStr; current gain: $actualStr).";
+        final actualGain = result.actualGain ?? (currentWeight - baselineW);
+        final actualStr =
+            "${actualGain >= 0 ? '+' : ''}${actualGain.toStringAsFixed(1)} kg";
+        final gainRangeStr =
+            "${expectedGainMin.toStringAsFixed(1)} – ${expectedGainMax.toStringAsFixed(1)} kg";
+        final weightRangeStr =
+            "${expectedWeightMin.toStringAsFixed(1)} – ${expectedWeightMax.toStringAsFixed(1)} kg";
+
+        detailsText = "Based on pre-pregnancy BMI (${result.bmiCategory}): "
+            "recommended target weight for Week ${_aogWeeks!.toInt()} is $weightRangeStr "
+            "(ideal gain: $gainRangeStr; current gain: $actualStr).";
+      }
 
       return Container(
         margin: const EdgeInsets.only(top: 8),
