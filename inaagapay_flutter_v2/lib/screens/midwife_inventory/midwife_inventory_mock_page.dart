@@ -11,9 +11,6 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/confirmation_dialog_box.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/main_header.dart';
-import '../../widgets/overview_info.dart';
-import '../../widgets/secondary_button.dart';
-import '../../widgets/tab_button.dart';
 import 'inventory_models.dart' as live;
 import 'inventory_repository.dart';
 
@@ -30,6 +27,7 @@ class MidwifeInventoryMockPage extends StatefulWidget {
 class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
     with WidgetsBindingObserver {
   static const double _pullUpRefreshThreshold = 56;
+  static const Color _warningForeground = Color(0xFF985400);
 
   final TextEditingController _stockSearchController = TextEditingController();
   final InventoryRepository _repository = InventoryRepository();
@@ -690,7 +688,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                               key: ValueKey<int>(_selectedTab),
                               physics: const AlwaysScrollableScrollPhysics(),
                               padding:
-                                  const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                                  const EdgeInsets.fromLTRB(20, 14, 20, 32),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -705,9 +703,10 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                                     _buildSyncWarning(),
                                     const SizedBox(height: 12),
                                   ],
-                                  if (_liveContext?.isDemo == true) ...[
+                                  if (_liveContext?.isDemo == true &&
+                                      _selectedTab != 0) ...[
                                     _buildDemoIdentityBanner(),
-                                    const SizedBox(height: 12),
+                                    const SizedBox(height: 10),
                                   ],
                                   if (!_workflowAvailable) ...[
                                     _buildWorkflowBanner(),
@@ -718,7 +717,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                                     const SizedBox(height: 14),
                                   ],
                                   _buildTabSelector(),
-                                  const SizedBox(height: 20),
+                                  const SizedBox(height: 16),
                                   page!,
                                   const SizedBox(height: 24),
                                   _buildPullUpRefreshFooter(),
@@ -814,23 +813,22 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
   Widget _buildDemoIdentityBanner() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.info.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.info.withValues(alpha: 0.16)),
       ),
       child: const Row(
         children: [
-          Icon(Icons.science_outlined, color: AppColors.info, size: 18),
-          SizedBox(width: 9),
+          Icon(Icons.science_outlined, color: AppColors.info, size: 16),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Live demo • Actions use Pinagbarilan BHC account #9 and update the shared inventory.',
+              'Demo data • Pinagbarilan BHC',
               style: TextStyle(
                 color: AppColors.textPrimary,
-                fontSize: 11,
-                height: 1.3,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -945,28 +943,48 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
   }
 
   Widget _buildTabSelector() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.bgSecondary,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.borderPrimary),
+      ),
       child: Row(
         children: [
-          TabButton(
-            label: 'Overview',
-            isActive: _selectedTab == 0,
-            onTap: () => setState(() => _selectedTab = 0),
-          ),
-          const SizedBox(width: 10),
-          TabButton(
-            label: 'My Stock',
-            isActive: _selectedTab == 1,
-            onTap: () => setState(() => _selectedTab = 1),
-          ),
-          const SizedBox(width: 10),
-          TabButton(
-            label: 'Requests',
-            isActive: _selectedTab == 2,
-            onTap: () => setState(() => _selectedTab = 2),
-          ),
+          _buildSegmentTab(label: 'Overview', index: 0),
+          _buildSegmentTab(label: 'My Stock', index: 1),
+          _buildSegmentTab(label: 'Requests', index: 2),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSegmentTab({required String label, required int index}) {
+    final selected = _selectedTab == index;
+    return Expanded(
+      child: Material(
+        color: selected ? AppColors.brandPrimary : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: () => setState(() => _selectedTab = index),
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            height: 44,
+            child: Center(
+              child: Text(
+                label,
+                maxLines: 1,
+                style: TextStyle(
+                  color: selected ? Colors.white : AppColors.textPrimary,
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -974,103 +992,216 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
   Widget _buildOverviewTab() {
     final pendingShipments =
         _shipments.where((shipment) => shipment.isPending).toList();
+    final expiryItems = _expiryAttentionItems;
+    final expiryItemIds = expiryItems.map((item) => item.itemId).toSet();
+    final lowOnlyItems = _lowStockItems
+        .where((item) => !expiryItemIds.contains(item.itemId))
+        .toList();
+    final totalAttention =
+        pendingShipments.length + expiryItems.length + lowOnlyItems.length;
+    final attentionRows = <Widget>[];
+
+    void addAttentionRow(Widget row) {
+      if (attentionRows.length < 3) attentionRows.add(row);
+    }
+
+    for (final shipment in pendingShipments) {
+      addAttentionRow(
+        _buildOverviewAttentionRow(
+          icon: Icons.local_shipping_outlined,
+          color: AppColors.info,
+          title: shipment.itemName,
+          subtitle:
+              '${shipment.issuedQuantity} ${shipment.unit} from RHU Main • Batch ${shipment.batchNumber}',
+          actionLabel: 'Receive',
+          onAction: () => _confirmReceive(shipment),
+        ),
+      );
+    }
+    for (final item in expiryItems) {
+      final hasExpired = item.expiredQuantity > 0;
+      addAttentionRow(
+        _buildOverviewAttentionRow(
+          icon: hasExpired ? Icons.event_busy_outlined : Icons.timer_outlined,
+          color: hasExpired ? AppColors.error : _warningForeground,
+          title: hasExpired ? '${item.name} has expired stock' : item.name,
+          subtitle: hasExpired
+              ? '${item.expiredQuantity} ${item.unit} cannot be dispensed'
+              : '${item.expiringSoonQuantity} ${item.unit} expire within 90 days • ${item.nearestExpiryLabel}',
+          actionLabel: hasExpired ? 'Report' : 'Review',
+          onAction: hasExpired
+              ? () => _showUnusableSheet(item)
+              : () => setState(() {
+                    _stockFilter = 'expiring';
+                    _selectedTab = 1;
+                  }),
+        ),
+      );
+    }
+    for (final item in lowOnlyItems) {
+      addAttentionRow(
+        _buildOverviewAttentionRow(
+          icon: Icons.warning_amber_rounded,
+          color: _warningForeground,
+          title: '${item.name} is low',
+          subtitle:
+              '${item.quantity} ${item.unit} usable • reorder at ${item.minimumStock}',
+          actionLabel: 'Request',
+          onAction: _workflowAvailable ? () => _showRequestSheet(item) : null,
+        ),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildConnectionHero(),
-        const SizedBox(height: 24),
-        _sectionHeading('STOCK AT A GLANCE'),
-        const SizedBox(height: 12),
-        Row(
+        const SizedBox(height: 20),
+        _sectionHeading(
+          totalAttention == 0
+              ? 'YOU\'RE ALL CAUGHT UP'
+              : 'NEEDS YOUR ATTENTION ($totalAttention)',
+        ),
+        const SizedBox(height: 10),
+        _buildOverviewAttentionList(
+          rows: attentionRows,
+          totalCount: totalAttention,
+          onViewAll: () => setState(() => _selectedTab = 1),
+        ),
+        const SizedBox(height: 22),
+        _sectionHeading('QUICK ACTIONS'),
+        const SizedBox(height: 10),
+        _buildStockActionsCard(pendingShipments),
+      ],
+    );
+  }
+
+  Widget _buildOverviewAttentionList({
+    required List<Widget> rows,
+    required int totalCount,
+    required VoidCallback onViewAll,
+  }) {
+    if (rows.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(15),
+        decoration: _cardDecoration(),
+        child: const Row(
           children: [
+            Icon(Icons.check_circle_rounded, color: AppColors.success),
+            SizedBox(width: 11),
             Expanded(
-              child: OverviewInfo(
-                value: _pendingShipmentCount,
-                label: 'Incoming\nstocks',
-                icon: Icons.inventory_2_outlined,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: OverviewInfo(
-                value: _lowStockItems.length,
-                label: 'Low stock\nitems',
-                icon: Icons.warning_amber_rounded,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: OverviewInfo(
-                value: _expiryAttentionItems.length,
-                label: 'Expiry\nalerts',
-                icon: Icons.event_busy_outlined,
+              child: Text(
+                'No deliveries, expired stock, or low-stock items need action.',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 26),
-        _sectionHeading('TODAY\'S STOCK ACTIONS'),
-        const SizedBox(height: 12),
-        _buildStockActionsCard(),
-        const SizedBox(height: 26),
-        _sectionHeading('INCOMING FROM RHU MAIN'),
-        const SizedBox(height: 12),
-        if (pendingShipments.isEmpty)
-          _buildAllCaughtUpCard()
-        else
-          ...pendingShipments.map(
-            (shipment) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildIncomingShipmentCard(shipment),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          for (int index = 0; index < rows.length; index++) ...[
+            rows[index],
+            if (index != rows.length - 1)
+              const Padding(
+                padding: EdgeInsets.only(left: 66),
+                child: Divider(height: 1, color: AppColors.borderPrimary),
+              ),
+          ],
+          if (totalCount > rows.length) ...[
+            const Divider(height: 1, color: AppColors.borderPrimary),
+            TextButton.icon(
+              onPressed: onViewAll,
+              icon: const Icon(Icons.inventory_2_outlined, size: 18),
+              label: Text('${totalCount - rows.length} more • View My Stock'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.brandText,
+                minimumSize: const Size(double.infinity, 48),
+                textStyle: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOverviewAttentionRow({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required String actionLabel,
+    required VoidCallback? onAction,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.11),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                    height: 1.3,
+                  ),
+                ),
+              ],
             ),
           ),
-        const SizedBox(height: 26),
-        _sectionHeading(
-          'EXPIRY ATTENTION',
-          actionLabel: 'Review stock',
-          onAction: () => setState(() => _selectedTab = 1),
-        ),
-        const SizedBox(height: 12),
-        if (_expiryAttentionItems.isEmpty)
-          _buildExpiryClearCard()
-        else
-          ..._expiryAttentionItems.take(2).map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _buildExpiryAttentionCard(item),
-                ),
+          const SizedBox(width: 6),
+          TextButton(
+            onPressed: onAction,
+            style: TextButton.styleFrom(
+              foregroundColor: color,
+              minimumSize: const Size(64, 44),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              textStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
               ),
-        const SizedBox(height: 26),
-        _sectionHeading(
-          'LOW-STOCK ATTENTION',
-          actionLabel: 'View stock',
-          onAction: () => setState(() => _selectedTab = 1),
-        ),
-        const SizedBox(height: 12),
-        if (_lowStockItems.isEmpty)
-          _buildAllStockHealthyCard()
-        else
-          ..._lowStockItems.take(2).map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _buildAttentionCard(item),
-                ),
-              ),
-        const SizedBox(height: 6),
-        SecondaryButton(
-          label: 'Request stocks from RHU Main',
-          leadingIcon: Icons.add_circle_outline_rounded,
-          onPressed:
-              _workflowAvailable ? _showRequestSheet : _showWorkflowUnavailable,
-        ),
-        const SizedBox(height: 16),
-        _buildLatestRequestCard(),
-        const SizedBox(height: 26),
-        _sectionHeading('RECENT ACTIVITY'),
-        const SizedBox(height: 10),
-        _buildRecentActivityCard(),
-      ],
+            ),
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1133,7 +1264,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1141,8 +1272,8 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        width: 44,
-                        height: 44,
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(14),
@@ -1153,7 +1284,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                         child: const Icon(
                           Icons.local_pharmacy_rounded,
                           color: Colors.white,
-                          size: 23,
+                          size: 21,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1175,37 +1306,26 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                                 height: 1.2,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${_liveContext?.displayName ?? 'Midwife'} • Shared inventory',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.84),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
                           ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
                   _HeroTag(
                     label: _liveContext?.isDemo == true
-                        ? 'LIVE DEMO IDENTITY'
-                        : 'VERIFIED MIDWIFE SESSION',
+                        ? 'DEMO DATA'
+                        : 'LIVE INVENTORY',
                     icon: _liveContext?.isDemo == true
                         ? Icons.science_outlined
-                        : Icons.verified_user_outlined,
+                        : Icons.sync_rounded,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   const Text(
-                    'RHU inventory connected',
+                    'Synced with RHU Main',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 23,
+                      fontSize: 22,
                       fontWeight: FontWeight.w800,
                       height: 1.1,
                     ),
@@ -1215,8 +1335,8 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                     constraints: const BoxConstraints(maxWidth: 360),
                     child: Text(
                       _pendingShipmentCount == 0
-                          ? 'Your BHC stock is synced. No delivery is waiting for confirmation.'
-                          : '$_pendingShipmentCount ${_pendingShipmentCount == 1 ? 'delivery is' : 'deliveries are'} ready for your receipt confirmation.',
+                          ? 'No deliveries are waiting to be received.'
+                          : '$_pendingShipmentCount ${_pendingShipmentCount == 1 ? 'delivery is' : 'deliveries are'} ready to receive.',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.9),
                         fontSize: 13,
@@ -1232,7 +1352,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 13,
-                        vertical: 11,
+                        vertical: 8,
                       ),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.16),
@@ -1252,11 +1372,11 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                           Expanded(
                             child: Text(
                               _lastSyncedAt == null
-                                  ? 'RHU issue → Receive → BHC stock update'
-                                  : 'Synced ${_dateTimeLabel(_lastSyncedAt!)}${_inventoryRealtimeConnected ? ' • LIVE' : ''}',
+                                  ? 'Pull down to refresh inventory'
+                                  : 'Updated ${_dateTimeLabel(_lastSyncedAt!)} • ${_inventoryRealtimeConnected ? 'Live updates on' : 'Pull to refresh'}',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 12,
+                                fontSize: 11,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -1274,604 +1394,131 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
     );
   }
 
-  Widget _buildStockActionsCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.bgSecondary,
-              borderRadius: BorderRadius.circular(14),
+  Widget _buildStockActionsCard(List<IncomingShipment> pendingShipments) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildQuickActionTile(
+                icon: Icons.inventory_2_outlined,
+                color: AppColors.info,
+                title: 'Receive',
+                subtitle: pendingShipments.isEmpty
+                    ? 'None waiting'
+                    : '${pendingShipments.length} ${pendingShipments.length == 1 ? 'delivery' : 'deliveries'} waiting',
+                onTap: pendingShipments.isEmpty || !_workflowAvailable
+                    ? null
+                    : () => unawaited(
+                          _showReceivePicker(pendingShipments),
+                        ),
+              ),
             ),
-            child: const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.account_tree_outlined,
-                  color: AppColors.brandText,
-                  size: 19,
-                ),
-                SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    'Choose an action → confirm the batch → review the new balance. Every movement is shared with RHU Main.',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                      height: 1.4,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildQuickActionTile(
+                icon: Icons.medication_outlined,
+                color: AppColors.brandText,
+                title: 'Dispense',
+                subtitle: 'Record care use',
+                onTap: _stockActivityAvailable && _dispensableItems.isNotEmpty
+                    ? _showDispenseSheet
+                    : null,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _buildStockActionButton(
-            icon: Icons.medication_liquid_outlined,
-            color: AppColors.brandPrimary,
-            title: 'Dispense stock',
-            subtitle: 'Record medicine or vaccine used during a service.',
-            badge: 'Earliest-expiring batch selected',
-            onTap: _stockActivityAvailable && _dispensableItems.isNotEmpty
-                ? _showDispenseSheet
-                : null,
-          ),
-          const SizedBox(height: 10),
-          _buildStockActionButton(
-            icon: Icons.report_gmailerrorred_rounded,
-            color: AppColors.error,
-            title: 'Report expired / unusable',
-            subtitle: 'Remove affected stock and alert RHU with an audit note.',
-            badge:
-                '${_expiryAttentionItems.length} expiry alert${_expiryAttentionItems.length == 1 ? '' : 's'}',
-            onTap: _stockActivityAvailable && _reportableItems.isNotEmpty
-                ? _showUnusableSheet
-                : null,
-          ),
-        ],
-      ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _buildQuickActionTile(
+                icon: Icons.report_gmailerrorred_outlined,
+                color: AppColors.error,
+                title: 'Report unusable',
+                subtitle: 'Expired or damaged',
+                onTap: _stockActivityAvailable && _reportableItems.isNotEmpty
+                    ? _showUnusableSheet
+                    : null,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildQuickActionTile(
+                icon: Icons.add_shopping_cart_outlined,
+                color: _warningForeground,
+                title: 'Request stock',
+                subtitle: 'Ask RHU Main',
+                onTap: _workflowAvailable ? _showRequestSheet : null,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
-  Widget _buildStockActionButton({
+  Widget _buildQuickActionTile({
     required IconData icon,
     required Color color,
     required String title,
     required String subtitle,
-    required String badge,
     required VoidCallback? onTap,
   }) {
+    final foreground = onTap == null ? AppColors.textSecondary : color;
     return Material(
-      color: color.withValues(alpha: 0.07),
+      color: onTap == null
+          ? AppColors.borderPrimary.withValues(alpha: 0.45)
+          : color.withValues(alpha: 0.07),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 108),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withValues(alpha: 0.18)),
+            border: Border.all(color: foreground.withValues(alpha: 0.2)),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: onTap == null ? 0.07 : 0.14),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  icon,
-                  color: onTap == null ? AppColors.textSecondary : color,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: onTap == null
-                            ? AppColors.textSecondary
-                            : AppColors.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 11,
-                        height: 1.3,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.88),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        badge,
-                        style: TextStyle(
-                          color:
-                              onTap == null ? AppColors.textSecondary : color,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: onTap == null ? AppColors.borderPrimary : color,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExpiryClearCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(),
-      child: const Row(
-        children: [
-          Icon(Icons.event_available_rounded, color: AppColors.success),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'No active batch expires within the next 90 days.',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExpiryAttentionCard(InventoryItem item) {
-    final hasExpired = item.expiredQuantity > 0;
-    final color = hasExpired ? AppColors.error : AppColors.warning;
-    final message = hasExpired
-        ? '${item.expiredQuantity} ${item.unit} must not be dispensed'
-        : '${item.expiringSoonQuantity} ${item.unit} expire within 90 days • nearest ${item.nearestExpiryLabel.toLowerCase()}';
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
-      decoration: _cardDecoration(),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.13),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              hasExpired ? Icons.event_busy_rounded : Icons.timer_outlined,
-              color: color,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  message,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: hasExpired
-                ? _stockActivityAvailable
-                    ? () => _showUnusableSheet(item)
-                    : null
-                : () {
-                    setState(() {
-                      _stockFilter = 'expiring';
-                      _selectedTab = 1;
-                    });
-                  },
-            child: Text(hasExpired ? 'Report' : 'Review'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildIncomingShipmentCard(IncomingShipment shipment) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: _cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: AppColors.brandPrimary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
+                  color: foreground.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(11),
                 ),
-                child: const Icon(
-                  Icons.inventory_2_rounded,
-                  color: AppColors.brandPrimary,
-                ),
+                child: Icon(icon, color: foreground, size: 20),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      shipment.itemName,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'From ${shipment.issuedBy}',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _StatusChip(
-                label: shipment.isPending ? 'Pending' : 'Received',
-                color:
-                    shipment.isPending ? AppColors.warning : AppColors.success,
-                icon: shipment.isPending
-                    ? Icons.schedule_rounded
-                    : Icons.check_circle_rounded,
-              ),
-            ],
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 15),
-            child: Divider(height: 1, color: AppColors.borderPrimary),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: _DetailValue(
-                  label: 'BATCH',
-                  value: shipment.batchNumber,
-                ),
-              ),
-              Expanded(
-                child: _DetailValue(
-                  label: 'QUANTITY',
-                  value: '${shipment.issuedQuantity} ${shipment.unit}',
-                ),
-              ),
-              Expanded(
-                child: _DetailValue(
-                  label: 'ISSUED',
-                  value: _shortDate(shipment.issuedAt),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.bgSecondary,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.info_outline_rounded,
-                  size: 18,
-                  color: AppColors.brandText,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    shipment.remarks,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          MainButton(
-            label: _receivingTransferIds.contains(shipment.transferId)
-                ? 'Receiving stock...'
-                : 'Receive ${shipment.issuedQuantity} ${shipment.unit}',
-            leftIcon: Icons.check_circle_outline_rounded,
-            onPressed: !_workflowAvailable ||
-                    _receivingTransferIds.contains(shipment.transferId)
-                ? null
-                : () => _confirmReceive(shipment),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAllCaughtUpCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: _cardDecoration(),
-      child: const Column(
-        children: [
-          Icon(
-            Icons.inventory_rounded,
-            color: AppColors.success,
-            size: 38,
-          ),
-          SizedBox(height: 10),
-          Text(
-            'All caught up',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            'There are no issued stocks waiting for your receipt confirmation.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAllStockHealthyCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(),
-      child: const Row(
-        children: [
-          Icon(Icons.check_circle_rounded, color: AppColors.success),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'All items are above their re-order levels.',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAttentionCard(InventoryItem item) {
-    final int shortfall = item.minimumStock - item.quantity;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
-      decoration: _cardDecoration(),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.warning.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(item.icon, color: AppColors.warning, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '${item.quantity} ${item.unit} on hand • $shortfall below re-order level',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed:
-                _workflowAvailable ? () => _showRequestSheet(item) : null,
-            child: const Text('Request'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLatestRequestCard() {
-    if (_requests.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: _cardDecoration(),
-        child: const Row(
-          children: [
-            Icon(Icons.assignment_outlined, color: AppColors.textSecondary),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'No stock requests have been recorded for this BHC.',
+              const SizedBox(height: 11),
+              Text(
+                title,
+                maxLines: 2,
                 style: TextStyle(
+                  color: onTap == null
+                      ? AppColors.textSecondary
+                      : AppColors.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 12,
+                  height: 1.25,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      );
-    }
-    final request = _requests.first;
-    final statusColor = _statusColor(request.status);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(Icons.assignment_outlined, color: statusColor),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Latest stock request',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '${request.itemName} • ${request.quantity} ${request.unit}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _StatusChip(
-            label: request.status,
-            color: statusColor,
-            icon: _statusIcon(request.status),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecentActivityCard() {
-    final recentEvents = _events.take(3).toList();
-    if (recentEvents.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: _cardDecoration(),
-        child: const Text(
-          'No inventory movements have been logged for this BHC yet.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-        ),
-      );
-    }
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: _cardDecoration(),
-      child: Column(
-        children: [
-          for (int index = 0; index < recentEvents.length; index++) ...[
-            _ActivityTile(
-                event: recentEvents[index], dateLabel: _dateTimeLabel),
-            if (index != recentEvents.length - 1)
-              const Padding(
-                padding: EdgeInsets.only(left: 64),
-                child: Divider(height: 1, color: AppColors.borderPrimary),
-              ),
-          ],
-        ],
       ),
     );
   }
@@ -1927,7 +1574,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
         ),
         const SizedBox(height: 5),
         const Text(
-          'Usable totals exclude expired batches. The earliest-expiring stock is selected first (FEFO).',
+          'Expired batches are excluded. Dispensing automatically uses the batch that expires first.',
           style: TextStyle(
             color: AppColors.textSecondary,
             fontSize: 12,
@@ -1937,7 +1584,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
         const SizedBox(height: 18),
         AppInputField(
           controller: _stockSearchController,
-          hintText: 'Search item, code, category, or batch',
+          hintText: 'Search medicine, code, or batch',
           leadingIcon: Icons.search_rounded,
           trailingIcon:
               _stockSearchController.text.isEmpty ? null : Icons.close_rounded,
@@ -1948,91 +1595,34 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _buildStockFilterChip(
-                value: 'all',
-                label: 'All stock',
-                icon: Icons.inventory_2_outlined,
-              ),
-              const SizedBox(width: 8),
-              _buildStockFilterChip(
-                value: 'expiring',
-                label: 'Expires ≤90d',
-                icon: Icons.timer_outlined,
-                color: AppColors.warning,
-              ),
-              const SizedBox(width: 8),
-              _buildStockFilterChip(
-                value: 'expired',
-                label: 'Expired',
-                icon: Icons.event_busy_outlined,
-                color: AppColors.error,
-              ),
-              const SizedBox(width: 8),
-              _buildStockFilterChip(
-                value: 'low',
-                label: 'Low stock',
-                icon: Icons.warning_amber_rounded,
-                color: AppColors.warning,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.bgSecondary,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: AppColors.brandPrimary.withValues(alpha: 0.12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildStockFilterChip(
+              value: 'all',
+              label: 'All (${_inventory.length})',
+              icon: Icons.inventory_2_outlined,
             ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: _InventoryCountLabel(
-                  icon: Icons.inventory_2_outlined,
-                  value: visibleItems.length,
-                  label: 'Items shown',
-                  color: AppColors.brandText,
-                  compact: true,
-                ),
-              ),
-              Container(
-                width: 1,
-                height: 34,
-                color: AppColors.borderPrimary,
-              ),
-              Expanded(
-                child: _InventoryCountLabel(
-                  icon: Icons.timer_outlined,
-                  value: expiringCount,
-                  label: 'Expiring',
-                  color: AppColors.warning,
-                  compact: true,
-                ),
-              ),
-              Container(
-                width: 1,
-                height: 34,
-                color: AppColors.borderPrimary,
-              ),
-              Expanded(
-                child: _InventoryCountLabel(
-                  icon: Icons.event_busy_outlined,
-                  value: expiredCount,
-                  label: 'Expired',
-                  color: AppColors.error,
-                  compact: true,
-                ),
-              ),
-            ],
-          ),
+            _buildStockFilterChip(
+              value: 'low',
+              label: 'Low (${_lowStockItems.length})',
+              icon: Icons.warning_amber_rounded,
+              color: _warningForeground,
+            ),
+            _buildStockFilterChip(
+              value: 'expiring',
+              label: 'Expiring ($expiringCount)',
+              icon: Icons.timer_outlined,
+              color: _warningForeground,
+            ),
+            _buildStockFilterChip(
+              value: 'expired',
+              label: 'Expired ($expiredCount)',
+              icon: Icons.event_busy_outlined,
+              color: AppColors.error,
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         if (visibleItems.isEmpty)
@@ -2048,12 +1638,6 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
         _sectionHeading('RECENT DISPENSING & UNUSABLE STOCK'),
         const SizedBox(height: 10),
         _buildStockOutActivityCard(),
-        const SizedBox(height: 18),
-        MainButton(
-          label: 'Request stocks from RHU Main',
-          leftIcon: Icons.add_shopping_cart_outlined,
-          onPressed: _workflowAvailable ? _showRequestSheet : null,
-        ),
       ],
     );
   }
@@ -2153,7 +1737,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
     final Color statusColor = hasExpired
         ? AppColors.error
         : hasExpiring || item.isLowStock
-            ? AppColors.warning
+            ? _warningForeground
             : AppColors.success;
     final String statusLabel = hasExpired
         ? 'Expiry alert'
@@ -2165,10 +1749,6 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                     ? 'Low stock'
                     : 'Available';
     final int shortfall = item.minimumStock - item.quantity;
-    final int progressTarget =
-        item.minimumStock > 0 ? item.minimumStock * 2 : 1;
-    final double progress =
-        (item.quantity / progressTarget).clamp(0.0, 1.0).toDouble();
 
     return Container(
       width: double.infinity,
@@ -2239,12 +1819,12 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 13),
           Row(
             children: [
               Expanded(
                 child: _DetailValue(
-                  label: 'ON HAND',
+                  label: 'USABLE NOW',
                   value: '${item.quantity} ${item.unit} usable',
                   valueColor: AppColors.textPrimary,
                 ),
@@ -2257,42 +1837,21 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          const Text(
-            'STOCK LEVEL',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.4,
+          if (item.isLowStock) ...[
+            const SizedBox(height: 8),
+            Text(
+              '$shortfall ${item.unit} needed to reach the reorder level of ${item.minimumStock}.',
+              style: const TextStyle(
+                color: _warningForeground,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            item.isLowStock
-                ? '$shortfall ${item.unit} below the re-order level'
-                : 'Stock is above the re-order level',
-            style: TextStyle(
-              color:
-                  item.isLowStock ? AppColors.textPrimary : AppColors.success,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 7),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 7,
-              color: statusColor,
-              backgroundColor: statusColor.withValues(alpha: 0.14),
-            ),
-          ),
-          const SizedBox(height: 14),
+          ],
+          const SizedBox(height: 11),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(11),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
             decoration: BoxDecoration(
               color: (item.nearestUsableBatch == null
                       ? AppColors.error
@@ -2322,8 +1881,8 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                 Expanded(
                   child: Text(
                     item.nearestUsableBatch == null
-                        ? 'No usable batch is available. Expired stock is excluded.'
-                        : 'Use first: Batch ${item.nearestUsableBatch!.batchNumber} • ${item.nearestExpiryLabel}',
+                        ? 'No usable batch. Expired stock is excluded.'
+                        : 'Use first • Batch ${item.nearestUsableBatch!.batchNumber} • ${item.nearestExpiryLabel}',
                     style: const TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 11,
@@ -2356,7 +1915,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
             ),
           ],
           const Padding(
-            padding: EdgeInsets.only(top: 14, bottom: 12),
+            padding: EdgeInsets.only(top: 11, bottom: 9),
             child: Divider(height: 1, color: AppColors.borderPrimary),
           ),
           Row(
@@ -2373,7 +1932,8 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                     side: BorderSide(
                       color: AppColors.brandPrimary.withValues(alpha: 0.45),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    minimumSize: const Size(0, 44),
+                    padding: const EdgeInsets.symmetric(vertical: 9),
                     textStyle: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -2395,7 +1955,8 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                     side: BorderSide(
                       color: AppColors.error.withValues(alpha: 0.4),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    minimumSize: const Size(0, 44),
+                    padding: const EdgeInsets.symmetric(vertical: 9),
                     textStyle: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -2413,7 +1974,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                 onPressed:
                     _workflowAvailable ? () => _showRequestSheet(item) : null,
                 icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                label: const Text('Request this item'),
+                label: const Text('Request stock'),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.brandText,
                   textStyle: const TextStyle(fontWeight: FontWeight.w700),
@@ -2494,7 +2055,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
         ),
         const SizedBox(height: 5),
         const Text(
-          'Track every request from RHU review to delivery. New requests are created from Overview or a low-stock item in My Stock.',
+          'Follow each request from submission to receipt.',
           style: TextStyle(
             color: AppColors.textSecondary,
             fontSize: 12,
@@ -2504,14 +2065,12 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
         const SizedBox(height: 18),
         _buildRequestStatusOverview(
           activeRequests: activeRequests,
-          history: requestHistory,
         ),
-        const SizedBox(height: 14),
-        _buildRequestLifecycleCard(),
-        const SizedBox(height: 24),
+        const SizedBox(height: 22),
         _buildRequestGroup(
-          title: 'ACTIVE REQUESTS',
+          title: 'IN PROGRESS',
           requests: activeRequests,
+          showGuidance: true,
           emptyIcon: Icons.task_alt_rounded,
           emptyTitle: 'No active requests',
           emptyMessage:
@@ -2519,8 +2078,9 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
         ),
         const SizedBox(height: 24),
         _buildRequestGroup(
-          title: 'REQUEST HISTORY',
+          title: 'PAST REQUESTS',
           requests: requestHistory,
+          showGuidance: false,
           emptyIcon: Icons.history_rounded,
           emptyTitle: 'No request history yet',
           emptyMessage:
@@ -2532,7 +2092,6 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
 
   Widget _buildRequestStatusOverview({
     required List<StockRequest> activeRequests,
-    required List<StockRequest> history,
   }) {
     final awaitingRhu = activeRequests
         .where(
@@ -2545,7 +2104,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -2557,8 +2116,8 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
             child: _InventoryCountLabel(
               icon: Icons.hourglass_top_rounded,
               value: awaitingRhu,
-              label: 'With RHU',
-              color: AppColors.warning,
+              label: 'Waiting for RHU',
+              color: _warningForeground,
               compact: true,
             ),
           ),
@@ -2567,18 +2126,8 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
             child: _InventoryCountLabel(
               icon: Icons.local_shipping_outlined,
               value: issued,
-              label: 'To receive',
+              label: 'Ready to receive',
               color: AppColors.brandText,
-              compact: true,
-            ),
-          ),
-          Container(width: 1, height: 38, color: AppColors.borderPrimary),
-          Expanded(
-            child: _InventoryCountLabel(
-              icon: Icons.task_alt_rounded,
-              value: history.length,
-              label: 'History',
-              color: AppColors.success,
               compact: true,
             ),
           ),
@@ -2590,6 +2139,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
   Widget _buildRequestGroup({
     required String title,
     required List<StockRequest> requests,
+    required bool showGuidance,
     required IconData emptyIcon,
     required String emptyTitle,
     required String emptyMessage,
@@ -2634,134 +2184,20 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
           ...requests.map(
             (request) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _buildRequestCard(request),
+              child: _buildRequestCard(
+                request,
+                showGuidance: showGuidance,
+              ),
             ),
           ),
       ],
     );
   }
 
-  Widget _buildRequestLifecycleCard() {
-    const labels = ['Pending', 'Approved', 'Issued', 'Received'];
-    const icons = [
-      Icons.hourglass_top_rounded,
-      Icons.task_alt_rounded,
-      Icons.local_shipping_outlined,
-      Icons.inventory_2_rounded,
-    ];
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
-      decoration: BoxDecoration(
-        color: AppColors.bgSecondary,
-        borderRadius: BorderRadius.circular(18),
-        border:
-            Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.route_outlined,
-                color: AppColors.brandText,
-                size: 18,
-              ),
-              SizedBox(width: 7),
-              Text(
-                'HOW REQUESTS MOVE',
-                style: TextStyle(
-                  color: AppColors.brandText,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 5),
-          const Text(
-            'The status changes automatically as RHU reviews and releases stock.',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 11,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              for (int index = 0; index < labels.length; index++) ...[
-                Expanded(
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: index == labels.length - 1
-                              ? AppColors.success.withValues(alpha: 0.16)
-                              : AppColors.brandPrimary.withValues(alpha: 0.14),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          icons[index],
-                          size: 17,
-                          color: index == labels.length - 1
-                              ? AppColors.success
-                              : AppColors.brandPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        labels[index],
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (index != labels.length - 1)
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.brandPrimary,
-                    size: 18,
-                  ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 14),
-          const Divider(height: 1, color: AppColors.borderPrimary),
-          const SizedBox(height: 12),
-          const Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.cancel_outlined, color: AppColors.error, size: 17),
-              SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  'Rejected requests stop before issue and remain in Request History with RHU remarks.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRequestCard(StockRequest request) {
+  Widget _buildRequestCard(
+    StockRequest request, {
+    required bool showGuidance,
+  }) {
     final Color statusColor = _statusColor(request.status);
     final bool isIssued = request.status == 'Issued';
     final String date = request.completedAt == null
@@ -2822,70 +2258,72 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
               ),
             ],
           ),
-          const SizedBox(height: 13),
+          const SizedBox(height: 11),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
             decoration: BoxDecoration(
               color: AppColors.bgPrimary,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'REQUEST REASON',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  request.reason,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 12,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: statusColor.withValues(alpha: 0.16)),
-            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  _statusIcon(request.status),
-                  color: statusColor,
+                const Icon(
+                  Icons.notes_rounded,
+                  color: AppColors.textSecondary,
                   size: 17,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _requestStatusMessage(request.status),
+                    'Reason: ${request.reason}',
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.textPrimary,
-                      fontSize: 11,
+                      fontSize: 12,
                       height: 1.35,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
               ],
             ),
           ),
+          if (showGuidance) ...[
+            const SizedBox(height: 9),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: statusColor.withValues(alpha: 0.16)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    _statusIcon(request.status),
+                    color: statusColor,
+                    size: 17,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _requestStatusMessage(request.status),
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 11,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (request.remarks.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
@@ -2931,7 +2369,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
               ),
               if (isIssued)
                 TextButton(
-                  onPressed: () => setState(() => _selectedTab = 0),
+                  onPressed: () => _openIssuedRequest(request),
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.brandText,
                     padding: const EdgeInsets.symmetric(
@@ -2940,7 +2378,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                     ),
                   ),
                   child: const Text(
-                    'View incoming',
+                    'Receive stock',
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -2949,6 +2387,23 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
         ],
       ),
     );
+  }
+
+  void _openIssuedRequest(StockRequest request) {
+    final matchingDeliveries = _shipments
+        .where(
+          (shipment) => shipment.isPending && shipment.requestId == request.id,
+        )
+        .toList();
+    if (matchingDeliveries.isEmpty) {
+      setState(() => _selectedTab = 0);
+      AppSnackbar.info(
+        context,
+        'The issued delivery is shown in Overview when it is ready to receive.',
+      );
+      return;
+    }
+    unawaited(_showReceivePicker(matchingDeliveries));
   }
 
   void _showDispenseSheet([InventoryItem? suggestedItem]) {
@@ -3251,8 +2706,8 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                                       const SizedBox(height: 3),
                                       Text(
                                         isDispense
-                                            ? 'Record stock used in a health service — no patient name is needed.'
-                                            : 'This immediately removes the affected quantity from usable stock and records the reason for RHU.',
+                                            ? 'Choose an item, enter the quantity, then confirm.'
+                                            : 'Choose the affected batch and tell RHU what happened.',
                                         style: const TextStyle(
                                           color: AppColors.textSecondary,
                                           fontSize: 11,
@@ -3263,6 +2718,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                                   ),
                                 ),
                                 IconButton(
+                                  tooltip: 'Close',
                                   onPressed: isSubmitting
                                       ? null
                                       : () => Navigator.of(sheetContext).pop(),
@@ -3271,13 +2727,11 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                               ],
                             ),
                             const SizedBox(height: 14),
-                            _buildActivityFlowSteps(isDispense: isDispense),
-                            const SizedBox(height: 14),
                             Expanded(
                               child: ListView(
                                 padding: const EdgeInsets.only(bottom: 8),
                                 children: [
-                                  const _FormLabel('1. INVENTORY ITEM'),
+                                  const _FormLabel('ITEM'),
                                   const SizedBox(height: 7),
                                   AppDropdownField<InventoryItem>(
                                     value: selectedItem,
@@ -3300,7 +2754,11 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                                     },
                                   ),
                                   const SizedBox(height: 16),
-                                  const _FormLabel('2. STOCK BATCH'),
+                                  _FormLabel(
+                                    isDispense
+                                        ? 'BATCH • SELECTED AUTOMATICALLY'
+                                        : 'BATCH',
+                                  ),
                                   const SizedBox(height: 7),
                                   AppDropdownField<live.InventoryBatchRecord>(
                                     value: selectedBatch,
@@ -3343,9 +2801,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                                   ],
                                   const SizedBox(height: 16),
                                   _FormLabel(
-                                    isDispense
-                                        ? '3. SERVICE PURPOSE'
-                                        : '3. ISSUE REASON',
+                                    isDispense ? 'SERVICE' : 'REASON',
                                   ),
                                   const SizedBox(height: 7),
                                   AppDropdownField<String>(
@@ -3377,7 +2833,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                                     },
                                   ),
                                   const SizedBox(height: 16),
-                                  const _FormLabel('4. QUANTITY'),
+                                  const _FormLabel('QUANTITY'),
                                   const SizedBox(height: 7),
                                   AppInputField(
                                     controller: quantityController,
@@ -3417,8 +2873,8 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                                   const SizedBox(height: 16),
                                   _FormLabel(
                                     requiresNotes
-                                        ? '5. NOTE (REQUIRED)'
-                                        : '5. NOTE (OPTIONAL)',
+                                        ? 'NOTE • REQUIRED'
+                                        : 'NOTE • OPTIONAL',
                                   ),
                                   const SizedBox(height: 7),
                                   AppInputField(
@@ -3483,50 +2939,6 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
     await _loadLiveInventory(refresh: true);
     if (!mounted) return;
     AppSnackbar.success(context, successMessage);
-  }
-
-  Widget _buildActivityFlowSteps({required bool isDispense}) {
-    final color = isDispense ? AppColors.brandPrimary : AppColors.error;
-    const labels = ['Choose stock', 'Enter details', 'Confirm'];
-    const icons = [
-      Icons.touch_app_outlined,
-      Icons.qr_code_scanner_rounded,
-      Icons.check_circle_outline_rounded,
-    ];
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: color.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        children: [
-          for (int index = 0; index < labels.length; index++) ...[
-            Expanded(
-              child: Column(
-                children: [
-                  Icon(icons[index], color: color, size: 17),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${index + 1}. ${labels[index]}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (index != labels.length - 1)
-              Icon(Icons.chevron_right_rounded, color: color, size: 17),
-          ],
-        ],
-      ),
-    );
   }
 
   Widget _buildSelectedBatchSummary({
@@ -3781,6 +3193,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
                                 ),
                               ),
                               IconButton(
+                                tooltip: 'Close',
                                 onPressed: isSubmitting
                                     ? null
                                     : () =>
@@ -3908,6 +3321,165 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
       context,
       '${selectedItem!.name} request sent to RHU Main.',
     );
+  }
+
+  Future<void> _showReceivePicker(
+    List<IncomingShipment> pendingShipments,
+  ) async {
+    if (pendingShipments.isEmpty) return;
+    if (pendingShipments.length == 1) {
+      _confirmReceive(pendingShipments.first);
+      return;
+    }
+
+    final selected = await showModalBottomSheet<IncomingShipment>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: FractionallySizedBox(
+            heightFactor: 0.72,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+              decoration: const BoxDecoration(
+                color: AppColors.bgPrimary,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.borderPrimary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'DELIVERIES TO RECEIVE',
+                              style: TextStyle(
+                                color: AppColors.brandText,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              'Choose the delivery you are confirming.',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: pendingShipments.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final shipment = pendingShipments[index];
+                        return Material(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          child: InkWell(
+                            onTap: () =>
+                                Navigator.of(sheetContext).pop(shipment),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: AppColors.borderPrimary,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 42,
+                                    height: 42,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          AppColors.info.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(
+                                      Icons.inventory_2_outlined,
+                                      color: AppColors.info,
+                                      size: 21,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 11),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          shipment.itemName,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: AppColors.textPrimary,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          '${shipment.issuedQuantity} ${shipment.unit} • Batch ${shipment.batchNumber}',
+                                          style: const TextStyle(
+                                            color: AppColors.textSecondary,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: AppColors.brandText,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected != null && mounted) _confirmReceive(selected);
   }
 
   void _confirmReceive(IncomingShipment shipment) {
@@ -4175,20 +3747,12 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
       live.InventoryNotificationKind.approved => AppColors.success,
       live.InventoryNotificationKind.rejected => AppColors.error,
       live.InventoryNotificationKind.issued => AppColors.brandPrimary,
-      live.InventoryNotificationKind.lowStock => AppColors.warning,
+      live.InventoryNotificationKind.lowStock => _warningForeground,
     };
   }
 
   void _showMockMessage(String message) {
     AppSnackbar.info(context, message);
-  }
-
-  void _showWorkflowUnavailable() {
-    AppSnackbar.warning(
-      context,
-      _workflowMessage ??
-          'Install the Supabase inventory workflow migration to enable requests and receipts.',
-    );
   }
 
   Widget _sectionHeading(
@@ -4245,7 +3809,7 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
   Color _statusColor(String status) {
     switch (status) {
       case 'Pending':
-        return AppColors.warning;
+        return _warningForeground;
       case 'Approved':
         return AppColors.info;
       case 'Issued':
