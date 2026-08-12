@@ -18,6 +18,7 @@ import '../../widgets/main_button.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../services/sms_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/prenatal_schedule_engine.dart';
 
 class AddPrenatalCheckupScreen extends StatefulWidget {
   const AddPrenatalCheckupScreen({
@@ -1553,53 +1554,25 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     }
   }
 
-  DateTime _calculateRecommendedNextSchedule() {
-    final baseDate = _normalizedDate(_checkupDateTime);
-    final weeks = _aogWeeks ?? 0;
-    final isHighRisk = _pregnancyRiskLevel.toLowerCase() == 'high';
-
-    int addDays;
-    if (weeks > 40) {
-      // Post-term mode: every 3 days with fetal surveillance
-      addDays = 3;
-    } else if (isHighRisk) {
-      // High-risk mode: every 1-2 weeks regardless of trimester
-      addDays = weeks >= 28 ? 7 : 14;
-    } else {
-      // Standard mode:
-      // Month 1-6 (weeks < 28): every 4 weeks (28 days)
-      // Month 7-8 (weeks 28 - 35.6): every 2 weeks (14 days)
-      // Month 9 (weeks 36 - 40): every 1 week (7 days)
-      if (weeks < 28) {
-        addDays = 28;
-      } else if (weeks < 36) {
-        addDays = 14;
-      } else {
-        addDays = 7;
-      }
-    }
-
-    return baseDate.add(Duration(days: addDays));
+  /// The proposed next visit, from [PrenatalScheduleEngine].
+  ///
+  /// The interval rules used to live in this method. They were correct, but
+  /// unreachable by a test and uncitable, and gestational diabetes screening
+  /// needs the same arithmetic. They now live in the engine; this stays as the
+  /// screen's way of asking, and the proposed date still lands in an editable
+  /// field the midwife confirms or overrides.
+  PrenatalScheduleProposal _scheduleProposal() {
+    return PrenatalScheduleEngine.propose(
+      lastVisit: _normalizedDate(_checkupDateTime),
+      gestationalWeeks: _aogWeeks,
+      isHighRisk: _pregnancyRiskLevel.toLowerCase() == 'high',
+      expectedDateOfDelivery: _effectiveEdd(),
+    );
   }
 
-  String _scheduleRecommendationReason() {
-    final weeks = _aogWeeks ?? 0;
-    final isHighRisk = _pregnancyRiskLevel.toLowerCase() == 'high';
+  DateTime _calculateRecommendedNextSchedule() => _scheduleProposal().date;
 
-    if (weeks > 40) {
-      return 'Post-term monitoring (+3 days)';
-    } else if (isHighRisk) {
-      return weeks >= 28 ? 'High-risk weekly monitoring (+1 week)' : 'High-risk bi-weekly monitoring (+2 weeks)';
-    } else {
-      if (weeks < 28) {
-        return 'Standard Month 1–6 schedule (+4 weeks / 28 days)';
-      } else if (weeks < 36) {
-        return 'Standard Month 7–8 schedule (+2 weeks / 14 days)';
-      } else {
-        return 'Standard Month 9 schedule (+1 week / 7 days)';
-      }
-    }
-  }
+  String _scheduleRecommendationReason() => _scheduleProposal().reason;
 
   DateTime? _effectiveLmp([Map<String, dynamic>? pregnancy]) {
     final lmpFromPregnancy = _tryDate(pregnancy?['last_menstrual_period']);

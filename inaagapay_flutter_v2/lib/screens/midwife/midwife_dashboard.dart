@@ -533,7 +533,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                     account:accounts (first_name, last_name)
                   ),
                   checkup:prenatal_checkups (
-                    prenatal_checkup_id,
+                    encounter_id,
                     td_vaccine_dose,
                     pregnancy_id,
                     blood_pressure_systolic,

@@ -171,7 +171,7 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
       final checkupsResponse = await Supabase.instance.client
           .from('prenatal_checkups')
           .select('''
-            prenatal_checkup_id,
+            encounter_id,
             next_schedule,
             pregnancy:pregnancy_id (
               mother:mother_id (
@@ -201,7 +201,7 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
       try {
         scheduleResponse =
             await Supabase.instance.client.from('schedules').select('''
-              id,
+              schedule_id,
               schedule_date,
               notes,
               status,
