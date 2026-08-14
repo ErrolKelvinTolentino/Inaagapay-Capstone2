@@ -4,7 +4,101 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'growth_reference_data.dart';
 
+/// The three growth indicators the app tracks.
+///
+/// Ordered by clinical priority for under-fives: weight-for-age (underweight)
+/// and height-for-age (stunting) are the indicators DOH growth monitoring is
+/// built on. BMI-for-age is supporting context — it is primarily a school-age
+/// and adolescent indicator, so it is presented as "body proportion" rather
+/// than as a headline finding.
+enum GrowthMetric {
+  weightForAge,
+  heightForAge,
+  bmiForAge;
+
+  String get label => switch (this) {
+        GrowthMetric.weightForAge => 'Weight for age',
+        GrowthMetric.heightForAge => 'Height for age',
+        GrowthMetric.bmiForAge => 'Body proportion',
+      };
+
+  String get labelFilipino => switch (this) {
+        GrowthMetric.weightForAge => 'Timbang sa edad',
+        GrowthMetric.heightForAge => 'Tangkad sa edad',
+        GrowthMetric.bmiForAge => 'Hubog ng katawan',
+      };
+
+  /// Short toggle label for the chart selector.
+  String get shortLabel => switch (this) {
+        GrowthMetric.weightForAge => 'Weight',
+        GrowthMetric.heightForAge => 'Height',
+        GrowthMetric.bmiForAge => 'Proportion',
+      };
+
+  String get unit => switch (this) {
+        GrowthMetric.weightForAge => 'kg',
+        GrowthMetric.heightForAge => 'cm',
+        GrowthMetric.bmiForAge => 'kg/m²',
+      };
+
+  /// What a below-range reading means, in clinical terms. Shown only to
+  /// midwives — mothers see the plain-language insight instead.
+  String? get belowRangeTerm => switch (this) {
+        GrowthMetric.weightForAge => 'underweight',
+        GrowthMetric.heightForAge => 'stunting',
+        GrowthMetric.bmiForAge => 'thinness',
+      };
+}
+
+/// Where a measurement sits against the WHO Child Growth Standards.
+enum GrowthBand {
+  below,
+  within,
+  above;
+
+  /// Label shown to midwives and mothers. Kept here so every screen renders the
+  /// same words for the same z-score.
+  String get label => switch (this) {
+        GrowthBand.below => 'Below standard range',
+        GrowthBand.within => 'Within standard range',
+        GrowthBand.above => 'Above standard range',
+      };
+
+  String get labelFilipino => switch (this) {
+        GrowthBand.below => 'Mababa sa pamantayan',
+        GrowthBand.within => 'Nasa loob ng pamantayan',
+        GrowthBand.above => 'Mataas sa pamantayan',
+      };
+
+  bool get isWithin => this == GrowthBand.within;
+}
+
 class GrowthCalculator {
+  /// WHO reference cut-off, in standard deviations.
+  ///
+  /// ±2 SD is the WHO threshold: -2 SD marks wasting/thinness and +2 SD marks
+  /// overweight in under-fives. A tighter ±1 SD would flag roughly a third of
+  /// perfectly healthy children, since that is simply how a normal
+  /// distribution is shaped.
+  static const double whoStandardSd = 2.0;
+
+  /// The single source of truth for classifying a growth z-score.
+  ///
+  /// Every screen that shows a growth status pill must go through this, so the
+  /// same child cannot read "within range" on one page and "above range" on
+  /// another.
+  static GrowthBand bandForZScore(double? zScore) {
+    if (zScore == null || zScore.isNaN || zScore.isInfinite) {
+      return GrowthBand.within;
+    }
+    if (zScore < -whoStandardSd) return GrowthBand.below;
+    if (zScore > whoStandardSd) return GrowthBand.above;
+    return GrowthBand.within;
+  }
+
+  /// Convenience wrapper returning the display label directly.
+  static String bandLabel(double? zScore) => bandForZScore(zScore).label;
+
   // Weight data for girls (WHO standards) - Weeks 0-13
   static final List<Map<String, dynamic>> _weightGirlsData = [
     {
@@ -1184,97 +1278,288 @@ class GrowthCalculator {
     }
   }
 
+  // ── WHO reference tables, month by month (0-60) ───────────────────────
+  //
+  // Generated from the WHO Child Growth Standards expanded z-score tables:
+  //   https://www.who.int/tools/child-growth-standards/standards
+  // Each row is [SD3neg, SD2neg, SD1neg, SD0, SD1, SD2, SD3] at that month.
+  //
+  // Length/height-for-age switches from recumbent length to standing height
+  // at 24 months, exactly as WHO's own table does.
+
   static const Map<int, List<double>> _boysHeightKeyPoints = {
     0: [44.2, 46.1, 48.0, 49.9, 51.8, 53.7, 55.6],
+    1: [48.8, 50.8, 52.7, 54.7, 56.6, 58.6, 60.5],
+    2: [52.4, 54.4, 56.4, 58.4, 60.4, 62.4, 64.4],
     3: [55.3, 57.3, 59.4, 61.4, 63.4, 65.5, 67.5],
-    6: [61.2, 63.3, 65.5, 67.6, 69.8, 71.9, 74.0],
+    4: [57.7, 59.7, 61.8, 63.9, 66.0, 68.1, 70.1],
+    5: [59.6, 61.7, 63.8, 65.9, 68.0, 70.1, 72.2],
+    6: [61.2, 63.4, 65.5, 67.6, 69.8, 71.9, 74.1],
+    7: [62.6, 64.8, 67.0, 69.2, 71.3, 73.5, 75.7],
+    8: [64.0, 66.2, 68.4, 70.6, 72.8, 75.0, 77.2],
     9: [65.2, 67.5, 69.7, 72.0, 74.2, 76.5, 78.7],
+    10: [66.4, 68.7, 71.0, 73.3, 75.5, 77.8, 80.1],
+    11: [67.6, 69.9, 72.2, 74.5, 76.9, 79.2, 81.5],
     12: [68.6, 71.0, 73.4, 75.7, 78.1, 80.5, 82.9],
-    18: [75.0, 77.4, 79.9, 82.3, 84.8, 87.3, 89.8],
-    24: [81.0, 83.2, 85.5, 87.8, 90.1, 92.4, 94.7],
-    36: [88.7, 91.2, 93.6, 96.1, 98.6, 101.1, 103.5],
-    48: [95.4, 98.0, 100.7, 103.3, 106.0, 108.6, 111.3],
-    60: [101.6, 104.4, 107.2, 110.0, 112.8, 115.6, 118.4],
+    13: [69.7, 72.1, 74.5, 76.9, 79.4, 81.8, 84.2],
+    14: [70.6, 73.1, 75.6, 78.0, 80.5, 83.0, 85.5],
+    15: [71.6, 74.1, 76.6, 79.2, 81.7, 84.2, 86.8],
+    16: [72.5, 75.0, 77.6, 80.2, 82.8, 85.4, 88.0],
+    17: [73.3, 76.0, 78.6, 81.2, 83.9, 86.5, 89.2],
+    18: [74.2, 76.9, 79.6, 82.3, 85.0, 87.7, 90.4],
+    19: [75.0, 77.7, 80.5, 83.2, 86.0, 88.7, 91.5],
+    20: [75.8, 78.6, 81.4, 84.2, 87.0, 89.8, 92.7],
+    21: [76.5, 79.4, 82.3, 85.1, 88.0, 90.9, 93.7],
+    22: [77.3, 80.2, 83.1, 86.1, 89.0, 91.9, 94.9],
+    23: [78.0, 80.9, 83.9, 86.9, 89.9, 92.9, 95.9],
+    24: [78.0, 81.0, 84.1, 87.1, 90.2, 93.2, 96.3],
+    25: [78.6, 81.7, 84.9, 88.0, 91.1, 94.2, 97.3],
+    26: [79.3, 82.4, 85.6, 88.8, 92.0, 95.1, 98.3],
+    27: [79.9, 83.2, 86.4, 89.6, 92.9, 96.1, 99.3],
+    28: [80.5, 83.8, 87.1, 90.4, 93.7, 97.0, 100.3],
+    29: [81.1, 84.5, 87.8, 91.2, 94.5, 97.9, 101.2],
+    30: [81.7, 85.1, 88.5, 91.9, 95.3, 98.7, 102.1],
+    31: [82.3, 85.8, 89.2, 92.7, 96.1, 99.6, 103.1],
+    32: [82.8, 86.4, 89.9, 93.4, 96.9, 100.4, 103.9],
+    33: [83.4, 86.9, 90.5, 94.1, 97.6, 101.2, 104.7],
+    34: [83.9, 87.5, 91.1, 94.8, 98.4, 102.0, 105.6],
+    35: [84.4, 88.1, 91.8, 95.4, 99.1, 102.7, 106.4],
+    36: [85.0, 88.7, 92.4, 96.1, 99.8, 103.5, 107.2],
+    37: [85.5, 89.2, 93.0, 96.7, 100.5, 104.2, 108.0],
+    38: [86.0, 89.8, 93.6, 97.4, 101.2, 105.0, 108.8],
+    39: [86.5, 90.3, 94.2, 98.0, 101.8, 105.7, 109.5],
+    40: [87.0, 90.9, 94.8, 98.6, 102.5, 106.4, 110.3],
+    41: [87.5, 91.4, 95.3, 99.2, 103.2, 107.1, 111.0],
+    42: [88.0, 91.9, 95.9, 99.8, 103.8, 107.8, 111.7],
+    43: [88.4, 92.4, 96.4, 100.5, 104.5, 108.5, 112.5],
+    44: [88.9, 92.9, 97.0, 101.0, 105.1, 109.1, 113.2],
+    45: [89.4, 93.5, 97.5, 101.6, 105.7, 109.8, 113.9],
+    46: [89.8, 94.0, 98.1, 102.2, 106.3, 110.4, 114.5],
+    47: [90.3, 94.5, 98.6, 102.8, 106.9, 111.1, 115.2],
+    48: [90.7, 94.9, 99.1, 103.3, 107.5, 111.7, 115.9],
+    49: [91.2, 95.4, 99.7, 103.9, 108.1, 112.3, 116.6],
+    50: [91.6, 95.9, 100.2, 104.5, 108.7, 113.0, 117.3],
+    51: [92.1, 96.4, 100.7, 105.0, 109.3, 113.6, 117.9],
+    52: [92.5, 96.9, 101.2, 105.6, 109.9, 114.2, 118.6],
+    53: [93.0, 97.4, 101.7, 106.1, 110.5, 114.9, 119.2],
+    54: [93.4, 97.8, 102.3, 106.7, 111.1, 115.5, 119.9],
+    55: [93.9, 98.3, 102.8, 107.2, 111.7, 116.1, 120.6],
+    56: [94.3, 98.8, 103.3, 107.8, 112.3, 116.8, 121.2],
+    57: [94.7, 99.3, 103.8, 108.3, 112.8, 117.4, 121.9],
+    58: [95.2, 99.7, 104.3, 108.9, 113.4, 118.0, 122.5],
+    59: [95.6, 100.2, 104.8, 109.4, 114.0, 118.6, 123.2],
+    60: [96.1, 100.7, 105.3, 110.0, 114.6, 119.2, 123.9],
   };
 
   static const Map<int, List<double>> _girlsHeightKeyPoints = {
     0: [43.6, 45.4, 47.3, 49.1, 51.0, 52.9, 54.7],
+    1: [47.8, 49.7, 51.7, 53.6, 55.6, 57.5, 59.5],
+    2: [51.0, 53.0, 55.0, 57.1, 59.1, 61.2, 63.2],
     3: [53.5, 55.6, 57.7, 59.8, 61.9, 64.0, 66.1],
-    6: [59.3, 61.4, 63.5, 65.7, 67.8, 69.9, 72.0],
-    9: [63.2, 65.5, 67.8, 70.1, 72.4, 74.7, 77.0],
-    12: [66.5, 68.9, 71.4, 74.0, 76.5, 79.0, 81.5],
-    18: [72.8, 75.4, 78.0, 80.7, 83.3, 86.0, 88.6],
-    24: [79.3, 81.7, 84.1, 86.4, 88.7, 91.1, 93.5],
-    36: [87.4, 89.9, 92.5, 95.1, 97.7, 100.3, 102.9],
-    48: [94.1, 97.0, 99.8, 102.7, 105.5, 108.4, 111.2],
-    60: [100.7, 103.6, 106.5, 109.4, 112.3, 115.2, 118.1],
+    4: [55.6, 57.8, 59.9, 62.1, 64.3, 66.4, 68.6],
+    5: [57.4, 59.6, 61.8, 64.0, 66.2, 68.5, 70.7],
+    6: [59.0, 61.2, 63.5, 65.8, 68.0, 70.3, 72.6],
+    7: [60.3, 62.7, 65.0, 67.3, 69.6, 71.9, 74.2],
+    8: [61.7, 64.0, 66.4, 68.8, 71.1, 73.5, 75.9],
+    9: [62.9, 65.3, 67.7, 70.1, 72.6, 75.0, 77.4],
+    10: [64.1, 66.5, 69.0, 71.5, 73.9, 76.4, 78.9],
+    11: [65.2, 67.7, 70.3, 72.8, 75.3, 77.8, 80.3],
+    12: [66.3, 68.9, 71.4, 74.0, 76.6, 79.2, 81.7],
+    13: [67.3, 70.0, 72.6, 75.2, 77.9, 80.5, 83.1],
+    14: [68.3, 71.0, 73.7, 76.4, 79.1, 81.7, 84.4],
+    15: [69.3, 72.0, 74.8, 77.5, 80.3, 83.0, 85.7],
+    16: [70.2, 73.0, 75.8, 78.6, 81.4, 84.2, 87.0],
+    17: [71.1, 74.0, 76.8, 79.7, 82.5, 85.4, 88.2],
+    18: [72.0, 74.9, 77.8, 80.7, 83.6, 86.5, 89.4],
+    19: [72.8, 75.8, 78.8, 81.7, 84.7, 87.6, 90.6],
+    20: [73.7, 76.7, 79.7, 82.7, 85.7, 88.7, 91.8],
+    21: [74.5, 77.5, 80.6, 83.7, 86.7, 89.8, 92.9],
+    22: [75.3, 78.4, 81.5, 84.6, 87.7, 90.9, 94.0],
+    23: [76.0, 79.2, 82.3, 85.5, 88.7, 91.9, 95.0],
+    24: [76.0, 79.3, 82.5, 85.7, 89.0, 92.2, 95.4],
+    25: [76.8, 80.0, 83.3, 86.6, 89.9, 93.1, 96.4],
+    26: [77.4, 80.8, 84.1, 87.4, 90.8, 94.1, 97.4],
+    27: [78.1, 81.5, 84.9, 88.3, 91.7, 95.1, 98.4],
+    28: [78.8, 82.2, 85.7, 89.1, 92.5, 96.0, 99.4],
+    29: [79.5, 82.9, 86.4, 89.9, 93.4, 96.9, 100.4],
+    30: [80.1, 83.6, 87.1, 90.7, 94.2, 97.7, 101.3],
+    31: [80.7, 84.3, 87.9, 91.5, 95.0, 98.6, 102.2],
+    32: [81.3, 84.9, 88.6, 92.2, 95.8, 99.4, 103.1],
+    33: [81.9, 85.6, 89.2, 92.9, 96.6, 100.3, 103.9],
+    34: [82.5, 86.2, 89.9, 93.6, 97.4, 101.1, 104.8],
+    35: [83.1, 86.8, 90.6, 94.3, 98.1, 101.9, 105.6],
+    36: [83.6, 87.4, 91.2, 95.1, 98.9, 102.7, 106.5],
+    37: [84.2, 88.0, 91.9, 95.7, 99.6, 103.4, 107.3],
+    38: [84.7, 88.6, 92.5, 96.4, 100.3, 104.2, 108.1],
+    39: [85.3, 89.2, 93.1, 97.1, 101.0, 105.0, 108.9],
+    40: [85.8, 89.8, 93.8, 97.8, 101.7, 105.7, 109.7],
+    41: [86.3, 90.4, 94.4, 98.4, 102.4, 106.5, 110.5],
+    42: [86.8, 90.9, 95.0, 99.0, 103.1, 107.2, 111.2],
+    43: [87.4, 91.5, 95.6, 99.7, 103.8, 107.9, 112.0],
+    44: [87.9, 92.0, 96.2, 100.3, 104.4, 108.6, 112.7],
+    45: [88.4, 92.6, 96.7, 100.9, 105.1, 109.3, 113.5],
+    46: [88.8, 93.1, 97.3, 101.5, 105.8, 110.0, 114.2],
+    47: [89.3, 93.6, 97.9, 102.1, 106.4, 110.7, 115.0],
+    48: [89.8, 94.1, 98.4, 102.7, 107.0, 111.3, 115.7],
+    49: [90.3, 94.6, 99.0, 103.3, 107.7, 112.0, 116.3],
+    50: [90.8, 95.1, 99.5, 103.9, 108.3, 112.7, 117.1],
+    51: [91.2, 95.6, 100.0, 104.5, 108.9, 113.3, 117.7],
+    52: [91.7, 96.1, 100.6, 105.1, 109.5, 114.0, 118.4],
+    53: [92.1, 96.6, 101.1, 105.6, 110.1, 114.6, 119.1],
+    54: [92.6, 97.1, 101.6, 106.2, 110.7, 115.3, 119.8],
+    55: [93.0, 97.6, 102.2, 106.7, 111.3, 115.9, 120.4],
+    56: [93.5, 98.1, 102.7, 107.3, 111.9, 116.5, 121.1],
+    57: [93.9, 98.5, 103.2, 107.8, 112.5, 117.1, 121.8],
+    58: [94.3, 99.0, 103.7, 108.4, 113.0, 117.7, 122.4],
+    59: [94.7, 99.5, 104.2, 108.9, 113.6, 118.3, 123.1],
+    60: [95.2, 99.9, 104.7, 109.4, 114.2, 118.9, 123.7],
   };
 
   static const Map<int, List<double>> _boysBmiKeyPoints = {
-    0: [10.1, 11.1, 12.2, 13.3, 14.6, 16.1, 17.7],
-    3: [12.2, 13.3, 14.6, 16.0, 17.5, 19.2, 21.0],
-    6: [13.1, 14.3, 15.5, 16.9, 18.4, 20.0, 21.8],
-    9: [13.1, 14.2, 15.4, 16.8, 18.3, 19.9, 21.7],
-    12: [12.9, 14.0, 15.2, 16.5, 18.0, 19.6, 21.4],
-    18: [12.5, 13.5, 14.7, 16.0, 17.4, 19.0, 20.8],
-    24: [12.1, 13.1, 14.2, 15.4, 16.8, 18.3, 20.0],
-    36: [11.8, 12.7, 13.7, 14.9, 16.2, 17.7, 19.4],
-    48: [11.5, 12.4, 13.3, 14.4, 15.7, 17.2, 18.9],
-    60: [11.2, 12.1, 13.0, 14.1, 15.3, 16.8, 18.5],
+    0: [10.2, 11.1, 12.2, 13.4, 14.8, 16.3, 18.1],
+    1: [11.3, 12.4, 13.6, 14.9, 16.3, 17.8, 19.4],
+    2: [12.5, 13.7, 15.0, 16.3, 17.8, 19.4, 21.1],
+    3: [13.1, 14.3, 15.5, 16.9, 18.4, 20.0, 21.8],
+    4: [13.4, 14.5, 15.8, 17.2, 18.7, 20.3, 22.1],
+    5: [13.5, 14.7, 15.9, 17.3, 18.8, 20.5, 22.3],
+    6: [13.6, 14.7, 16.0, 17.3, 18.8, 20.5, 22.3],
+    7: [13.7, 14.8, 16.0, 17.3, 18.8, 20.5, 22.3],
+    8: [13.6, 14.7, 15.9, 17.3, 18.7, 20.4, 22.2],
+    9: [13.6, 14.7, 15.8, 17.2, 18.6, 20.3, 22.1],
+    10: [13.5, 14.6, 15.7, 17.1, 18.5, 20.1, 22.0],
+    11: [13.4, 14.5, 15.6, 16.9, 18.4, 20.0, 21.8],
+    12: [13.4, 14.4, 15.5, 16.8, 18.2, 19.8, 21.6],
+    13: [13.3, 14.3, 15.4, 16.7, 18.1, 19.7, 21.5],
+    14: [13.2, 14.2, 15.3, 16.6, 18.0, 19.5, 21.3],
+    15: [13.1, 14.1, 15.2, 16.4, 17.8, 19.4, 21.2],
+    16: [13.1, 14.0, 15.1, 16.3, 17.7, 19.3, 21.0],
+    17: [13.0, 13.9, 15.0, 16.2, 17.6, 19.1, 20.9],
+    18: [12.9, 13.9, 14.9, 16.1, 17.5, 19.0, 20.8],
+    19: [12.9, 13.8, 14.9, 16.1, 17.4, 18.9, 20.7],
+    20: [12.8, 13.7, 14.8, 16.0, 17.3, 18.8, 20.6],
+    21: [12.8, 13.7, 14.7, 15.9, 17.2, 18.7, 20.5],
+    22: [12.7, 13.6, 14.7, 15.8, 17.2, 18.7, 20.4],
+    23: [12.7, 13.6, 14.6, 15.8, 17.1, 18.6, 20.3],
+    24: [12.9, 13.8, 14.8, 16.0, 17.3, 18.9, 20.6],
+    25: [12.8, 13.8, 14.8, 16.0, 17.3, 18.8, 20.5],
+    26: [12.8, 13.7, 14.8, 15.9, 17.3, 18.8, 20.5],
+    27: [12.7, 13.7, 14.7, 15.9, 17.2, 18.7, 20.4],
+    28: [12.7, 13.6, 14.7, 15.9, 17.2, 18.7, 20.4],
+    29: [12.7, 13.6, 14.7, 15.8, 17.1, 18.6, 20.3],
+    30: [12.6, 13.6, 14.6, 15.8, 17.1, 18.6, 20.2],
+    31: [12.6, 13.5, 14.6, 15.8, 17.1, 18.5, 20.2],
+    32: [12.5, 13.5, 14.6, 15.7, 17.0, 18.5, 20.1],
+    33: [12.5, 13.5, 14.5, 15.7, 17.0, 18.5, 20.1],
+    34: [12.5, 13.4, 14.5, 15.7, 17.0, 18.4, 20.0],
+    35: [12.4, 13.4, 14.5, 15.6, 16.9, 18.4, 20.0],
+    36: [12.4, 13.4, 14.4, 15.6, 16.9, 18.4, 20.0],
+    37: [12.4, 13.3, 14.4, 15.6, 16.9, 18.3, 19.9],
+    38: [12.3, 13.3, 14.4, 15.5, 16.8, 18.3, 19.9],
+    39: [12.3, 13.3, 14.3, 15.5, 16.8, 18.3, 19.9],
+    40: [12.3, 13.2, 14.3, 15.5, 16.8, 18.2, 19.9],
+    41: [12.2, 13.2, 14.3, 15.5, 16.8, 18.2, 19.9],
+    42: [12.2, 13.2, 14.3, 15.4, 16.8, 18.2, 19.8],
+    43: [12.2, 13.2, 14.2, 15.4, 16.7, 18.2, 19.8],
+    44: [12.2, 13.1, 14.2, 15.4, 16.7, 18.2, 19.8],
+    45: [12.2, 13.1, 14.2, 15.4, 16.7, 18.2, 19.8],
+    46: [12.1, 13.1, 14.2, 15.4, 16.7, 18.2, 19.8],
+    47: [12.1, 13.1, 14.2, 15.3, 16.7, 18.2, 19.9],
+    48: [12.1, 13.1, 14.1, 15.3, 16.7, 18.2, 19.9],
+    49: [12.1, 13.0, 14.1, 15.3, 16.7, 18.2, 19.9],
+    50: [12.1, 13.0, 14.1, 15.3, 16.7, 18.2, 19.9],
+    51: [12.1, 13.0, 14.1, 15.3, 16.6, 18.2, 19.9],
+    52: [12.0, 13.0, 14.1, 15.3, 16.6, 18.2, 19.9],
+    53: [12.0, 13.0, 14.1, 15.3, 16.6, 18.2, 20.0],
+    54: [12.0, 13.0, 14.0, 15.3, 16.6, 18.2, 20.0],
+    55: [12.0, 13.0, 14.0, 15.2, 16.6, 18.2, 20.0],
+    56: [12.0, 12.9, 14.0, 15.2, 16.6, 18.2, 20.1],
+    57: [12.0, 12.9, 14.0, 15.2, 16.6, 18.2, 20.1],
+    58: [12.0, 12.9, 14.0, 15.2, 16.6, 18.3, 20.2],
+    59: [12.0, 12.9, 14.0, 15.2, 16.6, 18.3, 20.2],
+    60: [11.9, 12.9, 14.0, 15.2, 16.6, 18.3, 20.3],
   };
 
   static const Map<int, List<double>> _girlsBmiKeyPoints = {
     0: [10.1, 11.1, 12.2, 13.3, 14.6, 16.1, 17.7],
-    3: [12.0, 13.2, 14.4, 15.8, 17.3, 18.9, 20.7],
-    6: [12.7, 13.9, 15.1, 16.5, 18.0, 19.6, 21.4],
-    9: [12.7, 13.8, 15.0, 16.4, 17.9, 19.5, 21.3],
-    12: [12.4, 13.5, 14.7, 16.0, 17.5, 19.1, 20.9],
-    18: [12.0, 13.0, 14.1, 15.4, 16.8, 18.4, 20.2],
-    24: [11.6, 12.6, 13.7, 14.9, 16.3, 17.8, 19.6],
-    36: [11.3, 12.2, 13.2, 14.4, 15.7, 17.2, 19.0],
-    48: [11.0, 11.8, 12.8, 13.9, 15.2, 16.7, 18.4],
-    60: [10.7, 11.5, 12.5, 13.6, 14.8, 16.3, 18.0],
+    1: [10.8, 11.9, 13.2, 14.5, 16.0, 17.5, 19.1],
+    2: [11.8, 13.0, 14.3, 15.8, 17.3, 19.0, 20.8],
+    3: [12.4, 13.6, 14.9, 16.4, 17.9, 19.7, 21.5],
+    4: [12.7, 13.9, 15.2, 16.7, 18.3, 20.0, 22.0],
+    5: [12.9, 14.1, 15.4, 16.8, 18.4, 20.2, 22.2],
+    6: [13.0, 14.1, 15.5, 16.9, 18.5, 20.3, 22.3],
+    7: [13.0, 14.2, 15.5, 16.9, 18.5, 20.3, 22.3],
+    8: [13.0, 14.1, 15.4, 16.8, 18.4, 20.2, 22.2],
+    9: [12.9, 14.1, 15.3, 16.7, 18.3, 20.1, 22.1],
+    10: [12.9, 14.0, 15.2, 16.6, 18.2, 19.9, 21.9],
+    11: [12.8, 13.9, 15.1, 16.5, 18.0, 19.8, 21.8],
+    12: [12.7, 13.8, 15.0, 16.4, 17.9, 19.6, 21.6],
+    13: [12.6, 13.7, 14.9, 16.2, 17.7, 19.5, 21.4],
+    14: [12.6, 13.6, 14.8, 16.1, 17.6, 19.3, 21.3],
+    15: [12.5, 13.5, 14.7, 16.0, 17.5, 19.2, 21.1],
+    16: [12.4, 13.5, 14.6, 15.9, 17.4, 19.1, 21.0],
+    17: [12.4, 13.4, 14.5, 15.8, 17.3, 18.9, 20.9],
+    18: [12.3, 13.3, 14.4, 15.7, 17.2, 18.8, 20.8],
+    19: [12.3, 13.3, 14.4, 15.7, 17.1, 18.8, 20.7],
+    20: [12.2, 13.2, 14.3, 15.6, 17.0, 18.7, 20.6],
+    21: [12.2, 13.2, 14.3, 15.5, 17.0, 18.6, 20.5],
+    22: [12.2, 13.1, 14.2, 15.5, 16.9, 18.5, 20.4],
+    23: [12.2, 13.1, 14.2, 15.4, 16.9, 18.5, 20.4],
+    24: [12.4, 13.3, 14.4, 15.7, 17.1, 18.7, 20.6],
+    25: [12.4, 13.3, 14.4, 15.7, 17.1, 18.7, 20.6],
+    26: [12.3, 13.3, 14.4, 15.6, 17.0, 18.7, 20.6],
+    27: [12.3, 13.3, 14.4, 15.6, 17.0, 18.6, 20.5],
+    28: [12.3, 13.3, 14.3, 15.6, 17.0, 18.6, 20.5],
+    29: [12.3, 13.2, 14.3, 15.6, 17.0, 18.6, 20.4],
+    30: [12.3, 13.2, 14.3, 15.5, 16.9, 18.5, 20.4],
+    31: [12.2, 13.2, 14.3, 15.5, 16.9, 18.5, 20.4],
+    32: [12.2, 13.2, 14.3, 15.5, 16.9, 18.5, 20.4],
+    33: [12.2, 13.2, 14.2, 15.5, 16.9, 18.5, 20.3],
+    34: [12.2, 13.1, 14.2, 15.4, 16.8, 18.5, 20.3],
+    35: [12.1, 13.1, 14.2, 15.4, 16.8, 18.4, 20.3],
+    36: [12.1, 13.1, 14.2, 15.4, 16.8, 18.4, 20.3],
+    37: [12.1, 13.1, 14.1, 15.4, 16.8, 18.4, 20.3],
+    38: [12.1, 13.0, 14.1, 15.4, 16.8, 18.4, 20.3],
+    39: [12.0, 13.0, 14.1, 15.3, 16.8, 18.4, 20.3],
+    40: [12.0, 13.0, 14.1, 15.3, 16.8, 18.4, 20.3],
+    41: [12.0, 13.0, 14.1, 15.3, 16.8, 18.4, 20.4],
+    42: [12.0, 12.9, 14.1, 15.3, 16.8, 18.4, 20.4],
+    43: [11.9, 12.9, 14.0, 15.3, 16.8, 18.4, 20.4],
+    44: [11.9, 12.9, 14.0, 15.3, 16.8, 18.5, 20.4],
+    45: [11.9, 12.9, 14.0, 15.3, 16.8, 18.5, 20.5],
+    46: [11.9, 12.9, 14.0, 15.3, 16.8, 18.5, 20.5],
+    47: [11.8, 12.8, 14.0, 15.3, 16.8, 18.5, 20.5],
+    48: [11.8, 12.8, 14.0, 15.3, 16.8, 18.5, 20.6],
+    49: [11.8, 12.8, 13.9, 15.3, 16.8, 18.5, 20.6],
+    50: [11.8, 12.8, 13.9, 15.3, 16.8, 18.6, 20.7],
+    51: [11.8, 12.8, 13.9, 15.2, 16.8, 18.6, 20.7],
+    52: [11.7, 12.8, 13.9, 15.2, 16.8, 18.6, 20.7],
+    53: [11.7, 12.7, 13.9, 15.2, 16.8, 18.6, 20.8],
+    54: [11.7, 12.7, 13.9, 15.3, 16.8, 18.7, 20.8],
+    55: [11.7, 12.7, 13.9, 15.3, 16.8, 18.7, 20.9],
+    56: [11.7, 12.7, 13.9, 15.3, 16.8, 18.7, 20.9],
+    57: [11.7, 12.7, 13.9, 15.3, 16.9, 18.7, 20.9],
+    58: [11.7, 12.7, 13.9, 15.3, 16.9, 18.8, 21.0],
+    59: [11.7, 12.7, 13.9, 15.3, 16.9, 18.8, 21.0],
+    60: [11.6, 12.7, 13.9, 15.3, 16.9, 18.8, 21.1],
   };
 
-  static Map<String, dynamic> _getInterpolatedSDBoundaries(int month, String metric, String gender) {
+  /// SD boundaries for a given month, read straight from the WHO tables.
+  ///
+  /// Every month 0-60 has its own row, so no interpolation happens. The tables
+  /// previously held only ten anchor months and interpolated linearly between
+  /// them, which both smoothed away the real curve and — because WHO's ±2 SD
+  /// values had been placed in the ±3 SD slots — reported a band far narrower
+  /// than WHO's. Ages outside 0-60 months clamp to the nearest end.
+  static Map<String, dynamic> _getInterpolatedSDBoundaries(
+      int month, String metric, String gender) {
     final isBoy = gender.toLowerCase() != 'female';
-    
-    // Select the key points
-    final Map<int, List<double>> keyPoints;
-    if (metric == 'height') {
-      keyPoints = isBoy ? _boysHeightKeyPoints : _girlsHeightKeyPoints;
-    } else {
-      keyPoints = isBoy ? _boysBmiKeyPoints : _girlsBmiKeyPoints;
-    }
 
-    if (month <= 0) {
-      return _listToMap(month, keyPoints[0]!);
-    }
-    if (month >= 60) {
-      return _listToMap(month, keyPoints[60]!);
-    }
+    final Map<int, List<double>> table = metric == 'height'
+        ? (isBoy ? _boysHeightKeyPoints : _girlsHeightKeyPoints)
+        : (isBoy ? _boysBmiKeyPoints : _girlsBmiKeyPoints);
 
-    // Find the lower and upper key months
-    final sortedKeys = keyPoints.keys.toList()..sort();
-    int lowerKey = 0;
-    int upperKey = 60;
-    for (int i = 0; i < sortedKeys.length - 1; i++) {
-      if (month >= sortedKeys[i] && month <= sortedKeys[i + 1]) {
-        lowerKey = sortedKeys[i];
-        upperKey = sortedKeys[i + 1];
-        break;
-      }
-    }
-
-    final lowerVals = keyPoints[lowerKey]!;
-    final upperVals = keyPoints[upperKey]!;
-    final t = (month - lowerKey) / (upperKey - lowerKey);
-
-    final interpolated = List<double>.generate(7, (idx) {
-      return lowerVals[idx] + t * (upperVals[idx] - lowerVals[idx]);
-    });
-
-    return _listToMap(month, interpolated);
+    final clamped = month < 0 ? 0 : (month > 60 ? 60 : month);
+    return _listToMap(clamped, table[clamped]!);
   }
 
   static Map<String, dynamic> _listToMap(int month, List<double> vals) {
@@ -1321,6 +1606,102 @@ class GrowthCalculator {
       }
     }
   }
+
+  /// WHO reference band for any metric at a given age, as the inverse of the
+  /// z-score calculation: what values sit at -2 SD and +2 SD for this age and
+  /// sex.
+  ///
+  /// Used to draw the reference band behind a child's growth line, the same way
+  /// the maternal chart draws its IOM bounds. A growth line without its band is
+  /// just a squiggle — the band is what makes it readable.
+  ///
+  /// Returns null when there is no reference data for the requested age.
+  static Map<String, double>? standardRangeAt(
+    GrowthMetric metric,
+    int week,
+    String gender, {
+    double sd = whoStandardSd,
+  }) {
+    if (week <= 13) {
+      final data = switch (metric) {
+        GrowthMetric.weightForAge => getWeightData(week, gender),
+        GrowthMetric.heightForAge => getHeightData(week, gender),
+        GrowthMetric.bmiForAge => getBMIData(week, gender),
+      };
+      if (data == null) return null;
+
+      final l = data['l'] as double;
+      final m = data['m'] as double;
+      final s = data['s'] as double;
+
+      // Inverse Box-Cox (LMS): value = M * (1 + L*S*z)^(1/L), or M*exp(S*z)
+      // when L is zero.
+      double valueAt(double z) {
+        if (l == 0) return m * math.exp(s * z);
+        final base = 1 + l * s * z;
+        if (base <= 0) return double.nan;
+        return m * math.pow(base, 1 / l).toDouble();
+      }
+
+      final min = valueAt(-sd);
+      final max = valueAt(sd);
+      if (min.isNaN || max.isNaN) return null;
+      return {'min': min, 'max': max};
+    }
+
+    // Beyond 13 weeks the references are tabulated SD boundaries, not LMS.
+    final month = (week / 4.345).round();
+    try {
+      final Map<String, dynamic> entry;
+      switch (metric) {
+        case GrowthMetric.weightForAge:
+          final monthly = gender.toLowerCase() == 'female'
+              ? GrowthReferenceData.weightGirlsMonthlyData
+              : GrowthReferenceData.weightBoysMonthlyData;
+          entry = monthly.firstWhere(
+            (e) => e['month'] == month,
+            orElse: () => monthly.last,
+          );
+        case GrowthMetric.heightForAge:
+          entry = _getInterpolatedSDBoundaries(month, 'height', gender);
+        case GrowthMetric.bmiForAge:
+          entry = _getInterpolatedSDBoundaries(month, 'bmi', gender);
+      }
+
+      final min = entry['sd2neg'];
+      final max = entry['sd2'];
+      if (min == null || max == null) return null;
+      return {
+        'min': (min as num).toDouble(),
+        'max': (max as num).toDouble(),
+      };
+    } catch (e) {
+      debugPrint('standardRangeAt note: $e');
+      return null;
+    }
+  }
+
+  /// Z-score for any metric, dispatching to the per-metric calculators.
+  static double? zScoreFor(
+    GrowthMetric metric,
+    double value,
+    int week,
+    String gender,
+  ) {
+    return switch (metric) {
+      GrowthMetric.weightForAge => calculateWeightZScore(value, week, gender),
+      GrowthMetric.heightForAge => calculateHeightZScore(value, week, gender),
+      GrowthMetric.bmiForAge => calculateBMIZScore(value, week, gender),
+    };
+  }
+
+  /// Retained for the existing BMI-only callers.
+  static Map<String, double>? bmiStandardRangeAt(
+    int week,
+    String gender, {
+    double sd = whoStandardSd,
+  }) =>
+      standardRangeAt(GrowthMetric.bmiForAge, week, gender, sd: sd);
 
   // Calculate Z-score for weight using LMS method (weekly) or SD interpolation (monthly)
   static double? calculateWeightZScore(double weight, int week, String gender) {

@@ -13,6 +13,18 @@ import '../../widgets/main_header.dart';
 class MidwifeShell extends StatefulWidget {
   const MidwifeShell({super.key});
 
+  /// Positions in the bottom navigation, named so screens inside the shell can
+  /// ask to switch tabs without repeating the order.
+  ///
+  /// The header and the navigation bar belong to the shell, not to the tabs.
+  /// Anything that pushes '/midwife-mothers' and friends as a route therefore
+  /// lands on a bare screen with no header and no way back — which is what the
+  /// analytics cards used to do.
+  static const int homeTab = 0;
+  static const int mothersTab = 1;
+  static const int childrenTab = 2;
+  static const int schedulesTab = 3;
+
   @override
   State<MidwifeShell> createState() => _MidwifeShellState();
 }
@@ -72,7 +84,10 @@ class _MidwifeShellState extends State<MidwifeShell> {
               child: IndexedStack(
                 index: _currentIndex,
                 children: [
-                  MidwifeDashboard(refreshNotifier: _refreshNotifier),
+                  MidwifeDashboard(
+                    refreshNotifier: _refreshNotifier,
+                    onNavigateToTab: _onTabSelected,
+                  ),
                   _visitedTabs[1]
                       ? const MidwifeMothersScreen()
                       : const SizedBox.shrink(),

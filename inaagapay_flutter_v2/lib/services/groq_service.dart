@@ -41,8 +41,27 @@ class GroqService {
 
   // ── API Constraints ─────────────────────────────────────────────────────
 
-  static const String _baseUrl =
+  static const String _groqBaseUrl =
       'https://api.groq.com/openai/v1/chat/completions';
+
+  /// NVIDIA NIM speaks the same OpenAI-compatible protocol as Groq, so the
+  /// same request body works against either host.
+  static const String _nvidiaBaseUrl =
+      'https://integrate.api.nvidia.com/v1/chat/completions';
+
+  /// Groq text model → NVIDIA NIM equivalent, used when Groq is rate-limited
+  /// or down. Llama 3.3 70B is the same model on both hosts, so the prompts
+  /// and safety rules behave identically on the fallback.
+  ///
+  /// Vision models are deliberately absent: that path already falls back to
+  /// Gemini in [_sendVisionRequest], and NVIDIA's VLMs expect a different
+  /// image payload shape than the OpenAI-style `image_url` blocks we send.
+  static const Map<String, String> _nvidiaModelEquivalents = {
+    _reasoningModel: 'meta/llama-3.3-70b-instruct',
+    _firstFallbackReasoningModel: 'meta/llama-3.1-8b-instruct',
+    _secondFallbackReasoningModel: 'meta/llama-3.1-70b-instruct',
+  };
+
   static const int _maxBase64Size = 4 * 1024 * 1024;
   static const int _maxImagesPerRequest = 5;
 
@@ -64,6 +83,14 @@ class GroqService {
       throw Exception('Groq API Key not found in .env');
     }
     return apiKey;
+  }
+
+  /// Optional — returns null when no NVIDIA key is configured, in which case
+  /// the provider fallback is simply skipped.
+  String? _getNvidiaApiKey() {
+    final apiKey = dotenv.env['NVIDIA_API_KEY'];
+    if (apiKey == null || apiKey.trim().isEmpty) return null;
+    return apiKey.trim();
   }
 
   // ════════════════════════════════════════════════════════════════════════
@@ -294,6 +321,11 @@ You are a precise document OCR data extractor for laboratory test reports. Perfo
   "location_facility": "Hi-Precision Diagnostics, San Fernando, Pampanga",
   "health_worker_name": "Maria Santos, RMT",
   "health_worker_profession": "Medical Technologist",
+  "blood_type": "O Positive",
+  "glucose_fasting_mg_dl": 92,
+  "glucose_1hr_mg_dl": 180,
+  "glucose_2hr_mg_dl": 153,
+  "glucose_3hr_mg_dl": null,
   "remarks": "Hemoglobin: 12.5 g/dL (Normal), WBC: 7.2 (Normal), Blood Type: O Positive"
 }
 
@@ -305,6 +337,11 @@ Guidance:
 - For institution_name: Extract ONLY the laboratory, clinic, or hospital name (e.g. Flabs, Hi-Precision Diagnostics).
 - For location_facility: Extract the facility name or address.
 - For health_worker_name: Look for the Pathologist, Medical Technologist, Doctor, or Examiner signature printed at the bottom or header.
+- For blood_type: Return the ABO and Rh result ONLY if the document explicitly prints one, copied exactly as it appears (e.g. "O Positive", "AB-", "B Rh(D) Negative"). Return null if the document does not state a blood type, if only the ABO group is shown without the Rh factor, or if the result is illegible. NEVER infer, guess, or carry over a blood type from any other value on the report — a blood type that is not printed on the document does not exist.
+- For the glucose fields: Return plasma glucose values ONLY from a Fasting Blood Sugar, Glucose Challenge, or Oral Glucose Tolerance Test, matching each printed sample to its timing label (fasting/0 hour, 1 hour, 2 hours, 3 hours). Return the number only, WITHOUT units.
+  * ALL FOUR VALUES MUST BE IN mg/dL. Philippine laboratories usually report mg/dL (values roughly 70-200). If the report states mmol/L (values roughly 4-11), return null for every glucose field — do NOT convert, and do NOT return the mmol/L number as if it were mg/dL.
+  * Return null for any sample the document does not print. A test with only a fasting value returns null for the others.
+  * Never infer a glucose value from HbA1c, urine glucose, or any other result. An unprinted value does not exist.
 - For remarks: Extract a clean summary of the main lab values, blood type, or impression lines visible on the document. Do NOT interpret or diagnose.
 
 CRITICAL: Extract ONLY actual text printed on the document image. DO NOT write conversational explanations or reasoning notes.
@@ -612,7 +649,7 @@ CRITICAL RULES:
             '- NEVER present exact target weights, guaranteed healthy weights, or rigid expectations.\n'
             '- If pre-pregnancy weight is unavailable, do NOT display BMI classifications or overweight/obese labels to the mother. Include disclaimer: "Pre-pregnancy weight information was not provided. Current insights are partially estimated and may have limited BMI-based interpretation."\n'
             '- For FIRST TRIMESTER: note that small weight changes are common in early pregnancy. Do NOT apply weekly rate references yet.\n'
-            '- Every weight interpretation must end with: "This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation."';
+            '- Every weight interpretation must end with: "This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation."';
 
     return _sendChatCompletion(
       messages: [
@@ -1102,32 +1139,55 @@ This reduces irrelevant findings and prevents AI misinterpretation.
 '''
         : '';
 
-    return """SYSTEM CONTEXT — ULTRASOUND AI-ASSISTED INTERPRETATION
+    return """SYSTEM CONTEXT — EXPLAIN MY REPORT
 
-You are an AI-assisted maternal healthcare interpretation assistant integrated into a barangay-level maternal healthcare monitoring system.
+You are a TRANSLATOR, not an interpreter.
 
-Your role is ONLY to:
-- simplify structured ultrasound findings
-- explain pregnancy monitoring information in understandable language
-- provide supportive and empathetic healthcare communication
-- help mothers better understand prenatal monitoring information
+A qualified sonologist or radiologist has ALREADY examined this scan and
+already reached their conclusions. Their work is finished and it is correct.
+Your only job is to put what they found into words a mother can understand.
 
 You are NOT:
 - a radiologist
 - a sonologist
 - a diagnostic system
 - a fetal anomaly detection system
+- a second opinion
 - a replacement for healthcare professionals
 
-IMPORTANT:
-The system does NOT directly diagnose ultrasound images.
-The system only interprets:
-- extracted ultrasound measurements
-- structured ultrasound findings
-- OCR-extracted ultrasound report data
-- healthcare monitoring information
+--------------------------------------------------
+THE ONE RULE THAT OVERRIDES EVERYTHING ELSE
+--------------------------------------------------
 
-The AI must NEVER pretend to directly analyze ultrasound images visually.
+EVERY statement you make must trace back to something written in the extracted
+report below. You may re-word it, simplify it, and explain what it means. You
+may NEVER add to it.
+
+Specifically, you must NEVER:
+- state a finding that does not appear in the extracted report
+- revise, soften, strengthen, contradict or "correct" the sonologist's
+  impression — if the report states an impression, restate it faithfully
+- work out your own conclusion from the measurements and present it as a
+  finding, even if the numbers seem to point somewhere
+- guess at anything the report does not mention
+- describe an anatomical structure the report does not describe
+- claim anything about the baby's health that the report does not claim
+
+If information is missing, say plainly that this scan did not record it. A
+mother is better served by "this report does not mention that" than by a
+confident answer you constructed yourself.
+
+A wrong reassurance and a wrong alarm are both harmful here. The safe answer is
+always the sonologist's answer, in simpler words.
+
+WHAT YOU ADD THAT THE REPORT DOES NOT
+The report is written for clinicians. You make it readable: plain language,
+Filipino where helpful, and context for what a number means at this stage of
+pregnancy. That is the whole of your contribution, and it is a real one — a
+mother who understands her own report attends her next visit.
+
+The AI must NEVER pretend to directly analyze ultrasound images visually. You
+are reading text that was extracted from a report, not looking at a scan.
 
 --------------------------------------------------
 PRIMARY GOAL
@@ -1310,7 +1370,7 @@ RECOMMENDED OUTPUT STRUCTURE
 4. Encouragement for Continued Prenatal Monitoring
 - encourage checkups and healthcare consultation
 
-5. Disclaimer: "This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation."
+5. Disclaimer: "This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation."
 
 $trimesterGuidance
 --------------------------------------------------
@@ -1381,7 +1441,7 @@ Return ONLY valid JSON in this exact schema (no markdown formatting outside the 
 - When things look normal, celebrate warmly (e.g. "Everything looks wonderful, mama — your baby is growing strong!")
 - If fetal weight estimates are mentioned, NEVER use "ideal weight" or "normal weight". Use "commonly expected range" or "appears within range".
 - Always end on an encouraging note.
-- End with: "This AI-assisted interpretation is for monitoring support only and does not replace professional medical consultation."
+- End with: "This AI-assisted explanation restates the findings already recorded by the sonologist and adds nothing of its own. It is for monitoring support only and does not replace professional medical consultation."
 """;
   }
 
@@ -1536,7 +1596,7 @@ Rules:
 - Use warm, caring phrasing — like a trusted ate talking to her bunso. Be honest about concerns but always pair them with encouragement and practical advice.
 - If lab results relate to maternal nutrition/weight (iron, glucose, etc.), NEVER use "ideal" or "normal" labels. Use "commonly expected range" or "appears within range".
 - Always end on an encouraging note (e.g. "You're doing a great job taking care of yourself and your baby, mama!").
-- End with: "This AI-assisted interpretation is for monitoring support only and does not replace professional medical consultation."
+- End with: "This AI-assisted explanation restates the findings already recorded by the sonologist and adds nothing of its own. It is for monitoring support only and does not replace professional medical consultation."
 """;
   }
 
@@ -1804,6 +1864,68 @@ Rules:
     final bool isVisionModel = model.toLowerCase().contains('vision');
     final bool useJsonMode = (forceJsonMode || _detectJsonMode(messages)) && !isVisionModel;
 
+    try {
+      return await _postChatCompletion(
+        baseUrl: _groqBaseUrl,
+        providerLabel: 'Groq',
+        apiKey: apiKey,
+        model: model,
+        messages: messages,
+        temperature: temperature,
+        maxOutputTokens: maxOutputTokens,
+        useJsonMode: useJsonMode,
+      );
+    } catch (e) {
+      final errorMessage = e.toString();
+
+      // Fallback 1 — same provider, smaller model. The prompt was too large
+      // for this model, so switching hosts would not help.
+      if (allowModelFallback && _isTokenLimitError(errorMessage)) {
+        final nextModel = _nextReasoningFallbackModel(model);
+        if (nextModel != null) {
+          _log(
+              '⚠️ ${model.split('/').last} token limit reached; retrying with ${nextModel.split('/').last}');
+          return _sendChatCompletion(
+            messages: messages,
+            apiKey: apiKey,
+            model: nextModel,
+            temperature: temperature,
+            maxOutputTokens: maxOutputTokens,
+            forceJsonMode: forceJsonMode,
+            allowModelFallback: true,
+          );
+        }
+      }
+
+      // Fallback 2 — different provider. Groq itself is rate-limited, down,
+      // or unreachable, so retry the same request against NVIDIA NIM.
+      if (_isProviderOutageError(errorMessage)) {
+        final nvidiaResult = await _tryNvidiaFallback(
+          messages: messages,
+          groqModel: model,
+          temperature: temperature,
+          maxOutputTokens: maxOutputTokens,
+          useJsonMode: useJsonMode,
+        );
+        if (nvidiaResult != null) return nvidiaResult;
+      }
+
+      rethrow;
+    }
+  }
+
+  /// Raw OpenAI-compatible chat-completion POST. Host-agnostic: both Groq and
+  /// NVIDIA NIM accept this exact body shape.
+  Future<String> _postChatCompletion({
+    required String baseUrl,
+    required String providerLabel,
+    required String apiKey,
+    required String model,
+    required List<Map<String, dynamic>> messages,
+    required double temperature,
+    required int maxOutputTokens,
+    required bool useJsonMode,
+  }) async {
     final requestBody = <String, dynamic>{
       'model': model,
       'messages': messages,
@@ -1815,12 +1937,12 @@ Rules:
     };
 
     _log(
-        '🌐 Sending request to ${model.split('/').last} (${messages.toString().length} chars)...');
+        '🌐 Sending request to $providerLabel/${model.split('/').last} (${messages.toString().length} chars)...');
 
     try {
       final response = await http
           .post(
-            Uri.parse(_baseUrl),
+            Uri.parse(baseUrl),
             headers: {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer $apiKey',
@@ -1835,24 +1957,6 @@ Rules:
           final errorData = jsonDecode(response.body);
           errorMessage = errorData['error']?['message'] ?? response.body;
         } catch (_) {}
-
-        if (allowModelFallback && _isTokenLimitError(errorMessage)) {
-          final nextModel = _nextReasoningFallbackModel(model);
-          if (nextModel != null) {
-            _log(
-                '⚠️ ${model.split('/').last} token limit reached; retrying with ${nextModel.split('/').last}');
-            return _sendChatCompletion(
-              messages: messages,
-              apiKey: apiKey,
-              model: nextModel,
-              temperature: temperature,
-              maxOutputTokens: maxOutputTokens,
-              forceJsonMode: forceJsonMode,
-              allowModelFallback: true,
-            );
-          }
-        }
-
         throw Exception('API Error (${response.statusCode}): $errorMessage');
       }
 
@@ -1860,10 +1964,96 @@ Rules:
       return _extractChatCompletionText(data);
     } on http.ClientException {
       throw Exception(
-          'Network error: Unable to reach Groq API. Please check your connection.');
+          'Network error: Unable to reach $providerLabel API. Please check your connection.');
     } on FormatException catch (e) {
-      throw Exception('Invalid response format from Groq API: $e');
+      throw Exception('Invalid response format from $providerLabel API: $e');
     }
+  }
+
+  /// Retries a failed Groq text request against NVIDIA NIM.
+  ///
+  /// Returns null — rather than throwing — whenever the fallback is
+  /// unavailable or also fails, so the caller surfaces the original Groq
+  /// error instead of a confusing secondary one.
+  Future<String?> _tryNvidiaFallback({
+    required List<Map<String, dynamic>> messages,
+    required String groqModel,
+    required double temperature,
+    required int maxOutputTokens,
+    required bool useJsonMode,
+  }) async {
+    final nvidiaKey = _getNvidiaApiKey();
+    if (nvidiaKey == null) {
+      _log('ℹ️ Groq unavailable and no NVIDIA_API_KEY set; skipping fallback.');
+      return null;
+    }
+
+    final nvidiaModel = _nvidiaModelEquivalents[groqModel];
+    if (nvidiaModel == null) {
+      _log('ℹ️ No NVIDIA equivalent mapped for $groqModel; skipping fallback.');
+      return null;
+    }
+
+    _log('🔁 Groq unavailable — falling back to NVIDIA NIM ($nvidiaModel)');
+
+    Future<String> attempt(bool jsonMode) => _postChatCompletion(
+          baseUrl: _nvidiaBaseUrl,
+          providerLabel: 'NVIDIA',
+          apiKey: nvidiaKey,
+          model: nvidiaModel,
+          messages: messages,
+          temperature: temperature,
+          maxOutputTokens: maxOutputTokens,
+          useJsonMode: jsonMode,
+        );
+
+    try {
+      return await attempt(useJsonMode);
+    } catch (e) {
+      final error = e.toString();
+
+      // Not every NIM model accepts response_format. Retry once as plain
+      // text — the JSON parsers downstream already tolerate prose and fences.
+      if (useJsonMode && error.contains('(400)')) {
+        _log('⚠️ NVIDIA rejected JSON mode; retrying without response_format');
+        try {
+          return await attempt(false);
+        } catch (retryError) {
+          _log('⚠️ NVIDIA fallback failed after retry: $retryError');
+          return null;
+        }
+      }
+
+      // NVIDIA's free tier returns transient 504s while a model cold-starts.
+      // One retry is cheap and this is already the last line of defence.
+      if (_isProviderOutageError(error)) {
+        _log('⚠️ NVIDIA transient failure; retrying once in 2s...');
+        await Future.delayed(const Duration(seconds: 2));
+        try {
+          return await attempt(useJsonMode);
+        } catch (retryError) {
+          _log('⚠️ NVIDIA fallback failed after retry: $retryError');
+          return null;
+        }
+      }
+
+      _log('⚠️ NVIDIA fallback failed: $error');
+      return null;
+    }
+  }
+
+  /// True when the failure is about provider availability rather than the
+  /// request itself — the only case where retrying on another host helps.
+  bool _isProviderOutageError(String message) {
+    final normalized = message.toLowerCase();
+    if (normalized.contains('network error') ||
+        normalized.contains('clientexception') ||
+        normalized.contains('timeoutexception') ||
+        normalized.contains('rate limit')) {
+      return true;
+    }
+    return RegExp(r'api error \((429|500|502|503|504|529)\)')
+        .hasMatch(normalized);
   }
 
   bool _isTokenLimitError(String message) {

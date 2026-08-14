@@ -20,10 +20,16 @@ class ObstetricScore {
   String get formattedGpaBullet => 'G$gravida • P$para • A$abortus';
 
   /// Formatted string like "G2 P1 A0 L1"
-  String get formattedGpal => formattedGpa;
+  ///
+  /// The L is the only figure here that reflects what happened *after* birth.
+  /// "G5 P3 A1" cannot say whether those three deliveries produced three
+  /// living children or one, which is exactly the difference a midwife needs.
+  /// Both GPAL getters previously forwarded to their GPA counterparts and
+  /// silently dropped it.
+  String get formattedGpal => '$formattedGpa L$livingChildren';
 
   /// Formatted string with bullets like "G2 • P1 • A0 • L1"
-  String get formattedGpalBullet => formattedGpaBullet;
+  String get formattedGpalBullet => '$formattedGpaBullet • L$livingChildren';
 
   /// Calculates G-P-A-L dynamically from past pregnancy items + current pregnancy status
   factory ObstetricScore.calculate({

@@ -198,19 +198,13 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
       return true;
     }).toList();
 
-    // Assign stable BHC patient IDs by sorting child_id ascending
-    final sortedForId = List<Map<String, dynamic>>.from(childrenList);
-    sortedForId.sort((a, b) => (a['child_id'] as int).compareTo(b['child_id'] as int));
-    
-    final idMap = <int, String>{};
-    for (int i = 0; i < sortedForId.length; i++) {
-      idMap[sortedForId[i]['child_id'] as int] = 'ANA-${(i + 1).toString().padLeft(3, '0')}';
-    }
-    
+    // Read the persisted NAK number rather than deriving one from list order —
+    // an index-based id changes whenever the list is filtered or re-sorted.
     for (var child in childrenList) {
-      child['bhc_child_id'] = idMap[child['child_id'] as int];
+      child['bhc_child_id'] =
+          SupabaseService.formatChildNumber(child['child_number'] as int?);
     }
-    
+
     childrenList.sort((a, b) {
       final dateA = DateTime.tryParse(a['added_at'] ?? '');
       final dateB = DateTime.tryParse(b['added_at'] ?? '');
@@ -308,19 +302,11 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
         return true;
       }).toList();
 
-      // Assign stable BHC patient IDs by sorting child_id ascending
-      final sortedForId = List<Map<String, dynamic>>.from(childrenList);
-      sortedForId.sort((a, b) => (a['child_id'] as int).compareTo(b['child_id'] as int));
-      
-      final idMap = <int, String>{};
-      for (int i = 0; i < sortedForId.length; i++) {
-        idMap[sortedForId[i]['child_id'] as int] = 'ANA-${(i + 1).toString().padLeft(3, '0')}';
-      }
-      
       for (var child in childrenList) {
-        child['bhc_child_id'] = idMap[child['child_id'] as int];
+        child['bhc_child_id'] =
+            SupabaseService.formatChildNumber(child['child_number'] as int?);
       }
-      
+
       childrenList.sort((a, b) {
         final dateA = DateTime.tryParse(a['added_at'] ?? '');
         final dateB = DateTime.tryParse(b['added_at'] ?? '');

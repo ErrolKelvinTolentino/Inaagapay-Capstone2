@@ -141,6 +141,7 @@ class _RecordsScreenState extends State<RecordsScreen>
           .from('clinical_encounters')
           .select('''
             encounter_datetime,
+            is_midwife_approved,
             recorded_by:midwives (
               midwife_id,
               account:accounts (first_name, last_name)
@@ -171,6 +172,7 @@ class _RecordsScreenState extends State<RecordsScreen>
         if (checkupMap != null) {
           checkupMap['checkup_datetime'] = enc['encounter_datetime'];
           checkupMap['midwife'] = enc['recorded_by'];
+          checkupMap['is_midwife_approved'] = enc['is_midwife_approved'];
           checkupsResponse.add(checkupMap);
         }
       }
@@ -181,6 +183,7 @@ class _RecordsScreenState extends State<RecordsScreen>
             *,
             remarks:findings_summary,
             encounter:clinical_encounters (
+              is_midwife_approved,
               recorded_by:midwives (
                 midwife_id,
                 account:accounts (first_name, last_name)
@@ -194,6 +197,7 @@ class _RecordsScreenState extends State<RecordsScreen>
         final map = Map<String, dynamic>.from(u as Map);
         map['ultrasound_id'] = map['encounter_id'];
         map['recorded_by'] = map['encounter']?['recorded_by'];
+        map['is_midwife_approved'] = map['encounter']?['is_midwife_approved'];
         return map;
       }).toList();
 
@@ -204,6 +208,7 @@ class _RecordsScreenState extends State<RecordsScreen>
             encounter:clinical_encounters (
               encounter_datetime,
               midwife_notes,
+              is_midwife_approved,
               recorded_by:midwives (
                 midwife_id,
                 account:accounts (first_name, last_name)
@@ -218,6 +223,7 @@ class _RecordsScreenState extends State<RecordsScreen>
         map['lab_test_date'] = map['encounter']?['encounter_datetime'];
         map['remarks'] = map['encounter']?['midwife_notes'];
         map['recorded_by'] = map['encounter']?['recorded_by'];
+        map['is_midwife_approved'] = map['encounter']?['is_midwife_approved'];
         return map;
       }).toList();
 
@@ -396,6 +402,20 @@ class _RecordsScreenState extends State<RecordsScreen>
     );
   }
 
+  /// Pulls the reviewing midwife's name out of a record.
+  ///
+  /// Checkups carry it under `midwife`; ultrasounds and lab tests under
+  /// `recorded_by`. Both shapes nest the name in an embedded `account`.
+  String? _midwifeNameFrom(Map<String, dynamic> record) {
+    final mw = (record['midwife'] ?? record['recorded_by']);
+    if (mw is! Map) return null;
+    final acc = mw['account'];
+    if (acc is! Map) return null;
+    final name =
+        '${acc['first_name'] ?? ''} ${acc['last_name'] ?? ''}'.trim();
+    return name.isEmpty ? null : name;
+  }
+
   void _showRecordDetails({
     required String title,
     required List<MapEntry<String, String>> rows,
@@ -409,11 +429,15 @@ class _RecordsScreenState extends State<RecordsScreen>
     List<String>? suggestedActions,
     Map<String, dynamic>? weightGainEval,
     String? ultrasoundClassification,
+    String? approvedByName,
+    bool? isMidwifeApproved,
   }) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => RecordDetailScreen(
+          approvedByName: approvedByName,
+          isMidwifeApproved: isMidwifeApproved,
           title: title,
           rows: rows,
           icon: icon,
@@ -1678,6 +1702,9 @@ class _RecordsScreenState extends State<RecordsScreen>
                                   subtitle: _formatDateTime(
                                       record['checkup_datetime']),
                                   icon: Icons.medical_services,
+                                  approvedByName: _midwifeNameFrom(record),
+                                  isMidwifeApproved:
+                                      record['is_midwife_approved'] == true,
                                   rows: [
                                     MapEntry(
                                       _t('Conducted by', 'Isinagawa ni'),
@@ -1814,6 +1841,9 @@ class _RecordsScreenState extends State<RecordsScreen>
                                   subtitle:
                                       '${_t('Added on', 'Inayos noong')} $addedDate',
                                   icon: Icons.monitor_heart,
+                                  approvedByName: _midwifeNameFrom(record),
+                                  isMidwifeApproved:
+                                      record['is_midwife_approved'] == true,
                                   imageUrls:
                                       imageUrls.isNotEmpty ? imageUrls : null,
                                   rows: [
@@ -1895,6 +1925,9 @@ class _RecordsScreenState extends State<RecordsScreen>
                                   subtitle:
                                       '${_t('Added on', 'Inayos noong')} $addedDate',
                                   icon: Icons.science,
+                                  approvedByName: _midwifeNameFrom(record),
+                                  isMidwifeApproved:
+                                      record['is_midwife_approved'] == true,
                                   imageUrls:
                                       imageUrls.isNotEmpty ? imageUrls : null,
                                   rows: [

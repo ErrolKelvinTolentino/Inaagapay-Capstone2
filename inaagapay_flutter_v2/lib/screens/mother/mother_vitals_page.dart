@@ -112,11 +112,32 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
         _isUnlinked = motherRow['assigned_bhc_id'] == null;
       }
 
-      // 3. Fetch checkups
+      // 3. Fetch checkups, through clinical_encounters.
+      //
+      // This used to select prenatal_checkup_id, checkup_datetime,
+      // age_of_gestation and remarks straight off prenatal_checkups. None of
+      // those columns exist there — the date, gestational age and notes live
+      // on the parent encounter, and the primary key is encounter_id. PostgREST
+      // rejected the whole request, the outer catch swallowed it, and the page
+      // silently rendered with no official checkups at all: no blood pressure,
+      // and a weight-gain analysis built only from what the mother typed
+      // herself. Mirrors the working query in mother_dashboard.dart.
       final checkupsRaw = await SupabaseService.client
-          .from('prenatal_checkups')
-          .select('prenatal_checkup_id, checkup_datetime, age_of_gestation, checkup_weight, blood_pressure_systolic, blood_pressure_diastolic, remarks')
-          .eq('pregnancy_id', widget.pregnancyId);
+          .from('clinical_encounters')
+          .select('''
+            encounter_datetime,
+            midwife_notes,
+            age_of_gestation_weeks,
+            age_of_gestation_days,
+            checkup:prenatal_checkups!inner (
+              encounter_id,
+              checkup_weight,
+              blood_pressure_systolic,
+              blood_pressure_diastolic
+            )
+          ''')
+          .eq('pregnancy_id', widget.pregnancyId)
+          .eq('encounter_type', 'checkup');
 
       // 4. Fetch maternal vitals
       final vitalsRaw = await SupabaseService.client
@@ -129,17 +150,39 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
 
       // 5. Merge records
       final List<Map<String, dynamic>> merged = [
-        ...checkups.map((c) => {
-              'id': c['prenatal_checkup_id'],
-              'date': DateTime.tryParse(c['checkup_datetime']?.toString() ?? '') ?? DateTime.now(),
-              'age_of_gestation': _toDouble(c['age_of_gestation']),
-              'weight_kg': _toDouble(c['checkup_weight']),
-              'bp_systolic': _toInt(c['blood_pressure_systolic']),
-              'bp_diastolic': _toInt(c['blood_pressure_diastolic']),
-              'height_cm': null,
-              'notes': c['remarks'] ?? 'Official Prenatal Checkup',
-              'source': 'prenatal_checkup',
-            }),
+        ...checkups.map((enc) {
+          // The embed comes back as a Map, or as a single-element List
+          // depending on how PostgREST resolves the relationship. Every other
+          // call site in this app unwraps both, so this does too.
+          final rawCheckup = enc['checkup'];
+          final checkup = rawCheckup is Map
+              ? Map<String, dynamic>.from(rawCheckup)
+              : (rawCheckup is List && rawCheckup.isNotEmpty
+                  ? Map<String, dynamic>.from(rawCheckup.first as Map)
+                  : <String, dynamic>{});
+
+          // Left null rather than zero when the encounter never recorded it —
+          // week 0 is a real gestational age and would be plotted as one.
+          final weeks = _toDouble(enc['age_of_gestation_weeks']);
+          final days = _toDouble(enc['age_of_gestation_days']);
+          final double? aog = (weeks == null && days == null)
+              ? null
+              : (weeks ?? 0) + (days ?? 0) / 7.0;
+
+          return {
+            'id': checkup['encounter_id'],
+            'date': DateTime.tryParse(
+                    enc['encounter_datetime']?.toString() ?? '') ??
+                DateTime.now(),
+            'age_of_gestation': aog,
+            'weight_kg': _toDouble(checkup['checkup_weight']),
+            'bp_systolic': _toInt(checkup['blood_pressure_systolic']),
+            'bp_diastolic': _toInt(checkup['blood_pressure_diastolic']),
+            'height_cm': null,
+            'notes': enc['midwife_notes'] ?? 'Official Prenatal Checkup',
+            'source': 'prenatal_checkup',
+          };
+        }),
         ...vitals.map((v) => {
               'id': v['vital_id'],
               'date': DateTime.tryParse(v['recorded_at']?.toString() ?? '') ?? DateTime.now(),
@@ -1350,6 +1393,47 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                                 ],
                               ],
                             ),
+
+                            // Blood pressure, on its own row because the row
+                            // above already carries three columns and a fourth
+                            // squeezes them on a phone. Only checkups have it —
+                            // she cannot log her own — so this appears on
+                            // official rows only.
+                            //
+                            // Shown as the plain reading with no interpretation.
+                            // Telling a mother her reading is "above threshold"
+                            // on a screen with no midwife present is alarming
+                            // without being actionable; the classification lives
+                            // on the midwife's side of the app.
+                            if (sys != null && dia != null) ...[
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  const Icon(Icons.monitor_heart_outlined,
+                                      size: 18, color: AppColors.brandPrimary),
+                                  const SizedBox(width: 8),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _t('Blood Pressure', 'Presyon ng Dugo'),
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.textSecondary),
+                                      ),
+                                      Text(
+                                        '$sys/$dia mmHg',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ],
                             if (notes.isNotEmpty) ...[
                               const Divider(height: 20, color: AppColors.borderPrimary),
                               Text(

@@ -246,16 +246,22 @@ class SupabaseService {
           };
         }
 
-        final int accountId = existing['account_id'] as int;
+        // Stage the password; do not touch password_hash. The OTP has not been
+        // answered yet, so nothing here proves this person holds the contact.
+        // verifyCode promotes it once the code is matched. Without this, knowing
+        // an unverified account's number is enough to overwrite its password.
+        //
+        // created_by is deliberately left alone. On an existing row it already
+        // records provenance ('self' / the creator's account id), and a
+        // re-registration attempt is not evidence about who created the account.
         await client.from('accounts').update({
-          'password_hash': _hashPassword(password),
+          'pending_password_hash': _hashPassword(password),
           'verification_code': code,
           'verification_expires': expires,
-          'created_by': accountId.toString(),
         }).eq(field, formattedContact);
       } else {
         final data = {
-          'password_hash': _hashPassword(password),
+          'pending_password_hash': _hashPassword(password),
           'account_type': 'mother',
           'verification_code': code,
           'verification_expires': expires,
@@ -320,7 +326,7 @@ class SupabaseService {
     if (isEmail) {
       final account = await client
           .from('accounts')
-          .select('account_id, email_address, phone_number, reset_code, reset_expires, verification_code, verification_expires')
+          .select('account_id, email_address, phone_number, reset_code, reset_expires, verification_code, verification_expires, pending_password_hash')
           .eq('email_address', cleanContact)
           .maybeSingle();
       if (account != null) {
@@ -352,7 +358,7 @@ class SupabaseService {
       
       final account = await client
           .from('accounts')
-          .select('account_id, email_address, phone_number, reset_code, reset_expires, verification_code, verification_expires')
+          .select('account_id, email_address, phone_number, reset_code, reset_expires, verification_code, verification_expires, pending_password_hash')
           .or('phone_number.eq."$format1",phone_number.eq."$format2",phone_number.eq."$format3"')
           .maybeSingle();
           
@@ -438,11 +444,24 @@ class SupabaseService {
       final expires = DateTime.parse(account['verification_expires']);
       if (expires.isBefore(DateTime.now())) return false;
 
-      await client.from('accounts').update({
+      // The code was held, so the password staged at registration can now be
+      // committed. Promote it here and nowhere else.
+      final pending = account['pending_password_hash'] as String?;
+
+      final update = <String, dynamic>{
         'is_verified': true,
         'verification_code': null,
         'verification_expires': null,
-      }).eq(field, value);
+      };
+
+      // Absent staging means this account verified through some other route.
+      // Leave the live hash alone rather than blanking a working password.
+      if (pending != null && pending.isNotEmpty) {
+        update['password_hash'] = pending;
+        update['pending_password_hash'] = null;
+      }
+
+      await client.from('accounts').update(update).eq(field, value);
 
       return true;
     } catch (e) {
@@ -496,6 +515,29 @@ class SupabaseService {
         'message': 'Failed to reset password: ${e.toString()}'
       };
     }
+  }
+
+  /// Whether this account was created by someone else — a midwife at the BHC —
+  /// rather than by the mother registering herself.
+  ///
+  /// `accounts.created_by` carries provenance in one of three shapes:
+  ///
+  ///   'self'                 — self-registered, before an account id existed
+  ///   the row's own id       — self-registered, stamped after insert
+  ///   another account's id   — created by that midwife
+  ///   'midwife'              — created by a midwife whose id could not be read
+  ///
+  /// So "midwife-created" is everything that is neither 'self' nor this row's
+  /// own id. Testing `== 'midwife'` instead catches only the last shape, which
+  /// is the rare fallback — that check was in main.dart and was very nearly
+  /// always false. It decides whether a mother is sent to Complete Profile, so
+  /// it lives here now and both callers share it.
+  static bool isMidwifeCreated({
+    required String? createdBy,
+    required Object? accountId,
+  }) {
+    if (createdBy == null || createdBy.isEmpty) return false;
+    return createdBy != 'self' && createdBy != accountId?.toString();
   }
 
   // LOGIN (supports email or phone)
@@ -1055,6 +1097,7 @@ class SupabaseService {
 
       int? midwifeId;
       int? assignedBhcId;
+      int? patientNumber;
 
       // 1. Get or create midwife_id from midwives table
       try {
@@ -1082,13 +1125,14 @@ class SupabaseService {
       try {
         final faRow = await client
             .from('facility_assignments')
-            .select('facility_id')
+            .select('facility_id, patient_number')
             .eq('account_id', accountId)
             .eq('is_active', true)
             .maybeSingle();
 
         if (faRow != null) {
           assignedBhcId = faRow['facility_id'] as int?;
+          patientNumber = faRow['patient_number'] as int?;
         }
       } catch (e) {
         if (kDebugMode) debugPrint('Facility assignment query note: $e');
@@ -1143,6 +1187,7 @@ class SupabaseService {
         'midwife_id': midwifeId ?? accountId,
         'assigned_bhc_id': assignedBhcId,
         'bhc_name': bhcName,
+        'patient_number': patientNumber,
       };
       _midwifeContextCache[accountId] = result;
       return result;
@@ -1154,6 +1199,201 @@ class SupabaseService {
         'assigned_bhc_id': 1,
         'bhc_name': 'Barangay Health Center',
       };
+    }
+  }
+
+  /// Display format for the BHC patient number stored in
+  /// `facility_assignments.patient_number`.
+  ///
+  /// Returns null when the mother has no patient number yet so callers can show
+  /// a neutral placeholder. Never fall back to `mother_id` here — a wrong-but-
+  /// plausible number is harder to notice than a visibly missing one.
+  static String? formatPatientNumber(int? patientNumber) {
+    if (patientNumber == null) return null;
+    return 'INA-${patientNumber.toString().padLeft(3, '0')}';
+  }
+
+  /// Batch-resolves BHC patient numbers for a set of mother account IDs.
+  ///
+  /// One query for the whole list — mother list screens render dozens of rows
+  /// and per-row lookups would undo the load-time work already done there.
+  /// Accounts without an active assignment are simply absent from the result.
+  static Future<Map<int, int>> getPatientNumbersByAccountId(
+    List<int> accountIds, {
+    int? facilityId,
+  }) async {
+    if (accountIds.isEmpty) return {};
+
+    try {
+      var query = client
+          .from('facility_assignments')
+          .select('account_id, patient_number')
+          .inFilter('account_id', accountIds)
+          .eq('is_active', true);
+
+      if (facilityId != null) {
+        query = query.eq('facility_id', facilityId);
+      }
+
+      final rows = await query.timeout(const Duration(seconds: 5));
+
+      final Map<int, int> byAccountId = {};
+      for (final row in rows) {
+        final accId = row['account_id'] as int?;
+        final number = row['patient_number'] as int?;
+        if (accId != null && number != null) {
+          byAccountId[accId] = number;
+        }
+      }
+      return byAccountId;
+    } catch (e) {
+      if (kDebugMode) debugPrint('getPatientNumbersByAccountId note: $e');
+      return {};
+    }
+  }
+
+  /// Resolves the BHC patient number for a single mother account.
+  static Future<int?> getPatientNumberForAccount(
+    int accountId, {
+    int? facilityId,
+  }) async {
+    final result = await getPatientNumbersByAccountId(
+      [accountId],
+      facilityId: facilityId,
+    );
+    return result[accountId];
+  }
+
+  /// Display format for `children.child_number`.
+  ///
+  /// Same contract as [formatPatientNumber]: null in, null out, so a child
+  /// without an assigned number renders a placeholder instead of a fake id.
+  static String? formatChildNumber(int? childNumber) {
+    if (childNumber == null) return null;
+    return 'NAK-${childNumber.toString().padLeft(3, '0')}';
+  }
+
+  /// Counts registered children per mother in a single query.
+  ///
+  /// Used by the child-registration mother picker, which shows a child count on
+  /// every row — one query for the page instead of one per mother.
+  static Future<Map<int, int>> getChildCountsByMotherId(
+    List<int> motherIds,
+  ) async {
+    if (motherIds.isEmpty) return {};
+
+    try {
+      final rows = await client
+          .from('children')
+          .select('mother_id')
+          .inFilter('mother_id', motherIds)
+          .timeout(const Duration(seconds: 5));
+
+      final Map<int, int> counts = {for (final id in motherIds) id: 0};
+      for (final row in rows) {
+        final motherId = row['mother_id'] as int?;
+        if (motherId != null && counts.containsKey(motherId)) {
+          counts[motherId] = counts[motherId]! + 1;
+        }
+      }
+      return counts;
+    } catch (e) {
+      if (kDebugMode) debugPrint('getChildCountsByMotherId note: $e');
+      return {};
+    }
+  }
+
+  /// Dates of a mother's previous live births, newest first.
+  ///
+  /// Used to pre-fill the child birth date during registration: when a mother
+  /// already recorded her pregnancy history, the birth dates are known and the
+  /// midwife should not have to retype them.
+  ///
+  /// Only `live_birth` outcomes are returned. Every other outcome in the schema
+  /// (miscarriage, stillbirth, abortion, ectopic, fetal_loss, vanishing_twin)
+  /// produced no living child, so offering those dates would invite registering
+  /// a child against a pregnancy that did not result in one.
+  static Future<List<DateTime>> getLiveBirthDatesForMother(int motherId) async {
+    try {
+      // Resolved in two steps rather than one embedded filter. This is an
+      // optional convenience, so a PostgREST embedding quirk should not make it
+      // fail quietly — plain `in` filters behave predictably.
+      final pregnancyRows = await client
+          .from('pregnancies')
+          .select('pregnancy_id')
+          .eq('mother_id', motherId)
+          .timeout(const Duration(seconds: 5));
+
+      final pregnancyIds = (pregnancyRows as List)
+          .map((row) => row['pregnancy_id'] as int?)
+          .whereType<int>()
+          .toList();
+
+      if (pregnancyIds.isEmpty) return [];
+
+      final rows = await client
+          .from('pregnancy_outcomes')
+          .select('outcome_date')
+          .inFilter('pregnancy_id', pregnancyIds)
+          .eq('outcome', 'live_birth')
+          .timeout(const Duration(seconds: 5));
+
+      final dates = <DateTime>{};
+      for (final row in rows) {
+        final raw = row['outcome_date']?.toString();
+        if (raw == null || raw.isEmpty) continue;
+        final parsed = DateTime.tryParse(raw);
+        // Twins share one outcome_date; the Set collapses them into one option.
+        if (parsed != null) {
+          dates.add(DateTime(parsed.year, parsed.month, parsed.day));
+        }
+      }
+
+      return dates.toList()..sort((a, b) => b.compareTo(a));
+    } catch (e) {
+      if (kDebugMode) debugPrint('getLiveBirthDatesForMother note: $e');
+      return [];
+    }
+  }
+
+  /// Resolves the formatted NAK child number for a single child.
+  ///
+  /// Returns null when the migration adding `children.child_number` has not
+  /// been applied yet, so the UI degrades to a placeholder instead of erroring.
+  static Future<String?> getChildNumber(int childId) async {
+    try {
+      final row = await client
+          .from('children')
+          .select('child_number')
+          .eq('child_id', childId)
+          .maybeSingle();
+
+      return formatChildNumber(row?['child_number'] as int?);
+    } catch (e) {
+      if (kDebugMode) debugPrint('getChildNumber note: $e');
+      return null;
+    }
+  }
+
+  /// Resolves the formatted BHC patient number for a mother, by mother_id.
+  ///
+  /// Kept off the main profile fetch so it loads the same way the profile
+  /// picture does — after first paint, without holding up the record.
+  static Future<String?> getPatientNumberForMother(int motherId) async {
+    try {
+      final motherResponse = await client
+          .from('mothers')
+          .select('account_id')
+          .eq('mother_id', motherId)
+          .maybeSingle();
+
+      final accountId = motherResponse?['account_id'] as int?;
+      if (accountId == null) return null;
+
+      return formatPatientNumber(await getPatientNumberForAccount(accountId));
+    } catch (e) {
+      if (kDebugMode) debugPrint('getPatientNumberForMother note: $e');
+      return null;
     }
   }
 
@@ -1610,7 +1850,10 @@ class SupabaseService {
         accountId = existingAccount['account_id'] as int;
 
         final isTempPass = existingAccount['is_temporary_password'] == true;
-        final createdByMidwife = existingAccount['created_by'] != 'self' && existingAccount['created_by'] != existingAccount['account_id']?.toString();
+        final createdByMidwife = isMidwifeCreated(
+          createdBy: existingAccount['created_by'] as String?,
+          accountId: existingAccount['account_id'],
+        );
 
         if (createdByMidwife && isTempPass) {
           // Re-generate temporary password and send credentials

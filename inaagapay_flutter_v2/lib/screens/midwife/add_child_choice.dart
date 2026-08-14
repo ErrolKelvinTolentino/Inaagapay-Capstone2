@@ -100,8 +100,9 @@ class AddChildChoicePage extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const AddChildStep3Child(
+                        builder: (_) => AddChildStep3Child(
                           mode: ChildParentMode.newGuardian,
+                          assignedBhcId: assignedBhcId,
                         ),
                       ),
                     );

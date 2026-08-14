@@ -1,16 +1,20 @@
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../theme/app_colors.dart';
 import '../../widgets/secondary_header.dart';
+import '../../widgets/growth_summary_card.dart';
 import '../../widgets/hero_card.dart';
 import '../../widgets/records_display_card.dart';
 import '../../widgets/status_indicator.dart';
 import '../../services/groq_service.dart';
 import '../../services/growth_calculator.dart';
+import '../../services/immunization_schedule.dart';
+import '../../services/supabase_service.dart';
 import 'add_growth_step1.dart';
-import 'add_immunization_page.dart';
+import 'add_immunization_choice.dart';
 import 'child_growth_list_page.dart';
 import 'child_immunization_list_page.dart';
 
@@ -73,6 +77,10 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
             phone_number,
             address,
             relationship
+          ),
+          registered_by:midwives!registered_by_midwife_id (
+            midwife_id,
+            account:account_id (first_name, last_name)
           )
         ''').eq('child_id', widget.childId).single().timeout(const Duration(seconds: 8)),
         Supabase.instance.client
@@ -200,6 +208,13 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
     }
   }
 
+  /// The child's date of birth, or null when no birth record exists.
+  DateTime? get _birthdate {
+    final raw = birthData?['birthdate']?.toString();
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
+  }
+
   int _ageInWeeks(DateTime recordDate) {
     if (birthData == null) return 0;
     final birthdate = birthData!['birthdate']?.toString();
@@ -265,6 +280,21 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
       return guardianData!['relationship']?.toString() ?? 'Guardian';
     }
     return 'Mother';
+  }
+
+  /// Name of the midwife who registered this child.
+  ///
+  /// Children registered before registered_by_midwife_id existed have no
+  /// registrar on file, and are reported as such rather than attributed to
+  /// whoever happens to be viewing the record.
+  String get _registeringMidwifeName {
+    final registeredBy = childData?['registered_by'];
+    if (registeredBy is! Map) return 'Not recorded';
+    final account = registeredBy['account'];
+    if (account is! Map) return 'Not recorded';
+    final name =
+        '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'.trim();
+    return name.isEmpty ? 'Not recorded' : name;
   }
 
   String getParentPhone() {
@@ -452,7 +482,7 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AddImmunizationPage(childId: widget.childId),
+        builder: (_) => AddImmunizationChoicePage(childId: widget.childId),
       ),
     );
     if (result == true && mounted) {
@@ -540,6 +570,9 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
         heroTag: 'fab_child_profile',
         onPressed: _showAddOptionsModal,
         backgroundColor: AppColors.brandPrimary,
+        // Circular, matching every other FAB in the app. Material 3 defaults to
+        // a rounded rectangle without this.
+        shape: const CircleBorder(),
         child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
       ),
       body: SafeArea(
@@ -556,6 +589,39 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
                 showWeekBadge: false,
                 showHeartRow: false,
               ),
+
+              // ── Child Number ───────────────────────────────────
+              // Hidden when absent rather than showing a placeholder id, so a
+              // child registered before the child_number migration simply has
+              // no badge instead of a misleading one.
+              if (SupabaseService.formatChildNumber(
+                    childData?['child_number'] as int?,
+                  ) !=
+                  null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.brandPrimary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Text(
+                    SupabaseService.formatChildNumber(
+                      childData?['child_number'] as int?,
+                    )!,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.brandPrimary,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 20),
 
@@ -598,27 +664,20 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
                         ? '${birthData!['birth_weight']} kg'
                         : 'Not recorded',
                   ),
+                  RecordItem(
+                    leadingIcon: Icons.badge_outlined,
+                    label: 'Registered by',
+                    value: _registeringMidwifeName,
+                  ),
                 ],
               ),
 
               _buildSectionDivider(),
 
               // ── Growth & Development ──────────────────────────
-              _buildSectionHeader(
-                title: 'Growth & Development',
-                icon: Icons.trending_up,
-                onViewAll: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          ChildGrowthListPage(childId: widget.childId),
-                    ),
-                  ).then((_) => fetchProfile());
-                },
-              ),
-              const SizedBox(height: 12),
-
+              // No section header here: the card states its own title and
+              // carries the "View history" link, so a header above it would
+              // repeat both.
               _buildProfileAiCard(),
 
               _buildSectionDivider(),
@@ -653,14 +712,22 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
                     : immunizations.map((imm) {
                         final vaccine = imm['vaccine'] as Map<String, dynamic>?;
                         final doseNum = vaccine?['dose_number'];
+                        // Judged, not assumed. This was previously the literal
+                        // StatusIndicatorType.onTime, so a dose given ten
+                        // months late still read "On Time".
+                        final timeliness =
+                            ImmunizationSchedule.timelinessOfRecord(
+                          imm,
+                          birthdate: _birthdate,
+                        );
                         return RecordItem(
                           leadingIcon: Icons.vaccines,
                           label: vaccine?['vaccine_name'] ?? 'Unknown Vaccine',
                           subLabel: doseNum != null ? 'Dose $doseNum' : null,
                           value: formatDate(imm['vaccination_date']),
-                          trailingWidget: StatusIndicator(
-                            status: StatusIndicatorType.onTime,
-                          ),
+                          trailingWidget: timeliness == null
+                              ? null
+                              : StatusIndicator(status: timeliness),
                           onTap: () {
                             Navigator.push(
                               context,
@@ -780,27 +847,29 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
     if (heightM <= 0) return null;
     return weightKg / (heightM * heightM);
   }
+  static const double _whoStandardSd = GrowthCalculator.whoStandardSd;
+
+  static String _bandForZScore(double? zScore) =>
+      GrowthCalculator.bandLabel(zScore);
 
   String _bmiStatus(double bmi) {
-    if (latestGrowth == null || childData == null) return 'Within expected standard range';
+    if (latestGrowth == null || childData == null) {
+      return 'Within standard range';
+    }
     final sex = (childData!['sex'] as String?) ?? 'female';
     final ageWeeks = _ageInWeeks(DateTime.parse(latestGrowth!['created_at']));
-    final zScore = GrowthCalculator.calculateBMIZScore(bmi, ageWeeks, sex);
-
-    if (zScore == null) return 'Within expected standard range';
-    if (zScore < -1) return 'Slightly below standard range';
-    if (zScore <= 1) return 'Within expected standard range';
-    return 'Slightly above standard range';
+    return _bandForZScore(
+      GrowthCalculator.calculateBMIZScore(bmi, ageWeeks, sex),
+    );
   }
 
   Color _bmiStatusColor(String status) {
     switch (status) {
-      case 'Slightly below standard range':
-        return Colors.orange; // Yellow/Orange
-      case 'Within expected standard range':
-        return AppColors.success; // Green
-      case 'Slightly above standard range':
-        return Colors.orange; // Yellow/Orange
+      case 'Below standard range':
+      case 'Above standard range':
+        return Colors.orange;
+      case 'Within standard range':
+        return AppColors.success;
       default:
         return AppColors.textSecondary;
     }
@@ -833,9 +902,9 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
                 style: TextStyle(fontSize: 13, height: 1.4),
               ),
               SizedBox(height: 8),
-              Text('• Within expected standard range (Green): between -1 and +1 Z-score.', style: TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w600)),
-              Text('• Slightly below standard range (Yellow): less than -1 Z-score.', style: TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600)),
-              Text('• Slightly above standard range (Yellow): greater than +1 Z-score.', style: TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600)),
+              Text('• Within standard range (Green): between -2 and +2 Z-score.', style: TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w600)),
+              Text('• Below standard range (Yellow): less than -2 Z-score.', style: TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600)),
+              Text('• Above standard range (Yellow): greater than +2 Z-score.', style: TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -971,31 +1040,20 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
   }
 
   Widget _buildProfileAiCard() {
-    if (latestGrowth == null) return const SizedBox.shrink();
+    if (latestGrowth == null || childData == null) {
+      return const SizedBox.shrink();
+    }
 
-    final latestBMI = _getLatestBMI();
-    final latestHeight = (latestGrowth!['child_height'] as num?)?.toDouble() ?? 0.0;
-    final latestWeight = (latestGrowth!['child_weight'] as num?)?.toDouble() ?? 0.0;
-    final latestAgeWeeks = _ageInWeeks(DateTime.parse(latestGrowth!['created_at']));
-    final sex = (childData!['sex'] as String?) ?? 'female';
-    final childSex = sex.toLowerCase();
-
-    final status = latestBMI != null ? _bmiStatus(latestBMI) : 'Within expected standard range';
-    final bmiColor = _bmiStatusColor(status);
-
-    final heightZ = GrowthCalculator.calculateHeightZScore(latestHeight, latestAgeWeeks, childSex);
-    final weightZ = GrowthCalculator.calculateWeightZScore(latestWeight, latestAgeWeeks, childSex);
-
-    final heightLabel = heightZ == null ? 'Within expected range' : (heightZ < -1 ? 'Slightly Below' : (heightZ <= 1 ? 'Within expected range' : 'Slightly Above'));
-    final weightLabel = weightZ == null ? 'Within expected range' : (weightZ < -1 ? 'Slightly Below' : (weightZ <= 1 ? 'Within expected range' : 'Slightly Above'));
-
-    final isWeightExpected = weightZ == null || (weightZ >= -1 && weightZ <= 1);
-    final isHeightExpected = heightZ == null || (heightZ >= -1 && heightZ <= 1);
-    final weightSuffix = isWeightExpected ? '' : ' ($weightLabel)';
-    final heightSuffix = isHeightExpected ? '' : ' ($heightLabel)';
-
-    return GestureDetector(
-      onTap: () {
+    return GrowthSummaryCard(
+      childFirstName: (childData!['first_name'] as String?) ?? '',
+      sex: ((childData!['sex'] as String?) ?? 'female').toLowerCase(),
+      measurements: _growthMeasurements(),
+      // AI narrative is written for a parent, so it stays on the mother app.
+      // The midwife sees the rule-based summary instead.
+      approvedBy: _registeringMidwifeName == 'Not recorded'
+          ? null
+          : _registeringMidwifeName,
+      onViewHistory: () {
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -1003,186 +1061,60 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
           ),
         ).then((_) => fetchProfile());
       },
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
-          border: Border.all(color: Colors.grey.shade100),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Styled Header mimicking weight gain analysis
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: bmiColor.withValues(alpha: 0.08),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  topRight: Radius.circular(18),
-                ),
-              ),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.trending_up_rounded,
-                          color: bmiColor, size: 22),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Growth Statistics',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Status badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: bmiColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: bmiColor.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(
-                      status,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: bmiColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Detail rows
-                  _growthInfoRow('Current Weight', '${latestWeight.toStringAsFixed(1)} kg$weightSuffix'),
-                  _growthInfoRow('Current Length', '${latestHeight.toStringAsFixed(1)} cm$heightSuffix'),
-                  _growthInfoRow('Current BMI', '${latestBMI?.toStringAsFixed(1) ?? 'N/A'} kg/m²'),
-                  _growthInfoRow('Age in Weeks', '$latestAgeWeeks weeks old'),
-
-                  const SizedBox(height: 12),
-                  const Divider(height: 1),
-                  const SizedBox(height: 10),
-                  
-                  // Dynamic interpretation text matching add growth record wording
-                  Text(
-                    _getBmiExplanationForDash(latestBMI, latestWeight, latestHeight, latestAgeWeeks, childSex, status),
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: bmiColor,
-                      height: 1.4,
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 12),
-                  const Align(
-                    alignment: Alignment.centerRight,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'View History & Charts',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.brandPrimary,
-                          ),
-                        ),
-                        SizedBox(width: 4),
-                        Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.brandPrimary),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
-  Widget _growthInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-          ),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-          ),
-        ],
-      ),
-    );
-  }
+  /// Growth records mapped into the shared card's input, oldest first.
+  ///
+  /// Birth measurements are prepended as the week-0 point, matching the Growth
+  /// Records page. Without it the chart starts at the first clinic visit and
+  /// the reference band looks flat, because every plotted point shares one age.
+  List<GrowthMeasurement> _growthMeasurements() {
+    final out = <GrowthMeasurement>[];
 
-  String _getBmiExplanationForDash(double? bmi, double weight, double height, int ageWeeks, String sex, String status) {
-    if (bmi == null) return '';
-    final heightZ = GrowthCalculator.calculateHeightZScore(height, ageWeeks, sex);
-    final weightZ = GrowthCalculator.calculateWeightZScore(weight, ageWeeks, sex);
-
-    if (status == 'Slightly below standard range') {
-      if (weightZ != null && weightZ < -1 && heightZ != null && heightZ > 1) {
-        return 'Both the child\'s weight is slightly below expected range and height is slightly above expected range, contributing to the lower BMI.';
+    final birthdateRaw = birthData?['birthdate']?.toString();
+    final birthWeight = (birthData?['birth_weight'] as num?)?.toDouble();
+    final birthLength = (birthData?['birth_length'] as num?)?.toDouble();
+    if (birthdateRaw != null &&
+        birthWeight != null &&
+        birthLength != null &&
+        birthWeight > 0 &&
+        birthLength > 0) {
+      final birthDate = DateTime.tryParse(birthdateRaw);
+      if (birthDate != null) {
+        out.add(GrowthMeasurement(
+          takenAt: birthDate,
+          heightCm: birthLength,
+          weightKg: birthWeight,
+          ageWeeks: 0,
+        ));
       }
-      if (weightZ != null && weightZ < -1) {
-        return 'The child\'s weight is slightly below the standard range for their age, contributing to the lower BMI.';
-      }
-      if (heightZ != null && heightZ > 1) {
-        return 'The child\'s height is slightly above the standard range for their age, which contributes to a lower BMI relative to their frame.';
-      }
-      if (weightZ != null && weightZ >= -1 && heightZ != null && heightZ <= 1) {
-        return 'Although the child\'s height and weight are both individually within expected ranges, the weight is on the lower side relative to their height, resulting in a slightly lower BMI.';
-      }
-      return 'The child\'s weight is lower than typical for their height at this age, resulting in a lower BMI.';
-    } else if (status == 'Slightly above standard range') {
-      if (weightZ != null && weightZ > 1 && heightZ != null && heightZ < -1) {
-        return 'Both the child\'s weight is slightly above expected range and height is slightly below expected range, contributing to the higher BMI.';
-      }
-      if (weightZ != null && weightZ > 1) {
-        return 'The child\'s weight is slightly above the standard range for their age, contributing to the higher BMI.';
-      }
-      if (heightZ != null && heightZ < -1) {
-        return 'The child\'s height is slightly below the standard range for their age, which contributes to a higher BMI relative to their frame.';
-      }
-      if (weightZ != null && weightZ <= 1 && heightZ != null && heightZ >= -1) {
-        return 'Although the child\'s height and weight are both individually within expected ranges, the weight is on the higher side relative to their height, resulting in a slightly higher BMI.';
-      }
-      return 'The child\'s weight is higher than typical for their height at this age, resulting in a higher BMI.';
-    } else {
-      return 'The child\'s height and weight are both within the expected standard range for this age, resulting in a standard BMI.';
     }
+
+    final sorted = List<Map<String, dynamic>>.from(growthRecords)
+      ..sort((a, b) {
+        final da = DateTime.tryParse(a['created_at']?.toString() ?? '');
+        final db = DateTime.tryParse(b['created_at']?.toString() ?? '');
+        if (da == null || db == null) return 0;
+        return da.compareTo(db);
+      });
+
+    for (final record in sorted) {
+      final height = (record['child_height'] as num?)?.toDouble();
+      final weight = (record['child_weight'] as num?)?.toDouble();
+      final createdAt = record['created_at']?.toString();
+      if (height == null || weight == null || createdAt == null) continue;
+      if (height <= 0 || weight <= 0) continue;
+
+      final takenAt = DateTime.parse(createdAt);
+      out.add(GrowthMeasurement(
+        takenAt: takenAt,
+        heightCm: height,
+        weightKg: weight,
+        ageWeeks: _ageInWeeks(takenAt),
+      ));
+    }
+    return out;
   }
 
   Future<void> _loadProfileAiInsight(int latestRecordId) async {
@@ -1336,10 +1268,8 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
     }).join('\n');
 
     String getStatus(double? z) {
-      if (z == null || z.isNaN || z.isInfinite) return 'Within expected standard range';
-      if (z < -1) return 'Slightly below standard range';
-      if (z <= 1) return 'Within expected standard range';
-      return 'Slightly above standard range';
+      if (z == null || z.isNaN || z.isInfinite) return 'Within standard range';
+      return _bandForZScore(z);
     }
 
     final heightStatus = getStatus(heightZ);
@@ -1357,7 +1287,7 @@ Refer to the child by their first name or as "your little one" ("iyong munting a
 Provide the response in both English and Filipino.
 Use the exact output format below. Do not add extra sections, titles, bullet points, or tables.
 
-Please carefully note the status indicators: "Within expected standard range", "Slightly above standard range", or "Slightly below standard range". 
+Please carefully note the status indicators: "Within standard range", "Above standard range", or "Below standard range". 
 - If any measurement is slightly above standard range, reassure the parent warmly and concisely (e.g. "Baby [Name] is growing well! Even though it seems like [his/her] [weight/height/BMI] is a bit higher than most babies [his/her] age, [he/she]'s gaining steadily and will catch up!").
 - If any measurement is slightly below standard range, reassure them warmly and concisely (e.g. "Baby [Name] is growing well! Even though [his/her] [weight/height/BMI] is a bit lower than most babies [his/her] age, [he/she]'s growing steadily and will catch up at [his/her] own pace!").
 - If everything is within expected range, celebrate their steady growth concisely (e.g. "Baby [Name] is doing great! [His/Her] growth is right on track, and [he/she] is growing steadily and beautifully!").
@@ -1679,3 +1609,4 @@ $recordsSummary
     );
   }
 }
+

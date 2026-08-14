@@ -13,6 +13,7 @@ import '../../services/supabase_service.dart';
 import '../../services/ph_address_service.dart' as ph_addr;
 import '../../theme/app_colors.dart';
 import '../../widgets/app_input_field.dart';
+import '../../widgets/branded_date_picker.dart';
 import '../../widgets/confirmation_dialog_box.dart';
 import '../../widgets/dialog_box.dart';
 import '../../widgets/secondary_header.dart';
@@ -231,6 +232,11 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
   // Context
   int? _midwifeId;
   int? _assignedBhcId;
+
+  /// Set when the midwife's health centre could not be resolved. While this
+  /// is non-null the form cannot be submitted, because there is nothing to
+  /// file the mother under.
+  String? _contextError;
   String _bhcName = '';
   bool _loadingContext = true;
 
@@ -872,6 +878,23 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
           factors.add('Pre-pregnancy obesity (BMI ≥ 30 kg/m²)');
         }
       }
+
+      // 6b. Short stature and low maternal weight — separate from BMI.
+      //
+      // BMI can read Normal while the mother still carries recognised
+      // obstetric risk, because BMI is a ratio and these are absolutes. A
+      // woman of 148 cm and 46 kg has a BMI of 21.0 — Normal under WHO and
+      // under the stricter Asian cut-offs — yet short stature raises the
+      // chance of cephalopelvic disproportion and low maternal weight raises
+      // the chance of a low-birth-weight baby. Neither shows up in a BMI
+      // category, which is why this section exists alongside it rather than
+      // by moving the BMI thresholds.
+      if (heightCm > 0 && heightCm < 145) {
+        factors.add('Short stature (< 145 cm) — risk of obstructed labour');
+      }
+      if (weightKg > 0 && weightKg < 45) {
+        factors.add('Low maternal weight (< 45 kg)');
+      }
     }
 
     // 7. Clinical Alert: Drug/Material Allergies
@@ -915,6 +938,21 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         if (bmi < 18.5) {
           insights.add(
               'Low pre-pregnancy BMI — nutritional monitoring recommended');
+        }
+
+        // Borderline stature and weight. Above the risk thresholds but close
+        // enough that a midwife should have it in mind — which is the honest
+        // reading of a 148 cm, 46 kg mother whose BMI is a healthy 21.0.
+        // Monitoring rather than risk: saying "underweight" of a normal BMI
+        // would be wrong, and saying nothing would miss what a clinician
+        // notices looking at her.
+        if (heightCm >= 145 && heightCm < 150) {
+          insights.add(
+              'Height 145–150 cm — monitor for cephalopelvic disproportion');
+        }
+        if (weightKg >= 45 && weightKg < 50) {
+          insights.add(
+              'Maternal weight under 50 kg — nutritional monitoring recommended');
         }
       }
     }
@@ -967,72 +1005,19 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     );
   }
 
+  /// Delegates to the shared picker so this wizard and the child forms cannot
+  /// drift apart visually.
   Future<DateTime?> _showBrandedDatePicker({
     required BuildContext context,
     required DateTime initialDate,
     required DateTime firstDate,
     required DateTime lastDate,
   }) {
-    DateTime clampedInitial = initialDate;
-    if (clampedInitial.isBefore(firstDate)) {
-      clampedInitial = firstDate;
-    } else if (clampedInitial.isAfter(lastDate)) {
-      clampedInitial = lastDate;
-    }
-
-    return showDatePicker(
+    return showBrandedDatePicker(
       context: context,
-      initialDate: clampedInitial,
+      initialDate: initialDate,
       firstDate: firstDate,
       lastDate: lastDate,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.brandPrimary,
-              onPrimary: Colors.white,
-              onSurface: AppColors.brandText,
-              secondary: AppColors.brandPrimary,
-              surface: Colors.white,
-            ),
-            dialogTheme: DialogThemeData(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
-              backgroundColor: Colors.white,
-              elevation: 4,
-              surfaceTintColor: Colors.transparent,
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.brandPrimary,
-                textStyle: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            datePickerTheme: DatePickerThemeData(
-              backgroundColor: Colors.white,
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
-              headerBackgroundColor: Colors.white,
-              headerForegroundColor: AppColors.brandText,
-              headerHeadlineStyle: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppColors.brandText,
-              ),
-              headerHelpStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: AppColors.brandPrimary,
-              ),
-              surfaceTintColor: Colors.transparent,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
   }
 
@@ -1154,20 +1139,30 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       if (accountId == null) throw Exception('Not authenticated');
       final result = await SupabaseService.getMidwifeContext(accountId);
       if (result['success'] == true) {
-        _midwifeId = result['midwife_id'] as int;
-        _assignedBhcId = result['assigned_bhc_id'] as int;
-        _bhcName = result['bhc_name'] as String;
-        _applyBhcAddress();
+        _midwifeId = result['midwife_id'] as int?;
+        _assignedBhcId = result['assigned_bhc_id'] as int?;
+        _bhcName = result['bhc_name'] as String? ?? '';
+        _contextError =
+            (_midwifeId == null || _assignedBhcId == null) ? _contextFailed : null;
+        if (_contextError == null) _applyBhcAddress();
+      } else {
+        _contextError = _contextFailed;
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to load context: $e')));
-      }
+      // Recorded in state rather than shouted once in a snackbar. This
+      // failure used to vanish after four seconds while the form stayed fully
+      // usable, so a midwife could fill in nine steps and only discover at
+      // submit that there was never a health centre to file them under.
+      _contextError = _contextFailed;
     } finally {
       if (mounted) setState(() => _loadingContext = false);
     }
   }
+
+  static const String _contextFailed =
+      'Your health center assignment could not be loaded. '
+      'Check your connection and try again — a mother cannot be registered '
+      'without it.';
 
   String _buildLinkingDialogSubtitle(Map<String, dynamic> existingData, Map<String, dynamic>? pregnancyData) {
     final name = '${existingData['first_name'] ?? ''} ${existingData['last_name'] ?? ''}'.trim();
@@ -1555,6 +1550,11 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         setState(() {
           _firstNameError = firstNameEmpty ? 'First name is required' : null;
           _lastNameError = lastNameEmpty ? 'Last name is required' : null;
+          // Phone and birthdate blocked Next without ever saying so. The
+          // midwife tapped the button, nothing moved, and the screen offered
+          // no reason — with a mother sitting in front of her.
+          if (phoneEmpty) _phoneError = 'Contact number is required';
+          if (birthdateEmpty) _birthdateError = 'Birthdate is required';
         });
         return !firstNameEmpty &&
             !lastNameEmpty &&
@@ -1593,19 +1593,24 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                     _provinceCtrl.text.trim().isNotEmpty));
 
       case 3:
+        // Every branch here used to return false in silence — this step could
+        // refuse to advance without a single word on screen.
+        String? missing;
         if (_gestationMethod == _GestationMethod.lmp && _lmp == null) {
-          return false;
-        }
-        if (_gestationMethod == _GestationMethod.edd && _edd == null) {
-          return false;
-        }
-        if (_gestationMethod == _GestationMethod.aog &&
+          missing = 'Select the last menstrual period date';
+        } else if (_gestationMethod == _GestationMethod.edd && _edd == null) {
+          missing = 'Select the expected date of delivery';
+        } else if (_gestationMethod == _GestationMethod.aog &&
             _aogWeeksCtrl.text.trim().isEmpty &&
             _aogDaysCtrl.text.trim().isEmpty) {
+          missing = 'Enter the age of gestation in weeks or days';
+        }
+
+        if (missing != null) {
+          setState(() => _gestationError = missing);
           return false;
         }
-        if (_gestationError != null) return false;
-        return true;
+        return _gestationError == null;
 
       case 4:
         final hVal = double.tryParse(_heightCtrl.text.trim());
@@ -1646,7 +1651,53 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
             curve: Curves.easeInOut);
         setState(() => _step++);
       }
+      return;
     }
+
+    // A blocked Next used to do nothing at all. Field errors help only if the
+    // field is on screen, and these steps scroll — so say it once, plainly,
+    // where she is already looking.
+    _showBlockedMessage();
+  }
+
+  /// Names what is missing on the current step.
+  ///
+  /// Deliberately specific rather than "Please complete all fields": on a
+  /// nine-step form that phrasing sends a midwife hunting through a page she
+  /// has already filled in.
+  void _showBlockedMessage() {
+    final missing = <String>[
+      if (_firstNameError != null) 'first name',
+      if (_lastNameError != null) 'last name',
+      if (_phoneError != null) 'contact number',
+      if (_birthdateError != null) 'birthdate',
+      if (_emailError != null) 'email address',
+      if (_houseError != null) 'house number',
+      if (_streetError != null) 'street',
+      if (_barangayError != null) 'barangay',
+      if (_cityError != null) 'city or municipality',
+      if (_provinceError != null) 'province',
+      if (_heightError != null) 'height',
+      if (_weightError != null) 'weight',
+      if (_prePregnancyWeightError != null) 'pre-pregnancy weight',
+    ];
+
+    final text = _gestationError != null
+        ? _gestationError!
+        : missing.isEmpty
+            ? 'Please complete this step before continuing.'
+            : 'Still needed: ${missing.join(', ')}.';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(text),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
   }
 
   void _goBack() {
@@ -1667,6 +1718,28 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
 
   Future<void> _submit() async {
     if (!_validateStepInline(8)) return;
+
+    // Was two null assertions on _midwifeId and _assignedBhcId, so a failed
+    // context load surfaced as "An error occurred: Null check operator used
+    // on a null value" — after nine steps of typing, with a mother waiting.
+    if (_midwifeId == null || _assignedBhcId == null) {
+      await showDialog(
+        context: context,
+        builder: (_) => DialogBox(
+          type: DialogType.error,
+          title: 'Health Center Not Loaded',
+          content: _contextError ?? _contextFailed,
+          buttonText: 'Try Again',
+          onPressed: () {
+            Navigator.pop(context);
+            setState(() => _loadingContext = true);
+            _loadContext();
+          },
+        ),
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
 
     try {
@@ -4329,47 +4402,23 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Email Address'),
+        // Contact number leads the step. It is the required field and the one
+        // the whole account hangs on — a mother can log in with it and have
+        // her temporary password sent to it. Email sat here and is optional,
+        // which put the skippable field first and the necessary one fourth.
+        _sectionLabel('Contact Number'),
         AppInputField(
-            hintText: 'Email Address (optional)',
-            controller: _emailCtrl,
-            leadingIcon: Icons.email_outlined,
-            keyboardType: TextInputType.emailAddress,
-            onChanged: _onEmailChanged,
-            errorText: _emailError,
-            readOnly: _isEmailReadOnly),
-        if (_emailChecking) ...[
-          const SizedBox(height: 6),
-          Padding(
-              padding: const EdgeInsets.only(left: 16),
-              child: Row(children: const [
-                SizedBox(
-                    width: 13,
-                    height: 13,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 1.8, color: AppColors.brandAccent)),
-                SizedBox(width: 8),
-                Text('Checking availability...',
-                    style: TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary))
-              ])),
-        ],
-        if (_checkingAccount) ...[
-          const SizedBox(height: 6),
-          Padding(
-              padding: const EdgeInsets.only(left: 16),
-              child: Row(children: const [
-                SizedBox(
-                    width: 13,
-                    height: 13,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 1.8, color: AppColors.brandAccent)),
-                SizedBox(width: 8),
-                Text('Checking for existing account...',
-                    style: TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary))
-              ])),
-        ],
+            hintText: 'Contact Number',
+            controller: _phoneCtrl,
+            isRequired: true,
+            leadingIcon: Icons.phone_outlined,
+            keyboardType: TextInputType.phone,
+            // Digits only. The field previously took letters, so a slipped
+            // keypress produced a number that silently fails SMS delivery —
+            // and SMS is how she receives her password.
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            errorText: _phoneError,
+            onChanged: (_) => _validateStepInline(0)),
         const SizedBox(height: 24),
         _sectionLabel('Full Name'),
         Row(
@@ -4470,15 +4519,50 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
               ])),
         ],
         const SizedBox(height: 24),
-        _sectionLabel('Contact'),
+        _sectionLabel('Email Address'),
         AppInputField(
-            hintText: 'Phone Number',
-            controller: _phoneCtrl,
-            isRequired: true,
-            leadingIcon: Icons.phone_outlined,
-            keyboardType: TextInputType.phone,
-            errorText: _phoneError,
-            onChanged: (_) => _validateStepInline(0)),
+            hintText: 'Email Address (optional)',
+            controller: _emailCtrl,
+            leadingIcon: Icons.email_outlined,
+            keyboardType: TextInputType.emailAddress,
+            onChanged: _onEmailChanged,
+            errorText: _emailError,
+            readOnly: _isEmailReadOnly),
+        // These follow the email lookup, so they move with it. Left behind by
+        // the swap, they sat under the phone field announcing "Checking
+        // availability..." about something else entirely.
+        if (_emailChecking) ...[
+          const SizedBox(height: 6),
+          Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: Row(children: const [
+                SizedBox(
+                    width: 13,
+                    height: 13,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 1.8, color: AppColors.brandAccent)),
+                SizedBox(width: 8),
+                Text('Checking availability...',
+                    style: TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary))
+              ])),
+        ],
+        if (_checkingAccount) ...[
+          const SizedBox(height: 6),
+          Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: Row(children: const [
+                SizedBox(
+                    width: 13,
+                    height: 13,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 1.8, color: AppColors.brandAccent)),
+                SizedBox(width: 8),
+                Text('Checking for existing account...',
+                    style: TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary))
+              ])),
+        ],
         const SizedBox(height: 24),
         _sectionLabel('Account Credentials'),
         if (isUnderage) ...[
@@ -6189,6 +6273,59 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
               child: Column(
                 children: [
+                  if (_contextError != null) ...[
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                            color: AppColors.error.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.error_outline_rounded,
+                              color: AppColors.error, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _contextError!,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                height: 1.4,
+                                color: AppColors.error,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              setState(() => _loadingContext = true);
+                              _loadContext();
+                            },
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // A progress bar shows how far along she is but not how far
+                  // is left. On a nine-step form that matters: a midwife
+                  // deciding whether to start now or after the checkup needs
+                  // the denominator.
+                  Text(
+                    'Step ${_step + 1} of $_totalSteps',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                      color: AppColors.brandPrimary.withValues(alpha: 0.85),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   Text(_stepTitles[_step],
                       style: const TextStyle(
                           fontSize: 20,

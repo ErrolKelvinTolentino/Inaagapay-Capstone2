@@ -2,12 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../models/blood_type.dart';
 import '../../services/auth_storage.dart';
+import '../../services/gestational_diabetes_screening.dart';
 import '../../services/groq_service.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/app_colors.dart';
@@ -76,6 +79,64 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
   String? _workerNameError;
   String? _institutionError;
 
+  /// What the mother's record already says, read once when the page opens.
+  String? _bloodTypeOnFile;
+
+  /// What the attached report says, once OCR has read it.
+  String? _bloodTypeFromReport;
+
+  /// What will be saved. Starts as whatever is on file, so an OCR reading never
+  /// replaces a recorded blood type on its own — the midwife has to choose it.
+  String? _selectedBloodType;
+
+  /// Glucose samples, when the attached report is a sugar test.
+  ///
+  /// Held as controllers rather than numbers so an OCR reading and a typed
+  /// correction go through the same field — the midwife confirms every value
+  /// by submitting the form, exactly as with the blood type above.
+  final TextEditingController _fastingGlucoseCtrl = TextEditingController();
+  final TextEditingController _glucose1hrCtrl = TextEditingController();
+  final TextEditingController _glucose2hrCtrl = TextEditingController();
+  final TextEditingController _glucose3hrCtrl = TextEditingController();
+
+  /// True once OCR has read at least one glucose value off the report.
+  bool _glucoseFromReport = false;
+
+  /// Whether the glucose section is worth showing.
+  ///
+  /// A CBC has no business displaying four empty sugar fields, but a midwife
+  /// holding a printed OGTT the OCR could not read still needs somewhere to
+  /// type it — so the section follows the selected test type as well as the
+  /// extraction.
+  bool get _isGlucoseTest {
+    final type = (_selectedLabType == 'Other'
+            ? _customLabTypeCtrl.text
+            : _selectedLabType)
+        .toLowerCase();
+    return _glucoseFromReport ||
+        type.contains('glucose') ||
+        type.contains('ogtt') ||
+        type.contains('sugar') ||
+        type.contains('fbs');
+  }
+
+  GlucoseValues get _enteredGlucose => GlucoseValues(
+        fasting: double.tryParse(_fastingGlucoseCtrl.text.trim()),
+        oneHour: double.tryParse(_glucose1hrCtrl.text.trim()),
+        twoHour: double.tryParse(_glucose2hrCtrl.text.trim()),
+        threeHour: double.tryParse(_glucose3hrCtrl.text.trim()),
+      );
+
+  /// True when the report and the record disagree and neither is blank.
+  ///
+  /// Usually an OCR misread or someone else's document attached to the wrong
+  /// mother. Either way it is a question for a person: silently rewriting a
+  /// blood type is how the wrong blood gets ordered later.
+  bool get _bloodTypeConflicts =>
+      _bloodTypeOnFile != null &&
+      _bloodTypeFromReport != null &&
+      _bloodTypeOnFile != _bloodTypeFromReport;
+
   static String? _workingBucket;
 
   static const List<String> _labTestTypes = [
@@ -116,6 +177,10 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
     _locationCtrl.dispose();
     _remarksCtrl.dispose();
     _customLabTypeCtrl.dispose();
+    _fastingGlucoseCtrl.dispose();
+    _glucose1hrCtrl.dispose();
+    _glucose2hrCtrl.dispose();
+    _glucose3hrCtrl.dispose();
     super.dispose();
   }
 
@@ -143,6 +208,21 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
       }
     } catch (e) {
       if (kDebugMode) debugPrint('[AddLabTest] User profile load error: $e');
+    }
+
+    // Read before OCR runs, so a reading from the report can be compared
+    // against what is already recorded rather than just landing on top of it.
+    try {
+      final mother = await Supabase.instance.client
+          .from('mothers')
+          .select('blood_type')
+          .eq('mother_id', widget.motherId)
+          .maybeSingle();
+
+      _bloodTypeOnFile = BloodType.parse(mother?['blood_type']?.toString());
+      _selectedBloodType = _bloodTypeOnFile;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[AddLabTest] Blood type load note: $e');
     }
 
     try {
@@ -329,6 +409,10 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                 _remarksCtrl.clear();
                 _customLabTypeCtrl.clear();
                 _selectedLabType = 'Complete Blood Count (CBC)';
+                // Anything read off a document that turned out not to be a lab
+                // report is void. Fall back to the recorded value.
+                _bloodTypeFromReport = null;
+                _selectedBloodType = _bloodTypeOnFile;
               });
             } else {
               setState(() {
@@ -387,6 +471,36 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                 if (_isValidFieldValue(data['remarks'])) {
                   _remarksCtrl.text = data['remarks'].toString().trim();
                 }
+
+                // Blood type is offered, never applied. It fills the field
+                // only when the record has none; where the record already has
+                // one, the stored value stands and the disagreement is shown
+                // instead. Submitting the form is the midwife's confirmation.
+                final readFromReport =
+                    BloodType.parse(data['blood_type']?.toString());
+                _bloodTypeFromReport = readFromReport;
+                if (readFromReport != null && _bloodTypeOnFile == null) {
+                  _selectedBloodType = readFromReport;
+                }
+
+                // Glucose samples. Filled in for review, never saved silently —
+                // the midwife submits the form to confirm them.
+                _glucoseFromReport = _fillGlucoseField(
+                      _fastingGlucoseCtrl,
+                      data['glucose_fasting_mg_dl'],
+                    ) |
+                    _fillGlucoseField(
+                      _glucose1hrCtrl,
+                      data['glucose_1hr_mg_dl'],
+                    ) |
+                    _fillGlucoseField(
+                      _glucose2hrCtrl,
+                      data['glucose_2hr_mg_dl'],
+                    ) |
+                    _fillGlucoseField(
+                      _glucose3hrCtrl,
+                      data['glucose_3hr_mg_dl'],
+                    );
 
                 _ocrExtracted = true;
               });
@@ -686,10 +800,59 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
         'file_url': imageValue,
       };
 
+      // Glucose samples, only the ones actually entered. Absent keys leave the
+      // columns NULL rather than writing a zero, which would read as a real
+      // measurement of nothing.
+      final glucose = _enteredGlucose;
+      if (glucose.fasting != null) {
+        labTestData['fasting_glucose_mg_dl'] = glucose.fasting;
+      }
+      if (glucose.oneHour != null) {
+        labTestData['glucose_1hr_mg_dl'] = glucose.oneHour;
+      }
+      if (glucose.twoHour != null) {
+        labTestData['glucose_2hr_mg_dl'] = glucose.twoHour;
+      }
+      if (glucose.threeHour != null) {
+        labTestData['glucose_3hr_mg_dl'] = glucose.threeHour;
+      }
+
       await Supabase.instance.client.from('lab_tests').insert(labTestData);
 
+      // 3. Blood type, only when the midwife's selection differs from what is
+      // stored. Written after the lab test itself so the record that justifies
+      // the value is already saved and can be produced if anyone asks where the
+      // blood type came from. A failure here must not lose the lab result, so
+      // it reports rather than throwing.
+      final bool bloodTypeChanged = BloodType.isValid(_selectedBloodType) &&
+          _selectedBloodType != _bloodTypeOnFile;
+      bool bloodTypeSaved = false;
+
+      if (bloodTypeChanged) {
+        try {
+          await Supabase.instance.client
+              .from('mothers')
+              .update({'blood_type': _selectedBloodType})
+              .eq('mother_id', widget.motherId);
+          bloodTypeSaved = true;
+        } catch (e) {
+          if (kDebugMode) debugPrint('[AddLabTest] Blood type update failed: $e');
+        }
+      }
+
       if (mounted) {
-        AppSnackbar.show(context, 'Lab test record saved successfully', type: AppSnackType.success);
+        AppSnackbar.show(
+          context,
+          bloodTypeChanged && bloodTypeSaved
+              ? 'Lab test saved. Blood type recorded as $_selectedBloodType.'
+              : (bloodTypeChanged
+                  ? 'Lab test saved, but the blood type could not be updated. '
+                      'Please set it on the mother\'s profile.'
+                  : 'Lab test record saved successfully'),
+          type: bloodTypeChanged && !bloodTypeSaved
+              ? AppSnackType.warning
+              : AppSnackType.success,
+        );
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -699,6 +862,274 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  /// Writes an OCR-read glucose value into its field, rejecting anything
+  /// outside the range a plasma glucose can plausibly take.
+  ///
+  /// The bound matters more than it looks: a report in mmol/L reads about 5.1
+  /// where mg/dL reads 92, and a stray "5.1" entered as mg/dL would sail under
+  /// every threshold and report a reassuring result. The prompt already
+  /// instructs the model to return null for mmol/L reports; this is the guard
+  /// for when it does not.
+  bool _fillGlucoseField(TextEditingController controller, Object? raw) {
+    final value = raw is num ? raw.toDouble() : double.tryParse('$raw');
+    if (value == null || value < 20 || value > 600) return false;
+
+    controller.text = value == value.roundToDouble()
+        ? value.toInt().toString()
+        : value.toString();
+    return true;
+  }
+
+  /// Blood type, shown whether or not the report mentioned one.
+  ///
+  /// Always visible on purpose: a midwife holding a paper result the OCR could
+  /// not read still needs somewhere to put it, and a field that appears only on
+  /// a successful extraction teaches her the app cannot be told directly.
+  ///
+  /// There is no way to clear a stored blood type from here. Correcting one is
+  /// picking the right value; emptying it is not something a lab report can
+  /// justify.
+  Widget _buildBloodTypeField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.bloodtype_outlined,
+                size: 16, color: AppColors.brandPrimary),
+            const SizedBox(width: 6),
+            const Text(
+              'Blood type',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              _bloodTypeOnFile == null ? '(not yet on record)' : '(on record)',
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        AppDropdownField<String>(
+          hintText: 'Select if shown on the report',
+          leadingIcon: Icons.bloodtype_outlined,
+          value: _selectedBloodType,
+          options: BloodType.values,
+          displayStringForOption: (val) => val,
+          onSelected: (val) => setState(() => _selectedBloodType = val),
+        ),
+        if (_bloodTypeConflicts) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.warning_amber_rounded,
+                    size: 18, color: AppColors.warning),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'This report reads $_bloodTypeFromReport, but the record '
+                        'says $_bloodTypeOnFile.',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          height: 1.4,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Keeping $_bloodTypeOnFile unless you change it above. '
+                        'Check that this report belongs to this mother before '
+                        'overwriting.',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          height: 1.35,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ] else if (_bloodTypeFromReport != null &&
+            _bloodTypeFromReport == _selectedBloodType) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome, size: 13, color: AppColors.success),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _bloodTypeOnFile == null
+                      ? 'Read from the report. Saving this form records it on '
+                          'the mother\'s profile.'
+                      : 'The report agrees with what is already on record.',
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// The glucose samples, with the screening reading beneath them.
+  ///
+  /// The reading names which samples reached threshold and what to do next. It
+  /// does not name a condition: gestational diabetes is diagnosed by a
+  /// physician, and a midwife's job here is to screen and refer.
+  Widget _buildGlucoseFields() {
+    final values = _enteredGlucose;
+    final assessment = values.isEmpty
+        ? null
+        : GestationalDiabetesScreening.assess(values: values);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.water_drop_outlined,
+                size: 16, color: AppColors.brandPrimary),
+            const SizedBox(width: 6),
+            const Text(
+              'Blood sugar values (mg/dL)',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Leave a box empty if that sample is not on the report.',
+          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(child: _glucoseInput(_fastingGlucoseCtrl, 'Fasting')),
+            const SizedBox(width: 10),
+            Expanded(child: _glucoseInput(_glucose1hrCtrl, '1 hour')),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(child: _glucoseInput(_glucose2hrCtrl, '2 hours')),
+            const SizedBox(width: 10),
+            Expanded(child: _glucoseInput(_glucose3hrCtrl, '3 hours')),
+          ],
+        ),
+        if (assessment != null &&
+            assessment.result != GdmResult.noResult) ...[
+          const SizedBox(height: 12),
+          Builder(builder: (context) {
+            final meets = assessment.result == GdmResult.meetsThreshold;
+            final incomplete = assessment.result == GdmResult.incomplete;
+            final tone = meets
+                ? AppColors.error
+                : (incomplete ? AppColors.warning : AppColors.success);
+
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: tone.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: tone.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        meets
+                            ? Icons.warning_amber_rounded
+                            : Icons.insights_outlined,
+                        size: 16,
+                        color: tone,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          assessment.finding,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1.4,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (assessment.action != GdmAction.none) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: tone.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        assessment.action.label,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: tone,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 6),
+          const Text(
+            kGdmSourceShort,
+            style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _glucoseInput(TextEditingController controller, String label) {
+    return AppInputField(
+      controller: controller,
+      hintText: label,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'^\d{0,3}(\.\d{0,1})?$')),
+      ],
+      onChanged: (_) => setState(() {}),
+    );
   }
 
   Widget _sectionCard({required String title, required Widget child}) {
@@ -858,6 +1289,12 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                                 contentPadding: const EdgeInsets.all(16),
                               ),
                             ),
+                            const SizedBox(height: 16),
+                            _buildBloodTypeField(),
+                            if (_isGlucoseTest) ...[
+                              const SizedBox(height: 20),
+                              _buildGlucoseFields(),
+                            ],
                           ],
                         ),
                       ),

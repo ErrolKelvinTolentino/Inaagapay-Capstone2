@@ -30,6 +30,8 @@ class RecordDetailScreen extends StatefulWidget {
     this.suggestedActions,
     this.weightGainEval,
     this.ultrasoundClassification,
+    this.approvedByName,
+    this.isMidwifeApproved,
   });
 
   final String title;
@@ -44,6 +46,13 @@ class RecordDetailScreen extends StatefulWidget {
   final List<String>? suggestedActions;
   final Map<String, dynamic>? weightGainEval;
   final String? ultrasoundClassification;
+
+  /// Name of the midwife who reviewed this record's assessment.
+  final String? approvedByName;
+
+  /// `clinical_encounters.is_midwife_approved`. Null when the caller does not
+  /// know the review state, in which case no attribution line is rendered.
+  final bool? isMidwifeApproved;
 
   @override
   State<RecordDetailScreen> createState() => _RecordDetailScreenState();
@@ -72,6 +81,68 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
 
   String _tAi(String english, String filipino) {
     return _showAiInFilipino ? filipino : english;
+  }
+
+  /// Shows which midwife stands behind the assessment above.
+  ///
+  /// The point of this line is that a mother reading an AI-generated insight
+  /// can see a named human reviewed it — so an unreviewed record says so
+  /// plainly rather than rendering nothing.
+  Widget _buildApprovalAttribution() {
+    final approved = widget.isMidwifeApproved;
+    if (approved == null) return const SizedBox.shrink();
+
+    final name = widget.approvedByName?.trim();
+    final hasName = name != null && name.isNotEmpty;
+
+    final String label;
+    if (approved) {
+      label = hasName
+          ? _t('Assessed and approved by $name',
+              'Sinuri at inaprubahan ni $name')
+          : _t('Assessed and approved by your midwife',
+              'Sinuri at inaprubahan ng iyong midwife');
+    } else {
+      label = _t('Pending midwife review', 'Hinihintay ang pagsusuri ng midwife');
+    }
+
+    final Color accent =
+        approved ? const Color(0xFF2E7D32) : AppColors.brandAccent;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: accent.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              approved ? Icons.verified_user_outlined : Icons.schedule_outlined,
+              size: 14,
+              color: accent,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                  color: accent,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _localizedSectionTitle(String title) {
@@ -706,8 +777,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           ),
           child: pw.Text(
             _tAi(
-              'Disclaimer: This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation. This document is not a medical prescription.',
-              'Paunawa: Ang AI-assisted na interpretasyong ito ay gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife. Ang dokumentong ito ay hindi medikal na reseta.',
+              'Disclaimer: This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation. This document is not a medical prescription.',
+              'Paunawa: Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife. Ang dokumentong ito ay hindi medikal na reseta.',
             ),
             style: const pw.TextStyle(
               fontSize: 8.5,
@@ -1592,6 +1663,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               else
                 _buildFormattedAiText(_getAiTextForLanguage(aiText)),
               const SizedBox(height: 12),
+              _buildApprovalAttribution(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
@@ -1607,8 +1679,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                     Expanded(
                       child: Text(
                         _tAi(
-                          'This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation.',
-                          'Ang AI-assisted na interpretasyong ito ay gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife.',
+                          'This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation.',
+                          'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife.',
                         ),
                         style: const TextStyle(
                           fontSize: 10,
@@ -1827,13 +1899,13 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
 
     // Strip any duplicate disclaimers from the text itself
     final disclaimersToStrip = [
-      'This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation.',
-      'Ang AI-assisted na interpretasyong ito ay gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife.',
-      'Ang AI-assisted interpretation na ito ay gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa inyong doktor o midwife.',
-      'Ang AI-assisted interpretation na ito ay gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa inyong doktor o midwife',
-      'This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation',
-      'This AI-assisted interpretation is a guide for health monitoring only and is not a substitute for consultation with a doctor or midwife.',
-      'This AI-assisted interpretation is a guide for health monitoring only and is not a substitute for consultation with a doctor or midwife'
+      'This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation.',
+      'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife.',
+      'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa inyong doktor o midwife.',
+      'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa inyong doktor o midwife',
+      'This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation',
+      'This AI-assisted explanation restates the findings recorded by the sonologist and is a guide for health monitoring only and is not a substitute for consultation with a doctor or midwife.',
+      'This AI-assisted explanation restates the findings recorded by the sonologist and is a guide for health monitoring only and is not a substitute for consultation with a doctor or midwife'
     ];
 
     for (final disc in disclaimersToStrip) {
@@ -3848,8 +3920,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           'ang mga sukat ng paglaki ng baby ay pangkalahatang tugma para sa yugtong ito',
       'continued healthcare monitoring may help support pregnancy health':
           'ang patuloy na pagsubaybay sa kalusugan ay makakatulong sa iyong pagbubuntis',
-      'This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation.':
-          'Ang AI-assisted na interpretasyong ito ay suporta lamang sa pagsubaybay at hindi pumapalit sa propesyonal na payong medikal.',
+      'This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation.':
+          'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang sa simpleng salita ang natuklasan ng sonologist at suporta lamang sa pagsubaybay at hindi pumapalit sa propesyonal na payong medikal.',
       'Continued prenatal checkups and healthcare consultation may help support pregnancy health':
           'Ang patuloy na prenatal checkup at konsultasyon sa doktor ay makakatulong upang maging ligtas ang iyong pagbubuntis.',
       
