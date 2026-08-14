@@ -63,7 +63,7 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
   bool _aiAnalysisSkipped = false;
   bool _showAdvancedAiDetails = false;
   bool _loadingOverlayVisible = false;
-  String _loadingTitle = 'Preparing AI analysis';
+  String _loadingTitle = 'Preparing your explanation';
   String _loadingDetail = 'Validating images and input context';
   int _analysisRunId = 0;
   final Set<int> _cancelledRunIds = <int>{};
@@ -1395,7 +1395,7 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
           ),
           title: Text(
             _selectedLanguage == 'filipino'
-                ? 'Batayan ng Klinikal na Interpretasyon'
+                ? 'Batayan ng Klinikal na Paliwanag'
                 : 'Clinical Reference Basis',
             style: TextStyle(
               fontSize: 11,
@@ -1820,7 +1820,7 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
 
     final runId = ++_analysisRunId;
     _setLoadingState(
-      'Preparing AI analysis',
+      'Preparing your explanation',
       'Checking images and clinical context',
     );
     _showLoadingOverlay(runId);
@@ -2100,7 +2100,8 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
                     _monitoringClassification)
                 : null,
             'created_at': DateTime.now().toIso8601String(),
-            if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
+            // `recorded_by_midwife_id` was never a column on this table.
+            if (midwifeId != null) 'recorded_by': midwifeId,
           })
           .select('ultrasound_id')
           .single();
@@ -2817,8 +2818,8 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
           'ang mga sukat ng paglaki ng baby ay pangkalahatang tugma para sa yugtong ito',
       'continued healthcare monitoring may help support pregnancy health':
           'ang patuloy na pagsubaybay sa kalusugan ay makakatulong sa iyong pagbubuntis',
-      'This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation.':
-          'Ang AI-assisted na interpretasyong ito ay suporta lamang sa pagsubaybay at hindi pumapalit sa propesyonal na payong medikal.',
+      'This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation.':
+          'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang sa simpleng salita ang natuklasan ng sonologist at suporta lamang sa pagsubaybay at hindi pumapalit sa propesyonal na payong medikal.',
       'Continued prenatal checkups and healthcare consultation may help support pregnancy health':
           'Ang patuloy na prenatal checkup at konsultasyon sa doktor ay makakatulong upang maging ligtas ang iyong pagbubuntis.',
       'skull': 'ulo / bungo',
@@ -3141,8 +3142,8 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
           Expanded(
             child: Text(
               _selectedLanguage == 'filipino'
-                  ? 'Paunawa: Ang AI-assisted na interpretasyong ito ay suporta lamang sa pagsubaybay at hindi pumapalit sa propesyonal na payong medikal ng doktor o komadrona.'
-                  : 'Disclaimer: This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation.',
+                  ? 'Paunawa: Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang sa simpleng salita ang natuklasan ng sonologist at suporta lamang sa pagsubaybay at hindi pumapalit sa propesyonal na payong medikal ng doktor o komadrona.'
+                  : 'Disclaimer: This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation.',
               style: const TextStyle(
                 fontSize: 10.5,
                 color: AppColors.textSecondary,

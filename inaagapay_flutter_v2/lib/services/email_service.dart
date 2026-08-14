@@ -25,6 +25,55 @@ class EmailService {
     }
   }
 
+  /// Invites a mother to a vaccination drive at her health centre.
+  ///
+  /// Bilingual because the mothers this reaches read either — and the Filipino
+  /// comes first, since that is the one more of them will act on.
+  static Future<bool> sendVaccinationDriveNotice({
+    required String email,
+    required String motherName,
+    required String vaccineName,
+    required String dateText,
+    required String facilityName,
+    String? notes,
+  }) async {
+    final firstName = motherName.trim().split(' ').first;
+    final extra = (notes ?? '').trim();
+
+    return _queueEmail(
+      email: email,
+      subject: '$vaccineName vaccination drive on $dateText',
+      htmlContent: '''
+<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#2D2D2D">
+  <h2 style="color:#E6398D;margin-bottom:4px">$vaccineName Vaccination Drive</h2>
+  <p style="color:#8A8A8A;margin-top:0">$facilityName &middot; $dateText</p>
+
+  <p>Kumusta $firstName,</p>
+  <p>
+    Magkakaroon ng <strong>$vaccineName vaccination drive</strong> sa
+    <strong>$facilityName</strong> sa <strong>$dateText</strong>.
+    Base sa iyong record, hindi pa kumpleto ang iyong TD vaccine para sa
+    pagbubuntis na ito, kaya inaasahan ka naming dumalo.
+  </p>
+
+  <p style="margin-top:18px">Hello $firstName,</p>
+  <p>
+    $facilityName is holding a <strong>$vaccineName vaccination drive</strong>
+    on <strong>$dateText</strong>. Your record shows your TD vaccination is not
+    yet complete for this pregnancy, so please come in on that date.
+  </p>
+  ${extra.isEmpty ? '' : '<p style="background:#FFF5F8;padding:12px;border-radius:8px"><strong>Note:</strong> $extra</p>'}
+  <p style="font-size:12px;color:#8A8A8A;margin-top:24px">
+    Kung nabakunahan ka na sa ibang health center, pakisabi sa iyong midwife.<br>
+    If you were vaccinated elsewhere, please tell your midwife so your record
+    can be updated.
+  </p>
+  <p style="font-size:12px;color:#8A8A8A">— InaAgapay</p>
+</div>
+''',
+    );
+  }
+
   // Send verification code via preferred channel (email or SMS)
   static Future<bool> sendVerificationCode({
     required String contact,

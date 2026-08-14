@@ -6,10 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/secondary_header.dart';
-import '../../widgets/page_title.dart';
 import '../../widgets/main_button.dart';
-import '../../widgets/small_description.dart';
 import '../../widgets/app_input_field.dart';
+import '../../widgets/app_snackbar.dart';
+import '../../widgets/confirmation_dialog_box.dart';
 import 'add_child_step4_birth.dart';
 
 enum ChildParentMode {
@@ -24,11 +24,16 @@ class AddChildStep3Child extends StatefulWidget {
   final int? motherId;  // Optional: only used when mode is registeredMother
   final String? motherFirstName;  // Optional: pre-fill mother info
 
+  /// BHC the registering midwife belongs to. Carried through the wizard so the
+  /// child row can be stamped with a facility and receive a NAK number.
+  final int? assignedBhcId;
+
   const AddChildStep3Child({
     super.key,
     required this.mode,
     this.motherId,
     this.motherFirstName,
+    this.assignedBhcId,
   });
 
   @override
@@ -44,6 +49,16 @@ class _AddChildStep3ChildState extends State<AddChildStep3Child> {
   final middleNameCtrl = TextEditingController();
   String _selectedExtension = '';
   String sex = 'male';
+
+  /// Which select field is currently expanded, if any. A single key keeps only
+  /// one open at a time so two option cards can never overlap.
+  String? _openDropdownKey;
+
+  // Display text for the read-only select fields. The real values live in
+  // _selectedExtension / _guardianSelectedExtension / _guardianRelationship.
+  final _extensionDisplayCtrl = TextEditingController(text: 'None');
+  final _guardianExtensionDisplayCtrl = TextEditingController(text: 'None');
+  final _relationshipDisplayCtrl = TextEditingController(text: 'Guardian');
 
   // Child validation error state
   String? _firstNameError;
@@ -92,6 +107,22 @@ class _AddChildStep3ChildState extends State<AddChildStep3Child> {
         _loadAllMothers();
       }
     }
+  }
+
+  @override
+  void dispose() {
+    firstNameCtrl.dispose();
+    lastNameCtrl.dispose();
+    middleNameCtrl.dispose();
+    guardianFirstNameCtrl.dispose();
+    guardianLastNameCtrl.dispose();
+    guardianMiddleNameCtrl.dispose();
+    guardianPhoneCtrl.dispose();
+    guardianAddressCtrl.dispose();
+    _extensionDisplayCtrl.dispose();
+    _guardianExtensionDisplayCtrl.dispose();
+    _relationshipDisplayCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSelectedMother() async {
@@ -496,33 +527,34 @@ class _AddChildStep3ChildState extends State<AddChildStep3Child> {
       guardianLastNameCtrl.text.trim().isNotEmpty ||
       guardianPhoneCtrl.text.trim().isNotEmpty;
 
-  Future<void> _confirmDiscardAndPop() async {
+  /// Header back = leave the Add Child flow entirely, in one confirmation,
+  /// rather than unwinding a screen at a time back through mother selection.
+  Future<void> _confirmDiscardAndExit() async {
     if (!_hasEnteredData) {
-      Navigator.pop(context);
+      _exitWizard();
       return;
     }
     final discard = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Discard changes?'),
-        content: const Text(
-            'You have unsaved child registration data. Are you sure you want to go back?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Discard'),
-          ),
-        ],
+      builder: (_) => ConfirmationDialogBox(
+        title: 'Discard child details?',
+        subtitle:
+            'You have unsaved child registration details. Are you sure you want to discard these changes?',
+        cancelText: 'Cancel',
+        confirmText: 'Discard',
+        onCancel: () => Navigator.pop(context, false),
+        onConfirm: () => Navigator.pop(context, true),
       ),
     );
     if (discard == true && mounted) {
-      Navigator.pop(context);
+      _exitWizard();
     }
+  }
+
+  /// Unwinds the Add Child flow back to the children list, which lives in the
+  /// midwife shell — the first route on the stack after login.
+  void _exitWizard() {
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   @override
@@ -531,37 +563,57 @@ class _AddChildStep3ChildState extends State<AddChildStep3Child> {
 
     return Scaffold(
       backgroundColor: AppColors.bgPrimary,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(56),
-        child: SecondaryHeader(
-          title: isRegisteredMode ? 'Link to Mother' : 'Add Guardian',
-          onBack: _confirmDiscardAndPop,
-        ),
-      ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: PageTitle(
-                    title: 'Child Information',
-                    leadingIcon: Icons.child_care,
-                    trailingIcon: Icons.check_circle,
+        bottom: false,
+        child: Column(
+          children: [
+            SecondaryHeader(
+              title: 'Add Child',
+              onBack: _confirmDiscardAndExit,
+            ),
+            // Step 1 of 2 — matches the Add Mother wizard's progress bar and
+            // title/subtitle block.
+            const LinearProgressIndicator(
+              value: 0.5,
+              backgroundColor: AppColors.borderPrimary,
+              valueColor:
+                  AlwaysStoppedAnimation<Color>(AppColors.brandPrimary),
+              minHeight: 3,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Column(
+                children: [
+                  const Text(
+                    'Child Information',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.brandText,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                SmallDescription(
-                  text: isRegisteredMode
-                      ? 'Enter child details and select the registered mother'
-                      : 'Enter child details and guardian information',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-
+                  const SizedBox(height: 4),
+                  Text(
+                    isRegisteredMode
+                        ? 'Child details and the registered mother to link'
+                        : 'Child details and guardian information',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                 if (isRegisteredMode) ...[
                   _buildRegisteredMotherSection(),
                   const SizedBox(height: 24),
@@ -741,80 +793,49 @@ class _AddChildStep3ChildState extends State<AddChildStep3Child> {
                   _buildNewGuardianSection(),
                 ],
 
-                const SizedBox(height: 32),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          side: BorderSide(color: AppColors.brandPrimary),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                        child: Text(
-                          'Back',
-                          style: TextStyle(
-                            color: AppColors.brandPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: MainButton(
-                        label: 'Continue',
-                        onPressed: isFormValid ? () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => AddChildStep4Birth(
-                                mode: widget.mode,
-                                motherId: isRegisteredMode && _selectedMother != null
-                                    ? _selectedMother!['mother_id'] as int
-                                    : null,
-                                motherName: isRegisteredMode && _selectedMother != null
-                                    ? _selectedMotherName
-                                    : null,
-                                firstName: firstNameCtrl.text.trim(),
-                                lastName: lastNameCtrl.text.trim(),
-                                middleName: middleNameCtrl.text.trim(),
-                                extensionName: _selectedExtension,
-                                sex: sex,
-                                guardianFirstName: !isRegisteredMode 
-                                    ? guardianFirstNameCtrl.text.trim() 
-                                    : null,
-                                guardianLastName: !isRegisteredMode 
-                                    ? guardianLastNameCtrl.text.trim() 
-                                    : null,
-                                guardianMiddleName: !isRegisteredMode 
-                                    ? guardianMiddleNameCtrl.text.trim() 
-                                    : null,
-                                guardianExtensionName: !isRegisteredMode 
-                                    ? _guardianSelectedExtension 
-                                    : null,
-                                guardianPhone: !isRegisteredMode 
-                                    ? guardianPhoneCtrl.text.trim() 
-                                    : null,
-                                guardianAddress: !isRegisteredMode 
-                                    ? guardianAddressCtrl.text.trim() 
-                                    : null,
-                                guardianRelationship: !isRegisteredMode 
-                                    ? _guardianRelationship 
-                                    : null,
-                              ),
-                            ),
-                          );
-                        } : null,
-                      ),
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 16),
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.07),
+              blurRadius: 14,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: MainButton(
+                    label: 'Back',
+                    leftIcon: Icons.arrow_back_ios_new_rounded,
+                    isWhiteVariant: true,
+                    // Steps back to mother/guardian selection. Only the header
+                    // back abandons the whole registration.
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: MainButton(
+                    label: 'Next',
+                    rightIcon: Icons.arrow_forward_ios_rounded,
+                    onPressed: _onNextPressed,
+                  ),
+                ),
               ],
             ),
           ),
@@ -823,40 +844,145 @@ class _AddChildStep3ChildState extends State<AddChildStep3Child> {
     );
   }
 
-  Widget _buildExtensionDropdown() {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedExtension.isEmpty ? null : _selectedExtension,
-          hint: const Text('Extension Name (Jr., III)', style: TextStyle(color: AppColors.textSecondary)),
-          isExpanded: true,
-          icon: const Icon(Icons.arrow_drop_down),
-          items: _extensionOptions.map((ext) {
-            return DropdownMenuItem(
-              value: ext.isEmpty ? null : ext,
-              child: Text(ext.isEmpty ? 'None' : ext),
-            );
-          }).toList(),
-          onChanged: (value) {
-            setState(() {
-              _selectedExtension = value ?? '';
-            });
-          },
+  /// Runs validation and surfaces the errors instead of silently refusing.
+  /// Mirrors the Add Mother wizard, where Next is always tappable and tells the
+  /// midwife what is missing.
+  void _onNextPressed() {
+    _validateChildFields();
+    if (widget.mode == ChildParentMode.newGuardian) {
+      _validateGuardianFields();
+    }
+
+    if (!isFormValid) {
+      if (widget.mode == ChildParentMode.registeredMother &&
+          _selectedMother == null) {
+        AppSnackbar.warning(
+          context,
+          'Select the registered mother before continuing.',
+        );
+      }
+      return;
+    }
+
+    _goToBirthDetails();
+  }
+
+  void _goToBirthDetails() {
+    final isRegisteredMode = widget.mode == ChildParentMode.registeredMother;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddChildStep4Birth(
+          mode: widget.mode,
+          assignedBhcId: widget.assignedBhcId,
+          motherId: isRegisteredMode && _selectedMother != null
+              ? _selectedMother!['mother_id'] as int
+              : null,
+          motherName: isRegisteredMode && _selectedMother != null
+              ? _selectedMotherName
+              : null,
+          firstName: firstNameCtrl.text.trim(),
+          lastName: lastNameCtrl.text.trim(),
+          middleName: middleNameCtrl.text.trim(),
+          extensionName: _selectedExtension,
+          sex: sex,
+          guardianFirstName:
+              !isRegisteredMode ? guardianFirstNameCtrl.text.trim() : null,
+          guardianLastName:
+              !isRegisteredMode ? guardianLastNameCtrl.text.trim() : null,
+          guardianMiddleName:
+              !isRegisteredMode ? guardianMiddleNameCtrl.text.trim() : null,
+          guardianExtensionName:
+              !isRegisteredMode ? _guardianSelectedExtension : null,
+          guardianPhone:
+              !isRegisteredMode ? guardianPhoneCtrl.text.trim() : null,
+          guardianAddress:
+              !isRegisteredMode ? guardianAddressCtrl.text.trim() : null,
+          guardianRelationship:
+              !isRegisteredMode ? _guardianRelationship : null,
         ),
       ),
+    );
+  }
+
+  /// Select field styled like the rest of the app's forms: a read-only
+  /// [AppInputField] that expands into a card of options, matching the Add
+  /// Mother wizard instead of Material's default DropdownButton menu.
+  ///
+  /// [dropdownKey] identifies which field is open, so opening one closes any
+  /// other.
+  Widget _buildSelectField({
+    required String hintText,
+    required TextEditingController controller,
+    required String dropdownKey,
+    required List<String> options,
+    required String Function(String) labelFor,
+    required ValueChanged<String> onSelected,
+  }) {
+    final isOpen = _openDropdownKey == dropdownKey;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppInputField(
+          controller: controller,
+          hintText: hintText,
+          readOnly: true,
+          trailingIcon: isOpen
+              ? Icons.keyboard_arrow_up_rounded
+              : Icons.keyboard_arrow_down_rounded,
+          onTap: () => setState(
+            () => _openDropdownKey = isOpen ? null : dropdownKey,
+          ),
+          onTrailingTap: () => setState(
+            () => _openDropdownKey = isOpen ? null : dropdownKey,
+          ),
+        ),
+        if (isOpen) ...[
+          const SizedBox(height: 4),
+          Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            color: Colors.white,
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: options.length,
+                itemBuilder: (context, idx) {
+                  final option = options[idx];
+                  return ListTile(
+                    dense: true,
+                    title: Text(
+                      labelFor(option),
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    onTap: () => setState(() {
+                      controller.text = labelFor(option);
+                      _openDropdownKey = null;
+                      onSelected(option);
+                    }),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildExtensionDropdown() {
+    return _buildSelectField(
+      hintText: 'Extension Name',
+      controller: _extensionDisplayCtrl,
+      dropdownKey: 'child_extension',
+      options: _extensionOptions,
+      labelFor: (ext) => ext.isEmpty ? 'None' : ext,
+      onSelected: (ext) => _selectedExtension = ext,
     );
   }
 
@@ -1154,75 +1280,24 @@ class _AddChildStep3ChildState extends State<AddChildStep3Child> {
   }
 
   Widget _buildGuardianExtensionDropdown() {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _guardianSelectedExtension.isEmpty ? null : _guardianSelectedExtension,
-          hint: const Text('Extension Name (Optional)', style: TextStyle(color: AppColors.textSecondary)),
-          isExpanded: true,
-          icon: const Icon(Icons.arrow_drop_down),
-          items: _extensionOptions.map((ext) {
-            return DropdownMenuItem(
-              value: ext.isEmpty ? null : ext,
-              child: Text(ext.isEmpty ? 'None' : ext),
-            );
-          }).toList(),
-          onChanged: (value) {
-            setState(() {
-              _guardianSelectedExtension = value ?? '';
-            });
-          },
-        ),
-      ),
+    return _buildSelectField(
+      hintText: 'Extension Name (Optional)',
+      controller: _guardianExtensionDisplayCtrl,
+      dropdownKey: 'guardian_extension',
+      options: _extensionOptions,
+      labelFor: (ext) => ext.isEmpty ? 'None' : ext,
+      onSelected: (ext) => _guardianSelectedExtension = ext,
     );
   }
 
   Widget _buildRelationshipDropdown() {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _guardianRelationship,
-          isExpanded: true,
-          icon: const Icon(Icons.arrow_drop_down),
-          items: _relationshipOptions.map((rel) {
-            return DropdownMenuItem(
-              value: rel,
-              child: Text(rel),
-            );
-          }).toList(),
-          onChanged: (value) {
-            setState(() {
-              _guardianRelationship = value ?? 'Guardian';
-            });
-          },
-        ),
-      ),
+    return _buildSelectField(
+      hintText: 'Relationship to Child',
+      controller: _relationshipDisplayCtrl,
+      dropdownKey: 'guardian_relationship',
+      options: _relationshipOptions,
+      labelFor: (rel) => rel,
+      onSelected: (rel) => _guardianRelationship = rel,
     );
   }
 }

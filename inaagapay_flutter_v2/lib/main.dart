@@ -26,12 +26,13 @@ import 'screens/midwife/ultrasound_analyzer_screen.dart';
 import 'screens/midwife/lab_test_analyzer_screen.dart';
 import 'screens/mother/records_screen.dart';
 import 'screens/mother/mother_journal_screen.dart';
+import 'screens/baby_book_entry.dart';
 import 'screens/mother/mother_children_screen.dart';
 import 'screens/midwife/midwife_mothers_screen.dart';
 import 'screens/midwife/midwife_children_screen.dart';
 import 'screens/midwife/midwife_schedules_screen.dart';
 import 'screens/midwife/midwife_add_mother_screen.dart';
-import 'screens/midwife_inventory/midwife_inventory_mock_page.dart';
+import 'screens/midwife_inventory/midwife_inventory_page.dart';
 import 'screens/settings_screen.dart';
 import 'screens/shared/immunization_poster_screen.dart';
 
@@ -151,7 +152,8 @@ class _InaagapayAppState extends State<InaagapayApp> {
               accountResponse?['is_temporary_password'] == true &&
                   !temporaryPasswordAlreadyChanged;
 
-          if (createdBy == 'midwife') {
+          if (SupabaseService.isMidwifeCreated(
+              createdBy: createdBy, accountId: accountId)) {
             if (!profileComplete) {
               await AuthStorage.saveProfileComplete(true);
             }
@@ -269,12 +271,16 @@ class _InaagapayAppState extends State<InaagapayApp> {
             '/mother-records': (context) => const RecordsScreen(),
             '/mother-journal': (context) => const MotherJournalScreen(),
             '/mother-children': (context) => const MotherChildrenScreen(),
+            // Resolves the signed-in mother before opening the book, so the
+            // sample-pregnancy fallback in BabyBookMockupPage stays a preview
+            // path and is never what a real mother is shown.
+            '/baby-book': (context) => const BabyBookEntry(),
             '/settings': (context) => const SettingsScreen(),
             '/midwife-mothers': (context) => const MidwifeMothersScreen(),
             '/midwife-children': (context) => const MidwifeChildrenScreen(),
             '/midwife-schedules': (context) => const MidwifeSchedulesScreen(),
             '/midwife-add-mother': (context) => const MidwifeAddMotherScreen(),
-            '/midwife-inventory': (context) => const MidwifeInventoryMockPage(),
+            '/midwife-inventory': (context) => const MidwifeInventoryPage(),
             '/immunization-poster': (context) => const ImmunizationPosterScreen(),
           },
           onGenerateRoute: (settings) {

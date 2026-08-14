@@ -88,17 +88,21 @@ _StatusStyle _statusStyle(StatusIndicatorType status) {
         icon: Icons.warning_rounded,
       );
 
+    // Amber, not red. These describe a dose that has already been given: the
+    // child is protected and there is nothing left to act on, so the badge is
+    // a note about the history rather than an alarm. Red stays reserved for
+    // situations that still need a decision.
     case StatusIndicatorType.overdue:
       return _StatusStyle(
-        label: 'Overdue',
-        backgroundColor: AppColors.error,
-        icon: Icons.error_rounded,
+        label: 'Very late',
+        backgroundColor: AppColors.warning,
+        icon: Icons.history_rounded,
       );
 
     case StatusIndicatorType.late:
       return _StatusStyle(
         label: 'Late',
-        backgroundColor: AppColors.error,
+        backgroundColor: AppColors.warning,
         icon: Icons.schedule_rounded,
       );
 

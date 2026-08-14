@@ -20,22 +20,14 @@ import '../../widgets/profile_widgets.dart';
 import '../../services/weight_gain_engine.dart';
 import '../../models/weight_gain_models.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../widgets/mother_qr_code.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/app_dropdown_field.dart';
+import '../../services/blood_pressure_reference.dart';
 
-// Blood type options
-const List<String> _bloodTypeOptions = [
-  'A+',
-  'A-',
-  'B+',
-  'B-',
-  'AB+',
-  'AB-',
-  'O+',
-  'O-',
-  'Unknown'
-];
+// Blood type is no longer chosen on this screen, so the option list that used
+// to back a dropdown here is gone. It listed 'Unknown' as a ninth choice, which
+// the mothers.blood_type CHECK constraint would have rejected on save.
+// lib/models/blood_type.dart now owns the eight storable values.
 
 const List<String> _commonConditions = [
   'Anemia',
@@ -124,7 +116,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   final Map<String, TextEditingController> _addressControllers = {};
 
   // Dropdown selections for editing
-  String _editingBloodType = '';
 
   // Editable medical conditions & allergies
   bool _isEditingConditions = false;
@@ -135,6 +126,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
   // Profile picture
   String? _profilePictureUrl;
+  String? _patientNumber;
 
 
 
@@ -149,6 +141,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     });
     _profileFuture = MotherProfileService.fetchMotherProfile(widget.motherId);
     _loadProfilePicture();
+    _loadPatientNumber();
   }
 
   @override
@@ -167,6 +160,14 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     final url = await SupabaseService.getProfilePictureUrl(widget.motherId);
     if (mounted) {
       setState(() => _profilePictureUrl = url);
+    }
+  }
+
+  Future<void> _loadPatientNumber() async {
+    final number =
+        await SupabaseService.getPatientNumberForMother(widget.motherId);
+    if (mounted) {
+      setState(() => _patientNumber = number);
     }
   }
 
@@ -1635,11 +1636,15 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     String? riskFactors,
     List<String>? suggestedActions,
     Map<String, dynamic>? weightGainEval,
+    String? approvedByName,
+    bool? isMidwifeApproved,
   }) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => RecordDetailScreen(
+          approvedByName: approvedByName,
+          isMidwifeApproved: isMidwifeApproved,
           title: title,
           rows: rows,
           icon: icon,
@@ -1920,6 +1925,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             title: 'Prenatal Checkup',
             subtitle: date,
             icon: Icons.medical_services,
+            approvedByName: midwifeName == '—' ? null : midwifeName,
+            isMidwifeApproved: checkup['is_midwife_approved'] == true,
             rows: [
               MapEntry('Conducted by', midwifeName),
               MapEntry('Fetal Count', fetalCount.toString()),
@@ -2034,6 +2041,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             subtitle: date,
             icon: Icons.monitor_heart,
             imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
+            approvedByName: midwifeName == '—' ? null : midwifeName,
+            isMidwifeApproved: ultrasound['is_midwife_approved'] == true,
             rows: [
               MapEntry('Recorded by', midwifeName),
               MapEntry(
@@ -2130,6 +2139,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             subtitle: date,
             icon: Icons.science,
             imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
+            approvedByName: midwifeName == '—' ? null : midwifeName,
+            isMidwifeApproved: labTest['is_midwife_approved'] == true,
             rows: [
               MapEntry('Recorded by', midwifeName),
               MapEntry('Lab Test Type', type),
@@ -3162,21 +3173,23 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     _personalControllers['pre_pregnancy_weight'] =
         TextEditingController(text: ppw?.toString() ?? '');
 
-    _editingBloodType = profile['blood_type'] ?? '';
+    _personalControllers['blood_type'] =
+        TextEditingController(text: profile['blood_type']?.toString() ?? '');
   }
 
+  /// Saves the one field on this sheet that is the midwife's to set.
+  ///
+  /// Height, weight and blood type are shown but not editable here. Blood type
+  /// in particular is written only by the Add Lab Test screen, from a report
+  /// attached in the same action — so this no longer touches `mothers`, and a
+  /// recorded blood type cannot be changed by a screen that holds no evidence
+  /// for the new value.
   Future<void> _savePersonalInfo() async {
-    final bloodType = _editingBloodType;
     final ppwText = _personalControllers['pre_pregnancy_weight']?.text.trim() ?? '';
     final double? ppw = ppwText.isEmpty ? null : double.tryParse(ppwText);
 
     try {
-      // 1. Update blood type in mothers table
-      await SupabaseService.client.from('mothers').update({
-        'blood_type': bloodType.isEmpty ? null : bloodType,
-      }).eq('mother_id', widget.motherId);
-
-      // 2. Update pre-pregnancy weight in pregnancies table for ongoing pregnancy
+      // Update pre-pregnancy weight in pregnancies table for ongoing pregnancy
       final ongoingPregnancy = await SupabaseService.client
           .from('pregnancies')
           .select('pregnancy_id')
@@ -4954,7 +4967,14 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         ProfileInfoRow(
           icon: Icons.medical_services_outlined,
           label: 'Obstetric Score',
-          value: 'G${profile['gravida'] ?? 0} P${profile['para'] ?? 0} A${profile['abortus'] ?? 0}',
+          // L included: living children is stored on every mother and was the
+          // one part of the score that never reached a screen. Without it a
+          // midwife cannot tell three deliveries with three living children
+          // from three deliveries with one.
+          value: 'G${profile['gravida'] ?? 0} '
+              'P${profile['para'] ?? 0} '
+              'A${profile['abortus'] ?? 0} '
+              'L${profile['living_children'] ?? 0}',
         ),
         ProfileInfoRow(
           icon: Icons.person_outline,
@@ -5221,6 +5241,371 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     );
   }
 
+  /// Blood pressure across the pregnancy, read as a line rather than a number.
+  ///
+  /// The point of the chart is the thing a list of visits cannot show: whether
+  /// a raised reading repeated. Gestational hypertension is defined on two
+  /// occasions, so a single high value and two consecutive ones are different
+  /// events — and every existing check in this app treats them the same.
+  ///
+  /// Plotted against gestational week, not date, to match the weight-gain
+  /// chart directly above it and because the thresholds themselves are
+  /// gestation-dependent.
+  Widget _buildBloodPressureTrendCard(List<dynamic> checkups, DateTime? lmp) {
+    final readings = <BpReading>[];
+
+    for (final c in checkups) {
+      if (c is! Map) continue;
+      final sys = _toDouble(c['blood_pressure_systolic'])?.round();
+      final dia = _toDouble(c['blood_pressure_diastolic'])?.round();
+      if (sys == null || dia == null) continue;
+
+      final dtStr = c['checkup_datetime']?.toString() ??
+          c['encounter']?['encounter_datetime']?.toString();
+      final dt = dtStr != null ? DateTime.tryParse(dtStr) : null;
+
+      // Same derivation as the weight-gain chart above, so the two cards put
+      // the same visit at the same place on the x-axis.
+      double? aog = c['age_of_gestation'] != null
+          ? (c['age_of_gestation'] as num).toDouble()
+          : null;
+      if (dt != null && lmp != null) {
+        aog = (dt.difference(lmp).inDays / 7.0).clamp(0.0, 42.0);
+      }
+
+      readings.add(BpReading(
+        systolic: sys,
+        diastolic: dia,
+        takenOn: dt,
+        gestationalWeeks: aog,
+      ));
+    }
+
+    readings.sort((a, b) {
+      final aw = a.gestationalWeeks ?? 0;
+      final bw = b.gestationalWeeks ?? 0;
+      return aw.compareTo(bw);
+    });
+
+    final assessment = BloodPressureReference.assess(readings);
+
+    return ProfileCardSection(
+      title: 'Blood Pressure Trend',
+      icon: Icons.monitor_heart_outlined,
+      iconColor: _bpToneColor(assessment.action),
+      children: [
+        if (readings.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'No blood pressure readings recorded for this pregnancy yet.',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          )
+        else ...[
+          if (readings.length < 2)
+            Container(
+              height: 110,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'One reading so far. A second visit is needed before a '
+                    'trend can be read.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ),
+              ),
+            )
+          else
+            SizedBox(height: 190, child: _buildBpChart(readings)),
+          const SizedBox(height: 14),
+          _buildBpFinding(assessment),
+        ],
+      ],
+    );
+  }
+
+  Color _bpToneColor(BpAction action) {
+    switch (action) {
+      case BpAction.referSameDay:
+        return AppColors.error;
+      case BpAction.referForAssessment:
+        return AppColors.error;
+      case BpAction.repeatNextVisit:
+        return AppColors.warning;
+      case BpAction.monitor:
+        return AppColors.info;
+      case BpAction.none:
+        return AppColors.success;
+    }
+  }
+
+  Widget _buildBpChart(List<BpReading> readings) {
+    const t = BpThresholds.standard;
+
+    final systolicSpots = <FlSpot>[];
+    final diastolicSpots = <FlSpot>[];
+    for (int i = 0; i < readings.length; i++) {
+      final x = readings[i].gestationalWeeks ?? i.toDouble();
+      systolicSpots.add(FlSpot(x, readings[i].systolic.toDouble()));
+      diastolicSpots.add(FlSpot(x, readings[i].diastolic.toDouble()));
+    }
+
+    final xs = systolicSpots.map((s) => s.x).toList();
+    final minX = (xs.reduce((a, b) => a < b ? a : b) - 1).clamp(0.0, 42.0);
+    final maxX = (xs.reduce((a, b) => a > b ? a : b) + 1).clamp(1.0, 42.0);
+
+    final allY = [
+      ...systolicSpots.map((s) => s.y),
+      ...diastolicSpots.map((s) => s.y),
+    ];
+    // The threshold lines are kept in view even when every reading sits well
+    // below them — a chart that crops the line she is being measured against
+    // hides the only context that matters.
+    final minY = ((allY.reduce((a, b) => a < b ? a : b)) - 15)
+        .clamp(40.0, 200.0);
+    final maxY = ([...allY, t.raisedSystolic.toDouble()]
+                .reduce((a, b) => a > b ? a : b) +
+            15)
+        .clamp(60.0, 260.0);
+
+    return LineChart(
+      LineChartData(
+        minX: minX,
+        maxX: maxX,
+        minY: minY,
+        maxY: maxY,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: true,
+          horizontalInterval: 20,
+          verticalInterval: 4,
+          getDrawingHorizontalLine: (value) =>
+              FlLine(color: Colors.grey.shade100, strokeWidth: 1),
+          getDrawingVerticalLine: (value) =>
+              FlLine(color: Colors.grey.shade100, strokeWidth: 1),
+        ),
+        borderData: FlBorderData(show: false),
+        titlesData: FlTitlesData(
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 24,
+              interval: 4,
+              getTitlesWidget: (value, meta) => Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'W${value.toInt()}',
+                  style: const TextStyle(
+                      fontSize: 9, color: AppColors.textSecondary),
+                ),
+              ),
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 30,
+              interval: 20,
+              getTitlesWidget: (value, meta) => Text(
+                value.toInt().toString(),
+                style: const TextStyle(
+                    fontSize: 9, color: AppColors.textSecondary),
+              ),
+            ),
+          ),
+        ),
+        // The published thresholds, drawn where the readings can be compared
+        // against them. This is what makes the chart a clinical instrument
+        // rather than a picture of some numbers going up and down.
+        extraLinesData: ExtraLinesData(
+          horizontalLines: [
+            HorizontalLine(
+              y: t.severeSystolic.toDouble(),
+              color: AppColors.error.withValues(alpha: 0.55),
+              strokeWidth: 1.5,
+              dashArray: [6, 4],
+              label: HorizontalLineLabel(
+                show: true,
+                alignment: Alignment.topRight,
+                style: const TextStyle(fontSize: 8, color: AppColors.error),
+                labelResolver: (_) => 'severe ${t.severeSystolic}',
+              ),
+            ),
+            HorizontalLine(
+              y: t.raisedSystolic.toDouble(),
+              color: AppColors.warning.withValues(alpha: 0.7),
+              strokeWidth: 1.5,
+              dashArray: [6, 4],
+              label: HorizontalLineLabel(
+                show: true,
+                alignment: Alignment.topRight,
+                style: const TextStyle(fontSize: 8, color: AppColors.warning),
+                labelResolver: (_) => 'threshold ${t.raisedSystolic}',
+              ),
+            ),
+            HorizontalLine(
+              y: t.raisedDiastolic.toDouble(),
+              color: AppColors.warning.withValues(alpha: 0.45),
+              strokeWidth: 1,
+              dashArray: [3, 4],
+              label: HorizontalLineLabel(
+                show: true,
+                alignment: Alignment.bottomRight,
+                style: const TextStyle(fontSize: 8, color: AppColors.warning),
+                labelResolver: (_) => 'threshold ${t.raisedDiastolic}',
+              ),
+            ),
+          ],
+        ),
+        lineBarsData: [
+          LineChartBarData(
+            spots: systolicSpots,
+            isCurved: false,
+            color: AppColors.brandAccent,
+            barWidth: 2.5,
+            dotData: const FlDotData(show: true),
+          ),
+          LineChartBarData(
+            spots: diastolicSpots,
+            isCurved: false,
+            color: AppColors.info,
+            barWidth: 2.5,
+            dotData: const FlDotData(show: true),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The reading of the chart, in words, with the rule it was judged against
+  /// named on screen.
+  ///
+  /// Deliberately never says "gestational hypertension" or "pre-eclampsia".
+  /// The app reports which threshold was met and what to do next; naming the
+  /// condition is the referring physician's job.
+  Widget _buildBpFinding(BpAssessment assessment) {
+    final tone = _bpToneColor(assessment.action);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _bpLegendDot(AppColors.brandAccent, 'Systolic'),
+            const SizedBox(width: 14),
+            _bpLegendDot(AppColors.info, 'Diastolic'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: tone.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: tone.withValues(alpha: 0.25)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    assessment.needsReferral
+                        ? Icons.warning_amber_rounded
+                        : Icons.insights_outlined,
+                    size: 16,
+                    color: tone,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      assessment.finding,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        height: 1.45,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (assessment.note != null) ...[
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.only(left: 24),
+                  child: Text(
+                    assessment.note!,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      height: 1.35,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+              if (assessment.action != BpAction.none) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: tone.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    assessment.action.label,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: tone,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          kBloodPressureSourceShort,
+          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+        ),
+      ],
+    );
+  }
+
+  Widget _bpLegendDot(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(label,
+            style:
+                const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+      ],
+    );
+  }
+
   Widget _buildEditableMedicalForm() {
     return Column(
       children: [
@@ -5247,12 +5632,15 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           ],
         ),
         const SizedBox(height: 12),
-        AppDropdownField<String>(
-          hintText: 'Blood Type',
-          options: _bloodTypeOptions,
-          displayStringForOption: (type) => type,
-          value: _editingBloodType.isEmpty ? null : _editingBloodType,
-          onSelected: (value) => setState(() => _editingBloodType = value),
+        // Read-only, like height and weight above it. Blood type is a
+        // transcribed lab finding, not a judgement call — it is recorded from
+        // a lab report on the Add Lab Test screen, where the document that
+        // proves it is attached in the same action. Typing it freely here
+        // would create a value with nothing behind it.
+        AppInputField(
+          controller: _personalControllers['blood_type']!,
+          hintText: 'Blood Type (from lab results)',
+          readOnly: true,
         ),
       ],
     );
@@ -5445,6 +5833,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               email: profile['email_address'],
               phone: profile['phone_number'],
               profilePictureUrl: _profilePictureUrl,
+              patientNumber: _patientNumber,
             ),
             const SizedBox(height: 16),
 
@@ -5959,6 +6348,13 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               ),
               const SizedBox(height: 12),
             ],
+
+            // ── Blood Pressure Trend ───────────────────────────────────
+            // Sits beside weight gain because both are read the same way: as
+            // a line across the pregnancy, not as the latest number.
+            _buildBloodPressureTrendCard(checkups, lmp),
+            const SizedBox(height: 16),
+
             // ── Prenatal Checkups ──
             _buildPreviewRecordSection(
               title: 'PRENATAL CHECKUPS',
@@ -6621,16 +7017,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 ),
               ),
               const Spacer(),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: () =>
-                    showMotherQrCodeDialog(context, widget.motherId),
-                icon: const Icon(Icons.qr_code_rounded,
-                    size: 24, color: AppColors.textPrimary),
-                tooltip: 'Show QR Code',
-              ),
-              const SizedBox(width: 14),
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),

@@ -35,7 +35,40 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
   String _selectedRiskFilter = 'All';
   Timer? _searchDebounceTimer;
 
-  String _selectedSort = 'ID Number';
+  String _selectedSort = 'Risk (High to Low)';
+
+  /// Sort weight for a risk level — lower sorts first.
+  ///
+  /// Covers `medium` as well as high and low: pregnancies.pregnancy_risk_level
+  /// permits all three, and treating an unrecognised value as high rather than
+  /// low keeps an unclassified mother at the top where she will be looked at,
+  /// instead of buried where she will not.
+  static int _riskRank(Object? level) {
+    switch (level?.toString().toLowerCase().trim()) {
+      case 'critical':
+        return 0;
+      case 'high':
+        return 1;
+      case 'medium':
+      case 'moderate':
+        return 2;
+      case 'low':
+        return 3;
+      default:
+        return 1;
+    }
+  }
+
+  /// The numeric part of a patient number, for ordering within a risk band.
+  ///
+  /// "INA-002" sorts before "INA-010", which a plain string comparison would
+  /// get backwards. Mothers without a number sort last rather than first — an
+  /// absent number is not a low one.
+  static int _patientNumberOf(Map<String, dynamic> mother) {
+    final raw = mother['bhc_patient_id']?.toString() ?? '';
+    final digits = RegExp(r'\d+').firstMatch(raw)?.group(0);
+    return digits == null ? 1 << 30 : int.parse(digits);
+  }
   int _currentPage = 1;
   static const int _pageSize = 5;
 
@@ -94,9 +127,19 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
       results = results.where((mother) {
         final fullName = mother['full_name']?.toString().toLowerCase() ?? '';
         final email = mother['email_address']?.toString().toLowerCase() ?? '';
-        return fullName.contains(_searchQuery) || email.contains(_searchQuery);
+        final patientId =
+            mother['bhc_patient_id']?.toString().toLowerCase() ?? '';
+        return fullName.contains(_searchQuery) ||
+            email.contains(_searchQuery) ||
+            patientId.contains(_searchQuery);
       }).toList();
     }
+
+    // Risk ordering for the default sort. Lower rank sorts first, so the
+    // most urgent are at the top. `medium` is included because
+    // pregnancies.pregnancy_risk_level allows low, medium and high — the risk
+    // filter above only handles two of them, so a medium mother would
+    // otherwise fall through to the bottom with the low-risk ones.
 
     // Apply risk filter
     if (_selectedRiskFilter != 'All') {
@@ -111,7 +154,19 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
     }
 
     // Apply sorting
-    if (_selectedSort == 'ID Number') {
+    if (_selectedSort == 'Risk (High to Low)') {
+      // The default. A midwife opening this list is triaging, so the mothers
+      // needing attention are at the top; patient number orders within a band
+      // so the same mother is always in the same place relative to her
+      // neighbours.
+      results.sort((a, b) {
+        final byRisk = _riskRank(a['risk_level']).compareTo(
+          _riskRank(b['risk_level']),
+        );
+        if (byRisk != 0) return byRisk;
+        return _patientNumberOf(a).compareTo(_patientNumberOf(b));
+      });
+    } else if (_selectedSort == 'ID Number') {
       results.sort((a, b) => (a['mother_id'] as int? ?? 0).compareTo(b['mother_id'] as int? ?? 0));
     } else if (_selectedSort == 'Name (A-Z)') {
       results.sort((a, b) => (a['full_name']?.toString() ?? '')
@@ -266,13 +321,21 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
       }
     }
 
+    final patientNumbersByAccountId =
+        await SupabaseService.getPatientNumbersByAccountId(
+      accountIds,
+      facilityId: _assignedBhcId,
+    );
+
     final List<Map<String, dynamic>> parsedMothers = [];
 
     for (int i = 0; i < rawMothers.length; i++) {
       final raw = rawMothers[i];
       final int motherId = raw['mother_id'] as int;
       final int accountId = raw['account_id'] as int;
-      final String bhcPatientId = 'INA-${(i + 1).toString().padLeft(3, '0')}';
+      final String? bhcPatientId = SupabaseService.formatPatientNumber(
+        patientNumbersByAccountId[accountId],
+      );
       final account = raw['accounts'] as Map<String, dynamic>?;
       if (account == null) continue;
 
@@ -384,13 +447,24 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
       final List<dynamic> rawMothers = List<dynamic>.from(response);
       rawMothers.sort((a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
 
+      final patientNumbersByAccountId =
+          await SupabaseService.getPatientNumbersByAccountId(
+        rawMothers
+            .map((r) => r['account_id'] as int?)
+            .whereType<int>()
+            .toList(),
+        facilityId: _assignedBhcId,
+      );
+
       final List<Map<String, dynamic>> parsedMothers = [];
 
       for (int i = 0; i < rawMothers.length; i++) {
         final raw = rawMothers[i];
         final int motherId = raw['mother_id'] as int;
         final int accountId = raw['account_id'] as int;
-        final String bhcPatientId = 'INA-${(i + 1).toString().padLeft(3, '0')}';
+        final String? bhcPatientId = SupabaseService.formatPatientNumber(
+          patientNumbersByAccountId[accountId],
+        );
         final account = raw['accounts'] as Map<String, dynamic>?;
         if (account == null) continue;
 
@@ -524,7 +598,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
     setState(() {
       _searchController.clear();
       _searchQuery = '';
-      _selectedSort = 'ID Number';
+      _selectedSort = 'Risk (High to Low)';
       _selectedRiskFilter = 'All';
       _applyFilters();
     });
@@ -573,6 +647,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
+                        'Risk (High to Low)',
                         'ID Number',
                         'Name (A-Z)',
                         'Age (Ascending)',
@@ -794,14 +869,14 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                   // Sort & Filter Icon Button
                   Container(
                     decoration: BoxDecoration(
-                      color: (_selectedSort != 'ID Number' ||
+                      color: (_selectedSort != 'Risk (High to Low)' ||
                               _selectedRiskFilter != 'All' ||
                               _searchQuery.isNotEmpty)
                           ? AppColors.brandPrimary
                           : Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: (_selectedSort != 'ID Number' ||
+                        color: (_selectedSort != 'Risk (High to Low)' ||
                                 _selectedRiskFilter != 'All' ||
                                 _searchQuery.isNotEmpty)
                             ? AppColors.brandPrimary
@@ -812,7 +887,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                     child: IconButton(
                       icon: Icon(
                         Icons.filter_list,
-                        color: (_selectedSort != 'ID Number' ||
+                        color: (_selectedSort != 'Risk (High to Low)' ||
                                 _selectedRiskFilter != 'All' ||
                                 _searchQuery.isNotEmpty)
                             ? Colors.white
@@ -822,7 +897,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                       tooltip: 'Sort & Filter',
                     ),
                   ),
-                  if (_selectedSort != 'ID Number' ||
+                  if (_selectedSort != 'Risk (High to Low)' ||
                       _selectedRiskFilter != 'All' ||
                       _searchQuery.isNotEmpty) ...[
                     const SizedBox(width: 8),
@@ -1327,7 +1402,7 @@ class _MotherCard extends StatelessWidget {
                               ),
                             ),
                             child: Text(
-                              '${mother['bhc_patient_id'] ?? mother['mother_id']}',
+                              mother['bhc_patient_id']?.toString() ?? '—',
                               style: const TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,

@@ -901,7 +901,11 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
             'health_worker_institution': _institutionCtrl.text.trim(),
             'health_worker_profession': _profession ?? 'Sonographer',
             'created_at': DateTime.now().toIso8601String(),
-            if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
+            // `recorded_by_midwife_id` was never a column on this table. The
+            // parent clinical_encounters row above is the primary record of who
+            // performed this; recorded_by here mirrors it for screens that read
+            // the ultrasound directly.
+            if (midwifeId != null) 'recorded_by': midwifeId,
           })
           .select()
           .single();
@@ -1127,7 +1131,7 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
 
                     // ── Card 4: Interpretation & Sonologist Remarks ───────────
                     _sectionCard(
-                      title: 'Interpretation & Sonologist Remarks',
+                      title: 'Sonologist Findings & Remarks',
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

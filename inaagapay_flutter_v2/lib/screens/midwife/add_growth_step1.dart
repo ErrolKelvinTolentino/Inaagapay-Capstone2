@@ -76,6 +76,14 @@ class _AddGrowthStep1State extends State<AddGrowthStep1> {
   ValidationType _validationMessageType = ValidationType.error;
   bool _isSaving = false;
 
+  /// Database error from the most recent save attempt, shown to the midwife so
+  /// a failure names its cause instead of being a generic "try again".
+  String? _lastSaveError;
+
+  /// True when the fields were seeded from the previous visit's measurements.
+  /// Drives the reminder to replace them with today's readings.
+  bool _prefilledFromPrevious = false;
+
   @override
   void initState() {
     super.initState();
@@ -122,6 +130,23 @@ class _AddGrowthStep1State extends State<AddGrowthStep1> {
 
       _growthRecords = List<Map<String, dynamic>>.from(growthResponse);
       _previousGrowth = _growthRecords.isNotEmpty ? _growthRecords.last : null;
+
+      // Pre-fill with the last recorded measurements so the midwife adjusts
+      // rather than retypes. Children change slowly between visits, so the
+      // previous value is the closest starting point — but it is a starting
+      // point only, which the banner under the fields spells out.
+      if (_previousGrowth != null) {
+        final lastHeight = (_previousGrowth!['child_height'] as num?)?.toDouble();
+        final lastWeight = (_previousGrowth!['child_weight'] as num?)?.toDouble();
+        if (lastHeight != null && lastHeight > 0) {
+          _heightController.text = lastHeight.toStringAsFixed(1);
+        }
+        if (lastWeight != null && lastWeight > 0) {
+          _weightController.text = lastWeight.toStringAsFixed(1);
+        }
+        _prefilledFromPrevious =
+            _heightController.text.isNotEmpty || _weightController.text.isNotEmpty;
+      }
 
       if (mounted) {
         setState(() {
@@ -217,6 +242,19 @@ class _AddGrowthStep1State extends State<AddGrowthStep1> {
     }
   }
 
+  /// Re-exported from [GrowthCalculator], the single place growth z-scores are
+  /// classified. See that class for why the cut-off is ±2 SD.
+  static const double _whoStandardSd = GrowthCalculator.whoStandardSd;
+
+  static String _bandForZScore(double zScore) =>
+      GrowthCalculator.bandLabel(zScore);
+
+  static Color _bandColorForZScore(double zScore) {
+    return zScore.abs() > _whoStandardSd
+        ? AppColors.warning
+        : AppColors.success;
+  }
+
   void _updateBMICategory(double? zScore) {
     debugPrint('Updating BMI category for Z-Score: $zScore');
 
@@ -227,19 +265,9 @@ class _AddGrowthStep1State extends State<AddGrowthStep1> {
         debugPrint('Category: n/a (zScore is null)');
         return;
       }
-      if (zScore < -1) {
-        _bmiCategoryText = 'Slightly below standard range';
-        _bmiCategoryColor = AppColors.warning;
-        debugPrint('Category: Slightly below standard range (zScore < -1)');
-      } else if (zScore <= 1) {
-        _bmiCategoryText = 'Within expected standard range';
-        _bmiCategoryColor = AppColors.success;
-        debugPrint('Category: Within expected standard range (-1 <= zScore <= 1)');
-      } else {
-        _bmiCategoryText = 'Slightly above standard range';
-        _bmiCategoryColor = AppColors.warning;
-        debugPrint('Category: Slightly above standard range (zScore > 1)');
-      }
+      _bmiCategoryText = _bandForZScore(zScore);
+      _bmiCategoryColor = _bandColorForZScore(zScore);
+      debugPrint('Category: $_bmiCategoryText (zScore $zScore)');
     });
   }
 
@@ -346,10 +374,8 @@ class _AddGrowthStep1State extends State<AddGrowthStep1> {
     }).join('\n');
 
     String getStatus(double? z) {
-      if (z == null || z.isNaN || z.isInfinite) return 'Within expected standard range';
-      if (z < -1) return 'Slightly below standard range';
-      if (z <= 1) return 'Within expected standard range';
-      return 'Slightly above standard range';
+      if (z == null || z.isNaN || z.isInfinite) return 'Within standard range';
+      return _bandForZScore(z);
     }
 
     final heightStatus = getStatus(heightZ);
@@ -367,10 +393,10 @@ Refer to the child by their first name or as "your little one" ("iyong munting a
 Provide the response in both English and Filipino.
 Use the exact output format below. Do not add extra sections, titles, bullet points, or tables.
 
-Please carefully note the status indicators: "Within expected standard range", "Slightly above standard range", or "Slightly below standard range". 
-- If any measurement is slightly above standard range, reassure the parent warmly and concisely (e.g. "Baby [Name] is growing well! Even though it seems like [his/her] [weight/height/BMI] is a bit higher than most babies [his/her] age, [he/she]'s gaining steadily and will catch up!").
-- If any measurement is slightly below standard range, reassure them warmly and concisely (e.g. "Baby [Name] is growing well! Even though [his/her] [weight/height/BMI] is a bit lower than most babies [his/her] age, [he/she]'s growing steadily and will catch up at [his/her] own pace!").
-- If everything is within expected range, celebrate their steady growth concisely (e.g. "Baby [Name] is doing great! [His/Her] growth is right on track, and [he/she] is growing steadily and beautifully!").
+Please carefully note the status indicators: "Within standard range", "Above standard range", or "Below standard range".
+- If any measurement is above standard range, reassure the parent warmly and concisely (e.g. "Baby [Name] is growing well! Even though it seems like [his/her] [weight/height/BMI] is a bit higher than most babies [his/her] age, [he/she]'s gaining steadily and will catch up!").
+- If any measurement is below standard range, reassure them warmly and concisely (e.g. "Baby [Name] is growing well! Even though [his/her] [weight/height/BMI] is a bit lower than most babies [his/her] age, [he/she]'s growing steadily and will catch up at [his/her] own pace!").
+- If everything is within standard range, celebrate their steady growth concisely (e.g. "Baby [Name] is doing great! [His/Her] growth is right on track, and [he/she] is growing steadily and beautifully!").
 
 Output format:
 
@@ -548,17 +574,40 @@ $recordsSummary
         debugPrint('Error getting midwife ID: $e');
       }
 
-      final insertResult = await Supabase.instance.client.from('child_growth_records').insert({
-        'child_id': widget.childId,
-        'child_height': height,
-        'child_weight': weight,
-        'created_at': DateTime.now().toIso8601String(),
-        if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
-      }).select('child_details_id').single();
+      final bmi = _calculateBMI(height, weight);
+      final now = DateTime.now();
+
+      final insertResult = await Supabase.instance.client
+          .from('child_growth_records')
+          .insert({
+            'child_id': widget.childId,
+            'child_height': height,
+            'child_weight': weight,
+            // measurement_date is NOT NULL in the schema. Omitting it was one of
+            // two reasons this insert used to fail.
+            'measurement_date': DateFormat('yyyy-MM-dd').format(now),
+            'created_at': now.toIso8601String(),
+            // The column is `recorded_by`. This previously wrote
+            // `recorded_by_midwife_id`, which does not exist on this table, so
+            // Postgres rejected the whole row.
+            if (midwifeId != null) 'recorded_by': midwifeId,
+            // Persist the WHO z-scores that were being computed and thrown away.
+            'height_for_age_zscore':
+                GrowthCalculator.calculateHeightZScore(height, _ageInWeeks, _gender),
+            'weight_for_age_zscore':
+                GrowthCalculator.calculateWeightZScore(weight, _ageInWeeks, _gender),
+            'bmi_for_age_zscore':
+                GrowthCalculator.calculateBMIZScore(bmi, _ageInWeeks, _gender),
+          })
+          .select('child_details_id')
+          .single();
 
       return insertResult['child_details_id'] as int;
     } catch (e) {
+      // Surface the reason instead of only logging it — a silent null here is
+      // what hid the broken column name in the first place.
       debugPrint('Error saving growth record: $e');
+      _lastSaveError = e.toString();
       return null;
     }
   }
@@ -655,7 +704,11 @@ $recordsSummary
         }
       } else {
         setState(() => _isSaving = false);
-        _showErrorDialog('Failed to save growth record. Please try again.');
+        _showErrorDialog(
+          _lastSaveError == null
+              ? 'Failed to save growth record. Please try again.'
+              : 'Failed to save growth record.\n\n$_lastSaveError',
+        );
       }
     } catch (e) {
       setState(() => _isSaving = false);
@@ -664,17 +717,15 @@ $recordsSummary
   }
 
   String _describeZScore(double? zScore) {
-    if (zScore == null) return 'Within expected standard range';
-    if (zScore < -1) return 'Slightly below standard range';
-    if (zScore <= 1) return 'Within expected standard range';
-    return 'Slightly above standard range';
+    if (zScore == null) return 'Within standard range';
+    return _bandForZScore(zScore);
   }
 
   String _describeZScoreFilipino(double? zScore) {
-    if (zScore == null) return 'naaayon sa inaasahang pamantayan';
-    if (zScore < -1) return 'medyo mababa sa pamantayan';
-    if (zScore <= 1) return 'naaayon sa inaasahang pamantayan';
-    return 'medyo mataas sa pamantayan';
+    if (zScore == null) return 'nasa loob ng pamantayan';
+    if (zScore < -_whoStandardSd) return 'mababa sa pamantayan';
+    if (zScore > _whoStandardSd) return 'mataas sa pamantayan';
+    return 'nasa loob ng pamantayan';
   }
 
   void _runBackgroundAiAnalysis(int childDetailsId) async {
@@ -739,35 +790,6 @@ $recordsSummary
     }
   }
 
-  String _growthStatusDescription(String metric, double? zScore) {
-    if (zScore == null) {
-      return '$metric status unavailable';
-    }
-    if (zScore < -5 || zScore > 5) {
-      return '$metric is outside the possible range';
-    }
-    if (zScore < -2) {
-      return '$metric is below the expected range';
-    }
-    if (zScore < -1) {
-      return '$metric is slightly below the expected range';
-    }
-    if (zScore <= 1) {
-      return '$metric is within the expected range';
-    }
-    if (zScore <= 2) {
-      return '$metric is slightly above the expected range';
-    }
-    return '$metric is above the expected range';
-  }
-
-  Color _zScoreColor(double? zScore) {
-    if (zScore == null) return AppColors.textSecondary;
-    if (zScore < -2 || zScore > 2) return AppColors.error;
-    if (zScore < -1 || zScore > 1) return AppColors.warning;
-    return AppColors.success;
-  }
-
   void _showReferenceDialog() {
     showDialog(
       context: context,
@@ -795,9 +817,14 @@ $recordsSummary
                 style: TextStyle(fontSize: 13, height: 1.4),
               ),
               SizedBox(height: 8),
-              Text('• Within expected standard range (Green): between -1 and +1 Z-score.', style: TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w600)),
-              Text('• Slightly below standard range (Yellow): less than -1 Z-score.', style: TextStyle(fontSize: 13, color: AppColors.warning, fontWeight: FontWeight.w600)),
-              Text('• Slightly above standard range (Yellow): greater than +1 Z-score.', style: TextStyle(fontSize: 13, color: AppColors.warning, fontWeight: FontWeight.w600)),
+              Text('• Within standard range (Green): between -2 and +2 Z-score.', style: TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w600)),
+              Text('• Below standard range (Yellow): less than -2 Z-score.', style: TextStyle(fontSize: 13, color: AppColors.warning, fontWeight: FontWeight.w600)),
+              Text('• Above standard range (Yellow): greater than +2 Z-score.', style: TextStyle(fontSize: 13, color: AppColors.warning, fontWeight: FontWeight.w600)),
+              SizedBox(height: 8),
+              Text(
+                'WHO uses ±2 SD as the reference cut-off. Most healthy children fall within this range; a value outside it is a prompt to review with the midwife, not a diagnosis.',
+                style: TextStyle(fontSize: 12, height: 1.4, color: AppColors.textSecondary),
+              ),
             ],
           ),
         ),
@@ -841,36 +868,32 @@ $recordsSummary
 
     final String status = _bmiCategoryText;
 
-    if (status == 'Slightly below standard range') {
-      if (_weightZScore != null && _weightZScore! < -1 && _heightZScore != null && _heightZScore! > 1) {
-        return 'Both the child\'s weight is slightly below expected range and height is slightly above expected range, contributing to the lower BMI.';
+    const sd = _whoStandardSd;
+
+    if (status == 'Below standard range') {
+      if (_weightZScore != null && _weightZScore! < -sd && _heightZScore != null && _heightZScore! > sd) {
+        return 'The child\'s weight is below and height is above the standard range for their age, which together lower the BMI.';
       }
-      if (_weightZScore != null && _weightZScore! < -1) {
-        return 'The child\'s weight is slightly below the standard range for their age, contributing to the lower BMI.';
+      if (_weightZScore != null && _weightZScore! < -sd) {
+        return 'The child\'s weight is below the standard range for their age, contributing to the lower BMI.';
       }
-      if (_heightZScore != null && _heightZScore! > 1) {
-        return 'The child\'s height is slightly above the standard range for their age, which contributes to a lower BMI relative to their frame.';
-      }
-      if (_weightZScore != null && _weightZScore! >= -1 && _heightZScore != null && _heightZScore! <= 1) {
-        return 'Although the child\'s height and weight are both individually within expected ranges, the weight is on the lower side relative to their height, resulting in a slightly lower BMI.';
+      if (_heightZScore != null && _heightZScore! > sd) {
+        return 'The child\'s height is above the standard range for their age, which lowers the BMI relative to their frame.';
       }
       return 'The child\'s weight is lower than typical for their height at this age, resulting in a lower BMI.';
-    } else if (status == 'Slightly above standard range') {
-      if (_weightZScore != null && _weightZScore! > 1 && _heightZScore != null && _heightZScore! < -1) {
-        return 'Both the child\'s weight is slightly above expected range and height is slightly below expected range, contributing to the higher BMI.';
+    } else if (status == 'Above standard range') {
+      if (_weightZScore != null && _weightZScore! > sd && _heightZScore != null && _heightZScore! < -sd) {
+        return 'The child\'s weight is above and height is below the standard range for their age, which together raise the BMI.';
       }
-      if (_weightZScore != null && _weightZScore! > 1) {
-        return 'The child\'s weight is slightly above the standard range for their age, contributing to the higher BMI.';
+      if (_weightZScore != null && _weightZScore! > sd) {
+        return 'The child\'s weight is above the standard range for their age, contributing to the higher BMI.';
       }
-      if (_heightZScore != null && _heightZScore! < -1) {
-        return 'The child\'s height is slightly below the standard range for their age, which contributes to a higher BMI relative to their frame.';
-      }
-      if (_weightZScore != null && _weightZScore! <= 1 && _heightZScore != null && _heightZScore! >= -1) {
-        return 'Although the child\'s height and weight are both individually within expected ranges, the weight is on the higher side relative to their height, resulting in a slightly higher BMI.';
+      if (_heightZScore != null && _heightZScore! < -sd) {
+        return 'The child\'s height is below the standard range for their age, which raises the BMI relative to their frame.';
       }
       return 'The child\'s weight is higher than typical for their height at this age, resulting in a higher BMI.';
-    } else if (status == 'Within expected standard range') {
-      return 'The child\'s height and weight are both within the expected standard range for this age, resulting in a healthy BMI.';
+    } else if (status == 'Within standard range') {
+      return 'The child\'s height and weight are both within the WHO standard range for this age, resulting in a healthy BMI.';
     }
     return null;
   }
@@ -1023,8 +1046,6 @@ $recordsSummary
           ),
         ],
 
-
-
         const SizedBox(height: 16),
 
         // Weight Input
@@ -1051,6 +1072,39 @@ $recordsSummary
                 fontSize: 12,
                 color: AppColors.textSecondary,
               ),
+            ),
+          ),
+        ],
+
+        if (_prefilledFromPrevious) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.warning.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.edit_note_rounded,
+                    size: 16, color: AppColors.warning),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'These are the last recorded measurements, filled in to save typing. '
+                    'Replace them with today\'s readings before saving.',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      height: 1.4,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1133,18 +1187,10 @@ $recordsSummary
                     ),
                 ],
               ),
+              // The pill already states the band; a second line restating it in
+              // sentence form was pure repetition, so only the explanation of
+              // *why* remains.
               if (_bmiZScore != null && _bmiController.text.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    _growthStatusDescription('BMI', _bmiZScore),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: _bmiCategoryColor.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ),
                 if (_getBmiExplanation() != null) ...[
                   const SizedBox(height: 12),
                   Divider(height: 1, color: _bmiCategoryColor.withValues(alpha: 0.2)),
@@ -1181,104 +1227,48 @@ $recordsSummary
         ],
         const SizedBox(height: 16),
 
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: AppColors.borderPrimary.withValues(alpha: 0.4),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Icon(
-                Icons.help_outline,
-                size: 18,
+        // Remarks — same outlined field used by the prenatal checkup form.
+        Row(
+          children: const [
+            Icon(Icons.notes_rounded, size: 18, color: AppColors.textSecondary),
+            SizedBox(width: 8),
+            Text(
+              'Remarks',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
                 color: AppColors.textSecondary,
               ),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Measurement guide: enter height in cm and weight in kg. Use the child\'s age range to choose realistic values and double-check the measuring tool if numbers seem unusual.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(
-              color: AppColors.textSecondary.withValues(alpha: 0.22),
-              width: 1.2,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: const [
-                  Icon(
-                    Icons.notes_rounded,
-                    size: 18,
-                    color: AppColors.textSecondary,
-                  ),
-                  SizedBox(width: 10),
-                  Text(
-                    'Remarks (optional)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _remarksController,
-                minLines: 4,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                  hintText: 'Add optional notes to describe the measurement context',
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(vertical: 0),
-                ),
-                style: TextStyle(
-                  color: AppColors.textPrimary.withValues(alpha: 0.85),
-                  fontSize: 15,
-                ),
-                cursorColor: AppColors.brandPrimary,
-              ),
-            ],
+          ],
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _remarksController,
+          maxLines: 5,
+          maxLength: 1000,
+          style: const TextStyle(fontSize: 13, height: 1.5),
+          cursorColor: AppColors.brandPrimary,
+          decoration: InputDecoration(
+            hintText: 'Measurement notes, observations (optional)',
+            hintStyle: TextStyle(
+              color: AppColors.textSecondary.withValues(alpha: 0.5),
+            ),
+            border: const OutlineInputBorder(
+              borderSide: BorderSide(color: AppColors.borderPrimary),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderSide: const BorderSide(color: AppColors.borderPrimary),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: const BorderSide(color: AppColors.brandPrimary),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           ),
         ),
 

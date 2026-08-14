@@ -76,7 +76,9 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     'parent_recall': 'Parent recalls it',
   };
 
-  bool get _isOutside => _administrationPlace == 'external_facility' || widget.source == ImmunizationSource.outside;
+  bool get _isOutside =>
+      _administrationPlace == 'external_facility' ||
+      widget.source == ImmunizationSource.outside;
 
   /// Whether the vaccine picker is expanded. Mirrors the Add Mother form's
   /// select fields, which open in place rather than over the form.
@@ -89,7 +91,9 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
   @override
   void initState() {
     super.initState();
-    _administrationPlace = widget.source == ImmunizationSource.outside ? 'external_facility' : 'local_facility';
+    _administrationPlace = widget.source == ImmunizationSource.outside
+        ? 'external_facility'
+        : 'local_facility';
     _loadData();
   }
 
@@ -338,6 +342,9 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
             allVaccines: _vaccines,
             takenVaccineIds: _takenVaccineIds,
             childBirthdate: _childBirthdate,
+            // A scanned card is a history, not a record of what we just gave.
+            // Carrying the chosen path through keeps a card scanned under
+            // "Given elsewhere" from being attributed to this centre.
             source: widget.source,
           ),
         ),
@@ -701,10 +708,15 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           .order('vaccine_name');
 
       _vaccines = List<Map<String, dynamic>>.from(response);
+      // Indexes are rebuilt here rather than rescanned per row: the schedule
+      // only changes on load, but the dropdown rebuilds on every keystroke.
       _rebuildLookups();
 
       if (_vaccines.isEmpty) {
         setState(() {
+          // Not a failure — the schedule simply has not been loaded into this
+          // deployment yet. Say what is missing and who can fix it, rather than
+          // implying the record or the connection is broken.
           _errorMessage =
               'The immunization schedule has not been set up for this health '
               'centre yet. Ask your administrator to load the DOH schedule '
@@ -725,6 +737,8 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
 
   Future<void> _loadTakenVaccines() async {
     try {
+      // Dates come along too: the minimum interval before a later dose is
+      // measured from when the previous one was actually given.
       final response = await Supabase.instance.client
           .from('immunization_records')
           .select('vaccine_id, vaccination_date')
@@ -741,6 +755,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
 
         final raw = row['vaccination_date']?.toString();
         final parsed = raw == null ? null : DateTime.tryParse(raw);
+        // Keep the latest, in case a vaccine somehow has more than one record.
         if (parsed != null &&
             (dates[id] == null || parsed.isAfter(dates[id]!))) {
           dates[id] = parsed;
@@ -759,8 +774,13 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     }
   }
 
+  /// Doses of each vaccine, ordered by dose number.
   final Map<String, List<Map<String, dynamic>>> _dosesByVaccineName = {};
+
+  /// When each recorded dose was administered.
   final Map<int, DateTime> _givenDateByVaccineId = {};
+
+  /// Vaccines that have more than one dose, so the tile knows when to show it.
   final Set<String> _multiDoseVaccineNames = {};
 
   void _rebuildLookups() {
@@ -780,6 +800,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     }
   }
 
+  /// Whether every earlier dose of this vaccine is already recorded.
   bool _isPrerequisiteMet(Map<String, dynamic> vaccine) {
     final doseNumber = (vaccine['dose_number'] as num?)?.toInt() ?? 1;
     if (doseNumber <= 1) return true;
@@ -795,6 +816,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     return true;
   }
 
+  /// When the dose immediately before this one was given, if it was.
   DateTime? _previousDoseGivenOn(Map<String, dynamic> vaccine) {
     final doseNumber = (vaccine['dose_number'] as num?)?.toInt() ?? 1;
     if (doseNumber <= 1) return null;
@@ -810,6 +832,8 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     return null;
   }
 
+  /// The earliest date this dose may be given, honouring both the scheduled
+  /// age and the minimum interval since the previous dose.
   DateTime? _earliestAllowedFor(Map<String, dynamic> vaccine) {
     return ImmunizationSchedule.earliestAllowedDate(
       birthdate: _childBirthdate,
@@ -821,6 +845,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     );
   }
 
+  /// Every vaccine in the schedule, unfiltered.
   List<Map<String, dynamic>> _getAvailableVaccines() {
     return _vaccines;
   }
@@ -845,11 +870,14 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     }
   }
 
+  /// Age as printed on the DOH card.
   String _formatRecommendedAge(double? months) =>
       ImmunizationSchedule.formatScheduledAge(months);
 
+  /// How late a dose must be before it counts as overdue rather than simply due.
   static const double _overdueAfterMonths = 4 / 4.345;
 
+  /// Where each vaccine sits for this child, right now.
   _VaccineGroups _groupVaccines() {
     final childAgeMonths = _getChildAgeMonths();
     final today = DateTime.now();
@@ -920,6 +948,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     );
   }
 
+  /// Whether the child has passed the age after which this dose should no longer be given.
   bool _isPastAgeCeiling(Map<String, dynamic> vaccine, double childAgeMonths) {
     final ceiling = (vaccine['maximum_age_months'] as num?)?.toDouble();
     if (ceiling == null) return false;
@@ -927,6 +956,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     return childAgeMonths > ceiling;
   }
 
+  /// How far past its scheduled age a dose is, in plain words.
   String _overdueBy(Map<String, dynamic> vaccine) {
     final scheduledAt =
         (vaccine['recommended_age_months'] as num?)?.toDouble() ?? 0;
@@ -1799,12 +1829,12 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.error_outline, color: AppColors.error, size: 20),
+                        const Icon(Icons.error_outline, color: AppColors.error, size: 20),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _errorMessage!,
-                            style: TextStyle(color: AppColors.error, fontSize: 12),
+                            style: const TextStyle(color: AppColors.error, fontSize: 12),
                           ),
                         ),
                       ],
@@ -1819,254 +1849,255 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
                         color: AppColors.brandPrimary,
                       ),
                     ),
-                  ),
+                  )
+                else ...[
+                  // Select Vaccine
+                  _buildVaccineDropdown(),
 
-                // Select Vaccine
-                _buildVaccineDropdown(),
-
-                if (!_vaccinesLoading && !hasAvailableVaccines && _vaccines.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0, left: 8.0),
-                    child: Text(
-                      'All age-appropriate vaccines have been administered, '
-                      'or the child has not reached the recommended age for remaining vaccines.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                        fontStyle: FontStyle.italic,
+                  if (!hasAvailableVaccines && _vaccines.isNotEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8.0, left: 8.0),
+                      child: Text(
+                        'All age-appropriate vaccines have been administered, '
+                        'or the child has not reached the recommended age for remaining vaccines.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
                     ),
-                  ),
 
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                // Administration Location Selector
-                const Text(
-                  'Vaccine Administration Location',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                  // Administration Location Selector
+                  const Text(
+                    'Vaccine Administration Location',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() => _administrationPlace = 'local_facility');
-                          if (_selectedVaccineId != null) {
-                            _checkBhcStock(_selectedVaccineId!);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                          decoration: BoxDecoration(
-                            color: _administrationPlace == 'local_facility'
-                                ? AppColors.brandPrimary.withValues(alpha: 0.12)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _administrationPlace = 'local_facility');
+                            if (_selectedVaccineId != null) {
+                              _checkBhcStock(_selectedVaccineId!);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                            decoration: BoxDecoration(
                               color: _administrationPlace == 'local_facility'
-                                  ? AppColors.brandPrimary
-                                  : AppColors.borderPrimary,
-                              width: _administrationPlace == 'local_facility' ? 1.5 : 1,
+                                  ? AppColors.brandPrimary.withValues(alpha: 0.12)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _administrationPlace == 'local_facility'
+                                    ? AppColors.brandPrimary
+                                    : AppColors.borderPrimary,
+                                width: _administrationPlace == 'local_facility' ? 1.5 : 1,
+                              ),
                             ),
-                          ),
-                          child: Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.location_on_rounded,
-                                    size: 16,
-                                    color: _administrationPlace == 'local_facility'
-                                        ? AppColors.brandPrimary
-                                        : AppColors.textSecondary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'At this BHC',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.location_on_rounded,
+                                      size: 16,
                                       color: _administrationPlace == 'local_facility'
                                           ? AppColors.brandPrimary
-                                          : AppColors.textPrimary,
+                                          : AppColors.textSecondary,
                                     ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'Deducts BHC Stock',
-                                style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _administrationPlace = 'external_facility'),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                          decoration: BoxDecoration(
-                            color: _administrationPlace == 'external_facility'
-                                ? AppColors.brandPrimary.withValues(alpha: 0.12)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: _administrationPlace == 'external_facility'
-                                  ? AppColors.brandPrimary
-                                  : AppColors.borderPrimary,
-                              width: _administrationPlace == 'external_facility' ? 1.5 : 1,
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'At this BHC',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: _administrationPlace == 'local_facility'
+                                            ? AppColors.brandPrimary
+                                            : AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'Deducts BHC Stock',
+                                  style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                                ),
+                              ],
                             ),
                           ),
-                          child: Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.local_hospital_outlined,
-                                    size: 16,
-                                    color: _administrationPlace == 'external_facility'
-                                        ? AppColors.brandPrimary
-                                        : AppColors.textSecondary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Elsewhere',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _administrationPlace = 'external_facility'),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: _administrationPlace == 'external_facility'
+                                  ? AppColors.brandPrimary.withValues(alpha: 0.12)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _administrationPlace == 'external_facility'
+                                    ? AppColors.brandPrimary
+                                    : AppColors.borderPrimary,
+                                width: _administrationPlace == 'external_facility' ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.local_hospital_outlined,
+                                      size: 16,
                                       color: _administrationPlace == 'external_facility'
                                           ? AppColors.brandPrimary
-                                          : AppColors.textPrimary,
+                                          : AppColors.textSecondary,
                                     ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'Record Only',
-                                style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                              ),
-                            ],
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Elsewhere',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: _administrationPlace == 'external_facility'
+                                            ? AppColors.brandPrimary
+                                            : AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'Record Only',
+                                  style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-
-                _buildBhcStockCard(),
-
-                const SizedBox(height: 16),
-
-                // Select Date
-                GestureDetector(
-                  onTap: _selectDate,
-                  child: AbsorbPointer(
-                    child: AppInputField(
-                      hintText: 'Vaccination Date',
-                      controller: _dateController,
-                      leadingIcon: Icons.calendar_month_rounded,
-                      isRequired: true,
-                    ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 16),
 
-                // Outside-record fields
-                if (_isOutside) ...[
-                  AppInputField(
-                    hintText: 'Where was it given?',
-                    controller: _facilityController,
-                    leadingIcon: Icons.location_city_outlined,
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16, bottom: 8),
-                    child: Text(
-                      'Hospital, clinic or health center name, if known.',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                  ),
-                  _buildEvidenceSelector(),
+                  _buildBhcStockCard(),
+
                   const SizedBox(height: 16),
-                ],
 
-                // Remarks
-                Row(
-                  children: const [
-                    Icon(Icons.notes_rounded,
-                        size: 18, color: AppColors.textSecondary),
-                    SizedBox(width: 8),
-                    Text(
-                      'Remarks',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
+                  // Select Date
+                  GestureDetector(
+                    onTap: _selectDate,
+                    child: AbsorbPointer(
+                      child: AppInputField(
+                        hintText: 'Vaccination Date',
+                        controller: _dateController,
+                        leadingIcon: Icons.calendar_month_rounded,
+                        isRequired: true,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _remarksController,
-                  maxLines: 5,
-                  maxLength: 1000,
-                  style: const TextStyle(fontSize: 13, height: 1.5),
-                  cursorColor: AppColors.brandPrimary,
-                  decoration: InputDecoration(
-                    hintText: _isOutside
-                        ? 'Anything worth noting about this record (optional)'
-                        : 'Observations, reactions, batch notes (optional)',
-                    hintStyle: TextStyle(
-                      color: AppColors.textSecondary.withValues(alpha: 0.5),
-                    ),
-                    border: const OutlineInputBorder(
-                      borderSide: BorderSide(color: AppColors.borderPrimary),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: AppColors.borderPrimary),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: AppColors.brandPrimary),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   ),
-                ),
+                  const SizedBox(height: 16),
 
-                const SizedBox(height: 12),
-
-                _isLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.brandPrimary,
+                  // Outside-record fields
+                  if (_isOutside) ...[
+                    AppInputField(
+                      hintText: 'Where was it given?',
+                      controller: _facilityController,
+                      leadingIcon: Icons.location_city_outlined,
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16, bottom: 8),
+                      child: Text(
+                        'Hospital, clinic or health center name, if known.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade500,
                         ),
-                      )
-                    : MainButton(
-                        label: 'Add Immunization Record',
-                        onPressed: (_isFormValid && hasAvailableVaccines && !_vaccinesLoading) ? _submit : null,
                       ),
+                    ),
+                    _buildEvidenceSelector(),
+                    const SizedBox(height: 16),
+                  ],
 
-                const SizedBox(height: 24),
+                  // Remarks
+                  Row(
+                    children: const [
+                      Icon(Icons.notes_rounded,
+                          size: 18, color: AppColors.textSecondary),
+                      SizedBox(width: 8),
+                      Text(
+                        'Remarks',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _remarksController,
+                    maxLines: 5,
+                    maxLength: 1000,
+                    style: const TextStyle(fontSize: 13, height: 1.5),
+                    cursorColor: AppColors.brandPrimary,
+                    decoration: InputDecoration(
+                      hintText: _isOutside
+                          ? 'Anything worth noting about this record (optional)'
+                          : 'Observations, reactions, batch notes (optional)',
+                      hintStyle: TextStyle(
+                        color: AppColors.textSecondary.withValues(alpha: 0.5),
+                      ),
+                      border: const OutlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.borderPrimary),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: const BorderSide(color: AppColors.borderPrimary),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: const BorderSide(color: AppColors.brandPrimary),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.brandPrimary,
+                          ),
+                        )
+                      : MainButton(
+                          label: 'Add Immunization Record',
+                          onPressed: (_isFormValid && hasAvailableVaccines && !_vaccinesLoading) ? _submit : null,
+                        ),
+
+                  const SizedBox(height: 24),
+                ],
               ],
             ),
           ),

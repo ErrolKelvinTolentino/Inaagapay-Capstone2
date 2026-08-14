@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/danger_signs_card.dart';
 import '../../services/auth_storage.dart';
 import '../../services/language_service.dart';
 import '../../services/supabase_service.dart';
@@ -882,6 +883,14 @@ class _HotlinesScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
+
+              // Placed above the numbers on purpose. Someone who opens this
+              // tab is already worried but may not know whether what she is
+              // feeling warrants a call. Answering that comes before giving
+              // her a number to dial.
+              const DangerSignsCard(),
+              const SizedBox(height: 16),
+
               _HotlineButton(
                 label: LanguageService.translate(
                     'National Emergency Hotline', 'Pambansang Emergency Hotline'),
