@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../services/auth_storage.dart';
+import '../../services/push_notification_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/app_input_field.dart';
@@ -17,17 +19,17 @@ import '../../widgets/tab_button.dart';
 import 'inventory_models.dart' as live;
 import 'inventory_repository.dart';
 
-/// Direct-launch presentation of the midwife side of the RHU inventory flow.
-/// Inventory data is read from the same Supabase project as `admin-web`.
-class MidwifeInventoryMockPage extends StatefulWidget {
-  const MidwifeInventoryMockPage({super.key});
+/// Midwife side of the RHU -> BHC inventory flow: incoming shipments, receipt
+/// confirmation, and stock requests. Reads and writes the same Supabase project
+/// as `admin-web`.
+class MidwifeInventoryPage extends StatefulWidget {
+  const MidwifeInventoryPage({super.key});
 
   @override
-  State<MidwifeInventoryMockPage> createState() =>
-      _MidwifeInventoryMockPageState();
+  State<MidwifeInventoryPage> createState() => _MidwifeInventoryPageState();
 }
 
-class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
+class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     with WidgetsBindingObserver {
   static const double _pullUpRefreshThreshold = 56;
 
@@ -607,20 +609,8 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
         MainHeader(
           title: 'Inventory',
           onNotificationTap: _showNotificationSheet,
-          onViewProfile: () => _showMockMessage(
-            'Midwife profile is outside this inventory mock.',
-          ),
-          onSettings: () => _showMockMessage(
-            'Inventory settings are available in the full app.',
-          ),
-          onHelp: () => _showMockMessage(
-            'Use Receive for issued stocks or submit a new request.',
-          ),
-          onLogout: () => _showMockMessage(
-            _liveContext?.isDemo == true
-                ? 'This presentation is using the labelled demo midwife identity.'
-                : 'The saved midwife session is supplying this inventory identity.',
-          ),
+          onSettings: () => Navigator.pushNamed(context, '/settings'),
+          onLogout: _logout,
         ),
         if (_unreadNotificationCount > 0)
           Positioned(
@@ -4179,8 +4169,11 @@ class _MidwifeInventoryMockPageState extends State<MidwifeInventoryMockPage>
     };
   }
 
-  void _showMockMessage(String message) {
-    AppSnackbar.info(context, message);
+  Future<void> _logout() async {
+    await PushNotificationService.removeToken();
+    await AuthStorage.clearAll();
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
   }
 
   void _showWorkflowUnavailable() {
