@@ -2048,6 +2048,45 @@
           };
         }
 
+        // Effective threshold calculation (scaled by total locations in combined view)
+        function getItemEffectiveThreshold(item, facilityFilter) {
+          const baseMin = item.minimum_stock_threshold || 50;
+          if (facilityFilter === "all" || facilityFilter === "" || facilityFilter === null || facilityFilter === undefined) {
+            const facilityCount = (Array.isArray(bhcs) ? bhcs.length : 0) + 1; // Central Warehouse + BHCs
+            return baseMin * Math.max(1, facilityCount);
+          }
+          return baseMin;
+        }
+
+        // Detailed facility-by-facility health check for an item
+        function getItemFacilityHealth(item) {
+          const baseMin = item.minimum_stock_threshold || 50;
+          const locations = [{ id: "central", name: "Central Warehouse" }];
+          if (Array.isArray(bhcs)) {
+            bhcs.forEach(b => locations.push({ id: String(b.bhc_id), name: b.bhc_name || `BHC #${b.bhc_id}` }));
+          }
+
+          let lowCount = 0;
+          let outCount = 0;
+
+          locations.forEach(loc => {
+            const m = getItemStockMetrics(item.item_id, loc.id);
+            if (m.available === 0) {
+              outCount++;
+              lowCount++;
+            } else if (m.available <= baseMin) {
+              lowCount++;
+            }
+          });
+
+          return {
+            hasLowFacilities: lowCount > 0,
+            lowCount,
+            outCount,
+            totalFacilities: locations.length
+          };
+        }
+
         // Reusable Pagination Controls Renderer
         function renderPaginationControls(containerId, totalItems, key) {
           const container = document.getElementById(containerId);
@@ -2202,7 +2241,13 @@
           let lowCount = 0;
           items.forEach(item => {
             const metrics = getItemStockMetrics(item.item_id, bhcFilter);
-            if (metrics.available <= (item.minimum_stock_threshold || 50)) lowCount++;
+            const effMin = getItemEffectiveThreshold(item, bhcFilter);
+            if (bhcFilter === "all" || bhcFilter === "" || bhcFilter === null) {
+              const fHealth = getItemFacilityHealth(item);
+              if (metrics.available <= effMin || fHealth.hasLowFacilities) lowCount++;
+            } else {
+              if (metrics.available <= effMin) lowCount++;
+            }
           });
           document.getElementById("kpi-low-stock").textContent = lowCount;
 
@@ -2292,17 +2337,26 @@
           const archivedFilter = document.getElementById("catalog-filter-archived") ? document.getElementById("catalog-filter-archived").value : "active";
           const bhcFilter = document.getElementById("global-bhc-filter").value;
 
+          const isCombined = (bhcFilter === "all" || bhcFilter === "" || bhcFilter === null || bhcFilter === undefined);
+
           const filtered = items.filter(item => {
             if (archivedFilter === "active" && item.is_archived) return false;
             if (archivedFilter === "archived" && !item.is_archived) return false;
             if (type && item.item_type !== type) return false;
             const searchStr = `${item.name || ""} ${item.generic_name || ""}`.toLowerCase();
             if (q && !searchStr.includes(q)) return false;
+
             const metrics = getItemStockMetrics(item.item_id, bhcFilter);
-            const min = item.minimum_stock_threshold || 50;
-            if (stockFilter === "low" && (metrics.available > min || metrics.available === 0)) return false;
-            if (stockFilter === "out" && metrics.available > 0) return false;
-            if (stockFilter === "normal" && metrics.available <= min) return false;
+            const effMin = getItemEffectiveThreshold(item, bhcFilter);
+            const fHealth = isCombined ? getItemFacilityHealth(item) : null;
+
+            const isOut = metrics.available === 0;
+            const isLow = !isOut && (metrics.available <= effMin || (isCombined && fHealth && fHealth.hasLowFacilities));
+            const isNormal = !isOut && !isLow;
+
+            if (stockFilter === "low" && !isLow) return false;
+            if (stockFilter === "out" && !isOut) return false;
+            if (stockFilter === "normal" && !isNormal) return false;
             return true;
           });
 
@@ -2319,15 +2373,30 @@
 
           tbody.innerHTML = paginatedItems.map(item => {
             const metrics = getItemStockMetrics(item.item_id, bhcFilter);
-            const min = item.minimum_stock_threshold || 50;
+            const baseMin = item.minimum_stock_threshold || 50;
+            const effMin = getItemEffectiveThreshold(item, bhcFilter);
+            const fHealth = isCombined ? getItemFacilityHealth(item) : null;
+
             let statusBadge = `<span class="badge-health-success"><i class="fa-solid fa-circle-check"></i> In Stock</span>`;
             if (item.is_archived) {
               statusBadge = `<span class="badge-health-warning" style="background:#f1f5f9;color:#64748b;border-color:#cbd5e1;"><i class="fa-solid fa-box-archive"></i> Archived</span>`;
             } else if (metrics.available === 0) {
               statusBadge = `<span class="badge-health-danger"><i class="fa-solid fa-ban"></i> Out of Stock</span>`;
-            } else if (metrics.available <= min) {
+            } else if (isCombined && fHealth && fHealth.hasLowFacilities) {
+              if (fHealth.outCount > 0) {
+                statusBadge = `<span class="badge-health-warning" title="${fHealth.outCount} facility completely out of stock"><i class="fa-solid fa-triangle-exclamation"></i> Low Stock (${fHealth.outCount} Out)</span>`;
+              } else {
+                statusBadge = `<span class="badge-health-warning" title="${fHealth.lowCount} facility below safety threshold"><i class="fa-solid fa-triangle-exclamation"></i> Low Stock (${fHealth.lowCount} Low)</span>`;
+              }
+            } else if (metrics.available <= effMin) {
               statusBadge = `<span class="badge-health-warning"><i class="fa-solid fa-triangle-exclamation"></i> Low Stock</span>`;
             }
+
+            const thresholdDisplay = isCombined 
+              ? `Min: ${effMin} <span style="font-size:9.5px;color:var(--text-secondary);">(${baseMin}/fac)</span>` 
+              : `Min: ${baseMin} ${esc(item.unit_of_measure)}`;
+
+            const isStockWarn = metrics.available <= effMin || (isCombined && fHealth && fHealth.hasLowFacilities);
 
             const archiveActionBtn = item.is_archived 
               ? `<button class="btn btn-sm btn-outline-pink" onclick="unarchiveItem(${item.item_id})" title="Restore / Unarchive Item" style="padding:2px 5px;font-size:11px;color:#059669;border-color:#bbf7d0;"><i class="fa-solid fa-rotate-left"></i> Restore</button>`
@@ -2344,14 +2413,14 @@
                   <div style="font-size:10.5px;color:var(--brand-text);font-style:italic;">${esc(item.generic_name || item.name)}</div>
                   <div style="font-size:10px;color:var(--text-secondary);display:flex;gap:6px;margin-top:1px;">
                     <span class="type-pill" style="font-size:9.5px;padding:0 4px;">${esc(item.item_type.replace('_',' '))}</span>
-                    <span>Min: ${min} ${esc(item.unit_of_measure)}</span>
+                    <span>${thresholdDisplay}</span>
                   </div>
                 </td>
                 <td>${esc(item.unit_of_measure)}</td>
                 <td style="text-align:right;font-weight:600;color:#059669;">+${metrics.added}</td>
                 <td style="text-align:right;font-weight:600;color:var(--brand-primary);">${metrics.issued}</td>
                 <td style="text-align:right;font-weight:600;color:#d97706;">${metrics.allocated > 0 ? `${metrics.allocated}` : '0'}</td>
-                <td style="text-align:right;font-weight:700;font-size:13.5px;color:${metrics.available <= min ? '#dc2626' : 'var(--text-primary)'};">${metrics.available}</td>
+                <td style="text-align:right;font-weight:700;font-size:13.5px;color:${isStockWarn ? '#dc2626' : 'var(--text-primary)'};">${metrics.available}</td>
                 <td style="text-align:center;">${statusBadge}</td>
                 <td style="text-align:center;">
                   <div style="display:flex;justify-content:center;gap:3px;flex-wrap:nowrap;">
@@ -3201,7 +3270,15 @@
             Total active stock level across facilities: <strong>${totalEnding.toLocaleString()}</strong> units.
           `;
 
-          const lowStockItems = items.filter(i => getItemStockMetrics(i.item_id, bhcFilter).available <= (i.minimum_stock_threshold || 50));
+          const lowStockItems = items.filter(i => {
+            const m = getItemStockMetrics(i.item_id, bhcFilter);
+            const effMin = getItemEffectiveThreshold(i, bhcFilter);
+            if (bhcFilter === "all" || bhcFilter === "" || bhcFilter === null) {
+              const fHealth = getItemFacilityHealth(i);
+              return m.available <= effMin || fHealth.hasLowFacilities;
+            }
+            return m.available <= effMin;
+          });
           const expiredBatchesCount = batches.filter(b => isBatchExpired(b) || b.status === 'expired').length;
           document.getElementById("insight-diagnostic").innerHTML = `
             ${lowStockItems.length > 0 ? `<strong>${lowStockItems.length} item(s)</strong> triggered low stock alerts.` : `Stock levels remain healthy across all monitored items.`}<br>
@@ -3836,13 +3913,24 @@
 
           const lowAlerts = items.filter(item => {
             const metrics = getItemStockMetrics(item.item_id, bhcFilter);
-            return metrics.available <= (item.minimum_stock_threshold || 50);
+            const effMin = getItemEffectiveThreshold(item, bhcFilter);
+            if (bhcFilter === "all" || bhcFilter === "" || bhcFilter === null) {
+              const fHealth = getItemFacilityHealth(item);
+              return metrics.available <= effMin || fHealth.hasLowFacilities;
+            }
+            return metrics.available <= effMin;
           }).map(item => {
             const metrics = getItemStockMetrics(item.item_id, bhcFilter);
+            const effMin = getItemEffectiveThreshold(item, bhcFilter);
+            const fHealth = (bhcFilter === "all" || bhcFilter === "" || bhcFilter === null) ? getItemFacilityHealth(item) : null;
+            let note = `Threshold: ${effMin}`;
+            if (fHealth && fHealth.hasLowFacilities) {
+              note += ` (${fHealth.lowCount} location(s) low)`;
+            }
             return {
               kind: "low",
               title: `Low Stock: ${esc(item.name)}`,
-              desc: `Available stock is ${metrics.available} ${esc(item.unit_of_measure)} (Threshold: ${item.minimum_stock_threshold || 50}).`,
+              desc: `Available stock is ${metrics.available} ${esc(item.unit_of_measure)} (${note}).`,
               action: `<button class="btn btn-sm btn-primary" onclick="closeModal('modal-alerts-hub'); quickReceive(${item.item_id});"><i class="fa-solid fa-plus"></i> Receive Batch</button>`
             };
           });
@@ -3909,7 +3997,8 @@
           const headers = ["Item Trade Name", "Generic Name", "Category", "Unit of Measure", "Minimum Threshold", "Total Received", "Total Issued", "Allocated/In-Transit", "Available Stock"];
           const rows = items.map(item => {
             const m = getItemStockMetrics(item.item_id, bhcFilter);
-            return [item.name, item.generic_name || "", item.item_type, item.unit_of_measure, item.minimum_stock_threshold || 50, m.added, m.issued, m.allocated, m.available];
+            const effMin = getItemEffectiveThreshold(item, bhcFilter);
+            return [item.name, item.generic_name || "", item.item_type, item.unit_of_measure, effMin, m.added, m.issued, m.allocated, m.available];
           });
           const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.map(val => window.csvCell(val)).join(","))].join("\n");
           const link = document.createElement("a");
