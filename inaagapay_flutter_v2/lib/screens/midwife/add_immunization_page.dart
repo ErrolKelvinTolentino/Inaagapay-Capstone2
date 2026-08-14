@@ -38,6 +38,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
 
   int? _selectedVaccineId;
   DateTime? _selectedDate;
+  String _administrationPlace = 'local_facility'; // 'local_facility' or 'external_facility'
   bool _isLoading = false;
   List<Map<String, dynamic>> _vaccines = [];
   bool _vaccinesLoading = true;
@@ -835,17 +836,19 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
 
     try {
       int? midwifeId;
+      int? bhcId;
       try {
         final accountId = await AuthStorage.getUserId();
         if (accountId != null) {
           final ctx = await SupabaseService.getMidwifeContext(accountId);
           midwifeId = ctx['midwife_id'] as int?;
+          bhcId = ctx['assigned_bhc_id'] as int?;
         }
       } catch (e) {
         debugPrint('Error getting midwife ID: $e');
       }
 
-      await Supabase.instance.client
+      final insertedRes = await Supabase.instance.client
           .from('immunization_records')
           .insert({
             'child_id': widget.childId,
@@ -853,8 +856,24 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
             'vaccination_date': _selectedDate!.toIso8601String().split('T')[0],
             'remarks': _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
             'created_at': DateTime.now().toIso8601String(),
+            'administration_place': _administrationPlace,
+            if (bhcId != null) 'facility_id': bhcId,
             if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
+          })
+          .select('immunization_record_id')
+          .single();
+
+      final recId = insertedRes['immunization_record_id'] as int?;
+      if (recId != null && _administrationPlace == 'local_facility') {
+        try {
+          final rpcRes = await Supabase.instance.client.rpc('deduct_immunization_stock', params: {
+            'p_immunization_record_id': recId,
           });
+          debugPrint('Deduct stock RPC result: $rpcRes');
+        } catch (rpcErr) {
+          debugPrint('RPC stock deduction warning (non-fatal): $rpcErr');
+        }
+      }
 
       setState(() {
         _anyRecordAdded = true;
@@ -1340,6 +1359,128 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
                     ),
                   ),
                 ),
+
+              const SizedBox(height: 16),
+
+              // Administration Location Selector
+              const Text(
+                'Vaccine Administration Location',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _administrationPlace = 'local_facility'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: _administrationPlace == 'local_facility'
+                              ? AppColors.brandPrimary.withValues(alpha: 0.12)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _administrationPlace == 'local_facility'
+                                ? AppColors.brandPrimary
+                                : AppColors.borderPrimary,
+                            width: _administrationPlace == 'local_facility' ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.location_on_rounded,
+                                  size: 16,
+                                  color: _administrationPlace == 'local_facility'
+                                      ? AppColors.brandPrimary
+                                      : AppColors.textSecondary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'At this BHC',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: _administrationPlace == 'local_facility'
+                                        ? AppColors.brandPrimary
+                                        : AppColors.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Deducts BHC Stock',
+                              style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _administrationPlace = 'external_facility'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: _administrationPlace == 'external_facility'
+                              ? AppColors.brandPrimary.withValues(alpha: 0.12)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _administrationPlace == 'external_facility'
+                                ? AppColors.brandPrimary
+                                : AppColors.borderPrimary,
+                            width: _administrationPlace == 'external_facility' ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.local_hospital_outlined,
+                                  size: 16,
+                                  color: _administrationPlace == 'external_facility'
+                                      ? AppColors.brandPrimary
+                                      : AppColors.textSecondary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Elsewhere',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: _administrationPlace == 'external_facility'
+                                        ? AppColors.brandPrimary
+                                        : AppColors.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Record Only',
+                              style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
 
               const SizedBox(height: 16),
 

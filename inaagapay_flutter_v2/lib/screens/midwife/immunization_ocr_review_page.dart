@@ -261,6 +261,7 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
           'vaccination_date': DateFormat('yyyy-MM-dd').format(item.vaccinationDate!),
           'remarks': item.remarks.trim().isEmpty ? null : item.remarks.trim(),
           'created_at': DateTime.now().toIso8601String(),
+          'administration_place': 'external_facility',
           if (midwifeId != null) 'recorded_by_midwife_id': midwifeId,
         });
       }
