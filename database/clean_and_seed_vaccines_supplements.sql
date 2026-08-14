@@ -132,11 +132,11 @@ DECLARE
   v_inv_item_id BIGINT;
   v_selected_batch RECORD;
 BEGIN
-  SELECT ir.*, v.inventory_item_id, m.assigned_bhc_id
+  SELECT ir.*, v.inventory_item_id, m.assigned_bhc_id, m.account_id AS midwife_account_id
   INTO v_rec
   FROM immunization_records ir
   JOIN vaccines v ON v.vaccine_id = ir.vaccine_id
-  LEFT JOIN midwives m ON m.midwife_id = ir.administered_by
+  LEFT JOIN midwives m ON m.midwife_id = COALESCE(ir.administered_by, ir.recorded_by)
   WHERE ir.immunization_record_id = p_immunization_record_id;
 
   IF v_rec IS NULL THEN
@@ -173,13 +173,14 @@ BEGIN
   WHERE batch_id = v_selected_batch.batch_id;
 
   INSERT INTO inventory_transactions (
-    batch_id, facility_id, transaction_type, quantity, reference_type, logged_at
+    batch_id, facility_id, transaction_type, quantity, reference_type, performed_by, logged_at
   ) VALUES (
     v_selected_batch.batch_id,
     v_rec.facility_id,
     'dispense',
     -1,
     'Auto-dispensed for Child Immunization Record #' || p_immunization_record_id,
+    v_rec.midwife_account_id,
     NOW()
   );
 
