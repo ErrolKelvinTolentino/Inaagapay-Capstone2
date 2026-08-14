@@ -4152,6 +4152,15 @@
             }
           });
 
+          if (selectEl.form) {
+            selectEl.form.addEventListener('reset', () => {
+              setTimeout(() => {
+                mainInput.value = '';
+                chipPreview.innerHTML = '';
+              }, 0);
+            });
+          }
+
           if (!window._searchableSelectGlobalClickListener) {
             window._searchableSelectGlobalClickListener = true;
             document.addEventListener('click', (e) => {
@@ -4421,12 +4430,20 @@
         };
 
         window.quickReceive = function(itemId) {
-          document.getElementById("batch-item-id").value = itemId;
+          const el = document.getElementById("batch-item-id");
+          if (el) {
+            el.value = itemId;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          }
           openModal("modal-batch");
         };
 
         window.quickDispense = function(batchId) {
-          document.getElementById("dispense-batch-id").value = batchId;
+          const el = document.getElementById("dispense-batch-id");
+          if (el) {
+            el.value = batchId;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          }
           openModal("modal-dispense");
         };
 
@@ -4546,6 +4563,13 @@
 
             showToast(`Batch #${batchNum} recorded successfully (+${qty} stock).`, "success");
             closeModal("modal-batch");
+
+            const filterDropdown = document.getElementById("global-bhc-filter");
+            const targetFilterVal = (facilityId === null || facilityId === 0) ? "central" : String(facilityId);
+            if (filterDropdown && filterDropdown.value !== "all" && filterDropdown.value !== targetFilterVal) {
+              filterDropdown.value = targetFilterVal;
+            }
+
             document.getElementById("form-batch").reset();
             loadInventoryData();
           } catch (err) {
@@ -4636,6 +4660,13 @@
 
             showToast(`Stock movement recorded successfully (${deduction}).`, "success");
             closeModal("modal-dispense");
+
+            const filterDropdown = document.getElementById("global-bhc-filter");
+            const batchFacilityVal = (batch.facility_id === null || batch.facility_id === 0 || batch.facility_id === undefined) ? "central" : String(batch.facility_id);
+            if (filterDropdown && filterDropdown.value !== "all" && filterDropdown.value !== batchFacilityVal) {
+              filterDropdown.value = batchFacilityVal;
+            }
+
             document.getElementById("form-dispense").reset();
             loadInventoryData();
           } catch (err) {
