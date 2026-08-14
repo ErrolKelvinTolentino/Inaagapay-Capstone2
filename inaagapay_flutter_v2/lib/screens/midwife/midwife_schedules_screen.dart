@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
 import '../../services/supabase_service.dart';
 import 'midwife_sms_reminders_screen.dart';
+import 'midwife_vaccination_drive_page.dart';
 
 class MidwifeSchedulesScreen extends StatefulWidget {
   const MidwifeSchedulesScreen({super.key});
@@ -835,24 +836,58 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const MidwifeSmsRemindersScreen(),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Scheduling a drive belongs beside the calendar it appears on, so
+          // it sits with the existing reminder action rather than in a menu.
+          FloatingActionButton.extended(
+            heroTag: 'vaccinationDrive',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const MidwifeVaccinationDrivePage(),
+                ),
+              );
+              if (mounted) _loadAllEventDates();
+            },
+            backgroundColor: Colors.white,
+            foregroundColor: AppColors.brandPrimary,
+            elevation: 2,
+            icon: const Icon(Icons.vaccines_rounded,
+                color: AppColors.brandPrimary),
+            label: const Text(
+              'Vaccination Drive',
+              style: TextStyle(
+                color: AppColors.brandPrimary,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          );
-        },
-        backgroundColor: AppColors.brandPrimary,
-        icon: const Icon(Icons.sms_rounded, color: Colors.white),
-        label: const Text(
-          'SMS Reminders',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
           ),
-        ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'smsReminders',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const MidwifeSmsRemindersScreen(),
+                ),
+              );
+            },
+            backgroundColor: AppColors.brandPrimary,
+            icon: const Icon(Icons.sms_rounded, color: Colors.white),
+            label: const Text(
+              'SMS Reminders',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -21,7 +21,6 @@ import '../../widgets/profile_widgets.dart';
 import '../../services/weight_gain_engine.dart';
 import '../../models/weight_gain_models.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../widgets/mother_qr_code.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../services/blood_pressure_reference.dart';
@@ -7019,16 +7018,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 ),
               ),
               const Spacer(),
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: () =>
-                    showMotherQrCodeDialog(context, widget.motherId),
-                icon: const Icon(Icons.qr_code_rounded,
-                    size: 24, color: AppColors.textPrimary),
-                tooltip: 'Show QR Code',
-              ),
-              const SizedBox(width: 14),
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
