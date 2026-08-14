@@ -4969,7 +4969,14 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         ProfileInfoRow(
           icon: Icons.medical_services_outlined,
           label: 'Obstetric Score',
-          value: 'G${profile['gravida'] ?? 0} P${profile['para'] ?? 0} A${profile['abortus'] ?? 0}',
+          // L included: living children is stored on every mother and was the
+          // one part of the score that never reached a screen. Without it a
+          // midwife cannot tell three deliveries with three living children
+          // from three deliveries with one.
+          value: 'G${profile['gravida'] ?? 0} '
+              'P${profile['para'] ?? 0} '
+              'A${profile['abortus'] ?? 0} '
+              'L${profile['living_children'] ?? 0}',
         ),
         ProfileInfoRow(
           icon: Icons.person_outline,

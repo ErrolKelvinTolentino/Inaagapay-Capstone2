@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/blood_type.dart';
 import '../../services/auth_storage.dart';
+import '../../services/gestational_diabetes_screening.dart';
 import '../../services/groq_service.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/app_colors.dart';
@@ -87,6 +89,44 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
   /// replaces a recorded blood type on its own — the midwife has to choose it.
   String? _selectedBloodType;
 
+  /// Glucose samples, when the attached report is a sugar test.
+  ///
+  /// Held as controllers rather than numbers so an OCR reading and a typed
+  /// correction go through the same field — the midwife confirms every value
+  /// by submitting the form, exactly as with the blood type above.
+  final TextEditingController _fastingGlucoseCtrl = TextEditingController();
+  final TextEditingController _glucose1hrCtrl = TextEditingController();
+  final TextEditingController _glucose2hrCtrl = TextEditingController();
+  final TextEditingController _glucose3hrCtrl = TextEditingController();
+
+  /// True once OCR has read at least one glucose value off the report.
+  bool _glucoseFromReport = false;
+
+  /// Whether the glucose section is worth showing.
+  ///
+  /// A CBC has no business displaying four empty sugar fields, but a midwife
+  /// holding a printed OGTT the OCR could not read still needs somewhere to
+  /// type it — so the section follows the selected test type as well as the
+  /// extraction.
+  bool get _isGlucoseTest {
+    final type = (_selectedLabType == 'Other'
+            ? _customLabTypeCtrl.text
+            : _selectedLabType)
+        .toLowerCase();
+    return _glucoseFromReport ||
+        type.contains('glucose') ||
+        type.contains('ogtt') ||
+        type.contains('sugar') ||
+        type.contains('fbs');
+  }
+
+  GlucoseValues get _enteredGlucose => GlucoseValues(
+        fasting: double.tryParse(_fastingGlucoseCtrl.text.trim()),
+        oneHour: double.tryParse(_glucose1hrCtrl.text.trim()),
+        twoHour: double.tryParse(_glucose2hrCtrl.text.trim()),
+        threeHour: double.tryParse(_glucose3hrCtrl.text.trim()),
+      );
+
   /// True when the report and the record disagree and neither is blank.
   ///
   /// Usually an OCR misread or someone else's document attached to the wrong
@@ -137,6 +177,10 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
     _locationCtrl.dispose();
     _remarksCtrl.dispose();
     _customLabTypeCtrl.dispose();
+    _fastingGlucoseCtrl.dispose();
+    _glucose1hrCtrl.dispose();
+    _glucose2hrCtrl.dispose();
+    _glucose3hrCtrl.dispose();
     super.dispose();
   }
 
@@ -439,6 +483,25 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                   _selectedBloodType = readFromReport;
                 }
 
+                // Glucose samples. Filled in for review, never saved silently —
+                // the midwife submits the form to confirm them.
+                _glucoseFromReport = _fillGlucoseField(
+                      _fastingGlucoseCtrl,
+                      data['glucose_fasting_mg_dl'],
+                    ) |
+                    _fillGlucoseField(
+                      _glucose1hrCtrl,
+                      data['glucose_1hr_mg_dl'],
+                    ) |
+                    _fillGlucoseField(
+                      _glucose2hrCtrl,
+                      data['glucose_2hr_mg_dl'],
+                    ) |
+                    _fillGlucoseField(
+                      _glucose3hrCtrl,
+                      data['glucose_3hr_mg_dl'],
+                    );
+
                 _ocrExtracted = true;
               });
             }
@@ -737,6 +800,23 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
         'file_url': imageValue,
       };
 
+      // Glucose samples, only the ones actually entered. Absent keys leave the
+      // columns NULL rather than writing a zero, which would read as a real
+      // measurement of nothing.
+      final glucose = _enteredGlucose;
+      if (glucose.fasting != null) {
+        labTestData['fasting_glucose_mg_dl'] = glucose.fasting;
+      }
+      if (glucose.oneHour != null) {
+        labTestData['glucose_1hr_mg_dl'] = glucose.oneHour;
+      }
+      if (glucose.twoHour != null) {
+        labTestData['glucose_2hr_mg_dl'] = glucose.twoHour;
+      }
+      if (glucose.threeHour != null) {
+        labTestData['glucose_3hr_mg_dl'] = glucose.threeHour;
+      }
+
       await Supabase.instance.client.from('lab_tests').insert(labTestData);
 
       // 3. Blood type, only when the midwife's selection differs from what is
@@ -782,6 +862,24 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  /// Writes an OCR-read glucose value into its field, rejecting anything
+  /// outside the range a plasma glucose can plausibly take.
+  ///
+  /// The bound matters more than it looks: a report in mmol/L reads about 5.1
+  /// where mg/dL reads 92, and a stray "5.1" entered as mg/dL would sail under
+  /// every threshold and report a reassuring result. The prompt already
+  /// instructs the model to return null for mmol/L reports; this is the guard
+  /// for when it does not.
+  bool _fillGlucoseField(TextEditingController controller, Object? raw) {
+    final value = raw is num ? raw.toDouble() : double.tryParse('$raw');
+    if (value == null || value < 20 || value > 600) return false;
+
+    controller.text = value == value.roundToDouble()
+        ? value.toInt().toString()
+        : value.toString();
+    return true;
   }
 
   /// Blood type, shown whether or not the report mentioned one.
@@ -892,6 +990,145 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
           ),
         ],
       ],
+    );
+  }
+
+  /// The glucose samples, with the screening reading beneath them.
+  ///
+  /// The reading names which samples reached threshold and what to do next. It
+  /// does not name a condition: gestational diabetes is diagnosed by a
+  /// physician, and a midwife's job here is to screen and refer.
+  Widget _buildGlucoseFields() {
+    final values = _enteredGlucose;
+    final assessment = values.isEmpty
+        ? null
+        : GestationalDiabetesScreening.assess(values: values);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.water_drop_outlined,
+                size: 16, color: AppColors.brandPrimary),
+            const SizedBox(width: 6),
+            const Text(
+              'Blood sugar values (mg/dL)',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Leave a box empty if that sample is not on the report.',
+          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(child: _glucoseInput(_fastingGlucoseCtrl, 'Fasting')),
+            const SizedBox(width: 10),
+            Expanded(child: _glucoseInput(_glucose1hrCtrl, '1 hour')),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(child: _glucoseInput(_glucose2hrCtrl, '2 hours')),
+            const SizedBox(width: 10),
+            Expanded(child: _glucoseInput(_glucose3hrCtrl, '3 hours')),
+          ],
+        ),
+        if (assessment != null &&
+            assessment.result != GdmResult.noResult) ...[
+          const SizedBox(height: 12),
+          Builder(builder: (context) {
+            final meets = assessment.result == GdmResult.meetsThreshold;
+            final incomplete = assessment.result == GdmResult.incomplete;
+            final tone = meets
+                ? AppColors.error
+                : (incomplete ? AppColors.warning : AppColors.success);
+
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: tone.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: tone.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        meets
+                            ? Icons.warning_amber_rounded
+                            : Icons.insights_outlined,
+                        size: 16,
+                        color: tone,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          assessment.finding,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1.4,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (assessment.action != GdmAction.none) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: tone.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        assessment.action.label,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: tone,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 6),
+          const Text(
+            kGdmSourceShort,
+            style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _glucoseInput(TextEditingController controller, String label) {
+    return AppInputField(
+      controller: controller,
+      hintText: label,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'^\d{0,3}(\.\d{0,1})?$')),
+      ],
+      onChanged: (_) => setState(() {}),
     );
   }
 
@@ -1054,6 +1291,10 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                             ),
                             const SizedBox(height: 16),
                             _buildBloodTypeField(),
+                            if (_isGlucoseTest) ...[
+                              const SizedBox(height: 20),
+                              _buildGlucoseFields(),
+                            ],
                           ],
                         ),
                       ),

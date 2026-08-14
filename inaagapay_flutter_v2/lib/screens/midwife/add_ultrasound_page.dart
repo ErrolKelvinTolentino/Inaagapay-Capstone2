@@ -1131,7 +1131,7 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
 
                     // ── Card 4: Interpretation & Sonologist Remarks ───────────
                     _sectionCard(
-                      title: 'Interpretation & Sonologist Remarks',
+                      title: 'Sonologist Findings & Remarks',
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

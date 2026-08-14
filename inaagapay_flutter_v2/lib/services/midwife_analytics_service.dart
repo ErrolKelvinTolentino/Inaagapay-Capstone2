@@ -28,6 +28,7 @@ import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
 import '../models/midwife_analytics.dart';
+import 'gestational_diabetes_screening.dart';
 import 'immunization_schedule.dart';
 import 'supabase_service.dart';
 
@@ -73,7 +74,7 @@ class MidwifeAnalyticsService {
             .select(
               'pregnancy_id, mother_id, status, last_menstrual_period, '
               'expected_date_of_delivery, pregnancy_risk_level, ended_at, '
-              'created_at',
+              'created_at, pre_pregnancy_bmi',
             )
             .inFilter('mother_id', motherIds),
         'pregnancies',
@@ -120,6 +121,22 @@ class MidwifeAnalyticsService {
         .toList();
     final childIds =
         children.map((row) => _int(row['child_id'])).whereType<int>().toList();
+
+    // Started before the batch below so it runs alongside it. Kept out of the
+    // Future.wait because it is the one query allowed to come back null: the
+    // glucose columns only exist after 20260812_gdm_glucose_values.sql has
+    // been run, and "the query failed" must not be read as "nobody has been
+    // screened" — that would mark every pregnancy overdue.
+    final glucoseFuture = pregnancyIds.isEmpty
+        ? Future<List<Map<String, dynamic>>?>.value(const [])
+        : _rowsOrNull(
+            SupabaseService.client
+                .from('lab_tests')
+                .select('pregnancy_id, fasting_glucose_mg_dl, '
+                    'glucose_1hr_mg_dl, glucose_2hr_mg_dl, glucose_3hr_mg_dl')
+                .inFilter('pregnancy_id', pregnancyIds),
+            'glucose results',
+          );
 
     final stage2 = await Future.wait([
       pregnancyIds.isEmpty
@@ -188,6 +205,15 @@ class MidwifeAnalyticsService {
                   .gte('next_schedule', _isoDate(_dayStart(now))),
               'upcoming checkups',
             ),
+      motherIds.isEmpty
+          ? _none()
+          : _rows(
+              SupabaseService.client
+                  .from('medical_conditions')
+                  .select('mother_id, condition_name, status')
+                  .inFilter('mother_id', motherIds),
+              'medical conditions',
+            ),
       _rows(
         SupabaseService.client
             .from('inventory_items')
@@ -212,8 +238,10 @@ class MidwifeAnalyticsService {
     final growthRecords = stage2[3];
     final immunizations = stage2[4];
     final upcomingCheckups = stage2[5];
-    final inventoryItems = stage2[6];
-    final inventoryBatches = stage2[7];
+    final medicalConditions = stage2[6];
+    final inventoryItems = stage2[7];
+    final inventoryBatches = stage2[8];
+    final glucoseRows = await glucoseFuture;
 
     // ===== SHARED DERIVATIONS =====
     final mothersById = {
@@ -225,6 +253,16 @@ class MidwifeAnalyticsService {
 
     final stock = _resolveStock(inventoryItems, inventoryBatches);
     final childDoses = _childDoseStatuses(children, vaccines, immunizations, now);
+    final gdm = glucoseRows == null
+        ? const <int, GdmAssessment>{}
+        : _gdmAssessments(
+            ongoing: ongoing,
+            mothers: mothers,
+            children: children,
+            medicalConditions: medicalConditions,
+            glucoseRows: glucoseRows,
+            now: now,
+          );
 
     final mothersSection = AnalyticsSection(
       title: 'Mothers',
@@ -232,6 +270,7 @@ class MidwifeAnalyticsService {
         _ageDistribution(mothers, ongoing, now),
         _riskLevels(ongoing),
         _riskDrivers(ongoing, riskAssessments),
+        _gdmScreening(ongoing, gdm, glucoseRows != null),
         _tdProtection(ongoing, pregnancies, checkups, now),
         _supplementation(ongoing, givenMedications, now),
         _weightGain(ongoing, weightGain),
@@ -268,6 +307,7 @@ class MidwifeAnalyticsService {
         riskAssessments: riskAssessments,
         childDoses: childDoses,
         stock: stock,
+        gdm: gdm,
         now: now,
       ),
     );
@@ -724,6 +764,116 @@ class MidwifeAnalyticsService {
               label:
                   'Follow up $outstanding ${_plural(outstanding, 'mother', 'mothers')} '
                   'without TD2',
+              action: AnalyticsAction.viewMothers,
+            )
+          : null,
+    );
+  }
+
+  /// Gestational diabetes screening, as a coverage question.
+  ///
+  /// The condition is usually symptomless, so "how many of the mothers who
+  /// should have been screened actually were" is the only honest way to
+  /// measure it. Nothing here names a condition — a mother whose samples reach
+  /// threshold is someone to refer, and the physician decides the rest.
+  static AnalyticsMetric _gdmScreening(
+    List<Map<String, dynamic>> ongoing,
+    Map<int, GdmAssessment> assessments,
+    bool glucoseColumnsExist,
+  ) {
+    const title = 'Gestational diabetes screening';
+
+    if (!glucoseColumnsExist) {
+      return const AnalyticsMetric.empty(
+        title: title,
+        kind: AnalyticsChartKind.coverage,
+        message: 'Waiting on the glucose columns. Run '
+            '20260812_gdm_glucose_values.sql in Supabase to turn this on.',
+      );
+    }
+
+    if (ongoing.isEmpty || assessments.isEmpty) {
+      return const AnalyticsMetric.empty(
+        title: title,
+        kind: AnalyticsChartKind.coverage,
+        message: 'No ongoing pregnancies to screen yet.',
+      );
+    }
+
+    // Eligible means "the window has opened for her" — counting mothers who
+    // are only 12 weeks along as unscreened would invent a backlog.
+    final eligible = assessments.values
+        .where((a) =>
+            a.status != GdmScreeningStatus.notYetDue &&
+            a.status != GdmScreeningStatus.dueEarly)
+        .toList();
+    final screened = eligible
+        .where((a) => a.status == GdmScreeningStatus.screened)
+        .length;
+
+    final overdue = assessments.values
+        .where((a) => a.status == GdmScreeningStatus.overdue)
+        .length;
+    final dueNow =
+        assessments.values.where((a) => a.status == GdmScreeningStatus.due).length;
+    final dueEarly = assessments.values
+        .where((a) => a.status == GdmScreeningStatus.dueEarly)
+        .length;
+    final reached = assessments.values.where((a) => a.needsReferral).length;
+
+    AnalyticsInsight insight;
+    if (reached > 0) {
+      insight = AnalyticsInsight(
+        '$reached screened ${_plural(reached, 'mother has', 'mothers have')} '
+        'samples at or above the screening threshold and '
+        '${reached == 1 ? 'needs' : 'need'} referral for assessment.',
+        tone: AnalyticsTone.alert,
+        evidence: 'Diagnosis is the referring physician\'s to make.',
+      );
+    } else if (overdue > 0) {
+      insight = AnalyticsInsight(
+        '$overdue ${_plural(overdue, 'pregnancy is', 'pregnancies are')} past '
+        'week 28 with no glucose result on file. Gestational diabetes has no '
+        'symptoms to notice, so an unscreened mother looks exactly like a '
+        'well one.',
+        tone: AnalyticsTone.watch,
+      );
+    } else if (dueEarly > 0) {
+      insight = AnalyticsInsight(
+        '$dueEarly ${_plural(dueEarly, 'mother carries', 'mothers carry')} '
+        'risk factors worth screening before week 24 rather than waiting.',
+        tone: AnalyticsTone.watch,
+      );
+    } else if (eligible.isEmpty) {
+      insight = const AnalyticsInsight(
+        'No pregnancy has reached the screening window yet.',
+        tone: AnalyticsTone.neutral,
+      );
+    } else {
+      insight = const AnalyticsInsight(
+        'Every mother whose screening window has opened has a result on file.',
+        tone: AnalyticsTone.good,
+      );
+    }
+
+    final outstanding = dueNow + overdue;
+
+    return AnalyticsMetric(
+      title: title,
+      kind: AnalyticsChartKind.coverage,
+      periodLabel: 'Weeks 24–28',
+      headline: '$screened',
+      headlineCaption: 'of ${eligible.length} '
+          '${_plural(eligible.length, 'mother', 'mothers')} past week 24 '
+          '${_plural(eligible.length, 'has', 'have')} been screened',
+      covered: screened,
+      eligible: eligible.length,
+      insight: insight,
+      footnote: kGdmSourceShort,
+      prescription: outstanding > 0
+          ? AnalyticsPrescription(
+              label: 'Arrange screening for $outstanding '
+                  '${_plural(outstanding, 'mother', 'mothers')}',
               action: AnalyticsAction.viewMothers,
             )
           : null,
@@ -1537,6 +1687,7 @@ class MidwifeAnalyticsService {
     required List<Map<String, dynamic>> riskAssessments,
     required Map<int, _ChildDoses> childDoses,
     required _Stock stock,
+    required Map<int, GdmAssessment> gdm,
     required DateTime now,
   }) {
     final priorities = <AnalyticsPriority>[];
@@ -1608,6 +1759,61 @@ class MidwifeAnalyticsService {
           sortKey: -20,
         ),
       );
+    }
+
+    // Gestational diabetes screening. It earns a place here precisely because
+    // there is nothing to notice at a visit — an unscreened mother with it
+    // looks exactly like one without.
+    for (final row in ongoing) {
+      final assessment = gdm[_int(row['pregnancy_id']) ?? -1];
+      final mother = mothersById[_int(row['mother_id']) ?? -1];
+      if (assessment == null || mother == null) continue;
+
+      final name = _motherName(mother);
+
+      if (assessment.needsReferral) {
+        priorities.add(
+          AnalyticsPriority(
+            title: 'Sugar test needs review — $name',
+            detail: 'Samples at or above threshold '
+                '(${assessment.samplesAtOrAboveThreshold.join(', ')}) · refer '
+                'for assessment',
+            severity: AnalyticsSeverity.alert,
+            action: AnalyticsAction.viewMothers,
+            sortKey: -15,
+          ),
+        );
+      } else if (assessment.status == GdmScreeningStatus.overdue) {
+        priorities.add(
+          AnalyticsPriority(
+            title: 'Sugar screening overdue — $name',
+            detail: 'Past the 24–28 week window with no result on file',
+            severity: AnalyticsSeverity.alert,
+            action: AnalyticsAction.viewMothers,
+            sortKey: -8,
+          ),
+        );
+      } else if (assessment.status == GdmScreeningStatus.due) {
+        priorities.add(
+          AnalyticsPriority(
+            title: 'Sugar screening due — $name',
+            detail: 'Now inside the 24–28 week screening window',
+            severity: AnalyticsSeverity.watch,
+            action: AnalyticsAction.viewMothers,
+            sortKey: 3,
+          ),
+        );
+      } else if (assessment.status == GdmScreeningStatus.dueEarly) {
+        priorities.add(
+          AnalyticsPriority(
+            title: 'Screen early — $name',
+            detail: assessment.risk.factors.join(' · '),
+            severity: AnalyticsSeverity.watch,
+            action: AnalyticsAction.viewMothers,
+            sortKey: 6,
+          ),
+        );
+      }
     }
 
     // Children with a dose past due, worst first.
@@ -1777,6 +1983,104 @@ class MidwifeAnalyticsService {
     return result;
   }
 
+  /// Screening picture per ongoing pregnancy, built from records already held.
+  ///
+  /// Every risk factor here is read from something the centre already stores —
+  /// her age, her pre-pregnancy BMI, the birth weight of her earlier children,
+  /// her recorded conditions. Nothing new is asked of the midwife.
+  ///
+  /// Family history of diabetes is a recognised risk factor and this app has
+  /// nowhere to record it, so it is absent rather than guessed at.
+  static Map<int, GdmAssessment> _gdmAssessments({
+    required List<Map<String, dynamic>> ongoing,
+    required List<Map<String, dynamic>> mothers,
+    required List<Map<String, dynamic>> children,
+    required List<Map<String, dynamic>> medicalConditions,
+    required List<Map<String, dynamic>> glucoseRows,
+    required DateTime now,
+  }) {
+    final ageByMother = <int, int>{};
+    for (final row in mothers) {
+      final id = _int(row['mother_id']);
+      final birthdate = _date(row['birthdate']);
+      if (id != null && birthdate != null) {
+        ageByMother[id] = _yearsBetween(birthdate, now);
+      }
+    }
+
+    // birth_details.birth_weight is recorded in kilograms — the child profile
+    // renders it as "3.2 kg" — while the engine works in grams.
+    final birthWeightsByMother = <int, List<num>>{};
+    for (final child in children) {
+      final motherId = _int(child['mother_id']);
+      final grams = _double(_firstMap(child['birth_details'])?['birth_weight']);
+      if (motherId != null && grams != null && grams > 0) {
+        birthWeightsByMother.putIfAbsent(motherId, () => []).add(grams * 1000);
+      }
+    }
+
+    final conditionsByMother = <int, List<String>>{};
+    for (final row in medicalConditions) {
+      final motherId = _int(row['mother_id']);
+      final name = row['condition_name']?.toString();
+      if (motherId == null || name == null || name.isEmpty) continue;
+      if (row['status']?.toString() == 'resolved') continue;
+      conditionsByMother.putIfAbsent(motherId, () => []).add(name);
+    }
+
+    final glucoseByPregnancy = <int, GlucoseValues>{};
+    for (final row in glucoseRows) {
+      final pregnancyId = _int(row['pregnancy_id']);
+      if (pregnancyId == null) continue;
+
+      final values = GlucoseValues(
+        fasting: _double(row['fasting_glucose_mg_dl']),
+        oneHour: _double(row['glucose_1hr_mg_dl']),
+        twoHour: _double(row['glucose_2hr_mg_dl']),
+        threeHour: _double(row['glucose_3hr_mg_dl']),
+      );
+      if (values.isEmpty) continue;
+
+      // Where a pregnancy has more than one glucose test, the one that reached
+      // threshold is the one that matters — a later normal result does not
+      // undo an earlier abnormal one.
+      final existing = glucoseByPregnancy[pregnancyId];
+      if (existing == null ||
+          GestationalDiabetesScreening.readValues(values) ==
+              GdmResult.meetsThreshold) {
+        glucoseByPregnancy[pregnancyId] = values;
+      }
+    }
+
+    final result = <int, GdmAssessment>{};
+
+    for (final pregnancy in ongoing) {
+      final pregnancyId = _int(pregnancy['pregnancy_id']);
+      final motherId = _int(pregnancy['mother_id']);
+      if (pregnancyId == null) continue;
+
+      final lmp = _date(pregnancy['last_menstrual_period']);
+      final weeks =
+          lmp == null ? null : now.difference(lmp).inDays / 7.0;
+
+      final risk = GestationalDiabetesScreening.assessRisk(
+        maternalAge: ageByMother[motherId ?? -1],
+        prePregnancyBmi: _double(pregnancy['pre_pregnancy_bmi']),
+        previousBirthWeightsGrams:
+            birthWeightsByMother[motherId ?? -1] ?? const [],
+        recordedConditions: conditionsByMother[motherId ?? -1] ?? const [],
+      );
+
+      result[pregnancyId] = GestationalDiabetesScreening.assess(
+        gestationalWeeks: weeks,
+        values: glucoseByPregnancy[pregnancyId],
+        risk: risk,
+      );
+    }
+
+    return result;
+  }
+
   static _Stock _resolveStock(
     List<Map<String, dynamic>> items,
     List<Map<String, dynamic>> batches,
@@ -1866,6 +2170,37 @@ class MidwifeAnalyticsService {
         debugPrint('Analytics: $label unavailable — $error');
       }
       return const [];
+    }
+  }
+
+  /// Like [_rows], but returns null when the query fails instead of an empty
+  /// list.
+  ///
+  /// The distinction only matters where absence is itself a finding. "No
+  /// glucose results" means every mother is unscreened and something should be
+  /// arranged; "the glucose columns do not exist yet" means the app cannot
+  /// tell, and must say so rather than raise a false backlog for the whole
+  /// caseload.
+  static Future<List<Map<String, dynamic>>?> _rowsOrNull(
+    dynamic query,
+    String label,
+  ) async {
+    try {
+      final result = await (query as Future).timeout(
+        const Duration(seconds: 8),
+      );
+      if (result is List) {
+        return result
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList();
+      }
+      return null;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Analytics: $label unavailable — $error');
+      }
+      return null;
     }
   }
 

@@ -777,8 +777,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           ),
           child: pw.Text(
             _tAi(
-              'Disclaimer: This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation. This document is not a medical prescription.',
-              'Paunawa: Ang AI-assisted na interpretasyong ito ay gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife. Ang dokumentong ito ay hindi medikal na reseta.',
+              'Disclaimer: This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation. This document is not a medical prescription.',
+              'Paunawa: Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife. Ang dokumentong ito ay hindi medikal na reseta.',
             ),
             style: const pw.TextStyle(
               fontSize: 8.5,
@@ -1679,8 +1679,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                     Expanded(
                       child: Text(
                         _tAi(
-                          'This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation.',
-                          'Ang AI-assisted na interpretasyong ito ay gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife.',
+                          'This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation.',
+                          'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife.',
                         ),
                         style: const TextStyle(
                           fontSize: 10,
@@ -1899,13 +1899,13 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
 
     // Strip any duplicate disclaimers from the text itself
     final disclaimersToStrip = [
-      'This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation.',
-      'Ang AI-assisted na interpretasyong ito ay gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife.',
-      'Ang AI-assisted interpretation na ito ay gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa inyong doktor o midwife.',
-      'Ang AI-assisted interpretation na ito ay gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa inyong doktor o midwife',
-      'This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation',
-      'This AI-assisted interpretation is a guide for health monitoring only and is not a substitute for consultation with a doctor or midwife.',
-      'This AI-assisted interpretation is a guide for health monitoring only and is not a substitute for consultation with a doctor or midwife'
+      'This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation.',
+      'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife.',
+      'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa inyong doktor o midwife.',
+      'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa inyong doktor o midwife',
+      'This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation',
+      'This AI-assisted explanation restates the findings recorded by the sonologist and is a guide for health monitoring only and is not a substitute for consultation with a doctor or midwife.',
+      'This AI-assisted explanation restates the findings recorded by the sonologist and is a guide for health monitoring only and is not a substitute for consultation with a doctor or midwife'
     ];
 
     for (final disc in disclaimersToStrip) {
@@ -3920,8 +3920,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           'ang mga sukat ng paglaki ng baby ay pangkalahatang tugma para sa yugtong ito',
       'continued healthcare monitoring may help support pregnancy health':
           'ang patuloy na pagsubaybay sa kalusugan ay makakatulong sa iyong pagbubuntis',
-      'This AI-assisted interpretation is intended only for healthcare monitoring support and does not replace professional medical consultation.':
-          'Ang AI-assisted na interpretasyong ito ay suporta lamang sa pagsubaybay at hindi pumapalit sa propesyonal na payong medikal.',
+      'This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation.':
+          'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang sa simpleng salita ang natuklasan ng sonologist at suporta lamang sa pagsubaybay at hindi pumapalit sa propesyonal na payong medikal.',
       'Continued prenatal checkups and healthcare consultation may help support pregnancy health':
           'Ang patuloy na prenatal checkup at konsultasyon sa doktor ay makakatulong upang maging ligtas ang iyong pagbubuntis.',
       
