@@ -313,31 +313,30 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
             }
           }
 
-          if ((immunizationResponse).isNotEmpty) {
-            final vaccineNames = immunizationResponse
-                .map((r) => (r['vaccine'] as Map<String, dynamic>?)?['vaccine_name']?.toString() ?? '')
-                .where((n) => n.isNotEmpty)
-                .toSet()
-                .toList();
-
-            final firstNote = immunizationResponse
-                .map((r) => r['notes']?.toString())
-                .where((n) => n != null && n.isNotEmpty)
-                .firstOrNull;
-
-            // Named after what is actually being given. "Barangay Vaccine Day"
-            // told the midwife nothing she could plan around; the vaccine is
-            // the thing she needs to see at a glance.
-            final driveTitle = vaccineNames.isEmpty
-                ? 'Vaccine Drive'
-                : '${vaccineNames.join(', ')} Vaccine Drive';
+          // One card per drive, not one card for the day.
+          //
+          // This used to fold every drive on a date into a single row —
+          // collecting the vaccine names into a set and keeping only the first
+          // note. Two drives on the same day therefore looked like one, and
+          // scheduling a second appeared to delete the first. Both were saved
+          // the whole time; only the display collapsed them, and with it went
+          // whichever notes were not first.
+          for (final row in immunizationResponse) {
+            final vaccine = row['vaccine'] as Map<String, dynamic>?;
+            final vaccineName = vaccine?['vaccine_name']?.toString() ?? '';
+            final forChildren =
+                vaccine?['target_recipients']?.toString() == 'child';
 
             schedules.add({
               'time': 'All Day',
-              'mother_name': driveTitle,
-              'type': 'Immunization Day',
+              // Named after what is being given. "Barangay Vaccine Day" told
+              // the midwife nothing she could plan around.
+              'mother_name': vaccineName.isEmpty
+                  ? 'Vaccine Drive'
+                  : '$vaccineName Vaccine Drive',
+              'type': forChildren ? 'Children Immunization' : 'Immunization Day',
               'status': 'immunization',
-              'notes': firstNote,
+              'notes': row['notes']?.toString(),
               'icon': Icons.vaccines,
             });
           }

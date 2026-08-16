@@ -32,19 +32,43 @@ import 'immunization_schedule.dart';
 import 'sms_service.dart';
 import 'supabase_service.dart';
 
-/// A vaccine a drive can be held for, with what is on the shelf for it.
-class DriveVaccine {
-  const DriveVaccine({
+/// One dose in a vaccine's series, as the catalogue stores it.
+class DriveDose {
+  const DriveDose({
     required this.vaccineId,
-    required this.name,
-    required this.forChildren,
-    required this.stock,
     this.doseNumber,
     this.recommendedAgeMonths,
   });
 
   final int vaccineId;
+  final int? doseNumber;
+  final double? recommendedAgeMonths;
+}
+
+/// A vaccine a drive can be held for, with what is on the shelf for it.
+///
+/// One entry per *vaccine*, not per dose. The `vaccines` table holds a row for
+/// every dose — TD1 through TD5 are five rows all named "Tetanus-Diphtheria
+/// (Td)" — so listing rows put the same vaccine in the menu five times over.
+/// A midwife schedules "a TD drive"; which dose each mother receives is
+/// decided per mother when she arrives.
+class DriveVaccine {
+  const DriveVaccine({
+    required this.name,
+    required this.forChildren,
+    required this.stock,
+    required this.doses,
+  });
+
   final String name;
+
+  /// Every dose of this vaccine in the catalogue, lowest first.
+  final List<DriveDose> doses;
+
+  /// The row recorded against the drive. The first dose stands for the series
+  /// — the schedule entry says which vaccine is being given that day, not
+  /// which dose any particular person is due.
+  int get vaccineId => doses.first.vaccineId;
 
   /// True when this dose is given to children rather than to the mother.
   final bool forChildren;
@@ -53,9 +77,6 @@ class DriveVaccine {
   /// expired. Null when no inventory item could be matched to the vaccine,
   /// which is different from zero and is said differently on screen.
   final int? stock;
-
-  final int? doseNumber;
-  final double? recommendedAgeMonths;
 
   bool get isOutOfStock => stock != null && stock! <= 0;
 
@@ -265,18 +286,36 @@ class VaccinationDriveService {
       final stockByItem = await _stockByItemId(bhcId);
       final items = await _inventoryItems();
 
-      return vaccines.map((v) {
+      // Collapse the catalogue's per-dose rows into one entry per vaccine.
+      // Keyed by name *and* recipient so a maternal Td and a childhood Td, if
+      // both existed, would not merge into one another.
+      final grouped = <String, List<Map<String, dynamic>>>{};
+      for (final v in vaccines) {
         final name = v['vaccine_name']?.toString() ?? 'Vaccine';
-        final itemId = _int(v['inventory_item_id']) ?? _matchInventoryItem(name, items);
+        final forChildren = v['target_recipients']?.toString() == 'child';
+        grouped.putIfAbsent('$forChildren|$name', () => []).add(v);
+      }
+
+      return grouped.values.map((rows) {
+        final name = rows.first['vaccine_name']?.toString() ?? 'Vaccine';
+        final itemId = _int(rows.first['inventory_item_id']) ??
+            _matchInventoryItem(name, items);
+
+        final doses = rows
+            .map((v) => DriveDose(
+                  vaccineId: _int(v['vaccine_id']) ?? -1,
+                  doseNumber: _int(v['dose_number']),
+                  recommendedAgeMonths:
+                      (v['recommended_age_months'] as num?)?.toDouble(),
+                ))
+            .toList()
+          ..sort((a, b) => (a.doseNumber ?? 0).compareTo(b.doseNumber ?? 0));
 
         return DriveVaccine(
-          vaccineId: _int(v['vaccine_id']) ?? -1,
           name: name,
-          forChildren: v['target_recipients']?.toString() == 'child',
+          forChildren: rows.first['target_recipients']?.toString() == 'child',
           stock: itemId == null ? null : (stockByItem[itemId] ?? 0),
-          doseNumber: _int(v['dose_number']),
-          recommendedAgeMonths:
-              (v['recommended_age_months'] as num?)?.toDouble(),
+          doses: doses,
         );
       }).toList();
     } catch (e) {
@@ -545,20 +584,25 @@ class VaccinationDriveService {
         final motherId = _int(child['mother_id']);
         if (childId == null || motherId == null) continue;
 
-        // Already had this dose.
-        if (givenByChild[childId]?.contains(vaccine.vaccineId) ?? false) {
-          continue;
-        }
-
         final birthdate = _birthdate(child);
         if (birthdate == null) continue;
 
-        final ageMonths =
-            when.difference(birthdate).inDays / 30.44;
-        final scheduledAt = vaccine.recommendedAgeMonths ?? 0;
+        final ageMonths = when.difference(birthdate).inDays / 30.44;
+        final given = givenByChild[childId] ?? const <int>{};
 
-        // Not yet old enough by the drive date.
-        if (ageMonths < scheduledAt) continue;
+        // The earliest dose of this vaccine she has not had and is old enough
+        // for. A Pentavalent drive serves children due for dose 1, 2 or 3, so
+        // the whole series is considered rather than a single row.
+        DriveDose? dueDose;
+        for (final dose in vaccine.doses) {
+          if (given.contains(dose.vaccineId)) continue;
+          if (ageMonths < (dose.recommendedAgeMonths ?? 0)) continue;
+          dueDose = dose;
+          break;
+        }
+        if (dueDose == null) continue;
+
+        final scheduledAt = dueDose.recommendedAgeMonths ?? 0;
 
         final motherRow = byMotherId[motherId];
         if (motherRow == null) continue;
@@ -575,6 +619,12 @@ class VaccinationDriveService {
           scheduledAtMonths: scheduledAt,
         );
 
+        // Named with the dose where the series has more than one, so the
+        // midwife knows what to draw up rather than just who to expect.
+        final doseName = vaccine.doses.length > 1 && dueDose.doseNumber != null
+            ? '${vaccine.name} dose ${dueDose.doseNumber}'
+            : vaccine.name;
+
         recipients.add(DriveRecipient(
           motherId: motherId,
           accountId: _int(motherRow['account_id']),
@@ -582,8 +632,8 @@ class VaccinationDriveService {
           childName: childName.isEmpty ? 'Child' : childName,
           currentDose: 0,
           dueLabel: overdue.isEmpty
-              ? 'Due for ${vaccine.name}'
-              : 'Due for ${vaccine.name} · $overdue',
+              ? 'Due for $doseName'
+              : 'Due for $doseName · $overdue',
           phoneNumber: account?['phone_number']?.toString(),
           email: account?['email_address']?.toString(),
         ));

@@ -1,7 +1,7 @@
 # InaAgapay — Product Definition, Epics, User Stories & Progress
 
 > **Status:** Post–Capstone Defense 1 revision map. Supersedes `epics_and_user_stories.md`.
-> **Last updated:** 2026-08-15
+> **Last updated:** 2026-08-15 (revision 2)
 > **Scope decisions:** QR account linking **removed** (E1-05). PhilHealth /
 > 4Ps / civil status fields **descoped** (E2-05). Both recorded below.
 
@@ -51,33 +51,39 @@ the file.
 
 | # | Epic | Wt | Progress | Status |
 |---|---|---|---|---|
-| E1 | Identity, Access & Account Lifecycle | 8 | **80%** | Complete for defense; QR removed, `password_history` unused |
-| E2 | Mother & Pregnancy Registry | 12 | **100%** | Done — blood type now transcribed from lab documents |
-| E3 | Prenatal Encounter & Clinical Decision Support | 15 | **88%** | Cited BP module + trend card built; nine legacy rule blocks remain |
-| E4 | Diagnostic Document Intelligence | 12 | **92%** | "Explain My Report" reframing done |
-| E5 | Automated Prenatal Scheduling & Reminders | 8 | **85%** | Engine extracted and tested; SMS live; pg_cron outstanding |
-| E6 | Child Health — Immunization & Growth | 15 | **92%** | Growth verified against WHO; immunization complete |
-| E7 | Mother Experience, Self-Care & Baby Book | 12 | **88%** | Baby Book shipped; vitals page repaired; jargon audit open |
-| E8 | Inventory Distribution (RHU → BHC) | 8 | **90%** | Release-edit path left to verify |
+| E1 | Identity, Access & Account Lifecycle | 8 | **95%** | QR removed cleanly; only `password_history` left unused |
+| E2 | Mother & Pregnancy Registry | 12 | **100%** | Blood type transcribed from documents; GPAL's L restored |
+| E3 | Prenatal Encounter & Clinical Decision Support | 15 | **90%** | Cited BP module, trend card, episode memory; nine legacy rule blocks remain |
+| E4 | Diagnostic Document Intelligence | 12 | **93%** | "Explain My Report" done; OCR truncation and rate-limit failures fixed |
+| E5 | Scheduling, Reminders & Vaccination Drives | 8 | **92%** | Engine extracted; drives live for mothers and children; pg_cron outstanding |
+| E6 | Child Health — Immunization & Growth | 15 | **93%** | Growth verified against WHO; child drives added |
+| E7 | Mother Experience, Self-Care & Baby Book | 12 | **90%** | Baby Book shipped; vitals page and weight chart repaired; jargon audit open |
+| E8 | Inventory Distribution (RHU → BHC) | 8 | **92%** | Now gates vaccination drives by live stock |
 | E9 | Admin Web — Monitoring, Reporting & Governance | 7 | **80%** | **Largest remaining gap by weight** |
 | E10 | Research & Documentation Artifacts | 3 | **100%** | ERD, sampling and limitations complete |
-| **E11** | **Midwife Analytics & Decision Support** *(new)* | 6 | **80%** | Dashboard analytics, priority band, GDM surfacing |
-| **E12** | **Gestational Diabetes Screening** *(new)* | 5 | **85%** | Pending migration run + protocol confirmation |
-| | **Weighted overall** | 111 | **~89%** | ~90% against the original 100-point scope |
+| **E11** | **Midwife Analytics & Decision Support** *(new)* | 6 | **85%** | Dashboard analytics, priority band, GDM surfacing — device-verified |
+| **E12** | **Gestational Diabetes Screening** *(new)* | 5 | **88%** | OGTT extraction and classification verified; migration + protocol outstanding |
+| | **Weighted overall** | 111 | **~92%** | Also ~92% against the original 100-point scope |
 
 Legend: ✅ done · 🟡 partial · 🔴 partial with a known defect · ❌ not started · ⛔ removed
 
-**Test suite: 224 passing, 0 failing.**
+**Test suite: 243 passing, 0 failing.**
 
-> **Health warning on these figures.** E5, E7 and E11 partly rest on four query
-> fixes that have not been confirmed on a device. If the Schedules tab is still
-> empty when opened, E5 is not 85%. See §6.
+> **What the figure does not capture.** The number moved 16 points across this
+> revision; confidence moved further. Nine defects were found and fixed that
+> would otherwise have surfaced during the defense — most of them *pre-existing*
+> and invisible, because a failing query caught into an empty list looks exactly
+> like "no data yet". They are listed in §7.
+>
+> Steps 1–11 of the test plan were verified on a device. The most recent changes
+> — child drives, vaccine grouping, multiple drives per day, and the profile
+> query guards — are analyzed and unit-tested but not yet seen running. See §6.
 
 ---
 
 ## 3. Epics & User Stories
 
-### E1 — Identity, Access & Account Lifecycle — 80%
+### E1 — Identity, Access & Account Lifecycle — 95%
 
 #### E1-01 Log in with contact number or email — ✅
 - [x] Login detects identifier type — `lib/screens/auth/login.dart:33-48`
@@ -138,7 +144,7 @@ reading the ERD will see the columns.
 
 ---
 
-### E3 — Prenatal Encounter & Clinical Decision Support — 88%
+### E3 — Prenatal Encounter & Clinical Decision Support — 90%
 
 #### E3-01 Prenatal checkup capture — ✅
 #### E3-02 Gestational weight gain vs IOM 2009 — ✅
@@ -178,7 +184,7 @@ underweight-twin where no official IOM data exists.
 
 ---
 
-### E4 — Diagnostic Document Intelligence — 92%
+### E4 — Diagnostic Document Intelligence — 93%
 
 #### E4-01 Ultrasound capture & OCR extraction — ✅
 #### E4-02 Lab test capture & interpretation — ✅
@@ -204,7 +210,7 @@ own report attends her next visit.
 
 ---
 
-### E5 — Automated Prenatal Scheduling & Reminders — 85%
+### E5 — Scheduling, Reminders & Vaccination Drives — 92%
 
 #### E5-01 Manual scheduling & calendar — ✅
 
@@ -232,18 +238,41 @@ week 42.
 
 #### E5-04 Vaccination drives — ✅ NEW
 A midwife schedules a drive (vaccine + date) which appears on the Schedules
-calendar and invites eligible mothers by SMS, email and in-app notice.
+calendar and invites everyone due by SMS, email and in-app notice.
+
+**Maternal drives**
 - [x] No schema change — `immunization_schedule` was already facility + vaccine + date
-- [x] Eligibility: pregnant mothers below **TD2**, the dose that protects the
-      newborn against neonatal tetanus
-- [x] **Saving and sending are separate acts.** Creating a drive messages
-      nobody; the recipient list is shown with names and dose status, and
-      sending sits behind a confirmation stating the count
+- [x] Eligibility is the **whole five-dose series**, not TD2. TD2 protects the
+      newborn in this pregnancy; TD3–TD5 extend protection toward lifetime, and
+      a drive is when they get given
+- [x] Doses counted **across every pregnancy** — tetanus protection accumulates
+      over a lifetime, so counting per pregnancy showed mothers who had TD2
+      years ago as never vaccinated
+- [x] Minimum intervals enforced (4 weeks, 6 months, 1 year, 1 year). A dose
+      given too soon does not extend protection, so inviting early wastes a
+      vial and leaves her believing she is covered
+- [x] Eligibility follows the **drive date**, not today
+
+**Child drives**
+- [x] Recipients are children old enough for a dose they have not had; the
+      **mother** is messaged, since hers is the contact on file, and the
+      message names the child to bring
+- [x] Timeliness judged by `ImmunizationSchedule`, the same rules the child
+      profile uses, so a child cannot read as "due" here and "not due" there
+- [ ] Minimum interval **between doses in a series** not yet enforced — a
+      Pentavalent drive can list a child who had dose 1 last week
+
+**Stock and safety**
+- [x] Live stock shown per vaccine; out-of-stock options greyed and unselectable
+- [x] Counts only active, unexpired batches — expired stock is not stock
+- [x] "Stock not tracked" distinguished from "out of stock"
+- [x] One action, one confirmation naming the count; the drive is written
+      before anything sends, so nobody is invited to a drive that failed to save
 - [x] An unreadable dose counts as zero — an unreadable record is not evidence
       of protection
 - [x] Unreachable mothers surfaced, not silently dropped
 - [x] SMS kept under one 160-character billing segment
-- [ ] Children's drives — next iteration
+- [x] Results counted in **mothers**, not messages
 
 #### E5-05 Scheduling limitations statement — ✅
 Documented: proposed dates ignore holidays, closures, non-working days and
@@ -251,7 +280,7 @@ clinic capacity; the midwife resolves those.
 
 ---
 
-### E6 — Child Health: Immunization & Growth — 92%
+### E6 — Child Health: Immunization & Growth — 93%
 
 #### E6-01 Full 0–12 month immunization schedule — ✅
 #### E6-02 Growth monitoring with WHO Z-scores — ✅
@@ -260,7 +289,7 @@ clinic capacity; the midwife resolves those.
 
 ---
 
-### E7 — Mother Experience, Self-Care & Baby Book — 88%
+### E7 — Mother Experience, Self-Care & Baby Book — 90%
 
 #### E7-01 Self-logged vitals — ✅ (with a repair)
 The page's checkup query requested four columns that do not exist on
@@ -290,7 +319,7 @@ four dedicated test files.
 
 ---
 
-### E8 — Inventory Distribution (RHU → BHC) — 90%
+### E8 — Inventory Distribution (RHU → BHC) — 92%
 
 E8-01 through E8-06 ✅ — catalog, batches, expiry, issue-to-BHC, notification,
 midwife receipt confirmation, stock requests, and a who/when audit trail.
@@ -326,7 +355,7 @@ self-log BP.
 
 ---
 
-### E11 — Midwife Analytics & Decision Support — 80% *(new scope)*
+### E11 — Midwife Analytics & Decision Support — 85% *(new scope)*
 
 *Goal:* turn recorded data into something a midwife acts on today.
 
@@ -354,7 +383,7 @@ self-log BP.
 
 ---
 
-### E12 — Gestational Diabetes Screening — 85% *(new scope)*
+### E12 — Gestational Diabetes Screening — 88% *(new scope)*
 
 *Goal:* identify who needs screening, record the result, alert the midwife —
 without diagnosing.
@@ -388,12 +417,20 @@ symptoms belong only as a prompt to test.
 ## 4. Priority Ordering Before Defense 2
 
 ### Tier 0 — blocking, and not code
-1. **Run the GDM migration** in Supabase
-2. **Confirm three sets of clinical thresholds** with the adviser (GDM
-   protocol, BP cut-points, visit intervals) and record each citation
+1. **Run two migrations** in Supabase:
+   - `20260812_gdm_glucose_values.sql` — without it glucose cannot save
+   - `20260815_ai_responses_index.sql` — the mother profile times out without
+     it. Six of the tables the profile reads have no index on `pregnancy_id`,
+     and the scans lengthen with every record saved
+2. **Confirm four sets of clinical thresholds** with the adviser, and record
+   each citation in the file that holds it:
+   - GDM protocol — one-step 75g or two-step 100g
+   - Blood pressure cut-points
+   - Antenatal visit intervals — conventional or WHO 8-contact
+   - TD minimum intervals between doses
 
 ### Tier 1 — verify on a device (§6)
-3. The four query fixes
+3. Child drives, vaccine grouping, multiple drives per date, profile guards
 
 ### Tier 2 — real build work
 4. **E9 admin web polish + role hardening** — largest gap by weight
@@ -444,17 +481,50 @@ symptoms belong only as a prompt to test.
 
 ---
 
-## 6. Unverified on Device
+## 6. Verification Status
 
-Four query bugs were found by reading the schema and fixed. None has been
-confirmed running, and three epic percentages depend on them.
+### Confirmed on a device
+- Recent Visits populates; Schedules tab lists checkups on their dates
+- Mother profile loads; obstetric score shows the L; no QR anywhere
+- Weight-gain chart reflects the latest checkup weight
+- Blood pressure trend renders with thresholds and detects the two-occasion pattern
+- Blood type extracted from a lab report, with the strict parser correctly
+  *refusing* an ABO group printed without its Rh factor
+- OGTT extraction and classification — 92 fasting alone triggers referral, and
+  96/185 names both samples
+- Vaccination drive schedules and the SMS arrives from `AGAPAY`
 
-| Check | Expect | Was |
-|---|---|---|
-| Schedules tab | Checkups appear on their scheduled dates | Selected `prenatal_checkup_id`, which does not exist |
-| Dashboard → Recent Visits | Populated | Same bad column |
-| Mother vitals page | BP shows; weight chart includes midwife measurements | Four non-existent columns |
-| Vaccination drive | Drive saves and appears on the calendar | Insert tries `bhc_id`, falls back to `facility_id` — the schema file and the live queries disagree |
+### Not yet seen running
+Analyzed and unit-tested, but unverified in the app:
+- Child vaccination drives, stock preview, and out-of-stock blocking
+- Vaccine grouping (one entry per vaccine rather than one per dose)
+- Two drives on the same date appearing as separate cards
+- The mother-profile query guards, and the calendar's `bhc_id`/`facility_id`
+  fallback
 
-Fifteen minutes of device testing converts these from *believed fixed* to
-*fixed*, and it is the highest-value item on this document.
+### Known clinical gap
+A child drive gates on age-and-not-yet-given, but does **not** yet enforce the
+minimum interval between doses in a series. A Pentavalent drive can therefore
+list a child who received dose 1 last week.
+`ImmunizationSchedule.statusOfVaccine` already implements the rule; it needs the
+previous dose's date threaded through.
+
+---
+
+## 7. Defects Found and Fixed in This Revision
+
+Worth keeping: most were silent, and several are good defense material about
+validating displayed data against its source.
+
+| Defect | What was happening |
+|---|---|
+| Schedules tab & Recent Visits | Selected `prenatal_checkup_id`, a column that does not exist. PostgREST rejected it, `catchError` swallowed it, the lists rendered empty |
+| Mother vitals page | Requested four columns that live on the parent encounter. No blood pressure, and weight-gain analysis built only from self-reported weights |
+| Mother profile timeout | Eight unguarded queries under one `Future.wait`; any slow table took the whole profile down. Six of the tables it reads have no index on `pregnancy_id` |
+| Weight-gain chart | De-duplication dropped the newer of two checkups taken within ~1.4 days, so a new weight never reached the chart |
+| GPAL formatter | `formattedGpal` returned `formattedGpa` — the L was computed, stored, and then discarded by two stub getters |
+| Blood pressure history | A single normal reading erased an earlier hypertensive episode; the card returned to "no action" |
+| TD eligibility | Stopped at TD2 and counted doses per pregnancy rather than per lifetime, so mothers needing TD3–TD5 were never invited and prior doses were invisible |
+| Vaccine dropdown | Listed catalogue rows, so one vaccine appeared five times — once per dose |
+| Drives on one date | Folded into a single card, making a second drive look like it had deleted the first |
+| OCR extraction | The vision model exhausted its token budget narrating before answering, and a later increase breached the tier's rate limit |
