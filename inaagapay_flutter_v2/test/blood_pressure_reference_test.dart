@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inaagapay_flutter_v2/services/blood_pressure_reference.dart';
 
@@ -7,9 +9,9 @@ BpReading r(int sys, int dia, {double? weeks}) =>
 void main() {
   group('categorise — single reading', () {
     test('exactly 140/90 meets the threshold', () {
-      // The existing _bpStatus in add_prenatal_checkup_screen.dart compares
-      // with `>`, so it calls this reading "Stage 1" while every risk engine
-      // calls it high. The cut-point is inclusive.
+      // The _bpStatus this replaced in add_prenatal_checkup_screen.dart
+      // compared with `>`, so it called this reading "Stage 1" while every
+      // risk engine called it high. The cut-point is inclusive.
       expect(BloodPressureReference.categorise(140, 90), BpCategory.raised);
       expect(BloodPressureReference.categorise(139, 89), BpCategory.normal);
     });
@@ -276,6 +278,56 @@ void main() {
       expect(finding.contains('hypertension'), isFalse);
       expect(finding.contains('preeclampsia'), isFalse);
       expect(finding, contains('140/90'));
+    });
+  });
+
+  group('the screens keep no rule set of their own', () {
+    // This is the guard on the consolidation. The contradiction it prevents
+    // came from a second opinion growing up beside the first: a pill drawn
+    // from AHA staging eight lines above a card applying the pregnancy
+    // thresholds, so one reading carried two severities in one section.
+    //
+    // Comments are stripped before the scan — the screens still describe what
+    // was removed, and that description should not fail the test.
+    const screens = [
+      'lib/screens/midwife/add_prenatal_checkup_screen.dart',
+      'lib/screens/mother/mother_profile_page.dart',
+    ];
+
+    String codeOf(String path) {
+      final file = File(path);
+      expect(file.existsSync(), isTrue,
+          reason: '$path not found — run tests from the package root');
+      return file.readAsLinesSync().map((line) {
+        final comment = line.indexOf('//');
+        return comment == -1 ? line : line.substring(0, comment);
+      }).join('\n');
+    }
+
+    test('no screen names a blood pressure stage or a condition', () {
+      for (final path in screens) {
+        final source = codeOf(path).toLowerCase();
+        for (final banned in [
+          'htn stage',
+          'stage 1 hypertension',
+          'stage 2 hypertension',
+          'hypertensive crisis',
+          'hypertension in pregnancy',
+          'hypertensive disorders',
+          'pre-hypertension',
+        ]) {
+          expect(source.contains(banned), isFalse,
+              reason: '$path names a condition ("$banned"). Blood pressure '
+                  'vocabulary belongs to BloodPressureReference');
+        }
+      }
+    });
+
+    test('both screens judge blood pressure through the shared rule set', () {
+      for (final path in screens) {
+        expect(codeOf(path), contains('BloodPressureReference'),
+            reason: '$path shows blood pressure without the cited thresholds');
+      }
     });
   });
 }

@@ -3,17 +3,19 @@
 // One place where blood pressure in pregnancy is judged.
 //
 // Before this file the app judged blood pressure in nine different places, and
-// they did not agree. Five of them live in the prenatal checkup screen alone:
-// one uses the non-pregnancy AHA/ACC staging where 130/80 is already Stage 1,
-// while the card rendered directly beneath it uses the pregnancy thresholds of
-// 140/90 and 160/110. A reading of 145/95 currently shows "HTN Stage 2" and
-// "Hypertension in Pregnancy" side by side. One of them also compares with a
-// strict `>`, so exactly 140/90 — the textbook cut-point — is classified as
-// Stage 1 there and as high risk everywhere else. None of the nine cites a
-// source.
+// they did not agree. Most of them lived in the prenatal checkup screen: one
+// used the non-pregnancy AHA/ACC staging where 130/80 is already Stage 1,
+// while the card rendered directly beneath it used the pregnancy thresholds of
+// 140/90 and 160/110 — so 145/95 showed "HTN Stage 2" and "Hypertension in
+// Pregnancy" side by side. One compared with a strict `>`, so exactly 140/90 —
+// the textbook cut-point — classified a stage lower there than in every risk
+// engine. None of the nine cited a source.
 //
-// This module does not delete those. It gives the app one rule set to migrate
-// them onto, and is the only one used by anything written from here on.
+// They are gone. Every blood pressure judgement in the app now comes from
+// here: the prenatal checkup screen (pill, guidance card, risk engine, step
+// validation, detected-factor chips and the text handed to the AI) and the
+// mother's profile (trend card and per-visit insights). A facility on a
+// different guideline changes [BpThresholds] and nothing else.
 //
 // TWO THINGS THIS FILE DELIBERATELY DOES NOT DO
 //
@@ -232,9 +234,9 @@ class BloodPressureReference {
   /// Where a single reading sits.
   ///
   /// Comparisons are `>=` throughout: a reading of exactly 140/90 meets the
-  /// threshold. The existing `_bpStatus` in the prenatal checkup screen uses
-  /// `>`, which is why the textbook cut-point classifies differently there than
-  /// in every risk engine.
+  /// threshold. The `_bpStatus` this replaced in the prenatal checkup screen
+  /// used `>`, which is why the textbook cut-point classified a stage lower
+  /// there than in every risk engine.
   static BpCategory categorise(
     int? systolic,
     int? diastolic, {

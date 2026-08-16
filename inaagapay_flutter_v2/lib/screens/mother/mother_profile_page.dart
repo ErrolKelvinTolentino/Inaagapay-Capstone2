@@ -809,12 +809,28 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     final fhrRaw = _formatValue(checkup['fetal_heart_beat']);
     final fhr = int.tryParse(fhrRaw);
 
+    // The same rule set as the trend card further down this page and as the
+    // screen that recorded the reading. This block judges one visit, so it
+    // categorises that reading; the two-occasion criterion is a property of
+    // the series and belongs to the trend card.
+    final bpCategory =
+        BloodPressureReference.categorise(bpSys?.round(), bpDia?.round());
+    const bpLimits = BpThresholds.standard;
+
     String overallAssessment =
         'Current prenatal checkup findings appear stable overall.';
-    if (bpSys != null && bpDia != null && (bpSys >= 140 || bpDia >= 90)) {
+    if (bpCategory == BpCategory.severe) {
       overallAssessment =
-          'Blood pressure is elevated and needs closer monitoring for hypertensive disorders of pregnancy.';
-    } else if (bpSys != null && bpDia != null && (bpSys < 90 || bpDia < 60)) {
+          'Blood pressure at this visit is in the severe range '
+          '(${bpLimits.severeSystolic}/${bpLimits.severeDiastolic} or above); '
+          'this is referred the same day rather than watched.';
+    } else if (bpCategory == BpCategory.raised) {
+      overallAssessment =
+          'Blood pressure at this visit met the '
+          '${bpLimits.raisedSystolic}/${bpLimits.raisedDiastolic} threshold. '
+          'Check the reading before it — the referral criterion is two '
+          'occasions, not one.';
+    } else if (bpCategory == BpCategory.low) {
       overallAssessment =
           'Blood pressure is lower than typical range; monitor hydration, symptoms, and follow-up trends.';
     } else if (fhr != null && (fhr < 120 || fhr > 160)) {
@@ -830,15 +846,22 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     buffer.write('KEY OBSERVATIONS:\n');
 
     if (bpSys != null && bpDia != null) {
-      if (bpSys >= 140 || bpDia >= 90) {
-        buffer.write(
-            '- Maternal Vitals - Blood Pressure: $bpSys/$bpDia mmHg [REVIEW].\n');
-      } else if (bpSys < 90 || bpDia < 60) {
-        buffer.write(
-            '- Maternal Vitals - Blood Pressure: $bpSys/$bpDia mmHg [MONITOR].\n');
-      } else {
-        buffer.write(
-            '- Maternal Vitals - Blood Pressure: $bpSys/$bpDia mmHg [WITHIN NORMAL LIMITS].\n');
+      switch (bpCategory) {
+        case BpCategory.severe:
+        case BpCategory.raised:
+          buffer.write(
+              '- Maternal Vitals - Blood Pressure: $bpSys/$bpDia mmHg [REVIEW].\n');
+        case BpCategory.low:
+          buffer.write(
+              '- Maternal Vitals - Blood Pressure: $bpSys/$bpDia mmHg [MONITOR].\n');
+        case BpCategory.normal:
+          buffer.write(
+              '- Maternal Vitals - Blood Pressure: $bpSys/$bpDia mmHg [WITHIN NORMAL LIMITS].\n');
+        case BpCategory.unreadable:
+          // Systolic at or below diastolic. A transposed pair is not a low
+          // reading and must not be reported as one.
+          buffer.write(
+              '- Maternal Vitals - Blood Pressure: $bpSys/$bpDia mmHg [REVIEW MANUALLY].\n');
       }
     } else {
       buffer.write(
@@ -887,7 +910,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     buffer.write('- Continue scheduled prenatal follow-up visits.\n');
     buffer
         .write('- Monitor maternal warning signs and fetal movement daily.\n');
-    if ((bpSys != null && bpDia != null && (bpSys >= 140 || bpDia >= 90)) ||
+    if (bpCategory == BpCategory.raised ||
+        bpCategory == BpCategory.severe ||
         (fhr != null && (fhr < 120 || fhr > 160))) {
       buffer.write(
           '- Prioritize clinician review for blood pressure and/or fetal heart findings.\n');

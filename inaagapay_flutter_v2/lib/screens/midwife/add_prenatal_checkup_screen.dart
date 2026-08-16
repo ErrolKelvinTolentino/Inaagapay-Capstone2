@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/auth_storage.dart';
+import '../../services/blood_pressure_reference.dart';
 import '../../services/groq_service.dart';
 import '../../services/weight_gain_engine.dart';
 import '../../models/weight_gain_models.dart';
@@ -129,68 +130,16 @@ class _RiskSnapshot {
 }
 
 // ── BP classification ────────────────────────────────────────────────────────
-
-enum _BpStatus {
-  unknown,
-  low,
-  normal,
-  elevated,
-  stage1,
-  stage2,
-  severe;
-
-  String get label {
-    switch (this) {
-      case _BpStatus.low:
-        return 'Low BP';
-      case _BpStatus.normal:
-        return 'Normal';
-      case _BpStatus.elevated:
-        return 'Elevated';
-      case _BpStatus.stage1:
-        return 'HTN Stage 1';
-      case _BpStatus.stage2:
-        return 'HTN Stage 2';
-      case _BpStatus.severe:
-        return 'Hypertensive Crisis';
-      default:
-        return '';
-    }
-  }
-
-  Color get color {
-    switch (this) {
-      case _BpStatus.low:
-        return AppColors.info;
-      case _BpStatus.normal:
-        return AppColors.success;
-      case _BpStatus.elevated:
-        return AppColors.warning;
-      case _BpStatus.stage1:
-        return const Color(0xFFE65100);
-      case _BpStatus.stage2:
-        return AppColors.error;
-      case _BpStatus.severe:
-        return const Color(0xFFB71C1C);
-      default:
-        return AppColors.textSecondary;
-    }
-  }
-
-  IconData get icon {
-    switch (this) {
-      case _BpStatus.low:
-        return Icons.arrow_downward_rounded;
-      case _BpStatus.normal:
-        return Icons.check_circle_rounded;
-      case _BpStatus.unknown:
-        return Icons.help_outline;
-      default:
-        return Icons.warning_rounded;
-    }
-  }
-}
-
+//
+// It used to live here, as a `_BpStatus` enum on the non-pregnancy AHA scale:
+// 130/80 was "HTN Stage 1", 145/95 was "HTN Stage 2", and because it compared
+// with `>` rather than `>=`, exactly 140/90 — the cut-point — fell a stage
+// below where every other check in the app put it. The pill it drew sat eight
+// lines above a card applying the pregnancy thresholds, so one reading could
+// be labelled two different severities in the same section.
+//
+// Both now read `services/blood_pressure_reference.dart`. See `_bpAssessment`.
+//
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
@@ -867,7 +816,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     final fhrText = _fetalBeatCtrl.text.trim().isNotEmpty ? '${_fetalBeatCtrl.text.trim()} bpm' : null;
 
     final reasPoints = <String>[];
-    if (bpText != null && _bpStatus == _BpStatus.normal) {
+    if (bpText != null && _bpCategory == BpCategory.normal) {
       reasPoints.add('Blood pressure ($bpText)');
     }
     if (fhrText != null) {
@@ -907,7 +856,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     final fhrText = _fetalBeatCtrl.text.trim().isNotEmpty ? '${_fetalBeatCtrl.text.trim()} bpm' : null;
 
     final reasPoints = <String>[];
-    if (bpText != null && _bpStatus == _BpStatus.normal) {
+    if (bpText != null && _bpCategory == BpCategory.normal) {
       reasPoints.add('Ang blood pressure ($bpText)');
     }
     if (fhrText != null) {
@@ -1058,14 +1007,21 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     // 1. Blood Pressure Thresholds
     if (systolic != null && diastolic != null) {
       notable.add('Current BP: $systolic/$diastolic mmHg');
-      if (systolic >= 140 || diastolic >= 90) {
+      final bpAssessment = _bpAssessment;
+      final bpCategory =
+          BloodPressureReference.categorise(systolic, diastolic);
+      if (bpCategory == BpCategory.raised || bpCategory == BpCategory.severe) {
         isHigh = true;
+        // The factor names the threshold met, not a condition. The wording is
+        // written once here because it is stored on `pregnancy_risk_factors`
+        // and read back by the midwife dashboard.
         factors.add(_RiskFactorItem(
-          factor: 'High blood pressure (>=140/90)',
+          factor: bpCategory == BpCategory.severe
+              ? 'Blood pressure in severe range (${BpThresholds.standard.severeSystolic}/${BpThresholds.standard.severeDiastolic} or above)'
+              : 'Blood pressure at or above ${BpThresholds.standard.raisedSystolic}/${BpThresholds.standard.raisedDiastolic}',
           influence: 'high',
         ));
-        actions
-            .add('Monitor blood pressure closely and screen for preeclampsia.');
+        actions.add('${bpAssessment.action.label}. ${bpAssessment.finding}');
       }
     }
 
@@ -1287,20 +1243,23 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     final sysVal = int.tryParse(_sysCtrl.text.trim());
     final diaVal = int.tryParse(_diaCtrl.text.trim());
     final String bpAssessmentStr;
-    final bool isBpNormal = sysVal != null && diaVal != null && (sysVal >= 90 && sysVal < 120) && (diaVal >= 60 && diaVal < 80);
 
-    if (sysVal != null && diaVal != null) {
-      if (sysVal >= 140 || diaVal >= 90) {
-        bpAssessmentStr = 'HIGH / STAGE 1-2 HYPERTENSION IN PREGNANCY ($sysVal/$diaVal mmHg - Diastolic $diaVal mmHg >= 90 mmHg. DO NOT SAY THIS IS WITHIN EXPECTED RANGE! PUT THIS IN FLAGGED ITEMS SENTENCE 2!)';
-      } else if (sysVal >= 120 || diaVal >= 80) {
-        bpAssessmentStr = 'ELEVATED / PRE-HYPERTENSION ($sysVal/$diaVal mmHg - Systolic $sysVal or Diastolic $diaVal is elevated. DO NOT SAY THIS IS WITHIN EXPECTED RANGE! PUT THIS IN FLAGGED ITEMS SENTENCE 2!)';
-      } else if (sysVal < 90 || diaVal < 60) {
-        bpAssessmentStr = 'LOW / HYPOTENSION ($sysVal/$diaVal mmHg)';
-      } else {
-        bpAssessmentStr = 'WITHIN EXPECTED RANGE ($sysVal/$diaVal mmHg)';
-      }
-    } else {
+    // What the model is told about the pressure comes from the same rule set
+    // the screen displays. It previously came from the non-pregnancy scale,
+    // where anything from 120/80 up was "PRE-HYPERTENSION" — so a textbook
+    // pregnancy reading was written up as a flagged finding, in text the
+    // mother reads.
+    final bpCategory = BloodPressureReference.categorise(sysVal, diaVal);
+    if (bpCategory == BpCategory.unreadable) {
       bpAssessmentStr = 'Not recorded';
+    } else {
+      final bpAssessment = _bpAssessment;
+      final flagged =
+          bpCategory == BpCategory.raised || bpCategory == BpCategory.severe;
+      bpAssessmentStr = '${bpCategory.label.toUpperCase()} '
+          '($sysVal/$diaVal mmHg). ${bpAssessment.finding}'
+          '${bpAssessment.note == null ? '' : ' ${bpAssessment.note}'}'
+          '${flagged ? ' DO NOT SAY THIS IS WITHIN EXPECTED RANGE! PUT THIS IN FLAGGED ITEMS SENTENCE 2!' : ''}';
     }
 
     // Compute trimester from gestational age
@@ -1351,7 +1310,7 @@ HEADER:
 
 SENTENCE 1: THE REASSURANCE ANCHOR
 - Lead ONLY with vitals/findings that are WITHIN EXPECTED RANGE, including ACTUAL NUMBERS (e.g. "Fetal heart rate (${_fetalBeatCtrl.text.trim().isEmpty ? '120 bpm' : '${_fetalBeatCtrl.text.trim()} bpm'}) is within expected range this visit.").
-- CRITICAL BLOOD PRESSURE RULE: ONLY include Blood Pressure in Sentence 1 if Blood Pressure Assessment is explicitly "WITHIN EXPECTED RANGE". If BP is HIGH or ELEVATED (e.g. 120/90 mmHg where diastolic >= 80/90 mmHg), DO NOT put BP in Sentence 1! Place BP in Sentence 2 (Flagged Items)!
+- CRITICAL BLOOD PRESSURE RULE: ONLY include Blood Pressure in Sentence 1 if the "Blood pressure Assessment" line below starts with "WITHIN USUAL RANGE". If it starts with "AT OR ABOVE THRESHOLD" or "SEVERE RANGE", DO NOT put BP in Sentence 1! Place BP in Sentence 2 (Flagged Items)! Judge it ONLY from that line — do not apply blood pressure cut-points of your own.
 - NEVER use the word "normal" or "normal values". Use "within expected range" or "within commonly expected range".
 
 SENTENCE 2: THE FLAGGED ITEMS (DATA, COMPARISON, REASSURANCE, SOFT ACTION)
@@ -1365,7 +1324,7 @@ CRITICAL SAFETY & MIDWIFE POV RULES:
 - REMOVE ALL DISCLAIMER LINES. DO NOT include any line like "General summary, not a diagnosis..."!
 - MIDWIFE POV MANDATE: The midwife is the healthcare provider entering these remarks! NEVER say "with your midwife or healthcare provider" or "consult your midwife". Say "requires clinical evaluation / doctor consultation" if severe.
 - NEVER write "No abnormal vital signs were noted" or claim findings are normal if Blood pressure is HIGH (e.g. 120/100 mmHg) or Edema is Moderate/Severe!
-- If Blood pressure is HIGH (diastolic >= 90 mmHg or systolic >= 140 mmHg) or Edema is Moderate/Severe:
+- If the "Blood pressure Assessment" line starts with "AT OR ABOVE THRESHOLD" or "SEVERE RANGE", or Edema is Moderate/Severe:
   * Sentence 1 (Anchor): Lead ONLY with passed vitals (e.g. "Fetal heart rate (120 bpm) is within expected range this visit.").
   * Sentence 2 (Flagged Items): Plainly state findings: "Blood pressure was recorded at 120/100 mmHg (high diastolic), weight gain is +2.0 kg (above expected), and moderate swelling was observed — these findings require close monitoring and doctor consultation."
 - KEEP EACH TRANSLATED SECTION CONCISE AND UNDER 280 CHARACTERS TOTAL.
@@ -1603,46 +1562,76 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     return (days / 7).floorToDouble();
   }
 
-  _BpStatus get _bpStatus {
+  /// Where the reading being typed sits against the published thresholds.
+  ///
+  /// One call, one rule set — see `blood_pressure_reference.dart`. An
+  /// impossible pair (systolic at or below diastolic) comes back as
+  /// [BpCategory.unreadable] rather than as a low reading.
+  BpCategory get _bpCategory => BloodPressureReference.categorise(
+        int.tryParse(_sysCtrl.text.trim()),
+        int.tryParse(_diaCtrl.text.trim()),
+      );
+
+  /// This visit read against the ones before it.
+  ///
+  /// Gestational hypertension is defined on *two* occasions, not one. This
+  /// screen already loads the last six checkups with their pressures, so the
+  /// reading being typed can be judged as part of a run instead of alarming on
+  /// its own — the second raised reading is the one that means something, and
+  /// alarming on the first trains people to dismiss the alarm.
+  BpAssessment get _bpAssessment {
+    final previous =
+        (_motherRiskContext?['previous_checkups'] as List? ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList()
+          ..sort((a, b) {
+            final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '');
+            final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '');
+            if (da == null || db == null) return 0;
+            return da.compareTo(db);
+          });
+
+    final readings = <BpReading>[];
+    for (final checkup in previous) {
+      final sys = int.tryParse(checkup['blood_pressure_systolic']?.toString() ?? '');
+      final dia = int.tryParse(checkup['blood_pressure_diastolic']?.toString() ?? '');
+      if (sys == null || dia == null) continue;
+      readings.add(BpReading(
+        systolic: sys,
+        diastolic: dia,
+        takenOn: _tryDate(checkup['checkup_datetime']),
+        gestationalWeeks: (checkup['age_of_gestation'] as num?)?.toDouble(),
+      ));
+    }
+
     final sys = int.tryParse(_sysCtrl.text.trim());
     final dia = int.tryParse(_diaCtrl.text.trim());
-
-    if (sys == null || dia == null) return _BpStatus.unknown;
-    if (sys <= 0 || dia <= 0) return _BpStatus.unknown;
-
-    // Physiological validation
-    if (sys <= dia) {
-      print('Warning: Systolic ≤ Diastolic - possible measurement error');
-      return _BpStatus.unknown;
+    if (sys != null && dia != null) {
+      readings.add(BpReading(
+        systolic: sys,
+        diastolic: dia,
+        takenOn: _checkupDateTime,
+        gestationalWeeks: _aogWeeks,
+      ));
     }
 
-    // Hypertensive Crisis
-    if (sys > 180 || dia > 120) {
-      return _BpStatus.stage2;
-    }
+    return BloodPressureReference.assess(readings);
+  }
 
-    // Stage 2 Hypertension
-    if (sys > 140 || dia > 90) {
-      return _BpStatus.stage2;
+  /// Severity colour for an action. Same mapping as the trend card on the
+  /// mother's profile, so the same finding is the same colour in both places.
+  Color _bpTone(BpAction action) {
+    switch (action) {
+      case BpAction.referSameDay:
+      case BpAction.referForAssessment:
+        return AppColors.error;
+      case BpAction.repeatNextVisit:
+        return AppColors.warning;
+      case BpAction.monitor:
+        return AppColors.info;
+      case BpAction.none:
+        return AppColors.success;
     }
-
-    // Stage 1 Hypertension
-    if (sys > 130 || dia > 80) {
-      return _BpStatus.stage1;
-    }
-
-    // Elevated BP
-    if (sys > 120 && dia < 80) {
-      return _BpStatus.elevated;
-    }
-
-    // Hypotension
-    if (sys < 90 || dia < 60) {
-      return _BpStatus.low;
-    }
-
-    // Normal BP
-    return _BpStatus.normal;
   }
 
   DateTime _normalizedDate(DateTime value) {
@@ -1776,33 +1765,42 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   }
 
   Widget _bpStatusPill() {
-    final s = _bpStatus;
-    if (s == _BpStatus.unknown) return const SizedBox.shrink();
+    final category = _bpCategory;
+    if (category == BpCategory.unreadable) return const SizedBox.shrink();
 
+    // Says where the reading sits, not what the mother has. Phrased to match
+    // the weight pill beside it ("WITHIN EXPECTED" / "ABOVE EXPECTED") so the
+    // two vitals in this summary row read in the same voice.
     final String pillLabel;
     final Color pillColor;
 
-    if (s == _BpStatus.normal) {
-      pillLabel = 'NORMAL';
-      pillColor = AppColors.success;
-    } else if (s == _BpStatus.low) {
-      pillLabel = 'LOW';
-      pillColor = const Color(0xFF3B82F6);
-    } else {
-      pillLabel = 'ELEVATED';
-      pillColor = AppColors.warning;
+    switch (category) {
+      case BpCategory.severe:
+        pillLabel = 'SEVERE RANGE';
+        pillColor = AppColors.error;
+      case BpCategory.raised:
+        pillLabel = 'AT THRESHOLD';
+        pillColor = AppColors.warning;
+      case BpCategory.low:
+        pillLabel = 'BELOW RANGE';
+        pillColor = AppColors.info;
+      case BpCategory.normal:
+        pillLabel = 'WITHIN RANGE';
+        pillColor = AppColors.success;
+      case BpCategory.unreadable:
+        // Unreachable — the pill is not drawn at all in this case. Kept
+        // explicit so an unreadable pair can never inherit the reassuring
+        // label by falling into the normal arm.
+        pillLabel = 'NOT READABLE';
+        pillColor = AppColors.textSecondary;
     }
-
-    final isLow = s == _BpStatus.low;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
       decoration: BoxDecoration(
-        color: isLow ? const Color(0xFFEFF6FF) : pillColor.withValues(alpha: 0.1),
+        color: pillColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isLow ? const Color(0xFFBFDBFE) : pillColor.withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: pillColor.withValues(alpha: 0.3)),
       ),
       child: Text(
         pillLabel,
@@ -2026,66 +2024,93 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     );
   }
 
+  /// What the guideline says about the reading being typed, read against the
+  /// visits before it.
+  ///
+  /// It states the finding and the next step; it does not name a condition.
+  /// Gestational hypertension, pre-eclampsia and chronic hypertension are
+  /// diagnoses a physician makes — the midwife screens and refers, and the
+  /// card says exactly that much. Same finding strip as the trend card on the
+  /// mother's profile.
   Widget _bpClinicalGuidanceCard() {
     if (_sysError != null || _diaError != null) {
       return const SizedBox.shrink();
     }
-    final sys = int.tryParse(_sysCtrl.text.trim());
-    final dia = int.tryParse(_diaCtrl.text.trim());
-
-    if (sys == null || dia == null || sys < 70 || sys > 250 || dia < 40 || dia > 150 || sys <= dia) {
+    if (_bpCategory == BpCategory.unreadable) {
       return const SizedBox.shrink();
     }
 
-    final isLow = sys < 90 || dia < 60;
-    final isSevere = sys >= 160 || dia >= 110;
-    final isHypertensive = (sys >= 140 || dia >= 90) && !isSevere;
-
-    String statusText;
-    Color statusColor;
-    IconData statusIcon;
-
-    if (isSevere) {
-      statusText = 'Severe Hypertension (≥160/110 mmHg) — Immediate Referral Required';
-      statusColor = const Color(0xFFB71C1C);
-      statusIcon = Icons.error_rounded;
-    } else if (isHypertensive) {
-      statusText = 'Hypertension in Pregnancy (≥140/90 mmHg)';
-      statusColor = AppColors.error;
-      statusIcon = Icons.warning_rounded;
-    } else if (isLow) {
-      statusText = 'Low Blood Pressure (<90/60 mmHg)';
-      statusColor = Colors.blue.shade700;
-      statusIcon = Icons.arrow_downward_rounded;
-    } else {
-      statusText = 'Normal Blood Pressure (Within acceptable range)';
-      statusColor = AppColors.success;
-      statusIcon = Icons.check_circle_rounded;
-    }
+    final assessment = _bpAssessment;
+    final tone = _bpTone(assessment.action);
 
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: statusColor.withValues(alpha: 0.08),
+        color: tone.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: statusColor.withValues(alpha: 0.25)),
+        border: Border.all(color: tone.withValues(alpha: 0.25)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(statusIcon, size: 16, color: statusColor),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              statusText,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: statusColor,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                assessment.needsReferral
+                    ? Icons.warning_amber_rounded
+                    : Icons.insights_outlined,
+                size: 16,
+                color: tone,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  assessment.finding,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    height: 1.45,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (assessment.note != null) ...[
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 24),
+              child: Text(
+                assessment.note!,
+                style: const TextStyle(
+                  fontSize: 11,
+                  height: 1.35,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
-          ),
+          ],
+          if (assessment.action != BpAction.none) ...[
+            const SizedBox(height: 8),
+            Container(
+              margin: const EdgeInsets.only(left: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: tone.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                assessment.action.label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: tone,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -2175,10 +2200,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         _showMessage('Systolic pressure must be higher than diastolic.');
         return false;
       }
-      // Hypertension warning (non-blocking)
-      if (systolic >= 140 || diastolic >= 90) {
+      // Non-blocking notice. It names the threshold the reading meets and the
+      // next step, not a condition — the guidance card under the field
+      // already carries the detail, and both come from the same rule set.
+      final bpCategory = BloodPressureReference.categorise(systolic, diastolic);
+      if (bpCategory == BpCategory.raised || bpCategory == BpCategory.severe) {
         _showMessage(
-          'Warning: BP $systolic/$diastolic suggests hypertension. Proceed with caution.',
+          'BP $systolic/$diastolic — ${bpCategory.label.toLowerCase()}. '
+          '${_bpAssessment.action.label}.',
           type: AppSnackType.warning,
         );
       }
@@ -3480,8 +3509,12 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   Icon(Icons.info_outline, size: 13, color: AppColors.textSecondary),
                   SizedBox(width: 6),
                   Expanded(
+                    // Named from the same file the thresholds come from. The
+                    // line here used to credit WHO/DOH while the numbers
+                    // applied were ACOG's — if the RHU confirms a different
+                    // guideline, both the rule and this citation change once.
                     child: Text(
-                      'Source: World Health Organization (WHO) & DOH Clinical Practice Guidelines for Maternal Care.',
+                      'Source: $kBloodPressureSourceShort.',
                       style: TextStyle(
                         fontSize: 11,
                         fontStyle: FontStyle.italic,
@@ -4492,19 +4525,39 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     );
   }
 
-  List<String> _getDetectedRiskFactors() {
-    final factors = <String>[];
+  /// Chips for the review step. Each carries its own severity rather than
+  /// having the chip infer one by searching its label for "severe" or
+  /// "hypertension" — that coupling meant rewording a label silently
+  /// recoloured it, which is how a raised blood pressure could have quietly
+  /// become an amber chip the moment it stopped being called hypertension.
+  List<({String label, bool isHigh})> _getDetectedRiskFactors() {
+    final factors = <({String label, bool isHigh})>[];
 
-    final sys = int.tryParse(_sysCtrl.text.trim());
-    final dia = int.tryParse(_diaCtrl.text.trim());
-    if (sys != null && dia != null) {
-      if (sys >= 160 || dia >= 110) {
-        factors.add('Severe Hypertension (≥160/110 mmHg)');
-      } else if (sys >= 140 || dia >= 90) {
-        factors.add('Hypertension in Pregnancy (≥140/90 mmHg)');
-      } else if (sys < 90 || dia < 60) {
-        factors.add('Low Blood Pressure (<90/60 mmHg)');
-      }
+    // Worded exactly as the risk engine words it, so the same finding is one
+    // entry on the dashboard rather than two spellings of the same thing.
+    const bp = BpThresholds.standard;
+    switch (_bpCategory) {
+      case BpCategory.severe:
+        factors.add((
+          label: 'Blood pressure in severe range '
+              '(${bp.severeSystolic}/${bp.severeDiastolic} or above)',
+          isHigh: true,
+        ));
+      case BpCategory.raised:
+        factors.add((
+          label: 'Blood pressure at or above '
+              '${bp.raisedSystolic}/${bp.raisedDiastolic}',
+          isHigh: true,
+        ));
+      case BpCategory.low:
+        factors.add((
+          label: 'Blood pressure below '
+              '${bp.lowSystolic}/${bp.lowDiastolic}',
+          isHigh: false,
+        ));
+      case BpCategory.normal:
+      case BpCategory.unreadable:
+        break;
     }
 
     final currentWeight = double.tryParse(_weightCtrl.text.trim());
@@ -4527,21 +4580,24 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           fetalCount: _fetalCount ?? 1,
         );
         if (result.status == WeightGainStatus.low) {
-          factors.add('Weight Gain: Inadequate Gain');
+          factors.add((label: 'Weight Gain: Inadequate Gain', isHigh: false));
         } else if (result.status == WeightGainStatus.high) {
-          factors.add('Weight Gain: Excessive Gain');
+          factors.add((label: 'Weight Gain: Excessive Gain', isHigh: false));
         }
       } catch (_) {}
     }
 
     if (_edema == 'moderate' || _edema == 'severe') {
-      factors.add('${_edema[0].toUpperCase()}${_edema.substring(1)} Edema');
+      factors.add((
+        label: '${_edema[0].toUpperCase()}${_edema.substring(1)} Edema',
+        isHigh: _edema == 'severe',
+      ));
     }
     for (final s in _symptoms) {
       if (s.riskCategory == 'danger') {
-        factors.add('Urgent Symptom: ${s.name}');
+        factors.add((label: 'Urgent Symptom: ${s.name}', isHigh: true));
       } else if (s.riskCategory == 'warning') {
-        factors.add('Monitored Symptom: ${s.name}');
+        factors.add((label: 'Monitored Symptom: ${s.name}', isHigh: false));
       }
     }
 
@@ -4550,7 +4606,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       for (final mc in medicalConditions) {
         final name = mc['condition_name'] ?? mc['name'];
         if (name != null && name.toString().isNotEmpty) {
-          factors.add('Medical History: $name');
+          // A recorded diagnosis, not a reading taken today. The name is the
+          // physician's word for it and is shown as written.
+          final serious = ['severe', 'hypertension', 'urgent']
+              .any((word) => name.toString().toLowerCase().contains(word));
+          factors.add((label: 'Medical History: $name', isHigh: serious));
         }
       }
     }
@@ -4617,10 +4677,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                           spacing: 6,
                           runSpacing: 6,
                           children: detectedFactors.map((factor) {
-                            final isHigh = factor.toLowerCase().contains('severe') ||
-                                factor.toLowerCase().contains('hypertension') ||
-                                factor.toLowerCase().contains('urgent');
-                            final chipColor = isHigh ? AppColors.error : AppColors.warning;
+                            final chipColor =
+                                factor.isHigh ? AppColors.error : AppColors.warning;
 
                             return Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -4633,13 +4691,15 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    isHigh ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
+                                    factor.isHigh
+                                        ? Icons.error_outline_rounded
+                                        : Icons.warning_amber_rounded,
                                     size: 13,
                                     color: chipColor,
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    factor,
+                                    factor.label,
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
