@@ -52,6 +52,42 @@ CREATE INDEX IF NOT EXISTS idx_ai_responses_reference_id
 CREATE INDEX IF NOT EXISTS idx_pregnancy_risk_factors_risk
     ON public.pregnancy_risk_factors (pregnancy_risk_id);
 
+-- ------------------------------------------------------------
+-- The pregnancy child tables the profile loads in one batch.
+--
+-- Every one of these is filtered by pregnancy_id, and only two tables in the
+-- whole schema carry such an index — clinical_encounters and
+-- pregnancy_risk_assessments. The rest are sequential scans that grow with
+-- every record saved, which is why the profile degraded over a single
+-- afternoon of recording lab tests and ultrasounds rather than failing from
+-- the start.
+--
+-- lab_tests and ultrasounds matter most: they gain a row per document
+-- recorded, and they are queried on every profile open.
+-- ------------------------------------------------------------
+
+CREATE INDEX IF NOT EXISTS idx_lab_tests_pregnancy
+    ON public.lab_tests (pregnancy_id);
+
+CREATE INDEX IF NOT EXISTS idx_ultrasounds_pregnancy
+    ON public.ultrasounds (pregnancy_id);
+
+CREATE INDEX IF NOT EXISTS idx_prenatal_checkups_pregnancy
+    ON public.prenatal_checkups (pregnancy_id);
+
+CREATE INDEX IF NOT EXISTS idx_maternal_vitals_pregnancy
+    ON public.maternal_vitals (pregnancy_id);
+
+CREATE INDEX IF NOT EXISTS idx_deliveries_pregnancy
+    ON public.deliveries (pregnancy_id);
+
+CREATE INDEX IF NOT EXISTS idx_pregnancy_outcomes_pregnancy
+    ON public.pregnancy_outcomes (pregnancy_id);
+
+-- Children are read by mother_id on the same screen.
+CREATE INDEX IF NOT EXISTS idx_children_mother
+    ON public.children (mother_id);
+
 -- ============================================================
 -- If this is ever run against a large, live table, prefer the
 -- non-blocking form instead (cannot run inside a transaction):

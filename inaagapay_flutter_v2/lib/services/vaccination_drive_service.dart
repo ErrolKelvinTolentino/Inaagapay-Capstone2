@@ -40,14 +40,22 @@ class DriveRecipient {
     required this.currentDose,
     this.phoneNumber,
     this.email,
+    this.lastDoseOn,
   });
 
   final int motherId;
   final int? accountId;
   final String name;
 
-  /// Highest TD dose on record, 0 when none has been given.
+  /// Highest TD dose on record across every pregnancy, 0 when none has been
+  /// given. Tetanus doses accumulate over a lifetime, not per pregnancy.
   final int currentDose;
+
+  /// When that dose was given, where the record says.
+  final DateTime? lastDoseOn;
+
+  /// The dose she is due next.
+  int get nextDose => currentDose + 1;
 
   final String? phoneNumber;
   final String? email;
@@ -59,32 +67,120 @@ class DriveRecipient {
   /// quietly dropping her from the count.
   bool get isUnreachable => !hasPhone && !hasEmail;
 
-  String get doseLabel =>
-      currentDose == 0 ? 'No TD dose on record' : 'Last had TD$currentDose';
+  String get doseLabel => currentDose == 0
+      ? 'No TD dose yet — needs TD1'
+      : 'Has TD$currentDose — needs TD$nextDose';
 }
 
 /// What happened when the notifications went out.
+///
+/// Counted in **mothers**, not in messages. One mother reached by both text
+/// and email is one mother, not two — reporting "reached 2 of 1" was the
+/// arithmetic of channels leaking into a sentence about people.
 class DriveNotificationResult {
   const DriveNotificationResult({
+    required this.total,
+    required this.notified,
     required this.smsSent,
     required this.smsFailed,
     required this.emailsQueued,
     required this.unreachable,
   });
 
+  /// Everyone on the invitation list.
+  final int total;
+
+  /// Mothers who got word by at least one channel.
+  final int notified;
+
+  /// Channel counts, for the detail line.
   final int smsSent;
   final int smsFailed;
   final int emailsQueued;
+
+  /// Mothers with neither a phone number nor an email on file.
   final int unreachable;
 
-  int get reached => smsSent + emailsQueued;
+  /// On the list, reachable in principle, but every channel failed.
+  int get failed => total - notified - unreachable;
+
+  /// A plain sentence a midwife can act on.
+  String get summary {
+    if (total == 0) return 'Drive scheduled. Nobody needed inviting.';
+
+    final parts = <String>[];
+    if (smsSent > 0) parts.add('$smsSent by text');
+    if (emailsQueued > 0) parts.add('$emailsQueued by email');
+    final how = parts.isEmpty ? '' : ' (${parts.join(', ')})';
+
+    final buffer = StringBuffer(
+      notified == total
+          ? 'Drive scheduled. All $total '
+              '${total == 1 ? 'mother was' : 'mothers were'} notified$how.'
+          : 'Drive scheduled. $notified of $total mothers notified$how.',
+    );
+
+    if (unreachable > 0) {
+      buffer.write(' $unreachable have no phone or email — tell them in '
+          'person.');
+    }
+    if (failed > 0) {
+      buffer.write(' $failed could not be reached; try again later.');
+    }
+    return buffer.toString();
+  }
 }
 
 class VaccinationDriveService {
   const VaccinationDriveService._();
 
-  /// Doses that protect the newborn. A mother at or above this is not invited.
+  /// Doses in the tetanus-diphtheria series.
+  ///
+  /// Five, not two. TD2 is what protects the newborn against neonatal tetanus
+  /// in *this* pregnancy, which is why it is the threshold the dashboard
+  /// reports coverage against — but the series continues to TD5, and a mother
+  /// who stops at two is protected for roughly three years rather than for
+  /// life. A drive is exactly the occasion to move her along it.
+  static const int completeSeries = 5;
+
+  /// The dose that protects the newborn in the current pregnancy. Used for
+  /// coverage reporting, not for deciding who to invite.
   static const int protectiveDose = 2;
+
+  /// How long must pass after each dose before the next one counts.
+  ///
+  /// ⚠️ CONFIRM BEFORE DEFENCE. These are the intervals in the DOH/WHO
+  /// tetanus-diphtheria schedule for women of reproductive age: four weeks
+  /// after TD1, six months after TD2, then a year after each of TD3 and TD4.
+  /// Verify against the guideline the RHU follows and cite it in the study.
+  ///
+  /// This matters clinically, not just administratively: a dose given too soon
+  /// after the previous one does not extend protection, so inviting a mother
+  /// early wastes a vial and leaves her believing she is covered.
+  static const Map<int, Duration> _minimumIntervalAfterDose = {
+    1: Duration(days: 28),
+    2: Duration(days: 182),
+    3: Duration(days: 365),
+    4: Duration(days: 365),
+  };
+
+  /// Whether [recipient] can be given her next dose on [driveDate].
+  ///
+  /// A mother with no dose recorded is always due. Where the record has a dose
+  /// but no date, she is treated as due — an undated record is not evidence
+  /// that the interval has not elapsed, and the midwife can check the card.
+  static bool isDueBy(DriveRecipient recipient, DateTime driveDate) {
+    if (recipient.currentDose >= completeSeries) return false;
+    if (recipient.currentDose == 0) return true;
+
+    final last = recipient.lastDoseOn;
+    if (last == null) return true;
+
+    final wait = _minimumIntervalAfterDose[recipient.currentDose];
+    if (wait == null) return true;
+
+    return !driveDate.isBefore(last.add(wait));
+  }
 
   /// Mother-facing vaccines a drive can be held for.
   static Future<List<Map<String, dynamic>>> fetchMaternalVaccines() async {
@@ -101,14 +197,21 @@ class VaccinationDriveService {
     }
   }
 
-  /// Pregnant mothers at this centre who have not reached [targetDose].
+  /// Pregnant mothers at this centre whose TD series is incomplete.
   ///
-  /// Reads TD doses off prenatal checkups, which is the only place they are
-  /// recorded. A mother whose dose text cannot be read counts as 0 rather than
-  /// being skipped — an unreadable record is not evidence of protection.
-  static Future<List<DriveRecipient>> fetchUnprotectedMothers({
+  /// Doses are counted across **every** pregnancy she has had, not just the
+  /// current one. Tetanus protection accumulates over a lifetime, so a mother
+  /// who received TD2 two pregnancies ago needs TD3 now — counting per
+  /// pregnancy would have shown her as never vaccinated.
+  ///
+  /// A dose whose text cannot be read counts as 0 rather than being skipped:
+  /// an unreadable record is not evidence of protection.
+  ///
+  /// [driveDate] decides who is far enough past their last dose to be given
+  /// the next one — see [isDueBy].
+  static Future<List<DriveRecipient>> fetchMothersDueForDose({
     required int bhcId,
-    int targetDose = protectiveDose,
+    DateTime? driveDate,
   }) async {
     try {
       final mothers = await SupabaseService.client
@@ -128,43 +231,63 @@ class VaccinationDriveService {
       }
       if (motherIds.isEmpty) return [];
 
-      // Only ongoing pregnancies. A drive is about protecting the pregnancy
-      // she is in now.
+      // EVERY pregnancy, not just the ongoing one. Doses carry across a
+      // lifetime, so a mother who had TD2 two pregnancies ago needs TD3 now.
+      // Reading only her current pregnancy showed her as never vaccinated.
       final pregnancies = await SupabaseService.client
           .from('pregnancies')
-          .select('pregnancy_id, mother_id')
-          .inFilter('mother_id', motherIds)
-          .eq('status', 'ongoing');
+          .select('pregnancy_id, mother_id, status')
+          .inFilter('mother_id', motherIds);
 
       final motherByPregnancy = <int, int>{};
+      final mothersCurrentlyPregnant = <int>{};
       for (final row in List<Map<String, dynamic>>.from(pregnancies)) {
         final pregnancyId = _int(row['pregnancy_id']);
         final motherId = _int(row['mother_id']);
-        if (pregnancyId != null && motherId != null) {
-          motherByPregnancy[pregnancyId] = motherId;
+        if (pregnancyId == null || motherId == null) continue;
+        motherByPregnancy[pregnancyId] = motherId;
+        if (row['status']?.toString() == 'ongoing') {
+          mothersCurrentlyPregnant.add(motherId);
         }
       }
-      if (motherByPregnancy.isEmpty) return [];
+      if (mothersCurrentlyPregnant.isEmpty) return [];
 
+      // The dose date lives on the parent encounter, not on the checkup, and
+      // it is what decides whether the next dose may be given yet.
       final checkups = await SupabaseService.client
-          .from('prenatal_checkups')
-          .select('pregnancy_id, td_vaccine_dose')
+          .from('clinical_encounters')
+          .select('pregnancy_id, encounter_datetime, '
+              'checkup:prenatal_checkups!inner (td_vaccine_dose)')
           .inFilter('pregnancy_id', motherByPregnancy.keys.toList())
-          .not('td_vaccine_dose', 'is', null);
+          .eq('encounter_type', 'checkup');
 
       final highestDose = <int, int>{};
+      final doseGivenOn = <int, DateTime>{};
       for (final row in List<Map<String, dynamic>>.from(checkups)) {
         final motherId = motherByPregnancy[_int(row['pregnancy_id']) ?? -1];
         if (motherId == null) continue;
-        final dose = parseDoseNumber(row['td_vaccine_dose']?.toString()) ?? 0;
-        if (dose > (highestDose[motherId] ?? 0)) highestDose[motherId] = dose;
+
+        final raw = row['checkup'];
+        final checkup = raw is Map
+            ? Map<String, dynamic>.from(raw)
+            : (raw is List && raw.isNotEmpty
+                ? Map<String, dynamic>.from(raw.first as Map)
+                : const <String, dynamic>{});
+
+        final dose = parseDoseNumber(checkup['td_vaccine_dose']?.toString());
+        if (dose == null) continue;
+
+        if (dose > (highestDose[motherId] ?? 0)) {
+          highestDose[motherId] = dose;
+          final when = DateTime.tryParse(
+              row['encounter_datetime']?.toString() ?? '');
+          if (when != null) doseGivenOn[motherId] = when;
+        }
       }
 
+      final when = driveDate ?? DateTime.now();
       final recipients = <DriveRecipient>[];
-      for (final motherId in motherByPregnancy.values.toSet()) {
-        final dose = highestDose[motherId] ?? 0;
-        if (dose >= targetDose) continue;
-
+      for (final motherId in mothersCurrentlyPregnant) {
         final row = byId[motherId];
         if (row == null) continue;
         final account = row['accounts'] as Map<String, dynamic>?;
@@ -172,14 +295,20 @@ class VaccinationDriveService {
                 '${account?['last_name'] ?? ''}'
             .trim();
 
-        recipients.add(DriveRecipient(
+        final candidate = DriveRecipient(
           motherId: motherId,
           accountId: _int(row['account_id']),
           name: name.isEmpty ? 'Unnamed mother' : name,
-          currentDose: dose,
+          currentDose: highestDose[motherId] ?? 0,
+          lastDoseOn: doseGivenOn[motherId],
           phoneNumber: account?['phone_number']?.toString(),
           email: account?['email_address']?.toString(),
-        ));
+        );
+
+        // Series complete, or too soon since her last dose for the next one
+        // to count.
+        if (!isDueBy(candidate, when)) continue;
+        recipients.add(candidate);
       }
 
       recipients.sort((a, b) {
@@ -211,12 +340,21 @@ class VaccinationDriveService {
 
     // The schema file calls this column facility_id while every query in the
     // Schedules screen uses bhc_id. Rather than guess which the live database
-    // has, try the one the working screens use and fall back to the other.
-    for (final column in ['bhc_id', 'facility_id']) {
+    // has, try filling both first — if the table carries both columns, and
+    // facility_id is NOT NULL as the schema says, writing only bhc_id fails
+    // the constraint and the row ends up saved under a column the calendar is
+    // not looking at. Populating both leaves nothing to find it by chance.
+    final attempts = <Map<String, dynamic>>[
+      {...payload, 'bhc_id': bhcId, 'facility_id': bhcId},
+      {...payload, 'bhc_id': bhcId},
+      {...payload, 'facility_id': bhcId},
+    ];
+
+    for (final attempt in attempts) {
       try {
         final row = await SupabaseService.client
             .from('immunization_schedule')
-            .insert({...payload, column: bhcId})
+            .insert(attempt)
             .select('immunization_schedule_id')
             .maybeSingle();
 
@@ -224,7 +362,7 @@ class VaccinationDriveService {
         if (id != null) return id;
       } catch (e) {
         if (kDebugMode) {
-          debugPrint('[Drive] Insert with $column failed: $e');
+          debugPrint('[Drive] Insert with ${attempt.keys.join('+')} failed: $e');
         }
       }
     }
@@ -241,6 +379,7 @@ class VaccinationDriveService {
   }) async {
     final dateText = _friendlyDate(date);
     int smsSent = 0, smsFailed = 0, emailsQueued = 0, unreachable = 0;
+    int notified = 0;
 
     for (final recipient in recipients) {
       if (recipient.isUnreachable) {
@@ -248,6 +387,8 @@ class VaccinationDriveService {
         continue;
       }
 
+      // Counted once per mother, however many channels worked for her.
+      var reachedThisMother = false;
       final firstName = recipient.name.split(' ').first;
 
       if (recipient.hasPhone) {
@@ -267,7 +408,12 @@ class VaccinationDriveService {
             recipient.phoneNumber!.trim(),
             message,
           );
-          ok ? smsSent++ : smsFailed++;
+          if (ok) {
+            smsSent++;
+            reachedThisMother = true;
+          } else {
+            smsFailed++;
+          }
         } catch (e) {
           smsFailed++;
           if (kDebugMode) debugPrint('[Drive] SMS failed: $e');
@@ -283,8 +429,13 @@ class VaccinationDriveService {
           facilityName: facilityName,
           notes: notes,
         );
-        if (queued) emailsQueued++;
+        if (queued) {
+          emailsQueued++;
+          reachedThisMother = true;
+        }
       }
+
+      if (reachedThisMother) notified++;
 
       // An in-app notice as well, so the reminder survives a deleted text.
       final accountId = recipient.accountId;
@@ -304,6 +455,8 @@ class VaccinationDriveService {
     }
 
     return DriveNotificationResult(
+      total: recipients.length,
+      notified: notified,
       smsSent: smsSent,
       smsFailed: smsFailed,
       emailsQueued: emailsQueued,

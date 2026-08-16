@@ -246,7 +246,43 @@ class MotherProfileService {
               .order('created_at', ascending: false),
         ];
 
-        final step2Results = await Future.wait(step2Futures);
+        // Every one of these is guarded, because Future.wait fails whole: a
+        // single slow table takes the pregnancies, checkups, children and
+        // vitals down with it and the screen shows "Error Loading Profile".
+        //
+        // The tables here are mostly *un-indexed* on pregnancy_id — only
+        // clinical_encounters and pregnancy_risk_assessments have one — so
+        // lab_tests, ultrasounds and prenatal_checkups are sequential scans
+        // that lengthen every time a record is saved. Recording lab tests all
+        // afternoon is exactly what pushes them past the statement timeout.
+        //
+        // Each failure is named in the log so the culprit identifies itself
+        // rather than hiding behind a generic profile error. The lasting fix
+        // is database/migrations/20260815_ai_responses_index.sql.
+        const step2Labels = [
+          'encounters',
+          'checkups',
+          'ultrasounds',
+          'lab tests',
+          'maternal vitals',
+          'deliveries',
+          'outcomes',
+          'risk assessments',
+        ];
+
+        final guardedStep2 = <Future<dynamic>>[];
+        for (var i = 0; i < step2Futures.length; i++) {
+          final label = i < step2Labels.length ? step2Labels[i] : 'query $i';
+          guardedStep2.add(
+            step2Futures[i].timeout(const Duration(seconds: 6)).catchError((e) {
+              debugPrint(
+                  'Profile: $label unavailable, profile still loads — $e');
+              return <Map<String, dynamic>>[];
+            }),
+          );
+        }
+
+        final step2Results = await Future.wait(guardedStep2);
         final encountersList = step2Results[0] as List<dynamic>;
         final checkupsList = step2Results[1] as List<dynamic>;
         final ultrasoundsList = step2Results[2] as List<dynamic>;

@@ -79,19 +79,39 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
 
       // 1. Fetch immunization dates
       if (_assignedBhcId != null) {
-        final resImm = await Supabase.instance.client
-            .from('immunization_schedule')
-            .select('schedule_date')
-            .eq('bhc_id', _assignedBhcId!)
-            .gte('schedule_date', startOfYear)
-            .lte('schedule_date', endOfYear)
-            .timeout(const Duration(seconds: 5))
-            .catchError((e) {
-              debugPrint('Immunization schedule dates error: $e');
-              return <Map<String, dynamic>>[];
-            });
+        // The schema file names this column facility_id; this screen has always
+        // queried bhc_id. Rather than guess which the live database has, try
+        // one and fall back — a drive saved under the other name was
+        // invisible here, so a scheduled drive never reached the calendar.
+        // Keep trying until a column actually returns rows, not merely until
+        // one does not error.
+        //
+        // If the table has both columns — facility_id NOT NULL from the
+        // schema plus a bhc_id — then a drive inserted with only bhc_id fails
+        // the NOT NULL and gets written under facility_id instead. Querying
+        // bhc_id then succeeds as a query and returns nothing, so breaking on
+        // "no exception" meant the row was never looked for under the column
+        // it was actually saved with.
+        List<dynamic> resImm = const [];
+        for (final column in ['bhc_id', 'facility_id']) {
+          try {
+            final rows = await Supabase.instance.client
+                .from('immunization_schedule')
+                .select('schedule_date')
+                .eq(column, _assignedBhcId!)
+                .gte('schedule_date', startOfYear)
+                .lte('schedule_date', endOfYear)
+                .timeout(const Duration(seconds: 5));
+            if ((rows as List).isNotEmpty) {
+              resImm = rows;
+              break;
+            }
+          } catch (e) {
+            debugPrint('Immunization dates via $column: $e');
+          }
+        }
 
-        final datesImm = (resImm as List)
+        final datesImm = (resImm)
             .map((r) => r['schedule_date']?.toString() ?? '')
             .where((d) => d.isNotEmpty)
             .toSet();
@@ -266,9 +286,14 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
       // Fetch immunization schedules for the BHC on this date
       if (_assignedBhcId != null) {
         try {
-          final immunizationResponse = await Supabase.instance.client
-              .from('immunization_schedule')
-              .select('''
+          // Same column ambiguity as _loadAllEventDates, and the same rule:
+          // keep going until rows come back, not until a query stops erroring.
+          List<dynamic> immunizationResponse = const [];
+          for (final column in ['bhc_id', 'facility_id']) {
+            try {
+              final rows = await Supabase.instance.client
+                  .from('immunization_schedule')
+                  .select('''
                 immunization_schedule_id,
                 schedule_date,
                 notes,
@@ -277,10 +302,18 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
                   target_recipients
                 )
               ''')
-              .eq('bhc_id', _assignedBhcId!)
-              .eq('schedule_date', formattedDate);
+                  .eq(column, _assignedBhcId!)
+                  .eq('schedule_date', formattedDate);
+              if ((rows as List).isNotEmpty) {
+                immunizationResponse = rows;
+                break;
+              }
+            } catch (e) {
+              debugPrint('Immunization for date via $column: $e');
+            }
+          }
 
-          if ((immunizationResponse as List).isNotEmpty) {
+          if ((immunizationResponse).isNotEmpty) {
             final vaccineNames = immunizationResponse
                 .map((r) => (r['vaccine'] as Map<String, dynamic>?)?['vaccine_name']?.toString() ?? '')
                 .where((n) => n.isNotEmpty)
@@ -292,13 +325,19 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
                 .where((n) => n != null && n.isNotEmpty)
                 .firstOrNull;
 
+            // Named after what is actually being given. "Barangay Vaccine Day"
+            // told the midwife nothing she could plan around; the vaccine is
+            // the thing she needs to see at a glance.
+            final driveTitle = vaccineNames.isEmpty
+                ? 'Vaccine Drive'
+                : '${vaccineNames.join(', ')} Vaccine Drive';
+
             schedules.add({
               'time': 'All Day',
-              'mother_name': 'Barangay Vaccine Day',
-              'type': 'Immunization Schedule',
-              'status': 'upcoming',
+              'mother_name': driveTitle,
+              'type': 'Immunization Day',
+              'status': 'immunization',
               'notes': firstNote,
-              'vaccines': vaccineNames,
               'icon': Icons.vaccines,
             });
           }
@@ -641,10 +680,10 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
                         color: AppColors.brandPrimary,
                         label: 'Prenatal Checkup',
                       ),
-                      _buildLegendItem(
-                        color: Colors.blue.shade700,
-                        label: 'Scheduled Checkup',
-                      ),
+                      // Two categories, not three. Every vaccine — TD for
+                      // mothers, the childhood series — is an Immunization
+                      // Day, so a separate colour for one of them split a
+                      // single idea across two legend entries.
                     ],
                   ),
                 ),
@@ -1163,7 +1202,14 @@ class ImmunizationDayCard extends StatelessWidget {
                       ),
                     ),
 
-                    /// 🏷️ STATUS BADGE (Teal)
+                    /// 🏷️ "Immunization Day" — the category, on the right.
+                    ///
+                    /// Replaces the old "UPCOMING" badge. The title already
+                    /// names the vaccine and the card already sits under the
+                    /// date, so "upcoming" was the one word on the card that
+                    /// said nothing. The separate type row and the vaccine
+                    /// chips went with it — all three were repeating the
+                    /// title.
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
@@ -1172,7 +1218,7 @@ class ImmunizationDayCard extends StatelessWidget {
                         border: Border.all(color: accentColor.withAlpha(70)),
                       ),
                       child: Text(
-                        status.toUpperCase(),
+                        'Immunization Day',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
@@ -1184,55 +1230,6 @@ class ImmunizationDayCard extends StatelessWidget {
                 ),
 
                 const SizedBox(height: 8),
-
-                /// 📋 TYPE AND ICON
-                Row(
-                  children: [
-                    Icon(
-                      Icons.vaccines,
-                      size: 16,
-                      color: accentColor,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Immunization Day',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: accentColor,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 10),
-
-                /// 💊 VACCINES PILL CHIPS
-                if (vaccines.isNotEmpty) ...[
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: vaccines.map((vacName) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.teal.shade50,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.teal.shade100),
-                        ),
-                        child: Text(
-                          vacName,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.teal.shade800,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 8),
-                ],
 
                 /// 📝 NOTES (IF ANY)
                 if (notes != null && notes!.trim().isNotEmpty) ...[
