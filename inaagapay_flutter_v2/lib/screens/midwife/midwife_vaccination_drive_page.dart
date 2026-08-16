@@ -45,8 +45,8 @@ class _MidwifeVaccinationDrivePageState
   int? _bhcId;
   String _facilityName = 'this health center';
 
-  List<Map<String, dynamic>> _vaccines = [];
-  Map<String, dynamic>? _selectedVaccine;
+  List<DriveVaccine> _vaccines = [];
+  DriveVaccine? _selectedVaccine;
   DateTime? _date;
 
   List<DriveRecipient> _recipients = [];
@@ -76,16 +76,20 @@ class _MidwifeVaccinationDrivePageState
         if (name != null && name.isNotEmpty) _facilityName = name;
       }
 
-      _vaccines = await VaccinationDriveService.fetchMaternalVaccines();
+      final bhcId = _bhcId;
+      if (bhcId != null) {
+        _vaccines = await VaccinationDriveService.fetchDriveVaccines(
+          bhcId: bhcId,
+        );
+      }
 
-      // Most maternal drives are TD, so it starts selected rather than making
-      // her find it in a list of one or two.
-      if (_vaccines.isNotEmpty) {
-        _selectedVaccine = _vaccines.firstWhere(
-          (v) => (v['vaccine_name']?.toString() ?? '')
-              .toLowerCase()
-              .contains('td'),
-          orElse: () => _vaccines.first,
+      // TD is the usual drive, so it starts selected — but never a vaccine
+      // that cannot actually be given today.
+      final selectable = _vaccines.where((v) => v.canBeScheduled).toList();
+      if (selectable.isNotEmpty) {
+        _selectedVaccine = selectable.firstWhere(
+          (v) => v.name.toLowerCase().contains('td') && !v.forChildren,
+          orElse: () => selectable.first,
         );
       }
     } finally {
@@ -98,13 +102,23 @@ class _MidwifeVaccinationDrivePageState
     final bhcId = _bhcId;
     if (bhcId == null) return;
 
+    final vaccine = _selectedVaccine;
+    if (vaccine == null) return;
+
     setState(() => _loadingRecipients = true);
-    // Passed the drive date because eligibility depends on it: a mother whose
-    // last dose was recent may not be due on the 20th but is due on the 30th.
-    final recipients = await VaccinationDriveService.fetchMothersDueForDose(
-      bhcId: bhcId,
-      driveDate: _date,
-    );
+    // The drive date is passed because eligibility depends on it: a mother
+    // whose last dose was recent may not be due on the 20th but is on the
+    // 30th, and a child may only reach the scheduled age in between.
+    final recipients = vaccine.forChildren
+        ? await VaccinationDriveService.fetchChildrenDueForVaccine(
+            bhcId: bhcId,
+            vaccine: vaccine,
+            driveDate: _date,
+          )
+        : await VaccinationDriveService.fetchMothersDueForDose(
+            bhcId: bhcId,
+            driveDate: _date,
+          );
     if (!mounted) return;
     setState(() {
       _recipients = recipients;
@@ -112,8 +126,7 @@ class _MidwifeVaccinationDrivePageState
     });
   }
 
-  String get _vaccineName =>
-      _selectedVaccine?['vaccine_name']?.toString() ?? 'Vaccine';
+  String get _vaccineName => _selectedVaccine?.name ?? 'Vaccine';
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
@@ -139,7 +152,7 @@ class _MidwifeVaccinationDrivePageState
   /// nobody should be told to come in for a drive that was never recorded.
   Future<void> _scheduleAndNotify() async {
     final bhcId = _bhcId;
-    final vaccineId = _selectedVaccine?['vaccine_id'];
+    final vaccineId = _selectedVaccine?.vaccineId;
     final date = _date;
 
     if (bhcId == null || vaccineId == null || date == null) {
@@ -171,7 +184,7 @@ class _MidwifeVaccinationDrivePageState
     setState(() => _saving = true);
     final driveId = await VaccinationDriveService.createDrive(
       bhcId: bhcId,
-      vaccineId: vaccineId as int,
+      vaccineId: vaccineId,
       date: date,
       notes: _notesCtrl.text,
     );
@@ -246,25 +259,21 @@ class _MidwifeVaccinationDrivePageState
                             title: 'Drive details',
                             child: Column(
                               children: [
-                                AppDropdownField<String>(
+                                // Stock is shown on every option and an empty
+                                // shelf cannot be chosen — scheduling a drive
+                                // for a vaccine the centre does not have is a
+                                // wasted trip for every mother invited.
+                                AppDropdownField<DriveVaccine>(
                                   hintText: 'Vaccine',
                                   leadingIcon: Icons.vaccines_outlined,
-                                  value: _selectedVaccine?['vaccine_name']
-                                      ?.toString(),
-                                  options: _vaccines
-                                      .map((v) =>
-                                          v['vaccine_name']?.toString() ?? '')
-                                      .where((n) => n.isNotEmpty)
-                                      .toSet()
-                                      .toList(),
-                                  displayStringForOption: (v) => v,
-                                  onSelected: (name) => setState(() {
-                                    _selectedVaccine = _vaccines.firstWhere(
-                                      (v) =>
-                                          v['vaccine_name']?.toString() == name,
-                                      orElse: () => _vaccines.first,
-                                    );
-                                  }),
+                                  value: _selectedVaccine,
+                                  options: _vaccines,
+                                  displayStringForOption: (v) => v.menuLabel,
+                                  isOptionEnabled: (v) => v.canBeScheduled,
+                                  onSelected: (v) {
+                                    setState(() => _selectedVaccine = v);
+                                    _refreshRecipients();
+                                  },
                                 ),
                                 const SizedBox(height: 12),
                                 GestureDetector(
@@ -336,9 +345,14 @@ class _MidwifeVaccinationDrivePageState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Pregnant mothers whose TD series is incomplete and who are far '
-            'enough past their last dose for the next one to count. The series '
-            'runs to TD5; TD2 is what protects the baby at birth.',
+            _selectedVaccine?.forChildren == true
+                ? 'Children old enough for this dose who have not had it yet. '
+                    'Their mother is the one messaged — she is the contact on '
+                    'file — and the message names the child to bring.'
+                : 'Pregnant mothers whose TD series is incomplete and who are '
+                    'far enough past their last dose for the next one to '
+                    'count. The series runs to TD5; TD2 is what protects the '
+                    'baby at birth.',
             style: TextStyle(
               fontSize: 12,
               height: 1.4,
@@ -382,9 +396,13 @@ class _MidwifeVaccinationDrivePageState
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _recipients.length == 1
-                        ? 'mother will be invited'
-                        : 'mothers will be invited',
+                    _selectedVaccine?.forChildren == true
+                        ? (_recipients.length == 1
+                            ? 'child is due — their mother will be told'
+                            : 'children are due — their mothers will be told')
+                        : (_recipients.length == 1
+                            ? 'mother will be invited'
+                            : 'mothers will be invited'),
                     style: const TextStyle(
                         fontSize: 12, color: AppColors.textSecondary),
                   ),
@@ -439,7 +457,7 @@ class _MidwifeVaccinationDrivePageState
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(recipient.name,
+            child: Text(recipient.subjectName,
                 style: const TextStyle(fontSize: 13),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),

@@ -28,8 +28,50 @@
 import 'package:flutter/foundation.dart';
 
 import 'email_service.dart';
+import 'immunization_schedule.dart';
 import 'sms_service.dart';
 import 'supabase_service.dart';
+
+/// A vaccine a drive can be held for, with what is on the shelf for it.
+class DriveVaccine {
+  const DriveVaccine({
+    required this.vaccineId,
+    required this.name,
+    required this.forChildren,
+    required this.stock,
+    this.doseNumber,
+    this.recommendedAgeMonths,
+  });
+
+  final int vaccineId;
+  final String name;
+
+  /// True when this dose is given to children rather than to the mother.
+  final bool forChildren;
+
+  /// Units on hand at this health centre — active batches that have not
+  /// expired. Null when no inventory item could be matched to the vaccine,
+  /// which is different from zero and is said differently on screen.
+  final int? stock;
+
+  final int? doseNumber;
+  final double? recommendedAgeMonths;
+
+  bool get isOutOfStock => stock != null && stock! <= 0;
+
+  /// A vaccine with no matching inventory item is still selectable — the
+  /// stock simply is not tracked under a name this can find, and blocking the
+  /// drive over a naming mismatch would be worse than letting it through.
+  bool get canBeScheduled => !isOutOfStock;
+
+  String get stockLabel {
+    if (stock == null) return 'stock not tracked';
+    if (stock! <= 0) return 'out of stock';
+    return '$stock in stock';
+  }
+
+  String get menuLabel => '$name  ·  $stockLabel';
+}
 
 /// One mother who should be invited, with the contacts to reach her by.
 class DriveRecipient {
@@ -41,11 +83,26 @@ class DriveRecipient {
     this.phoneNumber,
     this.email,
     this.lastDoseOn,
+    this.childName,
+    this.dueLabel,
   });
 
   final int motherId;
   final int? accountId;
   final String name;
+
+  /// For a child drive, whose appointment this is. Null on a maternal drive.
+  ///
+  /// The mother is always the one messaged — hers is the phone number on file
+  /// — so a child's invitation has to name the child, or she will read it as
+  /// being about herself.
+  final String? childName;
+
+  /// What this recipient is due for, ready to show. Set for child drives,
+  /// where [currentDose] does not describe the situation.
+  final String? dueLabel;
+
+  bool get isForChild => childName != null;
 
   /// Highest TD dose on record across every pregnancy, 0 when none has been
   /// given. Tetanus doses accumulate over a lifetime, not per pregnancy.
@@ -67,9 +124,13 @@ class DriveRecipient {
   /// quietly dropping her from the count.
   bool get isUnreachable => !hasPhone && !hasEmail;
 
-  String get doseLabel => currentDose == 0
-      ? 'No TD dose yet — needs TD1'
-      : 'Has TD$currentDose — needs TD$nextDose';
+  String get doseLabel => dueLabel ??
+      (currentDose == 0
+          ? 'No TD dose yet — needs TD1'
+          : 'Has TD$currentDose — needs TD$nextDose');
+
+  /// Who the row is about — the child for a child drive, otherwise the mother.
+  String get subjectName => childName ?? name;
 }
 
 /// What happened when the notifications went out.
@@ -182,19 +243,117 @@ class VaccinationDriveService {
     return !driveDate.isBefore(last.add(wait));
   }
 
-  /// Mother-facing vaccines a drive can be held for.
-  static Future<List<Map<String, dynamic>>> fetchMaternalVaccines() async {
+  /// Every vaccine a drive can be held for, with the stock behind each.
+  ///
+  /// Mother and child vaccines in one list — the midwife runs one kind of
+  /// session either way, and which one it is decides who gets invited rather
+  /// than which screen she opens.
+  static Future<List<DriveVaccine>> fetchDriveVaccines({
+    required int bhcId,
+  }) async {
     try {
-      final rows = await SupabaseService.client
+      final vaccineRows = await SupabaseService.client
           .from('vaccines')
-          .select('vaccine_id, vaccine_name, dose_number')
-          .eq('target_recipients', 'mother')
+          .select('*')
+          .order('target_recipients')
+          .order('recommended_age_months')
           .order('vaccine_name');
-      return List<Map<String, dynamic>>.from(rows);
+
+      final vaccines = List<Map<String, dynamic>>.from(vaccineRows);
+      if (vaccines.isEmpty) return [];
+
+      final stockByItem = await _stockByItemId(bhcId);
+      final items = await _inventoryItems();
+
+      return vaccines.map((v) {
+        final name = v['vaccine_name']?.toString() ?? 'Vaccine';
+        final itemId = _int(v['inventory_item_id']) ?? _matchInventoryItem(name, items);
+
+        return DriveVaccine(
+          vaccineId: _int(v['vaccine_id']) ?? -1,
+          name: name,
+          forChildren: v['target_recipients']?.toString() == 'child',
+          stock: itemId == null ? null : (stockByItem[itemId] ?? 0),
+          doseNumber: _int(v['dose_number']),
+          recommendedAgeMonths:
+              (v['recommended_age_months'] as num?)?.toDouble(),
+        );
+      }).toList();
     } catch (e) {
       if (kDebugMode) debugPrint('[Drive] Vaccine list unavailable: $e');
       return [];
     }
+  }
+
+  static Future<List<Map<String, dynamic>>> _inventoryItems() async {
+    try {
+      final rows = await SupabaseService.client
+          .from('inventory_items')
+          .select('item_id, name');
+      return List<Map<String, dynamic>>.from(rows);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[Drive] Inventory items unavailable: $e');
+      return [];
+    }
+  }
+
+  /// Units on hand per inventory item at this centre.
+  ///
+  /// Active batches that have not expired — expired stock on the shelf is not
+  /// stock you can give. Mirrors the check the Add Immunization screen makes.
+  static Future<Map<int, int>> _stockByItemId(int bhcId) async {
+    try {
+      final today = DateTime.now().toIso8601String().split('T')[0];
+      final rows = await SupabaseService.client
+          .from('inventory_batches')
+          .select('item_id, quantity_remaining')
+          .eq('facility_id', bhcId)
+          .eq('status', 'active')
+          .gte('expiration_date', today);
+
+      final totals = <int, int>{};
+      for (final row in List<Map<String, dynamic>>.from(rows)) {
+        final itemId = _int(row['item_id']);
+        if (itemId == null) continue;
+        totals[itemId] =
+            (totals[itemId] ?? 0) + (_int(row['quantity_remaining']) ?? 0);
+      }
+      return totals;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[Drive] Stock unavailable: $e');
+      return {};
+    }
+  }
+
+  /// Matches a vaccine to an inventory item by name.
+  ///
+  /// The same keyword pairs the Add Immunization screen uses, so a vaccine
+  /// resolves to the same item in both places. Used only when the vaccine row
+  /// carries no `inventory_item_id`.
+  static int? _matchInventoryItem(
+      String vaccineName, List<Map<String, dynamic>> items) {
+    final v = vaccineName.toLowerCase();
+
+    bool pairs(String itemName) {
+      final i = itemName.toLowerCase();
+      return (v.contains('bcg') && i.contains('bcg')) ||
+          (v.contains('penta') && i.contains('penta')) ||
+          (v.contains('pcv') && i.contains('pcv')) ||
+          (v.contains('opv') && i.contains('opv')) ||
+          (v.contains('ipv') && i.contains('ipv')) ||
+          (v.contains('rota') && i.contains('rota')) ||
+          (v.contains('measles') && (i.contains('mr') || i.contains('measles'))) ||
+          (v.contains('mmr') && (i.contains('mr') || i.contains('mmr'))) ||
+          (v.contains('hep') && i.contains('hep')) ||
+          (v.contains('vitamin a') && i.contains('vitamin a')) ||
+          (v.contains('td') && i.contains('td')) ||
+          (v.contains('tetanus') && i.contains('tetanus'));
+    }
+
+    for (final item in items) {
+      if (pairs(item['name']?.toString() ?? '')) return _int(item['item_id']);
+    }
+    return null;
   }
 
   /// Pregnant mothers at this centre whose TD series is incomplete.
@@ -322,6 +481,134 @@ class VaccinationDriveService {
     }
   }
 
+  /// Mothers whose child is due for [vaccine] on [driveDate].
+  ///
+  /// The mother is the recipient throughout: hers is the phone number on file,
+  /// and children have no contact details of their own. The child is named in
+  /// the row and in the message so she knows whose appointment it is — a
+  /// mother with three children needs to be told which one to bring.
+  ///
+  /// Timeliness is judged by [ImmunizationSchedule], the same rules the child
+  /// profile and the dashboard's overdue count use, so a child cannot read as
+  /// "due" here and "not yet due" on her own page.
+  static Future<List<DriveRecipient>> fetchChildrenDueForVaccine({
+    required int bhcId,
+    required DriveVaccine vaccine,
+    DateTime? driveDate,
+  }) async {
+    try {
+      final mothers = await SupabaseService.client
+          .from('mothers')
+          .select('mother_id, account_id, '
+              'accounts!inner (first_name, last_name, phone_number, email_address)')
+          .eq('assigned_bhc_id', bhcId)
+          .eq('status', 'active');
+
+      final byMotherId = <int, Map<String, dynamic>>{};
+      for (final row in List<Map<String, dynamic>>.from(mothers)) {
+        final id = _int(row['mother_id']);
+        if (id != null) byMotherId[id] = row;
+      }
+      if (byMotherId.isEmpty) return [];
+
+      final children = await SupabaseService.client
+          .from('children')
+          .select('child_id, mother_id, first_name, last_name, '
+              'birth_details (birthdate)')
+          .inFilter('mother_id', byMotherId.keys.toList());
+
+      final childRows = List<Map<String, dynamic>>.from(children);
+      if (childRows.isEmpty) return [];
+
+      final childIds =
+          childRows.map((c) => _int(c['child_id'])).whereType<int>().toList();
+
+      final records = await SupabaseService.client
+          .from('immunization_records')
+          .select('child_id, vaccine_id, vaccination_date')
+          .inFilter('child_id', childIds);
+
+      final givenByChild = <int, Set<int>>{};
+      for (final row in List<Map<String, dynamic>>.from(records)) {
+        final childId = _int(row['child_id']);
+        final vaccineId = _int(row['vaccine_id']);
+        if (childId != null && vaccineId != null) {
+          givenByChild.putIfAbsent(childId, () => <int>{}).add(vaccineId);
+        }
+      }
+
+      final when = driveDate ?? DateTime.now();
+      final recipients = <DriveRecipient>[];
+
+      for (final child in childRows) {
+        final childId = _int(child['child_id']);
+        final motherId = _int(child['mother_id']);
+        if (childId == null || motherId == null) continue;
+
+        // Already had this dose.
+        if (givenByChild[childId]?.contains(vaccine.vaccineId) ?? false) {
+          continue;
+        }
+
+        final birthdate = _birthdate(child);
+        if (birthdate == null) continue;
+
+        final ageMonths =
+            when.difference(birthdate).inDays / 30.44;
+        final scheduledAt = vaccine.recommendedAgeMonths ?? 0;
+
+        // Not yet old enough by the drive date.
+        if (ageMonths < scheduledAt) continue;
+
+        final motherRow = byMotherId[motherId];
+        if (motherRow == null) continue;
+        final account = motherRow['accounts'] as Map<String, dynamic>?;
+        final motherName = '${account?['first_name'] ?? ''} '
+                '${account?['last_name'] ?? ''}'
+            .trim();
+        final childName = '${child['first_name'] ?? ''} '
+                '${child['last_name'] ?? ''}'
+            .trim();
+
+        final overdue = ImmunizationSchedule.describeOverdue(
+          childAgeMonths: ageMonths,
+          scheduledAtMonths: scheduledAt,
+        );
+
+        recipients.add(DriveRecipient(
+          motherId: motherId,
+          accountId: _int(motherRow['account_id']),
+          name: motherName.isEmpty ? 'Unnamed mother' : motherName,
+          childName: childName.isEmpty ? 'Child' : childName,
+          currentDose: 0,
+          dueLabel: overdue.isEmpty
+              ? 'Due for ${vaccine.name}'
+              : 'Due for ${vaccine.name} · $overdue',
+          phoneNumber: account?['phone_number']?.toString(),
+          email: account?['email_address']?.toString(),
+        ));
+      }
+
+      // Longest overdue first — those are the ones a drive exists to catch.
+      recipients.sort((a, b) => a.subjectName.compareTo(b.subjectName));
+      return recipients;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[Drive] Child recipient lookup failed: $e');
+      return [];
+    }
+  }
+
+  static DateTime? _birthdate(Map<String, dynamic> child) {
+    final raw = child['birth_details'];
+    final details = raw is Map
+        ? Map<String, dynamic>.from(raw)
+        : (raw is List && raw.isNotEmpty
+            ? Map<String, dynamic>.from(raw.first as Map)
+            : const <String, dynamic>{});
+    final text = details['birthdate']?.toString();
+    return text == null ? null : DateTime.tryParse(text);
+  }
+
   /// Records the drive so it shows on the Schedules calendar.
   ///
   /// Returns the new row's id, or null if it could not be saved — the caller
@@ -401,8 +688,15 @@ class VaccinationDriveService {
         //
         // Signed AGAPAY because that is the registered sender name the
         // message will actually arrive from.
-        final message = 'Kumusta $firstName! May $vaccineName drive sa '
-            '$facilityName sa $dateText. Inaasahan po namin kayo. - AGAPAY';
+        // A child's invitation names the child. A mother with three children
+        // cannot act on "please come in" — she needs to know which one to
+        // bring. Her own invitation stays in the second person.
+        final child = recipient.childName;
+        final message = child == null
+            ? 'Kumusta $firstName! May $vaccineName drive sa $facilityName sa '
+                '$dateText. Inaasahan po namin kayo. - AGAPAY'
+            : 'Kumusta $firstName! May $vaccineName drive sa $facilityName sa '
+                '$dateText. Isama po si $child. - AGAPAY';
         try {
           final ok = await SmsService.sendSmsMessage(
             recipient.phoneNumber!.trim(),

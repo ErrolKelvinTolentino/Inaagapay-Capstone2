@@ -10,6 +10,11 @@ class AppDropdownField<T extends Object> extends StatefulWidget {
   final List<T> options;
   final String Function(T) displayStringForOption;
   final ValueChanged<T> onSelected;
+
+  /// Whether an option may be chosen. Options that return false are shown
+  /// greyed and cannot be tapped — used where the choice exists but is
+  /// unavailable right now, such as a vaccine that is out of stock.
+  final bool Function(T)? isOptionEnabled;
   final String? errorText;
 
   const AppDropdownField({
@@ -18,6 +23,7 @@ class AppDropdownField<T extends Object> extends StatefulWidget {
     required this.options,
     required this.displayStringForOption,
     required this.onSelected,
+    this.isOptionEnabled,
     this.leadingIcon,
     this.value,
     this.errorText,
@@ -187,18 +193,33 @@ class _AppDropdownFieldState<T extends Object> extends State<AppDropdownField<T>
                                   itemBuilder: (context, index) {
                                     final T option = filteredOptions[index];
                                     final isSelected = widget.value == option;
+                                    // Disabled options stay visible rather
+                                    // than being filtered out: a vaccine
+                                    // missing from the list looks like a
+                                    // system that does not stock it, while a
+                                    // greyed one says "we do, but not today".
+                                    final isEnabled =
+                                        widget.isOptionEnabled?.call(option) ??
+                                            true;
                                     return InkWell(
-                                      onTap: () {
-                                        _closeDropdown();
-                                        widget.onSelected(option);
-                                      },
+                                      onTap: isEnabled
+                                          ? () {
+                                              _closeDropdown();
+                                              widget.onSelected(option);
+                                            }
+                                          : null,
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                         color: isSelected ? AppColors.brandPrimary.withAlpha(15) : null,
                                         child: Text(
                                           widget.displayStringForOption(option),
                                           style: TextStyle(
-                                            color: isSelected ? AppColors.brandPrimary : AppColors.textPrimary,
+                                            color: !isEnabled
+                                                ? AppColors.textSecondary
+                                                    .withValues(alpha: 0.55)
+                                                : (isSelected
+                                                    ? AppColors.brandPrimary
+                                                    : AppColors.textPrimary),
                                             fontSize: 13,
                                             fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                                           ),
