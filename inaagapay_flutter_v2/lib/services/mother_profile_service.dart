@@ -338,6 +338,17 @@ class MotherProfileService {
 
         // Fetch AI responses and Risk factors concurrently in Step 2b if checkupIds / riskRows exist
         if (checkupIds.isNotEmpty) {
+          // Degrades instead of taking the whole profile down.
+          //
+          // ai_responses carries no index and grows with every AI call, so
+          // this filter becomes a sequential scan over an ever larger table.
+          // Unguarded, one slow scan threw out of fetchMotherProfile entirely
+          // and the screen showed "Error Loading Profile" — losing her
+          // pregnancies, checkups, children and vitals to recover a panel of
+          // AI commentary. Losing the commentary is the better trade.
+          //
+          // The lasting fix is the index in
+          // database/migrations/20260815_ai_responses_index.sql.
           final aiRows = await client
               .from('ai_responses')
               .select('''
@@ -352,7 +363,12 @@ class MotherProfileService {
               ''')
               .eq('reference_table', 'prenatal_checkups')
               .eq('response_type', 'risk_assessment')
-              .inFilter('reference_id', checkupIds);
+              .inFilter('reference_id', checkupIds)
+              .timeout(const Duration(seconds: 6))
+              .catchError((e) {
+                debugPrint('AI responses query note (profile still loads): $e');
+                return <Map<String, dynamic>>[];
+              });
 
           for (final row in (aiRows as List).cast<Map<String, dynamic>>()) {
             final refId = row['reference_id'];
@@ -377,7 +393,12 @@ class MotherProfileService {
                 source_id
               ''')
               .inFilter('pregnancy_risk_id', riskIds)
-              .order('created_at', ascending: true);
+              .order('created_at', ascending: true)
+              .timeout(const Duration(seconds: 6))
+              .catchError((e) {
+                debugPrint('Risk factors query note (profile still loads): $e');
+                return <Map<String, dynamic>>[];
+              });
 
           for (final row in (factorRows as List).cast<Map<String, dynamic>>()) {
             final riskId = row['pregnancy_risk_id'];

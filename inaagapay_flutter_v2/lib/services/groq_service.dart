@@ -189,7 +189,7 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
         imageFiles: [imageFiles.first],
         apiKey: apiKey,
         prompt: prompt,
-        maxTokens: 2048,
+        maxTokens: 3500,
       );
 
       _log('📄 Raw Ultrasound OCR Vision output: $rawOutput');
@@ -311,6 +311,10 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
     try {
       final apiKey = _getApiKey();
       const prompt = '''
+ANSWER WITH JSON ONLY. Do not think out loud. Do not write <think> blocks, notes, reasoning, or commentary of any kind. Your entire reply must be the JSON object and nothing else — the first character you write must be { and the last must be }.
+
+This instruction is first because it is the one that matters most: a reply that reasons before answering runs out of room and never produces the JSON, and the extraction is lost even when every value was read correctly.
+
 You are a precise document OCR data extractor for laboratory test reports. Perform text recognition on the provided image and return ONLY a raw JSON object matching this exact schema:
 
 {
@@ -349,11 +353,24 @@ CRITICAL: Extract ONLY actual text printed on the document image. DO NOT write c
 RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCESS (<think>). DO NOT INCLUDE MARKDOWN CODE BLOCKS.
 ''';
 
+      // Sized against the tier's tokens-per-minute ceiling, not just against
+      // what the reply needs.
+      //
+      // Groq counts the *whole* request — image, prompt, and the output budget
+      // reserved here — against 8000 TPM. A 960px report page is roughly 3,400
+      // input tokens, so anything above about 4,000 output returns 413 instead
+      // of an answer. 2048 was too tight and truncated the reply mid-thought;
+      // 6000 tipped the request over the limit. 3500 clears both, leaving
+      // about a thousand spare so a retry inside the same minute does not push
+      // it over.
+      //
+      // The real saving is the JSON-only instruction at the top of the prompt:
+      // if the model stops narrating before it answers, this budget is ample.
       final String rawOutput = await _sendVisionRequest(
         imageFiles: [imageFiles.first],
         apiKey: apiKey,
         prompt: prompt,
-        maxTokens: 2048,
+        maxTokens: 3500,
       );
 
       _log('📄 Raw Lab Test OCR Vision output: $rawOutput');
