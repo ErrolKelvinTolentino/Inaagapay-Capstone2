@@ -84,15 +84,74 @@ void main() {
       expect(result.action, BpAction.repeatNextVisit);
     });
 
-    test('an old raised run that has since normalised does not refer', () {
+    test('an episode that has normalised stops referring but is not forgotten',
+        () {
+      // The scenario that exposed this: two raised readings met the criterion,
+      // then one normal reading reset the card to "within the usual range" and
+      // no action — as though the episode had never happened. Pressure moves
+      // with rest and time of day, so one normal value is not evidence a
+      // hypertensive episode resolved.
       final result = BloodPressureReference.assess([
-        r(144, 92, weeks: 20),
-        r(146, 94, weeks: 24),
-        r(122, 78, weeks: 28),
+        r(120, 80, weeks: 16),
+        r(120, 80, weeks: 17),
+        r(110, 90, weeks: 18),
+        r(110, 90, weeks: 19),
+        r(120, 80, weeks: 20),
       ]);
 
-      expect(result.raisedRun, isEmpty);
+      expect(result.category, BpCategory.normal);
+      expect(result.raisedRun, isEmpty, reason: 'not currently raised');
+      expect(result.everMetCriterion, isTrue, reason: 'but it happened');
+      expect(result.priorRaisedEpisode.length, 2);
+
+      // Watching, not nothing — and not still referring either.
+      expect(result.action, BpAction.monitor);
+      expect(result.needsReferral, isFalse);
+
+      expect(result.finding, contains('back within range'));
+      expect(result.finding, contains('week 18'));
+      expect(result.finding, contains('not been steady'));
+      expect(result.note, contains('does not close an earlier episode'));
+    });
+
+    test('a single earlier raised reading is not treated as an episode', () {
+      // One raised reading was never a pattern, so it must not become a
+      // permanent flag either — that is the over-calling this design avoids.
+      final result = BloodPressureReference.assess([
+        r(144, 92, weeks: 20),
+        r(122, 78, weeks: 24),
+        r(120, 80, weeks: 28),
+      ]);
+
+      expect(result.everMetCriterion, isFalse);
+      expect(result.priorRaisedEpisode, isEmpty);
       expect(result.action, BpAction.none);
+      expect(result.finding, contains('within the usual range'));
+    });
+
+    test('a past severe reading is named even once pressure settles', () {
+      final result = BloodPressureReference.assess([
+        r(164, 112, weeks: 30),
+        r(150, 96, weeks: 31),
+        r(124, 80, weeks: 32),
+      ]);
+
+      expect(result.everSevere, isTrue);
+      expect(result.action, BpAction.monitor);
+      expect(result.finding, contains('severe range'));
+    });
+
+    test('a current run still reads as current, not as history', () {
+      final result = BloodPressureReference.assess([
+        r(120, 80, weeks: 20),
+        r(144, 92, weeks: 24),
+        r(146, 94, weeks: 28),
+      ]);
+
+      expect(result.priorRaisedEpisode, isEmpty,
+          reason: 'the run is ongoing, so it is not a past episode');
+      expect(result.everMetCriterion, isTrue);
+      expect(result.action, BpAction.referForAssessment);
     });
   });
 

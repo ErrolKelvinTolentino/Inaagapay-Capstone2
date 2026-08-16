@@ -5289,11 +5289,69 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
     final assessment = BloodPressureReference.assess(readings);
 
-    return ProfileCardSection(
-      title: 'Blood Pressure Trend',
-      icon: Icons.monitor_heart_outlined,
-      iconColor: _bpToneColor(assessment.action),
-      children: [
+    // Same shell and header as the weight-gain card directly above it: plain
+    // brand icon, uppercase title, optional status pill on the right. Two
+    // charts of the same pregnancy sitting one above the other should not be
+    // wearing two different card designs.
+    //
+    // The header stays neutral whatever the reading says — a card whose whole
+    // chrome turns amber alarms before the midwife has read a number. The
+    // finding strip at the bottom carries the severity.
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardColorOf(context),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.monitor_heart_outlined,
+                  color: AppColors.brandPrimary, size: 20),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'BLOOD PRESSURE TREND',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: Color(0xFF5A5A5A),
+                  ),
+                ),
+              ),
+              if (assessment.action != BpAction.none)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _bpToneColor(assessment.action)
+                        .withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    assessment.action.label.toLowerCase(),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: _bpToneColor(assessment.action),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
         if (readings.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
@@ -5325,11 +5383,12 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               ),
             )
           else
-            SizedBox(height: 190, child: _buildBpChart(readings)),
+            SizedBox(height: 215, child: _buildBpChart(readings)),
           const SizedBox(height: 14),
           _buildBpFinding(assessment),
         ],
-      ],
+        ],
+      ),
     );
   }
 
@@ -5359,6 +5418,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       diastolicSpots.add(FlSpot(x, readings[i].diastolic.toDouble()));
     }
 
+    final readingWeeks = systolicSpots.map((s) => s.x.round()).toSet();
     final xs = systolicSpots.map((s) => s.x).toList();
     final minX = (xs.reduce((a, b) => a < b ? a : b) - 1).clamp(0.0, 42.0);
     final maxX = (xs.reduce((a, b) => a > b ? a : b) + 1).clamp(1.0, 42.0);
@@ -5403,15 +5463,25 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 24,
-              interval: 4,
-              getTitlesWidget: (value, meta) => Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  'W${value.toInt()}',
-                  style: const TextStyle(
-                      fontSize: 9, color: AppColors.textSecondary),
-                ),
-              ),
+              interval: 1,
+              // A label under each actual visit, rather than every fourth week.
+              // A fixed interval on three or four readings spanning five weeks
+              // put labels where no reading was and left readings unlabelled,
+              // so a dot could not be tied to a week.
+              getTitlesWidget: (value, meta) {
+                final week = value.round();
+                if (!readingWeeks.contains(week)) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'W$week',
+                    style: const TextStyle(
+                        fontSize: 9, color: AppColors.textSecondary),
+                  ),
+                );
+              },
             ),
           ),
           leftTitles: AxisTitles(
@@ -5430,42 +5500,53 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         // The published thresholds, drawn where the readings can be compared
         // against them. This is what makes the chart a clinical instrument
         // rather than a picture of some numbers going up and down.
+        // Each threshold is drawn in its own series' colour so the eye pairs
+        // them: the pink dashed line is the limit for the pink systolic line,
+        // the blue for the blue. Two amber lines of the same colour, one above
+        // and one below, gave no clue which belonged to which.
         extraLinesData: ExtraLinesData(
           horizontalLines: [
             HorizontalLine(
               y: t.severeSystolic.toDouble(),
-              color: AppColors.error.withValues(alpha: 0.55),
-              strokeWidth: 1.5,
-              dashArray: [6, 4],
+              color: AppColors.error.withValues(alpha: 0.5),
+              strokeWidth: 1,
+              dashArray: [2, 4],
               label: HorizontalLineLabel(
                 show: true,
-                alignment: Alignment.topRight,
+                alignment: Alignment.topLeft,
+                padding: const EdgeInsets.only(left: 2, bottom: 2),
                 style: const TextStyle(fontSize: 8, color: AppColors.error),
                 labelResolver: (_) => 'severe ${t.severeSystolic}',
               ),
             ),
             HorizontalLine(
               y: t.raisedSystolic.toDouble(),
-              color: AppColors.warning.withValues(alpha: 0.7),
-              strokeWidth: 1.5,
-              dashArray: [6, 4],
+              color: AppColors.brandAccent.withValues(alpha: 0.45),
+              strokeWidth: 1,
+              dashArray: [5, 4],
               label: HorizontalLineLabel(
                 show: true,
-                alignment: Alignment.topRight,
-                style: const TextStyle(fontSize: 8, color: AppColors.warning),
-                labelResolver: (_) => 'threshold ${t.raisedSystolic}',
+                alignment: Alignment.topLeft,
+                padding: const EdgeInsets.only(left: 2, bottom: 2),
+                style: TextStyle(
+                    fontSize: 8,
+                    color: AppColors.brandAccent.withValues(alpha: 0.9)),
+                labelResolver: (_) => 'systolic limit ${t.raisedSystolic}',
               ),
             ),
             HorizontalLine(
               y: t.raisedDiastolic.toDouble(),
-              color: AppColors.warning.withValues(alpha: 0.45),
+              color: AppColors.info.withValues(alpha: 0.45),
               strokeWidth: 1,
-              dashArray: [3, 4],
+              dashArray: [5, 4],
               label: HorizontalLineLabel(
                 show: true,
-                alignment: Alignment.bottomRight,
-                style: const TextStyle(fontSize: 8, color: AppColors.warning),
-                labelResolver: (_) => 'threshold ${t.raisedDiastolic}',
+                alignment: Alignment.bottomLeft,
+                padding: const EdgeInsets.only(left: 2, top: 2),
+                style: TextStyle(
+                    fontSize: 8,
+                    color: AppColors.info.withValues(alpha: 0.9)),
+                labelResolver: (_) => 'diastolic limit ${t.raisedDiastolic}',
               ),
             ),
           ],
@@ -6172,7 +6253,23 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         final last = checkupList.last;
         final double diff = (item['age_of_gestation'] - last['age_of_gestation']).abs();
         if (diff < 0.2) {
-          if (item['is_checkup'] == true && last['is_checkup'] == false) {
+          // Two records at effectively the same point in the pregnancy —
+          // 0.2 weeks is about a day and a half, so this catches same-day and
+          // next-day entries.
+          //
+          // Keep the better record. An official checkup beats a self-logged
+          // weight; between two records of the same kind, the later one is the
+          // more recent measurement. rawList is sorted oldest first, so `item`
+          // is always the newer of the pair.
+          //
+          // The old rule replaced only when the incoming record was a checkup
+          // AND the kept one was a self-logged vital. Two checkups a day apart
+          // therefore matched neither branch and the newer one was dropped
+          // without trace — a second checkup could be saved correctly and
+          // never reach the weight chart.
+          final keepExisting =
+              item['is_checkup'] != true && last['is_checkup'] == true;
+          if (!keepExisting) {
             checkupList[checkupList.length - 1] = item;
           }
         } else {

@@ -164,6 +164,9 @@ class BpAssessment {
     required this.lowRun,
     this.severeReading,
     this.note,
+    this.everMetCriterion = false,
+    this.everSevere = false,
+    this.priorRaisedEpisode = const [],
   });
 
   const BpAssessment.noData()
@@ -174,7 +177,10 @@ class BpAssessment {
         raisedRun = const [],
         lowRun = const [],
         severeReading = null,
-        note = null;
+        note = null,
+        everMetCriterion = false,
+        everSevere = false,
+        priorRaisedEpisode = const [];
 
   final BpReading? latest;
   final BpCategory category;
@@ -197,6 +203,23 @@ class BpAssessment {
   /// Context that changes how the finding should be read — before 20 weeks, or
   /// the normal mid-pregnancy fall.
   final String? note;
+
+  /// True when the two-occasion threshold was met at any point in this
+  /// pregnancy, even if the latest reading has since come back down.
+  ///
+  /// This does not reset. Blood pressure moves with time of day, rest before
+  /// the cuff and anxiety at the clinic, so one normal reading is not evidence
+  /// that a hypertensive episode resolved — and pre-eclampsia can still
+  /// develop after readings that looked fine. A mother who once met the
+  /// criterion needs watching more closely afterwards, not less.
+  final bool everMetCriterion;
+
+  /// True when any reading in this pregnancy reached the severe range.
+  final bool everSevere;
+
+  /// The earlier run that met the criterion, when the latest reading has since
+  /// returned to range. Empty while that run is still the current one.
+  final List<BpReading> priorRaisedEpisode;
 
   bool get meetsTwoOccasionCriterion => raisedRun.length >= 2;
   bool get needsReferral =>
@@ -296,11 +319,41 @@ class BloodPressureReference {
       }
     }
 
+    // The whole history, not just the trailing run. A run that met the
+    // criterion earlier in the pregnancy still counts once the latest reading
+    // has come back down — otherwise a single normal value erases a
+    // hypertensive episode from the record the midwife is looking at.
+    final episodes = <List<BpReading>>[];
+    var current = <BpReading>[];
+    for (final reading in usable) {
+      final c =
+          categorise(reading.systolic, reading.diastolic, thresholds: thresholds);
+      if (c == BpCategory.raised || c == BpCategory.severe) {
+        current.add(reading);
+      } else {
+        if (current.length >= thresholds.occasionsForPattern) {
+          episodes.add(current);
+        }
+        current = <BpReading>[];
+      }
+    }
+    if (current.length >= thresholds.occasionsForPattern) episodes.add(current);
+
+    final everMetCriterion = episodes.isNotEmpty;
+    final everSevere = severeReading != null;
+
+    // Only a *past* episode — while the run is still current, raisedRun
+    // already describes it and repeating it would read as two separate events.
+    final priorEpisode = (raisedRun.isEmpty && episodes.isNotEmpty)
+        ? episodes.last
+        : const <BpReading>[];
+
     final action = _actionFor(
       category: category,
       raisedRun: raisedRun,
       lowRun: lowRun,
       thresholds: thresholds,
+      hasPriorEpisode: priorEpisode.isNotEmpty,
     );
 
     return BpAssessment(
@@ -310,18 +363,24 @@ class BloodPressureReference {
       severeReading: severeReading,
       raisedRun: raisedRun,
       lowRun: lowRun,
+      everMetCriterion: everMetCriterion,
+      everSevere: everSevere,
+      priorRaisedEpisode: priorEpisode,
       finding: _findingFor(
         category: category,
         latest: latest,
         raisedRun: raisedRun,
         lowRun: lowRun,
         thresholds: thresholds,
+        priorEpisode: priorEpisode,
+        everSevere: everSevere,
       ),
       note: _noteFor(
         category: category,
         latest: latest,
         raisedRun: raisedRun,
         thresholds: thresholds,
+        hasPriorEpisode: priorEpisode.isNotEmpty,
       ),
     );
   }
@@ -331,6 +390,7 @@ class BloodPressureReference {
     required List<BpReading> raisedRun,
     required List<BpReading> lowRun,
     required BpThresholds thresholds,
+    bool hasPriorEpisode = false,
   }) {
     // Severe range outranks everything, including the two-occasion rule. It is
     // confirmed over minutes, not weeks, and waiting for the next visit to see
@@ -341,6 +401,12 @@ class BloodPressureReference {
       return BpAction.referForAssessment;
     }
     if (category == BpCategory.raised) return BpAction.repeatNextVisit;
+
+    // Back in range, but she met the threshold earlier in this pregnancy.
+    // Not "no action" — keep watching. One normal reading is not evidence a
+    // hypertensive episode is over.
+    if (hasPriorEpisode) return BpAction.monitor;
+
     if (lowRun.length >= thresholds.occasionsForPattern) {
       return BpAction.monitor;
     }
@@ -354,6 +420,8 @@ class BloodPressureReference {
     required List<BpReading> raisedRun,
     required List<BpReading> lowRun,
     required BpThresholds thresholds,
+    List<BpReading> priorEpisode = const [],
+    bool everSevere = false,
   }) {
     final raised = '${thresholds.raisedSystolic}/${thresholds.raisedDiastolic}';
     final severe = '${thresholds.severeSystolic}/${thresholds.severeDiastolic}';
@@ -382,6 +450,29 @@ class BloodPressureReference {
           'One reading is not yet a pattern — repeat it at the next visit.';
     }
 
+    // Back in range after an earlier episode. Reporting only the latest value
+    // here would hide the episode entirely — the card would read exactly like
+    // a mother whose pressure has never been raised.
+    if (priorEpisode.isNotEmpty) {
+      final weeks = priorEpisode
+          .map((r) => r.gestationalWeeks == null
+              ? null
+              : 'week ${r.gestationalWeeks!.round()}')
+          .whereType<String>()
+          .toList();
+      final where =
+          weeks.length == priorEpisode.length ? ' (${weeks.join(' and ')})' : '';
+
+      final severeNote = everSevere
+          ? ' One of them reached the severe range.'
+          : '';
+
+      return 'Latest reading ${latest.formatted} is back within range, but '
+          '${priorEpisode.length} earlier readings met the $raised '
+          'threshold$where.$severeNote Blood pressure has not been steady this '
+          'pregnancy.';
+    }
+
     if (lowRun.length >= thresholds.occasionsForPattern) {
       return '${lowRun.length} consecutive readings below '
           '${thresholds.lowSystolic}/${thresholds.lowDiastolic}, '
@@ -401,8 +492,15 @@ class BloodPressureReference {
     required BpReading latest,
     required List<BpReading> raisedRun,
     required BpThresholds thresholds,
+    bool hasPriorEpisode = false,
   }) {
     final weeks = latest.gestationalWeeks;
+
+    if (hasPriorEpisode) {
+      return 'A normal reading does not close an earlier episode — pressure '
+          'moves with rest, time of day and anxiety at the clinic. Keep '
+          'measuring at every visit.';
+    }
 
     // Raised blood pressure before 20 weeks is not gestational in origin, and
     // the referral question is a different one.

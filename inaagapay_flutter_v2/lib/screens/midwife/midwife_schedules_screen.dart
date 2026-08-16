@@ -8,7 +8,6 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
 import '../../services/supabase_service.dart';
-import 'midwife_sms_reminders_screen.dart';
 import 'midwife_vaccination_drive_page.dart';
 
 class MidwifeSchedulesScreen extends StatefulWidget {
@@ -228,14 +227,16 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
         final lastName = account?['last_name']?.toString() ?? '';
         final motherName = '$firstName $lastName'.trim();
 
-        final encounter = checkup['encounter'] as Map<String, dynamic>?;
-
         schedules.add({
           'time': 'All Day',
           'mother_name': motherName.isNotEmpty ? motherName : 'Unknown Mother',
           'type': 'Prenatal Checkup',
           'status': 'upcoming',
-          'notes': encounter?['midwife_notes']?.toString(),
+          // No note. This row is an *upcoming* visit, but midwife_notes belongs
+          // to the past checkup that scheduled it — so the card was showing a
+          // summary of what already happened underneath a future date, which
+          // reads as though it describes the appointment ahead.
+          'notes': null,
           'icon': Icons.medical_services,
           'next_schedule': checkup['next_schedule']?.toString(),
         });
@@ -836,58 +837,33 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
           ),
         ),
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // Scheduling a drive belongs beside the calendar it appears on, so
-          // it sits with the existing reminder action rather than in a menu.
-          FloatingActionButton.extended(
-            heroTag: 'vaccinationDrive',
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const MidwifeVaccinationDrivePage(),
-                ),
-              );
-              if (mounted) _loadAllEventDates();
-            },
-            backgroundColor: Colors.white,
-            foregroundColor: AppColors.brandPrimary,
-            elevation: 2,
-            icon: const Icon(Icons.vaccines_rounded,
-                color: AppColors.brandPrimary),
-            label: const Text(
-              'Vaccination Drive',
-              style: TextStyle(
-                color: AppColors.brandPrimary,
-                fontWeight: FontWeight.bold,
-              ),
+      // Scheduling a drive belongs beside the calendar it appears on.
+      //
+      // The manual "SMS Reminders" action was removed: checkup reminders are
+      // meant to go out on a schedule, not because someone remembered to press
+      // a button. The screen itself still exists at
+      // MidwifeSmsRemindersScreen — see TODO.md, where enabling the pg_cron
+      // jobs is what makes this automatic.
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'vaccinationDrive',
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const MidwifeVaccinationDrivePage(),
             ),
+          );
+          if (mounted) _loadAllEventDates();
+        },
+        backgroundColor: AppColors.brandPrimary,
+        icon: const Icon(Icons.vaccines_rounded, color: Colors.white),
+        label: const Text(
+          'Vaccination Drive',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
-          const SizedBox(height: 12),
-          FloatingActionButton.extended(
-            heroTag: 'smsReminders',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const MidwifeSmsRemindersScreen(),
-                ),
-              );
-            },
-            backgroundColor: AppColors.brandPrimary,
-            icon: const Icon(Icons.sms_rounded, color: Colors.white),
-            label: const Text(
-              'SMS Reminders',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1053,27 +1029,9 @@ class ScheduleCard extends StatelessWidget {
                   ],
                 ),
 
-                /// 📅 NEXT SCHEDULE (if available)
-                if (nextSchedule != null && nextSchedule!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.calendar_today,
-                        size: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Next: ${DateFormat('MMM d, yyyy').format(DateTime.parse(nextSchedule!))}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                // The date is not repeated here. These cards only ever appear
+                // under the day the midwife just tapped, so printing "Next:
+                // Aug 19, 2026" on every row restates the heading above them.
 
                 /// 📝 NOTES (IF ANY)
                 if (notes != null && notes!.isNotEmpty) ...[
