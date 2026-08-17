@@ -102,6 +102,27 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
   /// True once OCR has read at least one glucose value off the report.
   bool _glucoseFromReport = false;
 
+  /// Whether the blood type field is worth showing.
+  ///
+  /// Mirrors [_isGlucoseTest]: the field appears when the report actually
+  /// carries a blood type, or when the selected test is one that produces
+  /// them. An OGTT has no business displaying a blood type field.
+  ///
+  /// It deliberately does not appear on extraction alone. A midwife holding a
+  /// blood typing result the OCR could not read still needs somewhere to put
+  /// it, and a field that only ever materialises on a successful scan teaches
+  /// her the app cannot be told directly.
+  bool get _isBloodTypeTest {
+    final type = (_selectedLabType == 'Other'
+            ? _customLabTypeCtrl.text
+            : _selectedLabType)
+        .toLowerCase();
+    return _bloodTypeFromReport != null ||
+        type.contains('blood typ') ||
+        type.contains('abo') ||
+        type.contains('blood group');
+  }
+
   /// Whether the glucose section is worth showing.
   ///
   /// A CBC has no business displaying four empty sugar fields, but a midwife
@@ -1289,8 +1310,10 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                                 contentPadding: const EdgeInsets.all(16),
                               ),
                             ),
-                            const SizedBox(height: 16),
-                            _buildBloodTypeField(),
+                            if (_isBloodTypeTest) ...[
+                              const SizedBox(height: 16),
+                              _buildBloodTypeField(),
+                            ],
                             if (_isGlucoseTest) ...[
                               const SizedBox(height: 20),
                               _buildGlucoseFields(),

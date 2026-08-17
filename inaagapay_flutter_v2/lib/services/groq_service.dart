@@ -17,9 +17,22 @@ class GroqService {
   static const List<String> _visionModelFallbacks = [
     'qwen/qwen3.6-27b',
   ];
-  static const String _reasoningModel = 'llama-3.3-70b-versatile';
-  static const String _firstFallbackReasoningModel = 'llama-3.1-8b-instant';
-  static const String _secondFallbackReasoningModel = 'llama-3.1-70b-versatile';
+  /// Text reasoning chain, largest first.
+  ///
+  /// Groq removed the whole Llama 3.x line — `llama-3.3-70b-versatile`,
+  /// `llama-3.1-8b-instant` and `llama-3.1-70b-versatile` are no longer served,
+  /// which is why every AI insight fell through to its rule-based fallback
+  /// while OCR kept working: the vision path had already moved to Qwen.
+  ///
+  /// Check what an account can actually reach before changing these:
+  ///   curl https://api.groq.com/openai/v1/models -H "Authorization: Bearer $GROQ_API_KEY"
+  static const String _reasoningModel = 'openai/gpt-oss-120b';
+  static const String _firstFallbackReasoningModel = 'openai/gpt-oss-20b';
+
+  /// Deliberately a different model family from the first two, so a fault in
+  /// one family does not take the last fallback down with it. It is also the
+  /// vision model, so it is the one model here already proven in this app.
+  static const String _secondFallbackReasoningModel = 'qwen/qwen3.6-27b';
 
   static const String childGrowthSystemPrompt =
       'You are a caring, knowledgeable midwife assistant in the Philippines who genuinely cares about every mother and child. '
@@ -50,16 +63,19 @@ class GroqService {
       'https://integrate.api.nvidia.com/v1/chat/completions';
 
   /// Groq text model → NVIDIA NIM equivalent, used when Groq is rate-limited
-  /// or down. Llama 3.3 70B is the same model on both hosts, so the prompts
-  /// and safety rules behave identically on the fallback.
+  /// or down. These are the same weights on both hosts, so the prompts and
+  /// safety rules behave identically on the fallback.
+  ///
+  /// A model with no entry here simply has no cross-provider fallback —
+  /// [_tryNvidiaFallback] logs and returns null rather than guessing at an id
+  /// the host may not serve.
   ///
   /// Vision models are deliberately absent: that path already falls back to
   /// Gemini in [_sendVisionRequest], and NVIDIA's VLMs expect a different
   /// image payload shape than the OpenAI-style `image_url` blocks we send.
   static const Map<String, String> _nvidiaModelEquivalents = {
-    _reasoningModel: 'meta/llama-3.3-70b-instruct',
-    _firstFallbackReasoningModel: 'meta/llama-3.1-8b-instruct',
-    _secondFallbackReasoningModel: 'meta/llama-3.1-70b-instruct',
+    _reasoningModel: 'openai/gpt-oss-120b',
+    _firstFallbackReasoningModel: 'openai/gpt-oss-20b',
   };
 
   static const int _maxBase64Size = 4 * 1024 * 1024;
@@ -189,7 +205,7 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
         imageFiles: [imageFiles.first],
         apiKey: apiKey,
         prompt: prompt,
-        maxTokens: 2048,
+        maxTokens: 3500,
       );
 
       _log('📄 Raw Ultrasound OCR Vision output: $rawOutput');
@@ -311,6 +327,10 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
     try {
       final apiKey = _getApiKey();
       const prompt = '''
+ANSWER WITH JSON ONLY. Do not think out loud. Do not write <think> blocks, notes, reasoning, or commentary of any kind. Your entire reply must be the JSON object and nothing else — the first character you write must be { and the last must be }.
+
+This instruction is first because it is the one that matters most: a reply that reasons before answering runs out of room and never produces the JSON, and the extraction is lost even when every value was read correctly.
+
 You are a precise document OCR data extractor for laboratory test reports. Perform text recognition on the provided image and return ONLY a raw JSON object matching this exact schema:
 
 {
@@ -349,11 +369,24 @@ CRITICAL: Extract ONLY actual text printed on the document image. DO NOT write c
 RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCESS (<think>). DO NOT INCLUDE MARKDOWN CODE BLOCKS.
 ''';
 
+      // Sized against the tier's tokens-per-minute ceiling, not just against
+      // what the reply needs.
+      //
+      // Groq counts the *whole* request — image, prompt, and the output budget
+      // reserved here — against 8000 TPM. A 960px report page is roughly 3,400
+      // input tokens, so anything above about 4,000 output returns 413 instead
+      // of an answer. 2048 was too tight and truncated the reply mid-thought;
+      // 6000 tipped the request over the limit. 3500 clears both, leaving
+      // about a thousand spare so a retry inside the same minute does not push
+      // it over.
+      //
+      // The real saving is the JSON-only instruction at the top of the prompt:
+      // if the model stops narrating before it answers, this budget is ample.
       final String rawOutput = await _sendVisionRequest(
         imageFiles: [imageFiles.first],
         apiKey: apiKey,
         prompt: prompt,
-        maxTokens: 2048,
+        maxTokens: 3500,
       );
 
       _log('📄 Raw Lab Test OCR Vision output: $rawOutput');

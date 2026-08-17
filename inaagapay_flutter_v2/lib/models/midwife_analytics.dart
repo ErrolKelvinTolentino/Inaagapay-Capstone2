@@ -49,6 +49,27 @@ enum AnalyticsAction {
   viewInventory,
 }
 
+/// The glyph beside a card's title.
+///
+/// Named by subject rather than by icon, so the model still carries no Flutter
+/// types and the widget layer picks the actual glyph. Swapping the icon set
+/// later touches one map instead of thirteen call sites.
+enum AnalyticsIcon {
+  mothers,
+  risk,
+  riskFactors,
+  vaccine,
+  supplement,
+  weight,
+  screening,
+  children,
+  growth,
+  immunization,
+  stock,
+  expiry,
+  demand,
+}
+
 /// Which visual a metric wants. The card shell is identical either way.
 enum AnalyticsChartKind {
   /// Ordered categories side by side — age bands, month buckets.
@@ -158,6 +179,7 @@ class AnalyticsMetric {
   const AnalyticsMetric({
     required this.title,
     required this.kind,
+    this.icon = AnalyticsIcon.mothers,
     this.headline,
     this.headlineCaption,
     this.bands = const [],
@@ -178,6 +200,7 @@ class AnalyticsMetric {
     required this.title,
     required String message,
     this.kind = AnalyticsChartKind.bars,
+    this.icon = AnalyticsIcon.mothers,
     this.periodLabel,
   })  : headline = null,
         headlineCaption = null,
@@ -192,6 +215,7 @@ class AnalyticsMetric {
 
   final String title;
   final AnalyticsChartKind kind;
+  final AnalyticsIcon icon;
 
   /// The number the card is about, already formatted.
   final String? headline;

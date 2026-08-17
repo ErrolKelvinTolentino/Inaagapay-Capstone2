@@ -232,7 +232,13 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
           final last = deduplicatedReadings.last;
           final double diff = (((item['age_of_gestation'] ?? 0) as num).toDouble() - ((last['age_of_gestation'] ?? 0) as num).toDouble()).abs();
           if (diff < 0.2) {
-            if (item['is_checkup'] == true && last['is_checkup'] == false) {
+            // Same rule as the mother profile: an official checkup beats a
+            // self-logged weight, and between two records of the same kind the
+            // later one wins. The previous condition dropped a second official
+            // checkup taken within a day and a half of the first.
+            final keepExisting =
+                item['is_checkup'] != true && last['is_checkup'] == true;
+            if (!keepExisting) {
               deduplicatedReadings[deduplicatedReadings.length - 1] = item;
             }
           } else {

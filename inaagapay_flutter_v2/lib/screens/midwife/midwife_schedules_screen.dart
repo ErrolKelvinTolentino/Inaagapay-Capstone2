@@ -8,7 +8,6 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
 import '../../services/supabase_service.dart';
-import 'midwife_sms_reminders_screen.dart';
 import 'midwife_vaccination_drive_page.dart';
 
 class MidwifeSchedulesScreen extends StatefulWidget {
@@ -80,19 +79,39 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
 
       // 1. Fetch immunization dates
       if (_assignedBhcId != null) {
-        final resImm = await Supabase.instance.client
-            .from('immunization_schedule')
-            .select('schedule_date')
-            .eq('bhc_id', _assignedBhcId!)
-            .gte('schedule_date', startOfYear)
-            .lte('schedule_date', endOfYear)
-            .timeout(const Duration(seconds: 5))
-            .catchError((e) {
-              debugPrint('Immunization schedule dates error: $e');
-              return <Map<String, dynamic>>[];
-            });
+        // The schema file names this column facility_id; this screen has always
+        // queried bhc_id. Rather than guess which the live database has, try
+        // one and fall back — a drive saved under the other name was
+        // invisible here, so a scheduled drive never reached the calendar.
+        // Keep trying until a column actually returns rows, not merely until
+        // one does not error.
+        //
+        // If the table has both columns — facility_id NOT NULL from the
+        // schema plus a bhc_id — then a drive inserted with only bhc_id fails
+        // the NOT NULL and gets written under facility_id instead. Querying
+        // bhc_id then succeeds as a query and returns nothing, so breaking on
+        // "no exception" meant the row was never looked for under the column
+        // it was actually saved with.
+        List<dynamic> resImm = const [];
+        for (final column in ['bhc_id', 'facility_id']) {
+          try {
+            final rows = await Supabase.instance.client
+                .from('immunization_schedule')
+                .select('schedule_date')
+                .eq(column, _assignedBhcId!)
+                .gte('schedule_date', startOfYear)
+                .lte('schedule_date', endOfYear)
+                .timeout(const Duration(seconds: 5));
+            if ((rows as List).isNotEmpty) {
+              resImm = rows;
+              break;
+            }
+          } catch (e) {
+            debugPrint('Immunization dates via $column: $e');
+          }
+        }
 
-        final datesImm = (resImm as List)
+        final datesImm = (resImm)
             .map((r) => r['schedule_date']?.toString() ?? '')
             .where((d) => d.isNotEmpty)
             .toSet();
@@ -228,14 +247,16 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
         final lastName = account?['last_name']?.toString() ?? '';
         final motherName = '$firstName $lastName'.trim();
 
-        final encounter = checkup['encounter'] as Map<String, dynamic>?;
-
         schedules.add({
           'time': 'All Day',
           'mother_name': motherName.isNotEmpty ? motherName : 'Unknown Mother',
           'type': 'Prenatal Checkup',
           'status': 'upcoming',
-          'notes': encounter?['midwife_notes']?.toString(),
+          // No note. This row is an *upcoming* visit, but midwife_notes belongs
+          // to the past checkup that scheduled it — so the card was showing a
+          // summary of what already happened underneath a future date, which
+          // reads as though it describes the appointment ahead.
+          'notes': null,
           'icon': Icons.medical_services,
           'next_schedule': checkup['next_schedule']?.toString(),
         });
@@ -265,9 +286,14 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
       // Fetch immunization schedules for the BHC on this date
       if (_assignedBhcId != null) {
         try {
-          final immunizationResponse = await Supabase.instance.client
-              .from('immunization_schedule')
-              .select('''
+          // Same column ambiguity as _loadAllEventDates, and the same rule:
+          // keep going until rows come back, not until a query stops erroring.
+          List<dynamic> immunizationResponse = const [];
+          for (final column in ['bhc_id', 'facility_id']) {
+            try {
+              final rows = await Supabase.instance.client
+                  .from('immunization_schedule')
+                  .select('''
                 immunization_schedule_id,
                 schedule_date,
                 notes,
@@ -276,28 +302,41 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
                   target_recipients
                 )
               ''')
-              .eq('bhc_id', _assignedBhcId!)
-              .eq('schedule_date', formattedDate);
+                  .eq(column, _assignedBhcId!)
+                  .eq('schedule_date', formattedDate);
+              if ((rows as List).isNotEmpty) {
+                immunizationResponse = rows;
+                break;
+              }
+            } catch (e) {
+              debugPrint('Immunization for date via $column: $e');
+            }
+          }
 
-          if ((immunizationResponse as List).isNotEmpty) {
-            final vaccineNames = immunizationResponse
-                .map((r) => (r['vaccine'] as Map<String, dynamic>?)?['vaccine_name']?.toString() ?? '')
-                .where((n) => n.isNotEmpty)
-                .toSet()
-                .toList();
-
-            final firstNote = immunizationResponse
-                .map((r) => r['notes']?.toString())
-                .where((n) => n != null && n.isNotEmpty)
-                .firstOrNull;
+          // One card per drive, not one card for the day.
+          //
+          // This used to fold every drive on a date into a single row —
+          // collecting the vaccine names into a set and keeping only the first
+          // note. Two drives on the same day therefore looked like one, and
+          // scheduling a second appeared to delete the first. Both were saved
+          // the whole time; only the display collapsed them, and with it went
+          // whichever notes were not first.
+          for (final row in immunizationResponse) {
+            final vaccine = row['vaccine'] as Map<String, dynamic>?;
+            final vaccineName = vaccine?['vaccine_name']?.toString() ?? '';
+            final forChildren =
+                vaccine?['target_recipients']?.toString() == 'child';
 
             schedules.add({
               'time': 'All Day',
-              'mother_name': 'Barangay Vaccine Day',
-              'type': 'Immunization Schedule',
-              'status': 'upcoming',
-              'notes': firstNote,
-              'vaccines': vaccineNames,
+              // Named after what is being given. "Barangay Vaccine Day" told
+              // the midwife nothing she could plan around.
+              'mother_name': vaccineName.isEmpty
+                  ? 'Vaccine Drive'
+                  : '$vaccineName Vaccine Drive',
+              'type': forChildren ? 'Children Immunization' : 'Immunization Day',
+              'status': 'immunization',
+              'notes': row['notes']?.toString(),
               'icon': Icons.vaccines,
             });
           }
@@ -640,10 +679,10 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
                         color: AppColors.brandPrimary,
                         label: 'Prenatal Checkup',
                       ),
-                      _buildLegendItem(
-                        color: Colors.blue.shade700,
-                        label: 'Scheduled Checkup',
-                      ),
+                      // Two categories, not three. Every vaccine — TD for
+                      // mothers, the childhood series — is an Immunization
+                      // Day, so a separate colour for one of them split a
+                      // single idea across two legend entries.
                     ],
                   ),
                 ),
@@ -836,58 +875,33 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
           ),
         ),
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // Scheduling a drive belongs beside the calendar it appears on, so
-          // it sits with the existing reminder action rather than in a menu.
-          FloatingActionButton.extended(
-            heroTag: 'vaccinationDrive',
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const MidwifeVaccinationDrivePage(),
-                ),
-              );
-              if (mounted) _loadAllEventDates();
-            },
-            backgroundColor: Colors.white,
-            foregroundColor: AppColors.brandPrimary,
-            elevation: 2,
-            icon: const Icon(Icons.vaccines_rounded,
-                color: AppColors.brandPrimary),
-            label: const Text(
-              'Vaccination Drive',
-              style: TextStyle(
-                color: AppColors.brandPrimary,
-                fontWeight: FontWeight.bold,
-              ),
+      // Scheduling a drive belongs beside the calendar it appears on.
+      //
+      // The manual "SMS Reminders" action was removed: checkup reminders are
+      // meant to go out on a schedule, not because someone remembered to press
+      // a button. The screen itself still exists at
+      // MidwifeSmsRemindersScreen — see TODO.md, where enabling the pg_cron
+      // jobs is what makes this automatic.
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'vaccinationDrive',
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const MidwifeVaccinationDrivePage(),
             ),
+          );
+          if (mounted) _loadAllEventDates();
+        },
+        backgroundColor: AppColors.brandPrimary,
+        icon: const Icon(Icons.vaccines_rounded, color: Colors.white),
+        label: const Text(
+          'Vaccination Drive',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
-          const SizedBox(height: 12),
-          FloatingActionButton.extended(
-            heroTag: 'smsReminders',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const MidwifeSmsRemindersScreen(),
-                ),
-              );
-            },
-            backgroundColor: AppColors.brandPrimary,
-            icon: const Icon(Icons.sms_rounded, color: Colors.white),
-            label: const Text(
-              'SMS Reminders',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1053,27 +1067,9 @@ class ScheduleCard extends StatelessWidget {
                   ],
                 ),
 
-                /// 📅 NEXT SCHEDULE (if available)
-                if (nextSchedule != null && nextSchedule!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.calendar_today,
-                        size: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Next: ${DateFormat('MMM d, yyyy').format(DateTime.parse(nextSchedule!))}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                // The date is not repeated here. These cards only ever appear
+                // under the day the midwife just tapped, so printing "Next:
+                // Aug 19, 2026" on every row restates the heading above them.
 
                 /// 📝 NOTES (IF ANY)
                 if (notes != null && notes!.isNotEmpty) ...[
@@ -1205,7 +1201,14 @@ class ImmunizationDayCard extends StatelessWidget {
                       ),
                     ),
 
-                    /// 🏷️ STATUS BADGE (Teal)
+                    /// 🏷️ "Immunization Day" — the category, on the right.
+                    ///
+                    /// Replaces the old "UPCOMING" badge. The title already
+                    /// names the vaccine and the card already sits under the
+                    /// date, so "upcoming" was the one word on the card that
+                    /// said nothing. The separate type row and the vaccine
+                    /// chips went with it — all three were repeating the
+                    /// title.
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
@@ -1214,7 +1217,7 @@ class ImmunizationDayCard extends StatelessWidget {
                         border: Border.all(color: accentColor.withAlpha(70)),
                       ),
                       child: Text(
-                        status.toUpperCase(),
+                        'Immunization Day',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
@@ -1226,55 +1229,6 @@ class ImmunizationDayCard extends StatelessWidget {
                 ),
 
                 const SizedBox(height: 8),
-
-                /// 📋 TYPE AND ICON
-                Row(
-                  children: [
-                    Icon(
-                      Icons.vaccines,
-                      size: 16,
-                      color: accentColor,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Immunization Day',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: accentColor,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 10),
-
-                /// 💊 VACCINES PILL CHIPS
-                if (vaccines.isNotEmpty) ...[
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: vaccines.map((vacName) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.teal.shade50,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.teal.shade100),
-                        ),
-                        child: Text(
-                          vacName,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.teal.shade800,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 8),
-                ],
 
                 /// 📝 NOTES (IF ANY)
                 if (notes != null && notes!.trim().isNotEmpty) ...[

@@ -420,6 +420,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.bars,
+      icon: AnalyticsIcon.mothers,
       headline: '${ages.length}',
       headlineCaption: 'mothers with a recorded age',
       bands: bands,
@@ -444,6 +445,7 @@ class MidwifeAnalyticsService {
       return const AnalyticsMetric.empty(
         title: title,
         kind: AnalyticsChartKind.donut,
+        icon: AnalyticsIcon.risk,
         message: 'No ongoing pregnancies are recorded at this centre yet.',
       );
     }
@@ -516,6 +518,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.donut,
+      icon: AnalyticsIcon.risk,
       headline: headline,
       headlineCaption: caption,
       bands: [
@@ -605,6 +608,7 @@ class MidwifeAnalyticsService {
       return const AnalyticsMetric.empty(
         title: title,
         kind: AnalyticsChartKind.rankedBars,
+        icon: AnalyticsIcon.riskFactors,
         message:
             'No risk factors recorded yet. They appear here as soon as a '
             'checkup produces a risk assessment.',
@@ -618,6 +622,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.rankedBars,
+      icon: AnalyticsIcon.riskFactors,
       headline: '${top.first.value}',
       headlineCaption: 'of $withFactors assessed '
           '${_plural(withFactors, 'pregnancy shows', 'pregnancies show')} '
@@ -663,6 +668,7 @@ class MidwifeAnalyticsService {
       return const AnalyticsMetric.empty(
         title: title,
         kind: AnalyticsChartKind.coverage,
+        icon: AnalyticsIcon.vaccine,
         message: 'No ongoing pregnancies, so TD coverage has nothing to cover.',
       );
     }
@@ -742,6 +748,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.coverage,
+      icon: AnalyticsIcon.vaccine,
       periodLabel: 'TD2 or more',
       headline: '$protected',
       headlineCaption:
@@ -787,6 +794,7 @@ class MidwifeAnalyticsService {
       return const AnalyticsMetric.empty(
         title: title,
         kind: AnalyticsChartKind.coverage,
+        icon: AnalyticsIcon.screening,
         message: 'Waiting on the glucose columns. Run '
             '20260812_gdm_glucose_values.sql in Supabase to turn this on.',
       );
@@ -796,6 +804,7 @@ class MidwifeAnalyticsService {
       return const AnalyticsMetric.empty(
         title: title,
         kind: AnalyticsChartKind.coverage,
+        icon: AnalyticsIcon.screening,
         message: 'No ongoing pregnancies to screen yet.',
       );
     }
@@ -861,6 +870,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.coverage,
+      icon: AnalyticsIcon.screening,
       periodLabel: 'Weeks 24–28',
       headline: '$screened',
       headlineCaption: 'of ${eligible.length} '
@@ -891,6 +901,7 @@ class MidwifeAnalyticsService {
       return const AnalyticsMetric.empty(
         title: title,
         kind: AnalyticsChartKind.coverage,
+        icon: AnalyticsIcon.supplement,
         message: 'No ongoing pregnancies to supplement.',
       );
     }
@@ -951,6 +962,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.coverage,
+      icon: AnalyticsIcon.supplement,
       periodLabel: 'Last 30 days',
       headline: '$covered',
       headlineCaption:
@@ -1005,6 +1017,7 @@ class MidwifeAnalyticsService {
       return const AnalyticsMetric.empty(
         title: title,
         kind: AnalyticsChartKind.donut,
+        icon: AnalyticsIcon.weight,
         message:
             'No weight-gain evaluations yet. They are produced once a mother '
             'has a pre-pregnancy weight and two checkup weights.',
@@ -1088,6 +1101,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.donut,
+      icon: AnalyticsIcon.weight,
       headline: headline,
       headlineCaption: caption,
       bands: [
@@ -1173,6 +1187,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.bars,
+      icon: AnalyticsIcon.children,
       headline: '${children.length}',
       headlineCaption: 'children registered at this centre',
       bands: [
@@ -1224,6 +1239,7 @@ class MidwifeAnalyticsService {
       return const AnalyticsMetric.empty(
         title: title,
         kind: AnalyticsChartKind.rankedBars,
+        icon: AnalyticsIcon.growth,
         message:
             'No growth measurements recorded yet. Weight and height entries '
             'appear here as soon as they are taken.',
@@ -1342,6 +1358,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.rankedBars,
+      icon: AnalyticsIcon.growth,
       periodLabel: 'Latest measurement',
       headline: flagged > 0 ? '$flagged' : '${latest.length}',
       headlineCaption: flagged > 0
@@ -1376,6 +1393,7 @@ class MidwifeAnalyticsService {
       return const AnalyticsMetric.empty(
         title: title,
         kind: AnalyticsChartKind.coverage,
+        icon: AnalyticsIcon.immunization,
         message:
             'Immunisation coverage needs children with recorded birthdates and '
             'a vaccine schedule to compare against.',
@@ -1441,6 +1459,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.coverage,
+      icon: AnalyticsIcon.immunization,
       periodLabel: 'On schedule',
       headline: '$upToDate',
       headlineCaption:
@@ -1481,6 +1500,7 @@ class MidwifeAnalyticsService {
       return const AnalyticsMetric.empty(
         title: title,
         kind: AnalyticsChartKind.rankedBars,
+        icon: AnalyticsIcon.stock,
         message: 'No inventory recorded for this health centre yet.',
       );
     }
@@ -1492,6 +1512,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.rankedBars,
+      icon: AnalyticsIcon.stock,
       periodLabel: stock.isSample ? 'Sample data' : 'Live',
       headline: '${short.length}',
       headlineCaption:
@@ -1546,6 +1567,7 @@ class MidwifeAnalyticsService {
       return const AnalyticsMetric.empty(
         title: title,
         kind: AnalyticsChartKind.rankedBars,
+        icon: AnalyticsIcon.expiry,
         message: 'Nothing on the shelf expires within the next three months.',
       );
     }
@@ -1556,6 +1578,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.rankedBars,
+      icon: AnalyticsIcon.expiry,
       periodLabel: 'Next 90 days',
       headline: '$atRisk',
       headlineCaption: 'units expire within 90 days',
@@ -1617,6 +1640,7 @@ class MidwifeAnalyticsService {
       return const AnalyticsMetric.empty(
         title: title,
         kind: AnalyticsChartKind.rankedBars,
+        icon: AnalyticsIcon.demand,
         message:
             'No doses fall due in the next 30 days for the children on file.',
       );
@@ -1650,6 +1674,7 @@ class MidwifeAnalyticsService {
     return AnalyticsMetric(
       title: title,
       kind: AnalyticsChartKind.rankedBars,
+      icon: AnalyticsIcon.demand,
       periodLabel: 'Next 30 days',
       headline: '$total',
       headlineCaption: 'doses fall due for children on file',

@@ -2,13 +2,14 @@
 //
 // Scheduling a vaccination drive, and inviting the mothers who need it.
 //
-// The screen is deliberately two steps rather than one. Saving the drive and
-// messaging thirty pregnant women are different acts with different
-// consequences: the first is a calendar entry that can be changed, the second
-// spends SMS credits and cannot be recalled. So the drive saves on its own,
-// the recipient list is shown with names and how many doses each mother has
-// had, and sending is a separate button behind a confirmation that states the
-// count out loud.
+// One action, one confirmation. Scheduling a drive and telling mothers about
+// it are the same intent, so the screen does not ask twice — but messaging
+// thirty pregnant women spends SMS credits and cannot be recalled, so the
+// confirmation names the count before anything goes out, and the drive is
+// written first: nobody is told to come in for a drive that failed to save.
+//
+// The recipient list is on screen throughout, with each mother's name and how
+// many TD doses she has had, so the count in the dialog is never a surprise.
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -19,6 +20,7 @@ import '../../services/vaccination_drive_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/app_input_field.dart';
+import '../../widgets/branded_date_picker.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/confirmation_dialog_box.dart';
 import '../../widgets/main_button.dart';
@@ -43,15 +45,13 @@ class _MidwifeVaccinationDrivePageState
   int? _bhcId;
   String _facilityName = 'this health center';
 
-  List<Map<String, dynamic>> _vaccines = [];
-  Map<String, dynamic>? _selectedVaccine;
+  List<DriveVaccine> _vaccines = [];
+  DriveVaccine? _selectedVaccine;
   DateTime? _date;
 
   List<DriveRecipient> _recipients = [];
   bool _loadingRecipients = false;
 
-  /// Set once the drive row exists, which is what unlocks sending.
-  int? _savedDriveId;
   DriveNotificationResult? _sendResult;
 
   @override
@@ -76,16 +76,20 @@ class _MidwifeVaccinationDrivePageState
         if (name != null && name.isNotEmpty) _facilityName = name;
       }
 
-      _vaccines = await VaccinationDriveService.fetchMaternalVaccines();
+      final bhcId = _bhcId;
+      if (bhcId != null) {
+        _vaccines = await VaccinationDriveService.fetchDriveVaccines(
+          bhcId: bhcId,
+        );
+      }
 
-      // Most maternal drives are TD, so it starts selected rather than making
-      // her find it in a list of one or two.
-      if (_vaccines.isNotEmpty) {
-        _selectedVaccine = _vaccines.firstWhere(
-          (v) => (v['vaccine_name']?.toString() ?? '')
-              .toLowerCase()
-              .contains('td'),
-          orElse: () => _vaccines.first,
+      // TD is the usual drive, so it starts selected — but never a vaccine
+      // that cannot actually be given today.
+      final selectable = _vaccines.where((v) => v.canBeScheduled).toList();
+      if (selectable.isNotEmpty) {
+        _selectedVaccine = selectable.firstWhere(
+          (v) => v.name.toLowerCase().contains('td') && !v.forChildren,
+          orElse: () => selectable.first,
         );
       }
     } finally {
@@ -98,9 +102,23 @@ class _MidwifeVaccinationDrivePageState
     final bhcId = _bhcId;
     if (bhcId == null) return;
 
+    final vaccine = _selectedVaccine;
+    if (vaccine == null) return;
+
     setState(() => _loadingRecipients = true);
-    final recipients =
-        await VaccinationDriveService.fetchUnprotectedMothers(bhcId: bhcId);
+    // The drive date is passed because eligibility depends on it: a mother
+    // whose last dose was recent may not be due on the 20th but is on the
+    // 30th, and a child may only reach the scheduled age in between.
+    final recipients = vaccine.forChildren
+        ? await VaccinationDriveService.fetchChildrenDueForVaccine(
+            bhcId: bhcId,
+            vaccine: vaccine,
+            driveDate: _date,
+          )
+        : await VaccinationDriveService.fetchMothersDueForDose(
+            bhcId: bhcId,
+            driveDate: _date,
+          );
     if (!mounted) return;
     setState(() {
       _recipients = recipients;
@@ -108,23 +126,33 @@ class _MidwifeVaccinationDrivePageState
     });
   }
 
-  String get _vaccineName =>
-      _selectedVaccine?['vaccine_name']?.toString() ?? 'Vaccine';
+  String get _vaccineName => _selectedVaccine?.name ?? 'Vaccine';
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    // The app's own picker, as used by every other date field. The bare
+    // Material showDatePicker looked like a different product.
+    final picked = await showBrandedDatePicker(
       context: context,
       initialDate: _date ?? now.add(const Duration(days: 7)),
       firstDate: DateTime(now.year, now.month, now.day),
       lastDate: now.add(const Duration(days: 365)),
     );
-    if (picked != null) setState(() => _date = picked);
+    if (picked != null) {
+      setState(() => _date = picked);
+      // Who is due depends on the date chosen, so the list is rebuilt against
+      // it rather than left showing yesterday's answer.
+      _refreshRecipients();
+    }
   }
 
-  Future<void> _saveDrive() async {
+  /// Saves the drive, then messages the mothers who need it.
+  ///
+  /// The drive is written first and the send only happens if that succeeded —
+  /// nobody should be told to come in for a drive that was never recorded.
+  Future<void> _scheduleAndNotify() async {
     final bhcId = _bhcId;
-    final vaccineId = _selectedVaccine?['vaccine_id'];
+    final vaccineId = _selectedVaccine?.vaccineId;
     final date = _date;
 
     if (bhcId == null || vaccineId == null || date == null) {
@@ -133,56 +161,55 @@ class _MidwifeVaccinationDrivePageState
       return;
     }
 
-    setState(() => _saving = true);
-    final driveId = await VaccinationDriveService.createDrive(
-      bhcId: bhcId,
-      vaccineId: vaccineId as int,
-      date: date,
-      notes: _notesCtrl.text,
-    );
-    if (!mounted) return;
-    setState(() {
-      _saving = false;
-      _savedDriveId = driveId;
-    });
-
-    AppSnackbar.show(
-      context,
-      driveId == null
-          ? 'Could not save the drive. Nothing was sent.'
-          : 'Drive scheduled for ${DateFormat('MMMM d, yyyy').format(date)}. '
-              'It now shows on the Schedules calendar.',
-      type: driveId == null ? AppSnackType.error : AppSnackType.success,
-    );
-  }
-
-  Future<void> _sendNotifications() async {
-    final date = _date;
-    if (_savedDriveId == null || date == null) return;
-
     final reachable = _recipients.where((r) => !r.isUnreachable).length;
-    if (reachable == 0) {
-      AppSnackbar.show(context, 'No mother on this list has a phone or email',
-          type: AppSnackType.warning);
-      return;
-    }
 
     // Text messages cannot be unsent, so the count is stated before anything
     // goes out rather than reported afterwards.
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => ConfirmationDialogBox(
-        title: 'Send to $reachable ${reachable == 1 ? 'mother' : 'mothers'}?',
-        subtitle: 'They will get a text message and an email about the '
-            '$_vaccineName drive on ${DateFormat('MMMM d').format(date)}. '
-            'Messages cannot be taken back once sent.',
-        confirmText: 'Send now',
+        title: 'Schedule and notify $reachable '
+            '${reachable == 1 ? 'mother' : 'mothers'}?',
+        subtitle: 'The drive goes on the calendar for '
+            '${DateFormat('MMMM d').format(date)}, and they get a text message '
+            'and an email about it. Messages cannot be taken back once sent.',
+        confirmText: 'Schedule & send',
         cancelText: 'Not yet',
         onConfirm: () => Navigator.pop(dialogContext, true),
         onCancel: () => Navigator.pop(dialogContext, false),
       ),
     );
     if (confirmed != true || !mounted) return;
+
+    setState(() => _saving = true);
+    final driveId = await VaccinationDriveService.createDrive(
+      bhcId: bhcId,
+      vaccineId: vaccineId,
+      date: date,
+      notes: _notesCtrl.text,
+    );
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+    });
+
+    // Nobody is told to come in for a drive that was never recorded.
+    if (driveId == null) {
+      AppSnackbar.show(context,
+          'Could not save the drive, so nothing was sent. Please try again.',
+          type: AppSnackType.error);
+      return;
+    }
+
+    if (reachable == 0) {
+      AppSnackbar.show(
+        context,
+        'Drive scheduled for ${DateFormat('MMMM d, yyyy').format(date)}. '
+        'No mother on this list has a phone or email, so tell them in person.',
+        type: AppSnackType.warning,
+      );
+      return;
+    }
 
     setState(() => _sending = true);
     final result = await VaccinationDriveService.notify(
@@ -200,9 +227,10 @@ class _MidwifeVaccinationDrivePageState
 
     AppSnackbar.show(
       context,
-      'Reached ${result.reached} of ${_recipients.length}: '
-      '${result.smsSent} by text, ${result.emailsQueued} by email.',
-      type: result.smsFailed > 0 ? AppSnackType.warning : AppSnackType.success,
+      result.summary,
+      type: (result.failed > 0 || result.unreachable > 0)
+          ? AppSnackType.warning
+          : AppSnackType.success,
     );
   }
 
@@ -213,7 +241,10 @@ class _MidwifeVaccinationDrivePageState
       body: SafeArea(
         child: Column(
           children: [
-            const SecondaryHeader(title: 'Schedule Vaccination Drive'),
+            SecondaryHeader(
+              title: 'Schedule Vaccination Drive',
+              onBack: () => Navigator.pop(context),
+            ),
             Expanded(
               child: _loading
                   ? const Center(
@@ -228,26 +259,21 @@ class _MidwifeVaccinationDrivePageState
                             title: 'Drive details',
                             child: Column(
                               children: [
-                                AppDropdownField<String>(
+                                // Stock is shown on every option and an empty
+                                // shelf cannot be chosen — scheduling a drive
+                                // for a vaccine the centre does not have is a
+                                // wasted trip for every mother invited.
+                                AppDropdownField<DriveVaccine>(
                                   hintText: 'Vaccine',
                                   leadingIcon: Icons.vaccines_outlined,
-                                  value: _selectedVaccine?['vaccine_name']
-                                      ?.toString(),
-                                  options: _vaccines
-                                      .map((v) =>
-                                          v['vaccine_name']?.toString() ?? '')
-                                      .where((n) => n.isNotEmpty)
-                                      .toSet()
-                                      .toList(),
-                                  displayStringForOption: (v) => v,
-                                  onSelected: (name) => setState(() {
-                                    _selectedVaccine = _vaccines.firstWhere(
-                                      (v) =>
-                                          v['vaccine_name']?.toString() == name,
-                                      orElse: () => _vaccines.first,
-                                    );
-                                    _savedDriveId = null;
-                                  }),
+                                  value: _selectedVaccine,
+                                  options: _vaccines,
+                                  displayStringForOption: (v) => v.menuLabel,
+                                  isOptionEnabled: (v) => v.canBeScheduled,
+                                  onSelected: (v) {
+                                    setState(() => _selectedVaccine = v);
+                                    _refreshRecipients();
+                                  },
                                 ),
                                 const SizedBox(height: 12),
                                 GestureDetector(
@@ -278,31 +304,27 @@ class _MidwifeVaccinationDrivePageState
                           const SizedBox(height: 16),
                           _recipientsCard(),
                           const SizedBox(height: 20),
+                          // One action, not two. Saving a drive and telling
+                          // mothers about it are the same intent, so the
+                          // screen no longer asks her to press twice — the
+                          // confirmation dialog is where she reviews and
+                          // agrees, and it still names how many people are
+                          // about to be messaged. Text messages cannot be
+                          // recalled, so that step stays.
                           MainButton(
                             label: _saving
                                 ? 'Saving…'
-                                : (_savedDriveId == null
-                                    ? 'Save drive to calendar'
-                                    : 'Saved to calendar'),
+                                : _sending
+                                    ? 'Sending…'
+                                    : (_sendResult != null
+                                        ? 'Scheduled and sent'
+                                        : 'Schedule drive & notify mothers'),
                             showIcons: false,
-                            onPressed: _saving || _savedDriveId != null
-                                ? null
-                                : _saveDrive,
+                            onPressed:
+                                _saving || _sending || _sendResult != null
+                                    ? null
+                                    : _scheduleAndNotify,
                           ),
-                          if (_savedDriveId != null) ...[
-                            const SizedBox(height: 12),
-                            MainButton(
-                              label: _sending
-                                  ? 'Sending…'
-                                  : (_sendResult == null
-                                      ? 'Notify mothers'
-                                      : 'Notifications sent'),
-                              showIcons: false,
-                              onPressed: _sending || _sendResult != null
-                                  ? null
-                                  : _sendNotifications,
-                            ),
-                          ],
                           const SizedBox(height: 28),
                         ],
                       ),
@@ -323,8 +345,14 @@ class _MidwifeVaccinationDrivePageState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Pregnant mothers who have not yet had TD2 — the second dose is '
-            'what protects the baby against tetanus at birth.',
+            _selectedVaccine?.forChildren == true
+                ? 'Children old enough for this dose who have not had it yet. '
+                    'Their mother is the one messaged — she is the contact on '
+                    'file — and the message names the child to bring.'
+                : 'Pregnant mothers whose TD series is incomplete and who are '
+                    'far enough past their last dose for the next one to '
+                    'count. The series runs to TD5; TD2 is what protects the '
+                    'baby at birth.',
             style: TextStyle(
               fontSize: 12,
               height: 1.4,
@@ -349,8 +377,9 @@ class _MidwifeVaccinationDrivePageState
             )
           else if (_recipients.isEmpty)
             const Text(
-              'Every pregnant mother here already has TD2 or more. Nobody '
-              'needs inviting.',
+              'Nobody is due on this date — either their series is complete, '
+              'or their last dose is too recent for the next one to count yet. '
+              'Try a later date.',
               style: TextStyle(fontSize: 13, color: AppColors.success),
             )
           else ...[
@@ -367,9 +396,13 @@ class _MidwifeVaccinationDrivePageState
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _recipients.length == 1
-                        ? 'mother will be invited'
-                        : 'mothers will be invited',
+                    _selectedVaccine?.forChildren == true
+                        ? (_recipients.length == 1
+                            ? 'child is due — their mother will be told'
+                            : 'children are due — their mothers will be told')
+                        : (_recipients.length == 1
+                            ? 'mother will be invited'
+                            : 'mothers will be invited'),
                     style: const TextStyle(
                         fontSize: 12, color: AppColors.textSecondary),
                   ),
@@ -424,7 +457,7 @@ class _MidwifeVaccinationDrivePageState
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(recipient.name,
+            child: Text(recipient.subjectName,
                 style: const TextStyle(fontSize: 13),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),

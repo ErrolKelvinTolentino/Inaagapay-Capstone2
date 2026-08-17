@@ -1,32 +1,10 @@
 -- ====================================================================
--- InaAgapay Migration: Link Child Vaccinations with Inventory Management
+-- Migration: Fix deduct_immunization_stock to attribute performed_by
 -- ====================================================================
+-- Previously, deduct_immunization_stock did not pass performed_by when
+-- inserting into inventory_transactions, causing auto-dispensed stock
+-- logs to default to 'System / Admin' instead of the administering midwife.
 
--- 1. Add Foreign Key linking clinical vaccines table to physical inventory catalog
-ALTER TABLE public.vaccines 
-ADD COLUMN IF NOT EXISTS inventory_item_id BIGINT REFERENCES public.inventory_items(item_id) ON DELETE SET NULL;
-
--- 2. Add administration context & inventory tracking to immunization_records
-ALTER TABLE public.immunization_records 
-ADD COLUMN IF NOT EXISTS administration_place VARCHAR(30) DEFAULT 'local_facility' 
-  CHECK (administration_place IN ('local_facility', 'external_facility')),
-ADD COLUMN IF NOT EXISTS facility_id BIGINT REFERENCES public.health_facilities(facility_id) ON DELETE SET NULL,
-ADD COLUMN IF NOT EXISTS inventory_batch_id BIGINT REFERENCES public.inventory_batches(batch_id) ON DELETE SET NULL,
-ADD COLUMN IF NOT EXISTS inventory_deducted BOOLEAN DEFAULT false;
-
--- 3. Map clinical vaccine items to physical DOH inventory items catalog
-UPDATE public.vaccines v
-SET inventory_item_id = i.item_id
-FROM public.inventory_items i
-WHERE (v.vaccine_name ILIKE '%bcg%' AND i.name ILIKE '%bcg%')
-   OR (v.vaccine_name ILIKE '%penta%' AND i.name ILIKE '%penta%')
-   OR (v.vaccine_name ILIKE '%pcv%' AND i.name ILIKE '%pcv%')
-   OR (v.vaccine_name ILIKE '%opv%' AND i.name ILIKE '%opv%')
-   OR (v.vaccine_name ILIKE '%measles%' AND (i.name ILIKE '%mr%' OR i.name ILIKE '%measles%'))
-   OR (v.vaccine_name ILIKE '%mmr%' AND (i.name ILIKE '%mr%' OR i.name ILIKE '%mmr%'))
-   OR (v.vaccine_name ILIKE '%rotavirus%' AND i.name ILIKE '%rotavirus%');
-
--- 4. Stored Procedure for Automatic FEFO Stock Deduction
 CREATE OR REPLACE FUNCTION public.deduct_immunization_stock(
   p_immunization_record_id BIGINT
 ) RETURNS jsonb AS $$
@@ -35,7 +13,12 @@ DECLARE
   v_inv_item_id BIGINT;
   v_selected_batch RECORD;
 BEGIN
-  SELECT ir.*, v.inventory_item_id, m.assigned_bhc_id, m.account_id AS midwife_account_id
+  -- Fetch immunization record details along with midwife account_id
+  SELECT 
+    ir.*, 
+    v.inventory_item_id, 
+    m.assigned_bhc_id,
+    m.account_id AS midwife_account_id
   INTO v_rec
   FROM immunization_records ir
   JOIN vaccines v ON v.vaccine_id = ir.vaccine_id
@@ -79,7 +62,7 @@ BEGIN
   SET quantity_remaining = quantity_remaining - 1
   WHERE batch_id = v_selected_batch.batch_id;
 
-  -- Log audit transaction ledger entry
+  -- Log audit transaction ledger entry with performing midwife's account_id
   INSERT INTO inventory_transactions (
     batch_id, facility_id, transaction_type, quantity, reference_type, performed_by, logged_at
   ) VALUES (

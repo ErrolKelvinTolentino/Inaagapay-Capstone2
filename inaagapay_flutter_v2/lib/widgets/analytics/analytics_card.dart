@@ -85,26 +85,72 @@ class AnalyticsCard extends StatelessWidget {
     );
   }
 
+  /// Icon, uppercase title, optional period pill.
+  ///
+  /// Matches the weight-gain card on the mother profile so that every analytic
+  /// surface in the app announces itself the same way. A midwife moving between
+  /// screens should not have to work out which chrome belongs to which kind of
+  /// card.
   Widget _header(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Icon(_glyphFor(metric.icon), color: AppColors.brandPrimary, size: 20),
+        const SizedBox(width: 8),
         Expanded(
-          child: Text(metric.title, style: AnalyticsTheme.titleStyle),
+          child: Text(
+            metric.title.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+              color: Color(0xFF5A5A5A),
+            ),
+          ),
         ),
         if (metric.periodLabel != null) ...[
           const SizedBox(width: 10),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: AppColors.bgSecondary,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Text(metric.periodLabel!, style: AnalyticsTheme.periodStyle),
           ),
         ],
       ],
     );
+  }
+
+  static IconData _glyphFor(AnalyticsIcon icon) {
+    switch (icon) {
+      case AnalyticsIcon.mothers:
+        return Icons.pregnant_woman_outlined;
+      case AnalyticsIcon.risk:
+        return Icons.shield_outlined;
+      case AnalyticsIcon.riskFactors:
+        return Icons.troubleshoot_outlined;
+      case AnalyticsIcon.vaccine:
+        return Icons.vaccines_outlined;
+      case AnalyticsIcon.supplement:
+        return Icons.medication_outlined;
+      case AnalyticsIcon.weight:
+        return Icons.monitor_weight_outlined;
+      case AnalyticsIcon.screening:
+        return Icons.water_drop_outlined;
+      case AnalyticsIcon.children:
+        return Icons.child_care_outlined;
+      case AnalyticsIcon.growth:
+        return Icons.straighten_outlined;
+      case AnalyticsIcon.immunization:
+        return Icons.shield_moon_outlined;
+      case AnalyticsIcon.stock:
+        return Icons.inventory_2_outlined;
+      case AnalyticsIcon.expiry:
+        return Icons.event_busy_outlined;
+      case AnalyticsIcon.demand:
+        return Icons.trending_up_outlined;
+    }
   }
 
   Widget _headline() {

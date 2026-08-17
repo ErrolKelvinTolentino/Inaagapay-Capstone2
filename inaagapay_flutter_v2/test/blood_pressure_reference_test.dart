@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inaagapay_flutter_v2/services/blood_pressure_reference.dart';
 
@@ -7,9 +9,9 @@ BpReading r(int sys, int dia, {double? weeks}) =>
 void main() {
   group('categorise — single reading', () {
     test('exactly 140/90 meets the threshold', () {
-      // The existing _bpStatus in add_prenatal_checkup_screen.dart compares
-      // with `>`, so it calls this reading "Stage 1" while every risk engine
-      // calls it high. The cut-point is inclusive.
+      // The _bpStatus this replaced in add_prenatal_checkup_screen.dart
+      // compared with `>`, so it called this reading "Stage 1" while every
+      // risk engine called it high. The cut-point is inclusive.
       expect(BloodPressureReference.categorise(140, 90), BpCategory.raised);
       expect(BloodPressureReference.categorise(139, 89), BpCategory.normal);
     });
@@ -84,15 +86,74 @@ void main() {
       expect(result.action, BpAction.repeatNextVisit);
     });
 
-    test('an old raised run that has since normalised does not refer', () {
+    test('an episode that has normalised stops referring but is not forgotten',
+        () {
+      // The scenario that exposed this: two raised readings met the criterion,
+      // then one normal reading reset the card to "within the usual range" and
+      // no action — as though the episode had never happened. Pressure moves
+      // with rest and time of day, so one normal value is not evidence a
+      // hypertensive episode resolved.
       final result = BloodPressureReference.assess([
-        r(144, 92, weeks: 20),
-        r(146, 94, weeks: 24),
-        r(122, 78, weeks: 28),
+        r(120, 80, weeks: 16),
+        r(120, 80, weeks: 17),
+        r(110, 90, weeks: 18),
+        r(110, 90, weeks: 19),
+        r(120, 80, weeks: 20),
       ]);
 
-      expect(result.raisedRun, isEmpty);
+      expect(result.category, BpCategory.normal);
+      expect(result.raisedRun, isEmpty, reason: 'not currently raised');
+      expect(result.everMetCriterion, isTrue, reason: 'but it happened');
+      expect(result.priorRaisedEpisode.length, 2);
+
+      // Watching, not nothing — and not still referring either.
+      expect(result.action, BpAction.monitor);
+      expect(result.needsReferral, isFalse);
+
+      expect(result.finding, contains('back within range'));
+      expect(result.finding, contains('week 18'));
+      expect(result.finding, contains('not been steady'));
+      expect(result.note, contains('does not close an earlier episode'));
+    });
+
+    test('a single earlier raised reading is not treated as an episode', () {
+      // One raised reading was never a pattern, so it must not become a
+      // permanent flag either — that is the over-calling this design avoids.
+      final result = BloodPressureReference.assess([
+        r(144, 92, weeks: 20),
+        r(122, 78, weeks: 24),
+        r(120, 80, weeks: 28),
+      ]);
+
+      expect(result.everMetCriterion, isFalse);
+      expect(result.priorRaisedEpisode, isEmpty);
       expect(result.action, BpAction.none);
+      expect(result.finding, contains('within the usual range'));
+    });
+
+    test('a past severe reading is named even once pressure settles', () {
+      final result = BloodPressureReference.assess([
+        r(164, 112, weeks: 30),
+        r(150, 96, weeks: 31),
+        r(124, 80, weeks: 32),
+      ]);
+
+      expect(result.everSevere, isTrue);
+      expect(result.action, BpAction.monitor);
+      expect(result.finding, contains('severe range'));
+    });
+
+    test('a current run still reads as current, not as history', () {
+      final result = BloodPressureReference.assess([
+        r(120, 80, weeks: 20),
+        r(144, 92, weeks: 24),
+        r(146, 94, weeks: 28),
+      ]);
+
+      expect(result.priorRaisedEpisode, isEmpty,
+          reason: 'the run is ongoing, so it is not a past episode');
+      expect(result.everMetCriterion, isTrue);
+      expect(result.action, BpAction.referForAssessment);
     });
   });
 
@@ -217,6 +278,83 @@ void main() {
       expect(finding.contains('hypertension'), isFalse);
       expect(finding.contains('preeclampsia'), isFalse);
       expect(finding, contains('140/90'));
+    });
+  });
+
+  group('gestational age is stated in completed weeks', () {
+    test('a part-week reading is not promoted to the next week', () {
+      // A visit at 10 weeks 6 days is week 10. Rounding made it week 11, and
+      // because a stored visit comes back as weeks + days/7 while the visit
+      // being typed is already floored, one afternoon could read as
+      // "week 11 and week 10" — two occasions that were in fact the same week.
+      final result = BloodPressureReference.assess([
+        r(142, 91, weeks: 10 + 6 / 7),
+        r(145, 95, weeks: 10),
+      ]);
+
+      expect(result.finding, contains('(week 10 and week 10)'));
+      expect(result.finding.contains('week 11'), isFalse);
+    });
+
+    test('the same holds for an episode that has since settled', () {
+      final result = BloodPressureReference.assess([
+        r(142, 91, weeks: 10 + 6 / 7),
+        r(145, 95, weeks: 11 + 5 / 7),
+        r(118, 76, weeks: 13),
+      ]);
+
+      expect(result.finding, contains('(week 10 and week 11)'));
+    });
+  });
+
+  group('the screens keep no rule set of their own', () {
+    // This is the guard on the consolidation. The contradiction it prevents
+    // came from a second opinion growing up beside the first: a pill drawn
+    // from AHA staging eight lines above a card applying the pregnancy
+    // thresholds, so one reading carried two severities in one section.
+    //
+    // Comments are stripped before the scan — the screens still describe what
+    // was removed, and that description should not fail the test.
+    const screens = [
+      'lib/screens/midwife/add_prenatal_checkup_screen.dart',
+      'lib/screens/mother/mother_profile_page.dart',
+      'lib/services/risk_engine.dart',
+    ];
+
+    String codeOf(String path) {
+      final file = File(path);
+      expect(file.existsSync(), isTrue,
+          reason: '$path not found — run tests from the package root');
+      return file.readAsLinesSync().map((line) {
+        final comment = line.indexOf('//');
+        return comment == -1 ? line : line.substring(0, comment);
+      }).join('\n');
+    }
+
+    test('no screen names a blood pressure stage or a condition', () {
+      for (final path in screens) {
+        final source = codeOf(path).toLowerCase();
+        for (final banned in [
+          'htn stage',
+          'stage 1 hypertension',
+          'stage 2 hypertension',
+          'hypertensive crisis',
+          'hypertension in pregnancy',
+          'hypertensive disorders',
+          'pre-hypertension',
+        ]) {
+          expect(source.contains(banned), isFalse,
+              reason: '$path names a condition ("$banned"). Blood pressure '
+                  'vocabulary belongs to BloodPressureReference');
+        }
+      }
+    });
+
+    test('both screens judge blood pressure through the shared rule set', () {
+      for (final path in screens) {
+        expect(codeOf(path), contains('BloodPressureReference'),
+            reason: '$path shows blood pressure without the cited thresholds');
+      }
     });
   });
 }
