@@ -73,3 +73,7 @@ coverage/
 !.env.example
 inaagapay-1728f4916cfb.json
 inaagapay_flutter_v2/supabase/functions/send-push/service-account.json
+
+# Supabase CLI scratch — records which project this checkout is linked to.
+# Local state, not project source.
+supabase/.temp/

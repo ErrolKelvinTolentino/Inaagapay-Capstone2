@@ -201,6 +201,16 @@ class _MidwifeVaccinationDrivePageState
       return;
     }
 
+    // Remember who this drive is for, before anything is sent. The list is
+    // what the day-before reminder re-sends to, and it is recorded for
+    // everyone who is due — including mothers with no phone, since "she was
+    // due and we could not reach her" is worth knowing.
+    await VaccinationDriveService.recordInvitations(
+      scheduleId: driveId,
+      recipients: _recipients,
+    );
+    if (!mounted) return;
+
     if (reachable == 0) {
       AppSnackbar.show(
         context,
