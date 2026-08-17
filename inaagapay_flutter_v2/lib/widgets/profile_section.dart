@@ -46,37 +46,28 @@ class ProfileCardSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header Bar matching Pic 2
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.brandPrimary.withValues(alpha: 0.06),
-                border: Border(
-                  bottom: BorderSide(
-                    color: AppColors.brandPrimary.withValues(alpha: 0.12),
-                    width: 1.0,
-                  ),
-                ),
-              ),
+            // The heading treatment used by the weight-gain and blood pressure
+            // cards, and now by the record detail screen: a small brand icon,
+            // uppercase letterspaced grey, on the card's own white.
+            //
+            // It was a tinted bar with a tinted icon chip and a pink title —
+            // three applications of the brand colour before a single record
+            // appeared, on a page that stacks eight of these sections. The
+            // heading's job is to be found, not to be looked at.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 12, 4),
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(icon, color: accent, size: 18),
-                  ),
-                  const SizedBox(width: 12),
+                  Icon(icon, color: accent, size: 16),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       title.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
                         letterSpacing: 0.5,
-                        color: accent,
+                        color: Color(0xFF5A5A5A),
                       ),
                     ),
                   ),
@@ -86,7 +77,7 @@ class ProfileCardSection extends StatelessWidget {
             ),
             // Card Content Body
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: children,
