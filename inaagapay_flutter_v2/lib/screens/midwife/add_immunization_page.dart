@@ -76,9 +76,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     'parent_recall': 'Parent recalls it',
   };
 
-  bool get _isOutside =>
-      _administrationPlace == 'external_facility' ||
-      widget.source == ImmunizationSource.outside;
+  bool get _isOutside => widget.source == ImmunizationSource.outside;
 
   /// Whether the vaccine picker is expanded. Mirrors the Add Mother form's
   /// select fields, which open in place rather than over the form.
@@ -582,6 +580,20 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     }
 
     try {
+      if (_midwifeBhcId == null) {
+        await _loadMidwifeBhcId();
+      }
+
+      if (_midwifeBhcId == null) {
+        if (mounted) {
+          setState(() {
+            _bhcStockCount = 0;
+            _bhcStockLoading = false;
+          });
+        }
+        return;
+      }
+
       final vRes = await Supabase.instance.client
           .from('vaccines')
           .select('vaccine_name, inventory_item_id')
@@ -636,31 +648,24 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
       final today = DateTime.now().toIso8601String().split('T')[0];
       final batchesRes = await Supabase.instance.client
           .from('inventory_batches')
-          .select('quantity_remaining, facility_id')
+          .select('quantity_remaining, doses_remaining_in_open_vial, facility_id, item:inventory_items(doses_per_unit)')
           .eq('item_id', itemId)
+          .eq('facility_id', _midwifeBhcId!)
           .eq('status', 'active')
           .gte('expiration_date', today);
 
-      int total = 0;
-      final facilityBatches = (batchesRes as List<dynamic>).where((b) {
-        if (_midwifeBhcId == null) return true;
-        final fId = b['facility_id'];
-        return fId == _midwifeBhcId || fId == null || fId == 0;
-      }).toList();
-
-      for (final b in facilityBatches) {
-        total += (b['quantity_remaining'] as num? ?? 0).toInt();
-      }
-
-      if (total == 0 && batchesRes.isNotEmpty) {
-        for (final b in (batchesRes as List<dynamic>)) {
-          total += (b['quantity_remaining'] as num? ?? 0).toInt();
-        }
+      int totalDoses = 0;
+      for (final b in (batchesRes as List<dynamic>)) {
+        final sealedQty = (b['quantity_remaining'] as num? ?? 0).toInt();
+        final openDoses = (b['doses_remaining_in_open_vial'] as num? ?? 0).toInt();
+        final itemMap = b['item'] as Map<String, dynamic>?;
+        final dosesPerUnit = (itemMap?['doses_per_unit'] as num? ?? 1).toInt();
+        totalDoses += (sealedQty * dosesPerUnit) + openDoses;
       }
 
       if (mounted) {
         setState(() {
-          _bhcStockCount = total;
+          _bhcStockCount = totalDoses;
           _bhcStockLoading = false;
         });
       }
@@ -1422,7 +1427,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           'Out of Stock',
           'There are no remaining vials for this vaccine at your BHC. '
           'You cannot deduct stock when count is 0. '
-          'Please select "Elsewhere" if administered at another clinic, or request stock replenishment.',
+          'Please request stock replenishment or go back to record a dose given elsewhere.',
         );
       }
       return false;
@@ -1700,7 +1705,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'BHC Stock Available: $_bhcStockCount vials',
+                'BHC Stock Available: $_bhcStockCount dose${_bhcStockCount == 1 ? '' : 's'}',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF065F46)),
               ),
             ),
@@ -1724,7 +1729,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Low Stock Warning: Only $_bhcStockCount vials remaining at this BHC.',
+                'Low Stock Warning: Only $_bhcStockCount dose${_bhcStockCount == 1 ? '' : 's'} remaining at this BHC.',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
               ),
             ),
@@ -1747,7 +1752,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Out of Stock: 0 vials available at this BHC. Switch to "Elsewhere" or request stock replenishment.',
+              'Out of Stock: 0 vials available at this BHC. Request stock replenishment or go back to record a dose given elsewhere.',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
             ),
           ),
@@ -1867,133 +1872,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
                         ),
                       ),
                     ),
-
-                  const SizedBox(height: 16),
-
-                  // Administration Location Selector
-                  const Text(
-                    'Vaccine Administration Location',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() => _administrationPlace = 'local_facility');
-                            if (_selectedVaccineId != null) {
-                              _checkBhcStock(_selectedVaccineId!);
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: _administrationPlace == 'local_facility'
-                                  ? AppColors.brandPrimary.withValues(alpha: 0.12)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: _administrationPlace == 'local_facility'
-                                    ? AppColors.brandPrimary
-                                    : AppColors.borderPrimary,
-                                width: _administrationPlace == 'local_facility' ? 1.5 : 1,
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.location_on_rounded,
-                                      size: 16,
-                                      color: _administrationPlace == 'local_facility'
-                                          ? AppColors.brandPrimary
-                                          : AppColors.textSecondary,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'At this BHC',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: _administrationPlace == 'local_facility'
-                                            ? AppColors.brandPrimary
-                                            : AppColors.textPrimary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                const Text(
-                                  'Deducts BHC Stock',
-                                  style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => setState(() => _administrationPlace = 'external_facility'),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: _administrationPlace == 'external_facility'
-                                  ? AppColors.brandPrimary.withValues(alpha: 0.12)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: _administrationPlace == 'external_facility'
-                                    ? AppColors.brandPrimary
-                                    : AppColors.borderPrimary,
-                                width: _administrationPlace == 'external_facility' ? 1.5 : 1,
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.local_hospital_outlined,
-                                      size: 16,
-                                      color: _administrationPlace == 'external_facility'
-                                          ? AppColors.brandPrimary
-                                          : AppColors.textSecondary,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Elsewhere',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: _administrationPlace == 'external_facility'
-                                            ? AppColors.brandPrimary
-                                            : AppColors.textPrimary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                const Text(
-                                  'Record Only',
-                                  style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
 
                   _buildBhcStockCard(),
 

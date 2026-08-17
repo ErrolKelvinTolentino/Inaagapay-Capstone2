@@ -206,8 +206,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   final _calciumQtyCtrl = TextEditingController();
 
   int? _fetalCount;
-  int? _originalFetalCount;
-  bool _loadingFetalCount = true;
 
   String _edema = 'none';
 
@@ -231,13 +229,14 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   int _step = 0;
   static const int _totalSteps = 6;
   bool _submitting = false;
-  bool _loadingSymptomTypes = false;
-  final String _symptomRiskFilter = 'all';
   int? _midwifeId;
+  int? _midwifeBhcId;
   String? _midwifeName;
   int? _accountId;
-  bool _loadingRiskPreview = false;
-  String? _riskPreviewError;
+  int _tdStockAvailable = 0;
+  int _ferrousStockAvailable = 0;
+  int _calciumStockAvailable = 0;
+  bool _tdGivenOnSite = true;
   _RiskSnapshot? _riskSnapshot;
   String? _lastRiskSignature;
   String? _lastRiskAiPrompt;
@@ -382,16 +381,12 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
       if (res != null && mounted) {
         final dbFetalCount = int.tryParse(res['fetal_count']?.toString() ?? '');
         setState(() {
-          _originalFetalCount = dbFetalCount;
           // Only reflect fetal count if there are ultrasound records; otherwise display Unknown
           _fetalCount = hasUltrasound ? dbFetalCount : null;
-          _loadingFetalCount = false;
         });
-      } else {
-        if (mounted) setState(() => _loadingFetalCount = false);
       }
     } catch (_) {
-      if (mounted) setState(() => _loadingFetalCount = false);
+      // ignore
     }
   }
 
@@ -475,12 +470,13 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     try {
       final result = await Supabase.instance.client
           .from('midwives')
-          .select('midwife_id, account:accounts(first_name, last_name)')
+          .select('midwife_id, assigned_bhc_id, account:accounts(first_name, last_name)')
           .eq('account_id', accountId)
           .maybeSingle();
 
       if (result != null && mounted) {
         final mwId = result['midwife_id'] as int;
+        final bhcId = result['assigned_bhc_id'] as int?;
         String? mwName;
         final acc = result['account'] as Map<String, dynamic>?;
         if (acc != null) {
@@ -488,14 +484,67 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
         }
         setState(() {
           _midwifeId = mwId;
+          _midwifeBhcId = bhcId;
           _midwifeName = mwName;
         });
+        if (bhcId != null) {
+          _loadFacilityInventory(bhcId);
+        }
       }
     } catch (_) {}
   }
 
+  Future<void> _loadFacilityInventory(int facilityId) async {
+    if (!mounted) return;
+    try {
+      final batches = await Supabase.instance.client
+          .from('inventory_batches')
+          .select('quantity_remaining, expiration_date, status, doses_remaining_in_open_vial, item:inventory_items(name, generic_name, item_type, doses_per_unit)')
+          .eq('facility_id', facilityId)
+          .eq('status', 'active');
+
+      int tdDoses = 0;
+      int ferrousTabs = 0;
+      int calciumTabs = 0;
+      final now = DateTime.now();
+
+      for (final b in (batches as List)) {
+        final expStr = b['expiration_date']?.toString();
+        if (expStr != null) {
+          final exp = DateTime.tryParse(expStr);
+          if (exp != null && exp.isBefore(now)) continue;
+        }
+        final item = b['item'] as Map<String, dynamic>?;
+        if (item == null) continue;
+        final name = (item['name']?.toString() ?? '').toLowerCase();
+        final generic = (item['generic_name']?.toString() ?? '').toLowerCase();
+        final type = (item['item_type']?.toString() ?? '').toLowerCase();
+        final qty = (b['quantity_remaining'] as num?)?.toInt() ?? 0;
+        final dosesPerUnit = (item['doses_per_unit'] as num?)?.toInt() ?? 1;
+        final openDoses = (b['doses_remaining_in_open_vial'] as num?)?.toInt() ?? 0;
+
+        if (name.contains('td') || name.contains('tetanus') || generic.contains('tetanus') || (type == 'vaccine' && name.contains('td'))) {
+          tdDoses += (qty * dosesPerUnit) + openDoses;
+        } else if (name.contains('ferrous') || generic.contains('ferrous') || name.contains('iron')) {
+          ferrousTabs += qty;
+        } else if (name.contains('calcium') || generic.contains('calcium')) {
+          calciumTabs += qty;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _tdStockAvailable = tdDoses;
+          _ferrousStockAvailable = ferrousTabs;
+          _calciumStockAvailable = calciumTabs;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading facility inventory: $e');
+    }
+  }
+
   Future<void> _loadSymptomTypes() async {
-    setState(() => _loadingSymptomTypes = true);
     try {
       final rows = await Supabase.instance.client
           .from('symptom_types')
@@ -582,8 +631,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     } catch (_) {
       if (!mounted) return;
       _showMessage('Unable to load symptom types. Please try again.');
-    } finally {
-      if (mounted) setState(() => _loadingSymptomTypes = false);
     }
   }
 
@@ -735,24 +782,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   int? _ageFromBirthdate(DateTime? birthdate) {
     if (birthdate == null) return null;
     return (DateTime.now().difference(birthdate).inDays / 365.25).floor();
-  }
-
-  Color _riskLevelColor(String level) {
-    switch (level) {
-      case 'high':
-        return AppColors.error;
-      default:
-        return AppColors.success;
-    }
-  }
-
-  String _riskLevelLabel(String level) {
-    switch (level) {
-      case 'high':
-        return 'High Risk';
-      default:
-        return 'Low Risk';
-    }
   }
 
   String _currentRiskSignature() {
@@ -1031,12 +1060,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     final conditions =
         (_motherRiskContext?['medical_conditions'] as List? ?? const [])
             .cast<dynamic>();
-    final pastPregnancies =
-        (_motherRiskContext?['past_pregnancies'] as List? ?? const [])
-            .cast<dynamic>();
-    final pastPregnancyOutcomes =
-        (_motherRiskContext?['past_pregnancy_outcomes'] as List? ?? const [])
-            .cast<dynamic>();
 
     final currentLmp =
         _tryDate(pregnancy?['last_menstrual_period']) ?? widget.lmp;
@@ -1161,87 +1184,11 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
 
   String _buildAiPrompt(_RiskSnapshot draft) {
     final mother = _motherRiskContext?['mother'] as Map<String, dynamic>?;
-    final pregnancy = _motherRiskContext?['pregnancy'] as Map<String, dynamic>?;
-    final conditions =
-        (_motherRiskContext?['medical_conditions'] as List? ?? const [])
-            .cast<dynamic>();
-    final allergies =
-        (_motherRiskContext?['allergies'] as List? ?? const []).cast<dynamic>();
-    final pastPregnancies =
-        (_motherRiskContext?['past_pregnancies'] as List? ?? const [])
-            .cast<dynamic>();
-    final pastPregnancyOutcomes =
-        (_motherRiskContext?['past_pregnancy_outcomes'] as List? ?? const [])
-            .cast<dynamic>();
-    final previousCheckups =
-        (_motherRiskContext?['previous_checkups'] as List? ?? const [])
-            .cast<dynamic>();
-
-    final Map<int, List<Map<String, dynamic>>> outcomesByPregnancy = {};
-    for (final row in pastPregnancyOutcomes) {
-      if (row is! Map<String, dynamic>) continue;
-      final pid = row['pregnancy_id'] as int?;
-      if (pid == null) continue;
-      outcomesByPregnancy
-          .putIfAbsent(pid, () => <Map<String, dynamic>>[])
-          .add(row);
-    }
-
-    final activeConditionLines = conditions
-        .where((c) => (c['status'] ?? '').toString().toLowerCase() == 'active')
-        .map((c) {
-      final name = (c['condition_name'] ?? 'Unknown condition').toString();
-      final diagnosis = (c['diagnosis_date'] ?? '').toString();
-      return diagnosis.isEmpty ? '- $name' : '- $name (diagnosed: $diagnosis)';
-    }).toList();
-
-    final activeAllergyLines = allergies
-        .where((a) => (a['status'] ?? '').toString().toLowerCase() == 'active')
-        .map((a) {
-      final name = (a['allergen'] ?? 'Unknown allergen').toString();
-      final diagnosis = (a['diagnosis_date'] ?? '').toString();
-      return diagnosis.isEmpty ? '- $name' : '- $name (noted: $diagnosis)';
-    }).toList();
-
-    final pastPregnancyLines = pastPregnancies.map((p) {
-      final pid = p['pregnancy_id'] as int?;
-      final fetalCount = p['fetal_count']?.toString() ?? '1';
-      final linkedOutcomes = pid == null
-          ? <Map<String, dynamic>>[]
-          : (outcomesByPregnancy[pid] ?? <Map<String, dynamic>>[]);
-
-      if (linkedOutcomes.isNotEmpty) {
-        final details = linkedOutcomes.asMap().entries.map((e) {
-          final o = e.value;
-          final outcome = (o['outcome'] ?? 'unknown').toString();
-          final date = (o['outcome_date'] ?? 'unknown').toString();
-          final method = (o['delivery_method'] ?? '').toString();
-          return 'F${e.key + 1}: $outcome on $date${method.isEmpty ? '' : ', method: $method'}';
-        }).join(' | ');
-        return '- pregnancy ${pid ?? 'unknown'} (fetal_count: $fetalCount): $details';
-      }
-
-      final outcome = (p['outcome'] ?? 'unknown').toString();
-      final date = (p['outcome_date'] ?? 'unknown').toString();
-      return '- pregnancy ${pid ?? 'unknown'} (fetal_count: $fetalCount): $outcome on $date';
-    }).toList();
-
-    final previousCheckupLines = previousCheckups.map((c) {
-      final date = (c['checkup_datetime'] ?? 'unknown').toString();
-      final weight = (c['checkup_weight'] ?? 'n/a').toString();
-      final sys = (c['blood_pressure_systolic'] ?? 'n/a').toString();
-      final dia = (c['blood_pressure_diastolic'] ?? 'n/a').toString();
-      final fhr = (c['fetal_heart_beat'] ?? 'n/a').toString();
-      return '- $date | wt: $weight kg | BP: $sys/$dia | FHR: $fhr';
-    }).toList();
 
     final symptomLines = _symptoms
         .map((s) =>
             '- ${s.name} [${s.riskCategory}]${(s.notes ?? '').trim().isEmpty ? '' : ' | note: ${s.notes!.trim()}'}')
         .toList();
-
-    // Calculate Maternal Age
-    final maternalAge = _ageFromBirthdate(_tryDate(mother?['birthdate']));
 
     // Calculate Weight Gain Evaluation using unified baseline resolution
     WeightGainResult? wgResult;
@@ -1287,7 +1234,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     final sysVal = int.tryParse(_sysCtrl.text.trim());
     final diaVal = int.tryParse(_diaCtrl.text.trim());
     final String bpAssessmentStr;
-    final bool isBpNormal = sysVal != null && diaVal != null && (sysVal >= 90 && sysVal < 120) && (diaVal >= 60 && diaVal < 80);
 
     if (sysVal != null && diaVal != null) {
       if (sysVal >= 140 || diaVal >= 90) {
@@ -1303,43 +1249,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
       bpAssessmentStr = 'Not recorded';
     }
 
-    // Compute trimester from gestational age
-    final String trimester;
-    if (_aogWeeks != null) {
-      if (_aogWeeks! <= 12) {
-        trimester = '1st trimester';
-      } else if (_aogWeeks! <= 27) {
-        trimester = '2nd trimester';
-      } else {
-        trimester = '3rd trimester';
-      }
-    } else {
-      trimester = 'unknown';
-    }
-
-    // Compute weight gain trend from previous checkups
-    final weightTrendLines = <String>[];
-    if (previousCheckups.length >= 2) {
-      for (int i = 1; i < previousCheckups.length; i++) {
-        final prev = previousCheckups[i - 1];
-        final curr = previousCheckups[i];
-        final prevW =
-            double.tryParse((prev['checkup_weight'] ?? '').toString());
-        final currW =
-            double.tryParse((curr['checkup_weight'] ?? '').toString());
-        if (prevW != null && currW != null) {
-          final diff = currW - prevW;
-          final prevDate = (prev['checkup_datetime'] ?? '').toString();
-          final currDate = (curr['checkup_datetime'] ?? '').toString();
-          weightTrendLines.add(
-              '- $prevDate to $currDate: ${diff >= 0 ? '+' : ''}${diff.toStringAsFixed(1)} kg');
-        }
-      }
-    }
-
     final aogWeekStr = _aogWeeks != null ? '${_aogWeeks!.toInt()}' : '7';
-    final sysText = _sysCtrl.text.trim();
-    final diaText = _diaCtrl.text.trim();
 
     return '''[CRITICAL INSTRUCTIONS - ANATOMY & STRUCTURE MANDATE]
 
@@ -1419,8 +1329,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
     final draft = _buildRuleBasedRiskSnapshot();
     setState(() {
-      _loadingRiskPreview = true;
-      _riskPreviewError = null;
       _riskSnapshot = draft;
     });
 
@@ -1461,15 +1369,9 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           aiGenerated: false,
           aiModel: null,
         );
-        _riskPreviewError =
-            'AI insight unavailable right now. Showing rule-based assessment.';
         _syncEditableRiskState(_riskSnapshot!, mergedText);
         _lastRiskSignature = signature;
       });
-    } finally {
-      if (mounted) {
-        setState(() => _loadingRiskPreview = false);
-      }
     }
   }
 
@@ -1589,10 +1491,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     return lmp?.add(const Duration(days: 280));
   }
 
-  String _formatDate(DateTime? date) {
-    return date == null ? 'unknown' : DateFormat('yyyy-MM-dd').format(date);
-  }
-
   double? get _aogWeeks {
     final lmp = _effectiveLmp();
     if (lmp == null) return null;
@@ -1612,7 +1510,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
     // Physiological validation
     if (sys <= dia) {
-      print('Warning: Systolic ≤ Diastolic - possible measurement error');
+      debugPrint('Warning: Systolic ≤ Diastolic - possible measurement error');
       return _BpStatus.unknown;
     }
 
@@ -2113,34 +2011,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     }
   }
 
-  List<SymptomType> _symptomsByRisk(String riskCategory) {
-    final query = _symptomSearchCtrl.text.trim().toLowerCase();
-    final grouped = _symptomTypes.where((s) => s.riskCategory == riskCategory);
-    if (query.isEmpty) return grouped.toList();
-
-    return grouped
-        .where((s) =>
-            s.name.toLowerCase().contains(query) ||
-            (s.description ?? '').toLowerCase().contains(query))
-        .toList();
-  }
-
-  bool _isSymptomSelected(int symptomTypeId) {
-    return _symptoms.any((s) => s.symptomTypeId == symptomTypeId);
-  }
-
-  int get _severeSymptomCount =>
-      _symptoms.where((s) => s.riskCategory == 'danger').length;
-
-  List<String> get _severeSymptomNames => _symptoms
-      .where((s) => s.riskCategory == 'danger')
-      .map((s) => s.name)
-      .toList();
-
-  bool _passesRiskFilter(String riskCategory) {
-    return _symptomRiskFilter == 'all' || _symptomRiskFilter == riskCategory;
-  }
-
   bool _validateCurrentStep() {
     if (_step == 0) {
       // Date is auto-locked to now, no date validation needed.
@@ -2240,151 +2110,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     return true;
   }
 
-  Future<void> _openSymptomNotesDialog(SymptomType symptomType) async {
-    if (_isSymptomSelected(symptomType.id)) {
-      _showMessage('${symptomType.name} is already recorded.');
-      return;
-    }
-
-    final notesCtrl = TextEditingController();
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.close, color: AppColors.brandText),
-                      onPressed: () => Navigator.pop(context, false),
-                    ),
-                    const Expanded(
-                      child: Center(
-                        child: Text(
-                          'Add Symptom',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color: AppColors.brandText,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 48),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  symptomType.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _riskColor(symptomType.riskCategory)
-                        .withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: _riskColor(symptomType.riskCategory)
-                          .withValues(alpha: 0.35),
-                    ),
-                  ),
-                  child: Text(
-                    _riskLabel(symptomType.riskCategory),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: _riskColor(symptomType.riskCategory),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border:
-                        Border.all(color: AppColors.borderPrimary, width: 1.5),
-                  ),
-                  child: TextField(
-                    controller: notesCtrl,
-                    maxLines: 2,
-                    maxLength: 200,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Notes (optional)',
-                      hintStyle: TextStyle(
-                          color: AppColors.textSecondary, fontSize: 14),
-                      counterText: '',
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.brandPrimary,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24)),
-                    ),
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Add Symptom',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (saved == true) {
-      final nameLower = symptomType.name.trim().toLowerCase();
-      final exists = _symptoms.any((s) =>
-          (s.symptomTypeId == symptomType.id) ||
-          s.name.trim().toLowerCase() == nameLower);
-      if (!exists) {
-        setState(() {
-          _symptoms.add(
-            _SymptomEntry(
-              symptomTypeId: symptomType.id,
-              name: symptomType.name,
-              riskCategory: symptomType.riskCategory,
-              notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
-            ),
-          );
-        });
-      } else {
-        _showMessage('${symptomType.name} is already recorded.');
-      }
-    }
-
-    notesCtrl.dispose();
-  }
-
-
-
   Future<void> _confirmClearAllSymptoms() async {
     if (_symptoms.isEmpty) return;
     final confirmed = await showDialog<bool>(
@@ -2412,74 +2137,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     if (confirmed == true && mounted) {
       setState(() => _symptoms.clear());
     }
-  }
-
-  Widget _buildSymptomGroup({
-    required String title,
-    required String riskCategory,
-  }) {
-    if (!_passesRiskFilter(riskCategory)) return const SizedBox.shrink();
-    final color = _riskColor(riskCategory);
-    final group = _symptomsByRisk(riskCategory);
-    if (group.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: color,
-                  letterSpacing: 0.4,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: group.map((symptomType) {
-              final selected = _isSymptomSelected(symptomType.id);
-              return ActionChip(
-                label: Text(
-                  symptomType.name,
-                  style: TextStyle(
-                    color: selected ? Colors.white : color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                backgroundColor: selected ? color : Colors.white,
-                side: BorderSide(color: color),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20)),
-                onPressed: () {
-                  if (!selected) {
-                    _openSymptomNotesDialog(symptomType);
-                  } else {
-                    setState(() => _symptoms.removeWhere(
-                        (item) => item.symptomTypeId == symptomType.id));
-                  }
-                },
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _pickNextSchedule() async {
@@ -3038,6 +2695,28 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       await _insertSymptomRecords(encounterId);
 
       await _insertSupplementRecords();
+
+      // Atomic inventory deduction for supplements and maternal Td vaccine
+      if (_midwifeBhcId != null) {
+        try {
+          final shouldDeductTd = _tdGivenOnSite &&
+              _tdDose != null &&
+              _tdDose!.trim().isNotEmpty &&
+              _tdDose!.trim() != '-';
+
+          await Supabase.instance.client.rpc(
+            'deduct_prenatal_encounter_inventory',
+            params: {
+              'p_encounter_id': encounterId,
+              'p_facility_id': _midwifeBhcId,
+              'p_performed_by': _accountId ?? _midwifeId,
+              'p_deduct_td': shouldDeductTd,
+            },
+          );
+        } catch (invErr) {
+          debugPrint('Prenatal inventory deduction warning: $invErr');
+        }
+      }
 
       await _persistRiskAssessment(encounterId);
 
@@ -4109,58 +3788,371 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   }
 
   Widget _buildStep3() {
+    final tdDoseDefinitions = [
+      {'dose': 'Td1', 'timing': 'Early in pregnancy', 'protection': 'Initial sensitization'},
+      {'dose': 'Td2', 'timing': 'At least 4 weeks after Td1', 'protection': '3 years infant & maternal protection'},
+      {'dose': 'Td3', 'timing': 'At least 6 months after Td2', 'protection': '5 years protection'},
+      {'dose': 'Td4', 'timing': 'At least 1 year after Td3', 'protection': '10 years protection'},
+      {'dose': 'Td5', 'timing': 'At least 1 year after Td4', 'protection': 'Lifetime maternal protection'},
+    ];
+
+    final takenSet = _allTakenTdDoses;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ── 1. Supplements Section ──────────────────────────────────────────
         _sectionCard(
-          title: 'Supplements',
+          title: 'Supplements Dispensing',
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AppInputField(
-                hintText: 'Ferrous + FA quantity',
-                controller: _ferrousQtyCtrl,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                errorText: _ferrousError,
+              Row(
+                children: [
+                  Expanded(
+                    child: AppInputField(
+                      hintText: 'Ferrous Sulfate + FA (tabs)',
+                      controller: _ferrousQtyCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      errorText: _ferrousError,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              AppInputField(
-                hintText: 'Calcium quantity',
-                controller: _calciumQtyCtrl,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                errorText: _calciumError,
+              if (_midwifeBhcId != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 10, left: 4),
+                  child: Text(
+                    'Available at BHC: $_ferrousStockAvailable tabs',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      color: _ferrousStockAvailable > 0 ? Colors.grey.shade600 : AppColors.error,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppInputField(
+                      hintText: 'Calcium Carbonate (tabs)',
+                      controller: _calciumQtyCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      errorText: _calciumError,
+                    ),
+                  ),
+                ],
               ),
+              if (_midwifeBhcId != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, left: 4),
+                  child: Text(
+                    'Available at BHC: $_calciumStockAvailable tabs',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      color: _calciumStockAvailable > 0 ? Colors.grey.shade600 : AppColors.error,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
+
+        // ── 2. Maternal Td Immunization Timeline & Inventory Section ────────
         _sectionCard(
-          title: 'TD Vaccine',
-          child: _availableTdDoses.isEmpty
-              ? Row(
-                  children: const [
-                    Icon(Icons.check_circle_outline,
-                        color: AppColors.success, size: 18),
-                    SizedBox(width: 8),
-                    Text(
-                      'Complete TD vaccination received.',
-                      style: TextStyle(color: AppColors.success),
+          title: 'Maternal Td Immunization',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'DOH Td Vaccination Tracker',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
                     ),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AppDropdownField<String>(
-                      hintText: 'Select dose given today',
-                      value: _tdDose,
-                      options: _availableTdDoses,
-                      displayStringForOption: (t) => t,
-                      onSelected: (value) => setState(() => _tdDose = value),
+                  ),
+                  if (_midwifeBhcId != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: _tdStockAvailable > 0 ? Colors.teal.shade50 : Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _tdStockAvailable > 0 ? Colors.teal.shade200 : Colors.red.shade200,
+                        ),
+                      ),
+                      child: Text(
+                        'BHC Stock: $_tdStockAvailable dose${_tdStockAvailable == 1 ? '' : 's'}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: _tdStockAvailable > 0 ? Colors.teal.shade800 : AppColors.error,
+                        ),
+                      ),
                     ),
-                  ],
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // DOH 5-Dose Protection Timeline Grid
+              Column(
+                children: tdDoseDefinitions.map((d) {
+                  final doseKey = d['dose']!;
+                  final isCompleted = takenSet.contains(doseKey);
+                  final isSelectedToday = _tdDose == doseKey;
+                  final isAvailable = _availableTdDoses.contains(doseKey);
+
+                  Color cardBg = Colors.white;
+                  Color borderColor = Colors.grey.shade200;
+                  Widget statusBadge = const SizedBox.shrink();
+
+                  if (isCompleted) {
+                    cardBg = Colors.green.shade50.withValues(alpha: 0.6);
+                    borderColor = Colors.green.shade200;
+                    statusBadge = Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_circle, size: 12, color: Colors.green.shade800),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Completed',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green.shade900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  } else if (isSelectedToday) {
+                    cardBg = AppColors.brandPrimary.withValues(alpha: 0.08);
+                    borderColor = AppColors.brandPrimary;
+                    statusBadge = Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.brandPrimary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'Giving Today',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    );
+                  } else if (isAvailable) {
+                    borderColor = Colors.amber.shade400;
+                    statusBadge = Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: Text(
+                        'Next Recommended',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber.shade900,
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: isCompleted
+                          ? null
+                          : () {
+                              setState(() {
+                                if (_tdDose == doseKey) {
+                                  _tdDose = null;
+                                } else {
+                                  _tdDose = doseKey;
+                                }
+                              });
+                            },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: cardBg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: borderColor, width: isSelectedToday ? 1.5 : 1.0),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: isCompleted
+                                    ? Colors.green.shade600
+                                    : (isSelectedToday ? AppColors.brandPrimary : Colors.grey.shade100),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  doseKey,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: (isCompleted || isSelectedToday) ? Colors.white : Colors.grey.shade700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        d['timing']!,
+                                        style: const TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      statusBadge,
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    d['protection']!,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+
+              // Administration mode selection when a dose is chosen
+              if (_tdDose != null && _tdDose!.isNotEmpty && _tdDose != '-') ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Vaccine Administration Source',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ChoiceChip(
+                              label: const Text('Administered at BHC'),
+                              selected: _tdGivenOnSite,
+                              selectedColor: AppColors.brandPrimary.withValues(alpha: 0.15),
+                              labelStyle: TextStyle(
+                                fontSize: 12,
+                                fontWeight: _tdGivenOnSite ? FontWeight.bold : FontWeight.normal,
+                                color: _tdGivenOnSite ? AppColors.brandPrimary : Colors.grey.shade700,
+                              ),
+                              onSelected: (val) {
+                                if (val) setState(() => _tdGivenOnSite = true);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ChoiceChip(
+                              label: const Text('Outside Clinic / Hospital'),
+                              selected: !_tdGivenOnSite,
+                              selectedColor: Colors.blue.shade50,
+                              labelStyle: TextStyle(
+                                fontSize: 12,
+                                fontWeight: !_tdGivenOnSite ? FontWeight.bold : FontWeight.normal,
+                                color: !_tdGivenOnSite ? Colors.blue.shade800 : Colors.grey.shade700,
+                              ),
+                              onSelected: (val) {
+                                if (val) setState(() => _tdGivenOnSite = false);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _tdGivenOnSite ? Colors.teal.shade50 : Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _tdGivenOnSite ? Icons.inventory_2_outlined : Icons.info_outline,
+                              size: 14,
+                              color: _tdGivenOnSite ? Colors.teal.shade800 : Colors.blue.shade800,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _tdGivenOnSite
+                                    ? '1 dose will be deducted from active BHC Td vaccine inventory on save.'
+                                    : 'Record only. No BHC inventory will be deducted.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: _tdGivenOnSite ? Colors.teal.shade900 : Colors.blue.shade900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+              ],
+            ],
+          ),
         ),
       ],
     );

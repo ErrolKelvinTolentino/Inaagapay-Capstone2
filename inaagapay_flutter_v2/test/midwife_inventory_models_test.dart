@@ -97,5 +97,64 @@ void main() {
       expect(legacyBatch.status, 'unknown');
       expect(stock.quantityOn(today), 0);
     });
+
+    test('correctly evaluates open vial expiry after 6 hours', () {
+      final openedAt = DateTime.now().subtract(const Duration(hours: 7));
+      final batch = InventoryBatchRecord(
+        batchId: 99,
+        itemId: 1,
+        facilityId: 3,
+        batchNumber: 'BCG-OPEN',
+        quantityReceived: 10,
+        quantityRemaining: 5,
+        receivedDate: DateTime.now(),
+        expirationDate: DateTime.now().add(const Duration(days: 100)),
+        manufacturer: 'DOH',
+        status: 'active',
+        dosesRemainingInOpenVial: 14,
+        openVialsCount: 1,
+        vialOpenedAt: openedAt,
+      );
+
+      expect(batch.isOpenVialExpired(DateTime.now(), 6), isTrue);
+      expect(batch.isOpenVialExpired(DateTime.now(), 24), isFalse);
+    });
+
+    test('calculates total available doses combining sealed units and open vials', () {
+      const vaccineCatalog = InventoryCatalogRecord(
+        itemId: 1,
+        name: 'BCG Vaccine',
+        genericName: 'BCG',
+        itemCode: 'VAC-BCG',
+        strengthDescription: '0.05mL',
+        dosageForm: 'Vial',
+        itemType: 'vaccine',
+        unit: 'vials',
+        minimumStock: 10,
+        dosesPerUnit: 20,
+      );
+
+      final stock = FacilityInventoryRecord(
+        catalog: vaccineCatalog,
+        batches: [
+          InventoryBatchRecord(
+            batchId: 101,
+            itemId: 1,
+            facilityId: 3,
+            batchNumber: 'BCG-101',
+            quantityReceived: 5,
+            quantityRemaining: 3, // 3 sealed vials * 20 doses = 60 doses
+            receivedDate: DateTime.now(),
+            expirationDate: DateTime.now().add(const Duration(days: 200)),
+            manufacturer: 'DOH',
+            status: 'active',
+            dosesRemainingInOpenVial: 12, // 12 doses left in open vial
+            openVialsCount: 1,
+          ),
+        ],
+      );
+
+      expect(stock.availableDosesOn(), 72); // 60 + 12 = 72 available doses
+    });
   });
 }

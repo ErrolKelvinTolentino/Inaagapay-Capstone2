@@ -83,6 +83,8 @@ class InventoryCatalogRecord {
     required this.itemType,
     required this.unit,
     required this.minimumStock,
+    this.dosesPerUnit = 1,
+    this.openVialShelfHours = 6,
     this.isArchived = false,
   });
 
@@ -97,6 +99,8 @@ class InventoryCatalogRecord {
       itemType: _asString(json['item_type'], fallback: 'other'),
       unit: _asString(json['unit_of_measure'], fallback: 'units'),
       minimumStock: _asInt(json['minimum_stock_threshold'], fallback: 50),
+      dosesPerUnit: _asInt(json['doses_per_unit'], fallback: 1),
+      openVialShelfHours: _asInt(json['open_vial_shelf_hours'], fallback: 6),
       isArchived: json['is_archived'] == true,
     );
   }
@@ -110,6 +114,8 @@ class InventoryCatalogRecord {
   final String itemType;
   final String unit;
   final int minimumStock;
+  final int dosesPerUnit;
+  final int openVialShelfHours;
   final bool isArchived;
 }
 
@@ -125,6 +131,9 @@ class InventoryBatchRecord {
     required this.expirationDate,
     required this.manufacturer,
     required this.status,
+    this.dosesRemainingInOpenVial = 0,
+    this.openVialsCount = 0,
+    this.vialOpenedAt,
   });
 
   factory InventoryBatchRecord.fromJson(Map<String, dynamic> json) {
@@ -140,6 +149,9 @@ class InventoryBatchRecord {
       expirationDate: _asDate(json['expiration_date']),
       manufacturer: _asString(json['manufacturer']),
       status: _asString(json['status'], fallback: 'unknown'),
+      dosesRemainingInOpenVial: _asInt(json['doses_remaining_in_open_vial'], fallback: 0),
+      openVialsCount: _asInt(json['open_vials_count'], fallback: 0),
+      vialOpenedAt: _asDate(json['vial_opened_at']),
     );
   }
 
@@ -153,8 +165,17 @@ class InventoryBatchRecord {
   final DateTime? expirationDate;
   final String manufacturer;
   final String status;
+  final int dosesRemainingInOpenVial;
+  final int openVialsCount;
+  final DateTime? vialOpenedAt;
 
   bool get isActive => status.toLowerCase() == 'active';
+
+  bool isOpenVialExpired([DateTime? now, int shelfHours = 6]) {
+    if (dosesRemainingInOpenVial <= 0 || vialOpenedAt == null || shelfHours <= 0) return false;
+    final current = now ?? DateTime.now();
+    return current.difference(vialOpenedAt!).inHours >= shelfHours;
+  }
 
   DateTime? get expirationDay {
     final value = expirationDate;
@@ -182,7 +203,7 @@ class InventoryBatchRecord {
   }
 
   bool isUsableOn([DateTime? day]) {
-    return isActive && quantityRemaining > 0 && !isExpiredOn(day);
+    return isActive && (quantityRemaining > 0 || dosesRemainingInOpenVial > 0) && !isExpiredOn(day);
   }
 }
 
@@ -198,6 +219,10 @@ class FacilityInventoryRecord {
   int quantityOn([DateTime? day]) => batches
       .where((batch) => batch.isUsableOn(day))
       .fold(0, (total, batch) => total + batch.quantityRemaining);
+
+  int availableDosesOn([DateTime? day]) => batches
+      .where((batch) => batch.isUsableOn(day))
+      .fold(0, (total, batch) => total + (batch.quantityRemaining * catalog.dosesPerUnit) + batch.dosesRemainingInOpenVial);
 
   int get quantity => quantityOn();
 

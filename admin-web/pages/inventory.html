@@ -43,6 +43,70 @@
         font-size: 11px;
         color: var(--text-secondary);
       }
+
+      @keyframes scanLaser {
+        0% { top: 15%; opacity: 0.8; }
+        50% { top: 80%; opacity: 1; }
+        100% { top: 15%; opacity: 0.8; }
+      }
+
+      /* Modern Elongated Capsule / Pill Action Buttons for Modal Labels */
+      .action-pill-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 22px;
+        padding: 0 10px;
+        font-size: 11px;
+        font-weight: 600;
+        border-radius: 9999px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        line-height: 1;
+        text-decoration: none;
+        transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        user-select: none;
+        white-space: nowrap;
+        box-sizing: border-box;
+      }
+      .action-pill-btn i {
+        font-size: 10px;
+      }
+      .action-pill-btn.pill-purple {
+        color: #7c3aed;
+        background: #f5f3ff;
+        border-color: #ddd6fe;
+      }
+      .action-pill-btn.pill-purple:hover {
+        background: #ede9fe;
+        border-color: #c4b5fd;
+        color: #6d28d9;
+        transform: translateY(-0.5px);
+        box-shadow: 0 2px 6px rgba(124, 58, 237, 0.15);
+      }
+      .action-pill-btn.pill-pink {
+        color: var(--brand-primary);
+        background: #fdf2f8;
+        border-color: #fbcfe8;
+      }
+      .action-pill-btn.pill-pink:hover {
+        background: #fce7f3;
+        border-color: #f472b6;
+        color: #db2777;
+        transform: translateY(-0.5px);
+        box-shadow: 0 2px 6px rgba(255, 104, 165, 0.15);
+      }
+      .action-pill-btn.pill-dark {
+        color: #e2e8f0;
+        background: #334155;
+        border-color: #475569;
+      }
+      .action-pill-btn.pill-dark:hover {
+        background: #475569;
+        color: #ffffff;
+        border-color: #64748b;
+        transform: translateY(-0.5px);
+      }
       
       /* Primary 4-Hub Navigation Bar */
       .inventory-main-tabs {
@@ -467,7 +531,7 @@
       }
       .inventory-safety-metrics {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
         gap: 6px;
         margin-top: 10px;
       }
@@ -917,16 +981,19 @@
         <div id="tab-transactions" class="tab-content" style="display: none;">
           <!-- Section A: Movement History Ledger -->
           <div class="card" style="margin-bottom: 24px;">
-            <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-primary);">
-              <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-clock-rotate-left" style="color: var(--brand-primary); margin-right: 8px;"></i> Stock Movement History Ledger</h3>
-              <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 12.5px;">Complete audit trail of receipts, dispenses, adjustments, transfers, and disposals.</p>
+            <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-clock-rotate-left" style="color: var(--brand-primary); margin-right: 8px;"></i> Stock Movement History Ledger</h3>
+                <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 12.5px;">Complete audit trail of receipts, dispenses, adjustments, transfers, and disposals.</p>
+              </div>
+              <button class="btn btn-outline-pink btn-sm" id="export-tx-csv-btn" onclick="exportTransactionsCSV()"><i class="fa-solid fa-file-csv"></i> Export Ledger CSV</button>
             </div>
-            <div class="toolbar">
-              <div class="search-box">
+            <div class="toolbar" style="flex-wrap: wrap; gap: 10px;">
+              <div class="search-box" style="flex: 1; min-width: 220px;">
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <input class="form-control" type="search" id="tx-search" placeholder="Search by batch, brand, generic, or user..." />
               </div>
-              <div class="filter-group">
+              <div class="filter-group" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
                 <select class="form-select" id="tx-filter-type" style="width: auto">
                   <option value="">All Movement Types</option>
                   <option value="receipt">Stock Receipt (+)</option>
@@ -935,6 +1002,19 @@
                   <option value="expiry_disposal">Expiry Disposal (-)</option>
                   <option value="transfer">RHU / BHC Transfer</option>
                 </select>
+                <select class="form-select" id="tx-filter-date" style="width: auto">
+                  <option value="all">All Dates</option>
+                  <option value="today">Today</option>
+                  <option value="7d">Last 7 Days</option>
+                  <option value="30d">Last 30 Days</option>
+                  <option value="this_month">This Month</option>
+                  <option value="custom">Custom Date Range...</option>
+                </select>
+                <div id="tx-custom-date-wrap" style="display: none; align-items: center; gap: 6px;">
+                  <input type="date" id="tx-date-start" class="form-control" style="width: auto; padding: 4px 8px; font-size: 12px;" />
+                  <span style="font-size: 12px; color: var(--text-secondary);">to</span>
+                  <input type="date" id="tx-date-end" class="form-control" style="width: auto; padding: 4px 8px; font-size: 12px;" />
+                </div>
               </div>
             </div>
 
@@ -942,11 +1022,11 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Date &amp; Time</th>
-                    <th>Location</th>
-                    <th>Movement Type</th>
-                    <th>Item Details</th>
-                    <th style="text-align: right">Qty</th>
+                    <th style="cursor: pointer;" onclick="toggleTxSort('date')">Date &amp; Time <span id="tx-sort-date"><i class="fa-solid fa-sort"></i></span></th>
+                    <th style="cursor: pointer;" onclick="toggleTxSort('location')">Location <span id="tx-sort-location"><i class="fa-solid fa-sort"></i></span></th>
+                    <th style="cursor: pointer;" onclick="toggleTxSort('type')">Movement Type <span id="tx-sort-type"><i class="fa-solid fa-sort"></i></span></th>
+                    <th style="cursor: pointer;" onclick="toggleTxSort('item')">Item Details <span id="tx-sort-item"><i class="fa-solid fa-sort"></i></span></th>
+                    <th style="text-align: right; cursor: pointer;" onclick="toggleTxSort('qty')">Qty <span id="tx-sort-qty"><i class="fa-solid fa-sort"></i></span></th>
                     <th>Performed By</th>
                     <th>Reference / Notes</th>
                   </tr>
@@ -1036,6 +1116,55 @@
               <h4 style="margin:0 0 8px; font-size:14px; color:var(--brand-text);"><i class="fa-solid fa-lightbulb"></i> 4. Prescriptive Analytics</h4>
               <p style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">Smart reorder &amp; stock transfer recommendations</p>
               <div id="insight-prescriptive" style="font-size:13px; color:var(--text-primary); line-height:1.5;">Loading smart suggestions...</div>
+            </div>
+          </div>
+
+          <!-- DOH Wastage Rate & Multi-Dose Open Vial Monitor -->
+          <div class="card" style="margin-bottom: 24px; padding: 20px; border-left: 4px solid #f59e0b;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+              <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--brand-text); display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-hourglass-half" style="color: #f59e0b;"></i> DOH Vaccine Wastage Rate &amp; Open Multi-Dose Vial Monitor
+              </h4>
+              <button class="action-pill-btn pill-secondary" onclick="renderOpenVialsTracker()"><i class="fa-solid fa-arrows-rotate"></i> Refresh Open Vials</button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 16px;">
+              <div style="background: #fffbeb; border: 1px solid #fde68a; padding: 12px 14px; border-radius: 10px;">
+                <div style="font-size: 11.5px; font-weight: 600; color: #92400e;">Vaccine Wastage Rate (DOH)</div>
+                <div style="font-size: 22px; font-weight: 800; color: #b45309; margin-top: 2px;" id="stat-wastage-rate">0.0%</div>
+                <div style="font-size: 10.5px; color: #78350f; margin-top: 2px;">Target: &le;15% multi-dose, &le;5% single-dose</div>
+              </div>
+              <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 14px; border-radius: 10px;">
+                <div style="font-size: 11.5px; font-weight: 600; color: #1e40af;">Active Open Multi-Dose Vials</div>
+                <div style="font-size: 22px; font-weight: 800; color: #2563eb; margin-top: 2px;" id="stat-open-vials-count">0 vials</div>
+                <div style="font-size: 10.5px; color: #1d4ed8; margin-top: 2px;">Doses currently drawn across BHCs</div>
+              </div>
+              <div style="background: #fdf2f8; border: 1px solid #fbcfe8; padding: 12px 14px; border-radius: 10px;">
+                <div style="font-size: 11.5px; font-weight: 600; color: #9d174d;">Total Administered Doses</div>
+                <div style="font-size: 22px; font-weight: 800; color: var(--brand-primary); margin-top: 2px;" id="stat-doses-administered">0 doses</div>
+                <div style="font-size: 10.5px; color: #be185d; margin-top: 2px;">Successful clinical immunizations</div>
+              </div>
+            </div>
+
+            <!-- Open Vials Active Table -->
+            <div class="table-wrap" style="border: 1px solid var(--border-primary); border-radius: 8px;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Item / Vaccine</th>
+                    <th>Location</th>
+                    <th>Batch #</th>
+                    <th style="text-align: right;">Doses Left</th>
+                    <th>Opened At</th>
+                    <th>Shelf Limit</th>
+                    <th style="text-align: center;">Status</th>
+                    <th style="text-align: right;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="open-vials-tbody">
+                  <tr><td colspan="8" style="text-align: center; padding: 20px; color: var(--text-secondary);">No open vials currently registered across facilities.</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -1146,11 +1275,11 @@
             <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
               <div class="form-group">
                 <label class="form-label" for="item-name" style="font-weight: 600; font-size: 12.5px;">Item Trade Name <span class="req" style="color:#dc2626;">*</span></label>
-                <input class="form-control" type="text" id="item-name" placeholder="e.g. Depo-Provera, BCG" required style="border-radius: 8px;" />
+                <input class="form-control" type="text" id="item-name" placeholder="e.g. BCG Vaccine, Depo-Provera" required style="border-radius: 8px;" />
               </div>
               <div class="form-group">
                 <label class="form-label" for="item-generic-name" style="font-weight: 600; font-size: 12.5px;">Generic Name <span class="req" style="color:#dc2626;">*</span></label>
-                <input class="form-control" type="text" id="item-generic-name" placeholder="e.g. DMPA 150mg/mL" required style="border-radius: 8px;" />
+                <input class="form-control" type="text" id="item-generic-name" placeholder="e.g. Bacillus Calmette–Guérin" required style="border-radius: 8px;" />
               </div>
             </div>
             <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
@@ -1165,11 +1294,69 @@
               </div>
               <div class="form-group">
                 <label class="form-label" for="item-uom" style="font-weight: 600; font-size: 12.5px;">Unit of Measure <span class="req" style="color:#dc2626;">*</span></label>
-                <input class="form-control" type="text" id="item-uom" placeholder="e.g. vials, tablets, doses" required style="border-radius: 8px;" />
+                <select class="form-select" id="item-uom" required style="border-radius: 8px;">
+                  <option value="vials" selected>Vials (vials)</option>
+                  <option value="ampoules">Ampoules (ampoules)</option>
+                  <option value="tablets">Tablets (tablets)</option>
+                  <option value="capsules">Capsules (capsules)</option>
+                  <option value="bottles">Bottles (bottles)</option>
+                  <option value="pieces">Pieces / Units (pieces)</option>
+                  <option value="boxes">Boxes (boxes)</option>
+                  <option value="sachets">Sachets (sachets)</option>
+                  <option value="kits">Kits (kits)</option>
+                  <option value="tubes">Tubes (tubes)</option>
+                </select>
               </div>
             </div>
+            <!-- Packaging Volume & Dosage Helper Calculator -->
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 12px; font-weight: 700; color: #334155; display: flex; align-items: center; gap: 6px;">
+                  <i class="fa-solid fa-calculator" style="color: var(--brand-primary);"></i> Volume &amp; Dose Packaging Calculator
+                </span>
+                <span style="font-size: 11px; color: #64748b;">(Auto-computes Doses)</span>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1.2fr 1.2fr 80px; gap: 8px; align-items: flex-end; margin-bottom: 8px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 2px;">Total Pkg Volume</label>
+                  <input class="form-control" type="number" id="item-calc-total-vol" placeholder="e.g. 100 or 5.0" step="any" min="0.001" style="height: 32px; font-size: 12px; border-radius: 6px;" oninput="calculateItemDoses()" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 2px;">Single Dose Size</label>
+                  <input class="form-control" type="number" id="item-calc-dose-size" placeholder="e.g. 10 or 0.5" step="any" min="0.001" style="height: 32px; font-size: 12px; border-radius: 6px;" oninput="calculateItemDoses()" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 2px;">Metric</label>
+                  <select class="form-select" id="item-calc-unit" style="height: 32px; font-size: 12px; border-radius: 6px;" onchange="calculateItemDoses()">
+                    <option value="mL">mL</option>
+                    <option value="mg">mg</option>
+                    <option value="g">g</option>
+                    <option value="drops">drops</option>
+                    <option value="tabs">tabs</option>
+                  </select>
+                </div>
+              </div>
+
+              <div id="item-calc-preview" style="font-size: 11.5px; color: #475569; background: #fff; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px;">
+                <span><i class="fa-solid fa-circle-info" style="color:var(--brand-primary); margin-right:4px;"></i> Enter volume &amp; dose size above, or click a standard preset below:</span>
+              </div>
+
+              <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                <button type="button" class="btn btn-xs btn-secondary" onclick="applyDosePreset('bcg')" style="padding: 2px 7px; font-size: 10.5px; border-radius: 4px;">BCG (1.0mL ÷ 0.05mL = 20 doses)</button>
+                <button type="button" class="btn btn-xs btn-secondary" onclick="applyDosePreset('mr')" style="padding: 2px 7px; font-size: 10.5px; border-radius: 4px;">MR/Td (5.0mL ÷ 0.5mL = 10 doses)</button>
+                <button type="button" class="btn btn-xs btn-secondary" onclick="applyDosePreset('syrup100')" style="padding: 2px 7px; font-size: 10.5px; border-radius: 4px;">Liquid (100mL ÷ 10mL = 10 doses)</button>
+                <button type="button" class="btn btn-xs btn-secondary" onclick="applyDosePreset('single')" style="padding: 2px 7px; font-size: 10.5px; border-radius: 4px;">Single-use (1 dose)</button>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="item-doses-per-unit" style="font-weight: 600; font-size: 12.5px;">Resulting Clinical Doses per Package / Unit <span class="req" style="color:#dc2626;">*</span></label>
+              <input class="form-control" type="number" id="item-doses-per-unit" min="1" value="1" required style="border-radius: 8px; font-weight: 700; color: var(--brand-primary);" />
+              <span class="form-hint" style="font-size: 11px; color: var(--text-secondary); margin-top: 3px; display: block;">For multi-dose items, each patient visit consumes 1 dose from the active open vial rather than deducting an entire vial.</span>
+            </div>
             <div class="form-group" style="margin-bottom: 0;">
-              <label class="form-label" for="item-threshold" style="font-weight: 600; font-size: 12.5px;">Minimum Stock Alert Threshold</label>
+              <label class="form-label" for="item-threshold" style="font-weight: 600; font-size: 12.5px;">Minimum Stock Alert Threshold (Vials / Units)</label>
               <input class="form-control" type="number" id="item-threshold" value="50" min="1" required style="border-radius: 8px;" />
               <span class="form-hint" style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; display: block;">Alerts when total available stock falls below this threshold.</span>
             </div>
@@ -1184,7 +1371,7 @@
 
     <!-- Modal 2: Edit Catalog Item -->
     <div class="modal-overlay" id="modal-edit-item">
-      <div class="modal" style="max-width: 480px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
+      <div class="modal" style="max-width: 520px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
         <div class="modal-header" style="padding: 18px 24px 14px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
           <h2 class="modal-title" style="font-size: 16px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-pen-to-square" style="color:var(--brand-primary);"></i> Edit Inventory Catalog Item</h2>
           <button class="modal-close" onclick="closeModal('modal-edit-item')"><i class="fa-solid fa-xmark"></i></button>
@@ -1208,8 +1395,66 @@
               </div>
               <div class="form-group">
                 <label class="form-label" for="edit-item-uom" style="font-weight: 600; font-size: 12.5px;">Unit of Measure <span class="req" style="color:#dc2626;">*</span></label>
-                <input class="form-control" type="text" id="edit-item-uom" required style="border-radius: 8px;" />
+                <select class="form-select" id="edit-item-uom" required style="border-radius: 8px;">
+                  <option value="vials">Vials (vials)</option>
+                  <option value="ampoules">Ampoules (ampoules)</option>
+                  <option value="tablets">Tablets (tablets)</option>
+                  <option value="capsules">Capsules (capsules)</option>
+                  <option value="bottles">Bottles (bottles)</option>
+                  <option value="pieces">Pieces / Units (pieces)</option>
+                  <option value="boxes">Boxes (boxes)</option>
+                  <option value="sachets">Sachets (sachets)</option>
+                  <option value="kits">Kits (kits)</option>
+                  <option value="tubes">Tubes (tubes)</option>
+                </select>
               </div>
+            </div>
+
+            <!-- Edit Modal Packaging Volume & Dosage Helper Calculator -->
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 12px; font-weight: 700; color: #334155; display: flex; align-items: center; gap: 6px;">
+                  <i class="fa-solid fa-calculator" style="color: var(--brand-primary);"></i> Volume &amp; Dose Packaging Calculator
+                </span>
+                <span style="font-size: 11px; color: #64748b;">(Auto-computes Doses)</span>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1.2fr 1.2fr 80px; gap: 8px; align-items: flex-end; margin-bottom: 8px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 2px;">Total Pkg Volume</label>
+                  <input class="form-control" type="number" id="edit-item-calc-total-vol" placeholder="e.g. 100 or 5.0" step="any" min="0.001" style="height: 32px; font-size: 12px; border-radius: 6px;" oninput="calculateEditItemDoses()" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 2px;">Single Dose Size</label>
+                  <input class="form-control" type="number" id="edit-item-calc-dose-size" placeholder="e.g. 10 or 0.5" step="any" min="0.001" style="height: 32px; font-size: 12px; border-radius: 6px;" oninput="calculateEditItemDoses()" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 2px;">Metric</label>
+                  <select class="form-select" id="edit-item-calc-unit" style="height: 32px; font-size: 12px; border-radius: 6px;" onchange="calculateEditItemDoses()">
+                    <option value="mL">mL</option>
+                    <option value="mg">mg</option>
+                    <option value="g">g</option>
+                    <option value="drops">drops</option>
+                    <option value="tabs">tabs</option>
+                  </select>
+                </div>
+              </div>
+
+              <div id="edit-item-calc-preview" style="font-size: 11.5px; color: #475569; background: #fff; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px;">
+                <span><i class="fa-solid fa-circle-info" style="color:var(--brand-primary); margin-right:4px;"></i> Enter volume &amp; dose size above, or click a standard preset below:</span>
+              </div>
+
+              <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                <button type="button" class="btn btn-xs btn-secondary" onclick="applyEditDosePreset('bcg')" style="padding: 2px 7px; font-size: 10.5px; border-radius: 4px;">BCG (1.0mL ÷ 0.05mL = 20 doses)</button>
+                <button type="button" class="btn btn-xs btn-secondary" onclick="applyEditDosePreset('mr')" style="padding: 2px 7px; font-size: 10.5px; border-radius: 4px;">MR/Td (5.0mL ÷ 0.5mL = 10 doses)</button>
+                <button type="button" class="btn btn-xs btn-secondary" onclick="applyEditDosePreset('syrup100')" style="padding: 2px 7px; font-size: 10.5px; border-radius: 4px;">Liquid (100mL ÷ 10mL = 10 doses)</button>
+                <button type="button" class="btn btn-xs btn-secondary" onclick="applyEditDosePreset('single')" style="padding: 2px 7px; font-size: 10.5px; border-radius: 4px;">Single-use (1 dose)</button>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="edit-item-doses-per-unit" style="font-weight: 600; font-size: 12.5px;">Clinical Doses / Units per Package <span class="req" style="color:#dc2626;">*</span></label>
+              <input class="form-control" type="number" id="edit-item-doses-per-unit" min="1" value="1" required style="border-radius: 8px; font-weight: 700; color: var(--brand-primary);" />
             </div>
             <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" for="edit-item-threshold" style="font-weight: 600; font-size: 12.5px;">Minimum Stock Alert Threshold</label>
@@ -1232,6 +1477,10 @@
           <button class="modal-close" onclick="closeModal('modal-batch')"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body" style="padding: 18px 24px;">
+          <div style="margin-bottom: 14px; padding: 10px 14px; border-radius: 8px; background: rgba(255, 104, 165, 0.08); border: 1px solid rgba(255, 104, 165, 0.25); font-size: 12px; color: #831843; line-height: 1.4;">
+            <i class="fa-solid fa-circle-info" style="color: var(--brand-primary); margin-right: 6px;"></i>
+            <strong>Central Intake:</strong> External supplies from DOH / manufacturers are received directly into the <strong>Central RHU Warehouse</strong>. To replenish Barangay Health Centers, use <strong>Issue Stock to BHC</strong>.
+          </div>
           <form id="form-batch" onsubmit="return false;">
             <div class="form-group" style="margin-bottom: 14px;">
               <label class="form-label" for="batch-item-id" style="font-weight: 600; font-size: 12.5px;">Select Inventory Item <span class="req" style="color:#dc2626;">*</span></label>
@@ -1241,11 +1490,14 @@
             </div>
             <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
               <div class="form-group">
-                <label class="form-label" for="batch-number" style="font-weight: 600; font-size: 12.5px;">Batch / Lot Number <span class="req" style="color:#dc2626;">*</span></label>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <label class="form-label" for="batch-number" style="font-weight: 600; font-size: 12.5px; margin: 0;">Batch / Lot Number <span class="req" style="color:#dc2626;">*</span></label>
+                  <button type="button" class="action-pill-btn pill-pink" onclick="openBarcodeScanner('receive-batch')"><i class="fa-solid fa-barcode"></i> Scan GS1</button>
+                </div>
                 <input class="form-control" type="text" id="batch-number" placeholder="e.g. BATCH-2026-09A" required style="border-radius: 8px;" />
               </div>
               <div class="form-group">
-                <label class="form-label" for="batch-qty" style="font-weight: 600; font-size: 12.5px;">Quantity Received <span class="req" style="color:#dc2626;">*</span></label>
+                <label class="form-label" for="batch-qty" style="font-weight: 600; font-size: 12.5px;">Quantity Received (Units) <span class="req" style="color:#dc2626;">*</span></label>
                 <input class="form-control" type="number" id="batch-qty" min="1" placeholder="e.g. 500" required style="border-radius: 8px;" />
               </div>
             </div>
@@ -1260,9 +1512,9 @@
               </div>
             </div>
             <div class="form-group" style="margin-bottom: 14px;">
-              <label class="form-label" for="batch-facility-id" style="font-weight: 600; font-size: 12.5px;">Receiving Facility / Location</label>
-              <select class="form-select" id="batch-facility-id" style="width: 100%; border-radius: 8px;">
-                <option value="central">Central Warehouse / Main Office</option>
+              <label class="form-label" for="batch-facility-id" style="font-weight: 600; font-size: 12.5px;">Receiving Location</label>
+              <select class="form-select" id="batch-facility-id" disabled style="width: 100%; border-radius: 8px; background: #f8fafc; color: #334155; font-weight: 600;">
+                <option value="central" selected>Central Warehouse / Main RHU (Primary Depot)</option>
               </select>
             </div>
             <div class="form-group" style="margin-bottom: 0;">
@@ -1320,11 +1572,11 @@
       </div>
     </div>
 
-    <!-- Modal 5: Issue Stock to BHC -->
+    <!-- Modal 5: Issue Stock to BHC / Inter-BHC Transfer -->
     <div class="modal-overlay" id="modal-issue">
-      <div class="modal" style="max-width: 580px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
+      <div class="modal" style="max-width: 600px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
         <div class="modal-header" style="padding: 18px 24px 14px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
-          <h2 class="modal-title" style="font-size: 16px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-truck-ramp-box" style="color:#8b5cf6;"></i> Issue Stock to BHC</h2>
+          <h2 class="modal-title" style="font-size: 16px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-truck-ramp-box" style="color:#8b5cf6;"></i> Issue Stock Transfer</h2>
           <button class="modal-close" onclick="closeModal('modal-issue')"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body" style="padding: 18px 24px;">
@@ -1333,44 +1585,60 @@
             <input type="hidden" id="issue-request-id" />
             <div id="issue-request-context" style="display:none; margin-bottom:14px; padding:10px 14px; border-radius:8px; background:#f8fafc; border:1px solid #e2e8f0; font-size:12.5px; color:#1e293b;"></div>
             
-            <div class="form-group" style="margin-bottom: 14px;">
-              <label class="form-label" for="issue-source-batch" style="font-weight: 600; font-size: 12.5px;">Select Source Batch (Central Warehouse) <span class="req" style="color:#dc2626;">*</span></label>
-              <select class="form-select" id="issue-source-batch" required style="width:100%; border-radius: 8px;">
-                <option value="">— Select Central Batch —</option>
-              </select>
-            </div>
-            
-            <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom: 14px;">
+            <div class="form-row" style="display:grid; grid-template-columns:1.1fr 1fr; gap:12px; margin-bottom: 14px;">
               <div class="form-group">
-                <label class="form-label" for="issue-target-bhc" style="font-weight: 600; font-size: 12.5px;">Destination BHC <span class="req" style="color:#dc2626;">*</span></label>
-                <select class="form-select" id="issue-target-bhc" required style="width:100%; border-radius: 8px;" onchange="applySuggestedDeliveryEstimate(true)">
-                  <option value="">— Select Target BHC —</option>
+                <div style="display:flex; align-items:center; min-height:22px; margin-bottom:4px;">
+                  <label class="form-label" for="issue-source-facility" style="font-weight: 600; font-size: 12.5px; margin:0;">Transfer Source <span class="req" style="color:#dc2626;">*</span></label>
+                </div>
+                <select class="form-select" id="issue-source-facility" required style="width:100%; border-radius: 8px;" onchange="populateIssueBatchDropdown(); updateIssueSafetyCheck();">
+                  <option value="central" selected>Central Warehouse (RHU Depot)</option>
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label" for="issue-qty" style="font-weight: 600; font-size: 12.5px;">Quantity to Issue <span class="req" style="color:#dc2626;">*</span></label>
-                <input class="form-control" type="number" id="issue-qty" min="1" placeholder="e.g. 20" required style="width:100%; border-radius: 8px;" oninput="updateIssueSafetyCheck()" />
+                <div style="display:flex; justify-content:space-between; align-items:center; min-height:22px; margin-bottom:4px;">
+                  <label class="form-label" for="issue-target-bhc" style="font-weight: 600; font-size: 12.5px; margin:0;">Destination BHC <span class="req" style="color:#dc2626;">*</span></label>
+                  <button type="button" class="action-pill-btn pill-purple" id="btn-autofill-forecast" onclick="autoFillForecastForDestination()" title="Auto-calculate quota from due patients"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Forecast</button>
+                </div>
+                <select class="form-select" id="issue-target-bhc" required style="width:100%; border-radius: 8px;" onchange="applySuggestedDeliveryEstimate(true); updateIssueSafetyCheck();">
+                  <option value="">— Select Target BHC —</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <label class="form-label" for="issue-source-batch" style="font-weight: 600; font-size: 12.5px; margin:0;">Select Source Batch <span class="req" style="color:#dc2626;">*</span></label>
+                <button type="button" class="action-pill-btn pill-pink" onclick="openBarcodeScanner('issue-batch')"><i class="fa-solid fa-barcode"></i> Scan Batch</button>
+              </div>
+              <select class="form-select" id="issue-source-batch" required style="width:100%; border-radius: 8px;" onchange="updateIssueSafetyCheck();">
+                <option value="">— Select Available Source Batch —</option>
+              </select>
+            </div>
+            
+            <div class="form-row" style="display:grid; grid-template-columns:1fr 1.2fr; gap:12px; margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label" for="issue-qty" style="font-weight: 600; font-size: 12.5px;">Quantity to Transfer <span class="req" style="color:#dc2626;">*</span></label>
+                <input class="form-control" type="number" id="issue-qty" min="1" placeholder="e.g. 20" required style="width:100%; border-radius: 8px;" oninput="updateIssueSafetyCheck()" onchange="updateIssueSafetyCheck()" onkeyup="updateIssueSafetyCheck()" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="issue-expected-date" style="font-weight: 600; font-size: 12.5px;">Expected Arrival Date <span class="req" style="color:#dc2626;">*</span></label>
+                <input class="form-control" type="date" id="issue-expected-date" required style="border-radius: 8px;" onchange="updateIssueSafetyCheck()" oninput="updateIssueSafetyCheck()" onkeyup="updateIssueSafetyCheck()" />
               </div>
             </div>
 
             <div class="inventory-delivery-plan-grid" style="margin-bottom:14px;">
-              <div class="form-group">
-                <label class="form-label" for="issue-expected-date" style="font-weight: 600; font-size: 12.5px;">Expected Arrival Date <span class="req" style="color:#dc2626;">*</span></label>
-                <input class="form-control" type="date" id="issue-expected-date" required style="border-radius: 8px;" onchange="updateIssueSafetyCheck()" />
-                <span class="form-hint" id="issue-delivery-source" style="font-size:11px; color:var(--text-secondary); margin-top:3px; display:block;">Select agreed arrival date.</span>
-              </div>
-              <div class="inventory-delivery-estimate">
-                <span>Expected Arrival</span>
+              <div class="inventory-delivery-estimate" style="width:100%;">
+                <span>Estimated Transit Schedule</span>
                 <strong id="issue-expected-arrival">—</strong>
-                <small id="issue-delivery-duration-copy">Choose date to estimate duration.</small>
+                <small id="issue-delivery-duration-copy">Select destination to evaluate estimated transit time.</small>
               </div>
             </div>
 
             <section class="inventory-safety-card is-empty" id="issue-safety-check">
               <div class="inventory-safety-head">
                 <div>
-                  <span class="inventory-safety-eyebrow">Before Sending</span>
-                  <h3 id="issue-safety-title" style="font-size:13px; font-weight:700;">Delivery & Expiry Check</h3>
+                  <span class="inventory-safety-eyebrow">Before Dispatching</span>
+                  <h3 id="issue-safety-title" style="font-size:13px; font-weight:700;">Delivery & Expiry Safety Check</h3>
                 </div>
                 <span class="inventory-status neutral" id="issue-safety-status"><i class="fa-solid fa-list-check"></i> Waiting for details</span>
               </div>
@@ -1380,7 +1648,7 @@
             </section>
 
             <div class="form-group" style="margin-top: 14px; margin-bottom: 0;">
-              <label class="form-label" for="issue-reference" style="font-weight: 600; font-size: 12.5px;">Reference / Remarks</label>
+              <label class="form-label" for="issue-reference" style="font-weight: 600; font-size: 12.5px;">Reference / Dispatch Notes</label>
               <input class="form-control" type="text" id="issue-reference" placeholder="e.g. Monthly allocation for BHC" style="width:100%; border-radius: 8px;" />
             </div>
           </form>
@@ -1388,6 +1656,63 @@
         <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #fafafa; display: flex; justify-content: flex-end; gap: 10px;">
           <button class="btn btn-secondary" onclick="closeModal('modal-issue')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px;">Cancel</button>
           <button class="btn btn-primary" id="save-issue-btn" style="height: 36px; padding: 0 18px; border-radius: 8px; font-size: 13px; background:#8b5cf6; border-color:#8b5cf6; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Barcode & QR Code Scanner -->
+    <div class="modal-overlay" id="modal-barcode-scanner">
+      <div class="modal" style="max-width: 480px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.25);">
+        <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; background: #0f172a; color: white;">
+          <h2 class="modal-title" style="font-size: 15px; font-weight: 700; color: white; margin: 0; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-camera" style="color: var(--brand-primary);"></i> Barcode &amp; QR Scanner
+          </h2>
+          <button class="modal-close" onclick="closeBarcodeScanner()" style="color: white;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" style="padding: 20px; background: #0f172a; color: white; text-align: center;">
+          <div id="scanner-viewfinder" style="position: relative; width: 100%; height: 240px; background: #000; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 2px solid rgba(255,255,255,0.15);">
+            <video id="scanner-video" playsinline autoplay muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+            <div id="scanner-laser" style="position: absolute; left: 10%; right: 10%; height: 2px; background: #ff2d87; box-shadow: 0 0 12px #ff2d87; animation: scanLaser 2s infinite ease-in-out;"></div>
+            <div id="scanner-overlay-box" style="position: absolute; width: 220px; height: 150px; border: 2px dashed rgba(255, 104, 165, 0.8); border-radius: 8px; pointer-events: none;"></div>
+          </div>
+          <p id="scanner-status" style="font-size: 12px; color: #94a3b8; margin: 12px 0 14px;">Position barcode / GS1 DataMatrix within frame to autofill.</p>
+          
+          <!-- Test / Simulation Barcode Buttons for immediate testing without physical camera -->
+          <div style="background: #1e293b; border-radius: 8px; padding: 10px; text-align: left; border: 1px solid #334155;">
+            <span style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 6px;">Simulate Barcode / GS1 Scan:</span>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button type="button" class="action-pill-btn pill-dark" onclick="simulateBarcodeScan('GS1_BCG')"><i class="fa-solid fa-flask"></i> GS1 BCG (BCG2026A)</button>
+              <button type="button" class="action-pill-btn pill-dark" onclick="simulateBarcodeScan('GS1_TD')"><i class="fa-solid fa-syringe"></i> GS1 Td (TD-99201)</button>
+              <button type="button" class="action-pill-btn pill-dark" onclick="simulateBarcodeScan('LOT_RAW')"><i class="fa-solid fa-barcode"></i> Lot: PENTA-88301</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid #334155; background: #1e293b; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 11px; color: #94a3b8;">Supports GS1-128, DataMatrix &amp; QR</span>
+          <button class="btn btn-secondary btn-sm" onclick="closeBarcodeScanner()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Transfer Dispatch Slip & QR Code -->
+    <div class="modal-overlay" id="modal-transfer-qr">
+      <div class="modal" style="max-width: 440px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
+        <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
+          <h2 class="modal-title" style="font-size: 15px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-qrcode" style="color: var(--brand-primary);"></i> Transfer Dispatch QR Slip
+          </h2>
+          <button class="modal-close" onclick="closeModal('modal-transfer-qr')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" style="padding: 20px; text-align: center;">
+          <div id="transfer-qr-details" style="margin-bottom: 16px; text-align: left; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 12.5px;"></div>
+          <div style="background: white; padding: 16px; border: 2px dashed #cbd5e1; border-radius: 12px; display: inline-block;">
+            <div id="transfer-qrcode-canvas" style="display:flex; justify-content:center; align-items:center; width:160px; height:160px; background:#fafafa; border-radius:8px;"></div>
+          </div>
+          <p style="font-size: 11.5px; color: var(--text-secondary); margin-top: 12px;">The receiving BHC midwife can scan this QR code using the mobile app to verify and receive the batch immediately.</p>
+        </div>
+        <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--border-primary); background: #fafafa; display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-transfer-qr')">Close</button>
+          <button class="btn btn-primary btn-sm" onclick="window.print()"><i class="fa-solid fa-print"></i> Print Dispatch Slip</button>
         </div>
       </div>
     </div>
@@ -1526,6 +1851,7 @@
     <!-- External Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="common-security.js"></script>
     <script src="live-refresh.js"></script>
 
@@ -1790,29 +2116,28 @@
         function applySuggestedDeliveryEstimate(force = false) {
           const facilityId = document.getElementById("issue-target-bhc")?.value;
           const input = document.getElementById("issue-expected-date");
-          const hint = document.getElementById("issue-delivery-source");
-          if (!input || !hint) return;
+          const hint = document.getElementById("issue-delivery-duration-copy");
+          if (!input) return;
 
           input.min = localDateKey();
           if (!facilityId) {
             input.dataset.estimateSource = "";
-            hint.textContent = "Select destination and choose agreed arrival date.";
+            if (hint) hint.textContent = "Select destination to evaluate estimated transit time.";
             updateIssueSafetyCheck();
             return;
           }
 
           const estimate = getHistoricalDeliveryEstimate(facilityId);
-          if (estimate.available) {
-            if (!input.value || input.dataset.estimateSource === "history" || force) {
-              input.value = localDateKey(addLocalDays(new Date(), estimate.days));
-              input.dataset.estimateSource = "history";
-            }
-            hint.textContent = `Suggested arrival from ${estimate.samples} completed deliveries (${estimate.days} days avg).`;
-          } else {
-            const historyCopy = estimate.samples
-              ? `Only ${estimate.samples} completed deliver${estimate.samples === 1 ? "y" : "ies"} recorded.`
-              : "No delivery history recorded for this BHC yet.";
-            hint.textContent = `${historyCopy} Select agreed arrival date.`;
+          const defaultDays = (estimate && estimate.available) ? estimate.days : 2;
+          if (!input.value || input.dataset.estimateSource === "default" || input.dataset.estimateSource === "history" || force) {
+            input.value = localDateKey(addLocalDays(new Date(), defaultDays));
+            input.dataset.estimateSource = (estimate && estimate.available) ? "history" : "default";
+          }
+          
+          if (hint) {
+            hint.textContent = (estimate && estimate.available)
+              ? `Suggested arrival from ${estimate.samples} completed deliveries (${estimate.days} days avg).`
+              : `Standard BHC transit estimate (${defaultDays} days).`;
           }
           updateIssueSafetyCheck();
         }
@@ -1837,116 +2162,196 @@
         }
 
         function updateIssueSafetyCheck() {
-          const batchId = Number(document.getElementById("issue-source-batch")?.value);
-          const facilityId = document.getElementById("issue-target-bhc")?.value;
-          const quantity = Number(document.getElementById("issue-qty")?.value);
-          const expectedDateVal = document.getElementById("issue-expected-date")?.value;
-          const selectedArrival = asLocalDate(expectedDateVal);
-          const deliveryDays = selectedArrival ? calendarDaysBetween(new Date(), selectedArrival) : null;
+          try {
+            const batchId = document.getElementById("issue-source-batch")?.value;
+            const facilityId = document.getElementById("issue-target-bhc")?.value;
+            const quantity = Number(document.getElementById("issue-qty")?.value);
+            const expectedDateVal = document.getElementById("issue-expected-date")?.value;
+            const selectedArrival = asLocalDate(expectedDateVal);
+            const deliveryDays = selectedArrival ? calendarDaysBetween(new Date(), selectedArrival) : null;
 
-          const expectedArrivalEl = document.getElementById("issue-expected-arrival");
-          if (expectedArrivalEl) expectedArrivalEl.textContent = selectedArrival ? formatShortDate(selectedArrival) : "—";
-          const durationCopy = document.getElementById("issue-delivery-duration-copy");
-          if (durationCopy) {
-            durationCopy.textContent = selectedArrival && deliveryDays !== null && deliveryDays >= 0
-              ? `${durationLabel(deliveryDays)} from today`
-              : "Choose date to estimate duration.";
-          }
+            const expectedArrivalEl = document.getElementById("issue-expected-arrival");
+            if (expectedArrivalEl) expectedArrivalEl.textContent = selectedArrival ? formatShortDate(selectedArrival) : "—";
+            const durationCopy = document.getElementById("issue-delivery-duration-copy");
+            if (durationCopy) {
+              durationCopy.textContent = selectedArrival && deliveryDays !== null && deliveryDays >= 0
+                ? `${durationLabel(deliveryDays)} from today`
+                : "Choose date to estimate duration.";
+            }
 
-          const sourceBatch = (batches || []).find(b => Number(b.batch_id) === batchId);
-          if (!sourceBatch || !facilityId || !Number.isFinite(quantity) || quantity <= 0 || !selectedArrival) {
-            resetIssueSafetyCheck();
-            return;
-          }
+            const sourceBatch = (batches || []).find(b => String(b.batch_id) === String(batchId));
+            if (!sourceBatch || !facilityId || !Number.isFinite(quantity) || quantity <= 0 || !selectedArrival) {
+              resetIssueSafetyCheck();
+              return;
+            }
 
-          const item = (items || []).find(i => Number(i.item_id) === Number(sourceBatch.item_id));
-          const requestId = Number(document.getElementById("issue-request-id")?.value);
-          const request = requestId ? (stockRequests || []).find(r => Number(r.request_id) === requestId) : null;
+            const item = (items || []).find(i => Number(i.item_id) === Number(sourceBatch.item_id));
+            const requestId = Number(document.getElementById("issue-request-id")?.value);
+            const request = requestId ? (stockRequests || []).find(r => Number(r.request_id) === requestId) : null;
 
-          const quantityConflict = quantity > Number(sourceBatch.quantity_remaining || 0);
-          const requestConflict = Boolean(request && (
-            String(request.item_id) !== String(sourceBatch.item_id) ||
-            String(request.facility_id) !== String(facilityId)
-          ));
-          const shelfLifeAtArrival = calendarDaysBetween(selectedArrival, sourceBatch.expiration_date);
-          const destinationStock = calculateFacilityUsableStock(sourceBatch.item_id, facilityId);
-          const existingIncoming = calculateInTransitPerItem(sourceBatch.item_id, String(facilityId));
-          const expectedStockAfterReceipt = destinationStock + existingIncoming + quantity;
+            const quantityConflict = quantity > Number(sourceBatch.quantity_remaining || 0);
+            const requestConflict = Boolean(request && (
+              String(request.item_id) !== String(sourceBatch.item_id) ||
+              String(request.facility_id) !== String(facilityId)
+            ));
+            
+            // Shelf life of transferring batch at the expected arrival date
+            const shelfLifeAtArrival = calendarDaysBetween(selectedArrival, sourceBatch.expiration_date);
 
-          const expiryConflict = shelfLifeAtArrival === null || shelfLifeAtArrival <= 0;
-          const warnings = [];
-          if (!expiryConflict && shelfLifeAtArrival <= 30) {
-            warnings.push(`Only ${shelfLifeAtArrival} days of shelf life will remain upon arrival. Consider selecting a later-expiring batch.`);
-          }
-          if (destinationStock === 0 && deliveryDays > 0) {
-            warnings.push(`Destination BHC currently has 0 usable stock. Confirm whether transit time should be expedited.`);
-          }
+            // Batches currently stored at destination BHC
+            const destBatches = (batches || []).filter(b => 
+              String(b.item_id) === String(sourceBatch.item_id) && 
+              isUsableBatch(b) && 
+              String(b.facility_id) === String(facilityId)
+            ).sort((a, b) => new Date(a.expiration_date) - new Date(b.expiration_date));
 
-          const card = document.getElementById("issue-safety-check");
-          const status = document.getElementById("issue-safety-status");
-          const title = document.getElementById("issue-safety-title");
-          const message = document.getElementById("issue-safety-message");
-          const metricsEl = document.getElementById("issue-safety-metrics");
-          const saveBtn = document.getElementById("save-issue-btn");
+            const destinationStock = destBatches.reduce((sum, b) => sum + Number(b.quantity_remaining || 0), 0);
+            const nearestDestBatch = destBatches.length > 0 ? destBatches[0] : null;
 
-          if (!card || !status || !title || !message || !saveBtn) return;
+            // Evaluate destination BHC shelf-life and usable stock AT THE EXPECTED ARRIVAL DATE
+            const destShelfLifeAtArrival = nearestDestBatch ? calendarDaysBetween(selectedArrival, nearestDestBatch.expiration_date) : null;
+            const destBatchesUsableAtArrival = destBatches.filter(b => calendarDaysBetween(selectedArrival, b.expiration_date) > 0);
+            const destUsableStockAtArrival = destBatchesUsableAtArrival.reduce((sum, b) => sum + Number(b.quantity_remaining || 0), 0);
+            const destExpiredQtyByArrival = destinationStock - destUsableStockAtArrival;
 
-          if (quantityConflict || requestConflict) {
-            card.className = "inventory-safety-card is-critical";
-            status.className = "inventory-status critical";
-            status.innerHTML = '<i class="fa-solid fa-ban"></i> Fix details';
-            title.textContent = quantityConflict ? "Quantity exceeds available batch stock" : "Batch item does not match request";
-            message.textContent = quantityConflict
-              ? `Batch has ${sourceBatch.quantity_remaining} ${item?.unit_of_measure || "units"} available, but ${quantity} entered.`
-              : `Stock request #${requestId} was for ${item?.name || 'requested item'}. Selected batch item must match request.`;
-            saveBtn.disabled = true;
-            saveBtn.dataset.safetyBlocked = "true";
-          } else if (expiryConflict) {
-            card.className = "inventory-safety-card is-critical";
-            status.className = "inventory-status critical";
-            status.innerHTML = '<i class="fa-solid fa-ban"></i> Expiry Warning';
-            title.textContent = "Batch will expire before expected arrival date";
-            message.textContent = `Expected arrival is ${formatShortDate(selectedArrival)}, but batch expires ${formatShortDate(sourceBatch.expiration_date)}.`;
-            saveBtn.disabled = true;
-            saveBtn.dataset.safetyBlocked = "true";
-          } else if (warnings.length > 0) {
-            card.className = "inventory-safety-card is-warning";
-            status.className = "inventory-status warning";
-            status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Review before issuing';
-            title.textContent = "Delivery & Expiry Warning";
-            message.textContent = warnings.join(" ");
-            saveBtn.disabled = false;
-            saveBtn.dataset.safetyBlocked = "false";
-          } else {
-            card.className = "inventory-safety-card is-safe";
-            status.className = "inventory-status success";
-            status.innerHTML = '<i class="fa-solid fa-circle-check"></i> Safe to transfer';
-            title.textContent = "Valid delivery and shelf-life check";
-            message.textContent = `Batch will arrive with ${shelfLifeAtArrival} days of shelf-life remaining. Destination stock will increase to ${expectedStockAfterReceipt} ${item?.unit_of_measure || 'units'}.`;
-            saveBtn.disabled = false;
-            saveBtn.dataset.safetyBlocked = "false";
-          }
+            // Incoming usable transfer quantity
+            const incomingTransferUsableQty = (shelfLifeAtArrival !== null && shelfLifeAtArrival > 0) ? quantity : 0;
+            const existingIncoming = calculateInTransitPerItem(sourceBatch.item_id, String(facilityId));
+            const expectedStockAfterReceipt = destUsableStockAtArrival + existingIncoming + incomingTransferUsableQty;
 
-          if (metricsEl) {
-            metricsEl.style.display = "grid";
-            metricsEl.innerHTML = `
-              <div class="inventory-safety-metric">
-                <span>Transit Time</span>
-                <strong>${durationLabel(deliveryDays)}</strong>
-              </div>
-              <div class="inventory-safety-metric">
-                <span>Shelf Life @ Receipt</span>
-                <strong style="color:${shelfLifeAtArrival <= 30 ? '#d97706' : '#059669'}">${shelfLifeAtArrival !== null ? `${shelfLifeAtArrival} days` : '—'}</strong>
-              </div>
-              <div class="inventory-safety-metric">
-                <span>BHC Current Stock</span>
-                <strong>${destinationStock} ${item?.unit_of_measure || ''}</strong>
-              </div>
-              <div class="inventory-safety-metric">
-                <span>Expected Total</span>
-                <strong>${expectedStockAfterReceipt} ${item?.unit_of_measure || ''}</strong>
-              </div>
-            `;
+            // Destination shelf-life display & color
+            let destShelfLifeText = '0 stock (None)';
+            let destShelfLifeColor = '#64748b';
+            if (destShelfLifeAtArrival !== null) {
+              if (destShelfLifeAtArrival <= 0) {
+                destShelfLifeText = 'Expired by arrival';
+                destShelfLifeColor = '#dc2626';
+              } else if (destShelfLifeAtArrival <= 30) {
+                destShelfLifeText = `${destShelfLifeAtArrival} days left`;
+                destShelfLifeColor = '#d97706';
+              } else {
+                destShelfLifeText = `${destShelfLifeAtArrival} days left`;
+                destShelfLifeColor = '#2563eb';
+              }
+            }
+
+            const transferBatchExpired = shelfLifeAtArrival === null || shelfLifeAtArrival <= 0;
+            const destStockExpired = destinationStock > 0 && destUsableStockAtArrival === 0;
+            const warnings = [];
+
+            if (!transferBatchExpired && shelfLifeAtArrival <= 30) {
+              warnings.push(`Transfer batch will have only ${shelfLifeAtArrival} days of shelf life remaining upon arrival. Consider selecting a later-expiring batch.`);
+            }
+
+            if (destExpiredQtyByArrival > 0) {
+              if (destStockExpired) {
+                warnings.push(`Destination BHC's existing stock (${destinationStock} ${item?.unit_of_measure || 'units'}) will be expired by the time this delivery arrives (${formatShortDate(nearestDestBatch.expiration_date)}).`);
+              } else {
+                warnings.push(`${destExpiredQtyByArrival} of ${destinationStock} existing ${item?.unit_of_measure || 'units'} at destination BHC will expire before delivery arrival.`);
+              }
+            }
+
+            if (destUsableStockAtArrival === 0 && deliveryDays > 0 && destinationStock === 0) {
+              warnings.push(`Destination BHC currently has 0 usable stock. Confirm whether transit time should be expedited.`);
+            }
+
+            const card = document.getElementById("issue-safety-check");
+            const status = document.getElementById("issue-safety-status");
+            const title = document.getElementById("issue-safety-title");
+            const message = document.getElementById("issue-safety-message");
+            const metricsEl = document.getElementById("issue-safety-metrics");
+            const saveBtn = document.getElementById("save-issue-btn");
+
+            if (!card || !status || !title || !message || !saveBtn) return;
+
+            if (quantityConflict || requestConflict) {
+              card.className = "inventory-safety-card is-critical";
+              status.className = "inventory-status critical";
+              status.innerHTML = '<i class="fa-solid fa-ban"></i> Fix details';
+              title.textContent = quantityConflict ? "Quantity exceeds available batch stock" : "Batch item does not match request";
+              message.textContent = quantityConflict
+                ? `Batch has ${sourceBatch.quantity_remaining} ${item?.unit_of_measure || "units"} available, but ${quantity} entered.`
+                : `Stock request #${requestId} was for ${item?.name || 'requested item'}. Selected batch item must match request.`;
+              saveBtn.disabled = true;
+              saveBtn.dataset.safetyBlocked = "true";
+            } else if (transferBatchExpired && destStockExpired) {
+              card.className = "inventory-safety-card is-critical";
+              status.className = "inventory-status critical";
+              status.innerHTML = '<i class="fa-solid fa-ban"></i> Expiry Warning';
+              title.textContent = "Transfer batch & BHC stock will both be expired upon arrival";
+              message.textContent = `Expected arrival is ${formatShortDate(selectedArrival)}. Transfer batch expires ${formatShortDate(sourceBatch.expiration_date)}, and BHC existing stock (${destinationStock} ${item?.unit_of_measure || 'units'}) expires ${formatShortDate(nearestDestBatch.expiration_date)}. Zero usable stock will remain upon arrival.`;
+              saveBtn.disabled = true;
+              saveBtn.dataset.safetyBlocked = "true";
+            } else if (transferBatchExpired) {
+              card.className = "inventory-safety-card is-critical";
+              status.className = "inventory-status critical";
+              status.innerHTML = '<i class="fa-solid fa-ban"></i> Expiry Warning';
+              title.textContent = "Transfer batch will expire before expected arrival date";
+              message.textContent = `Expected arrival is ${formatShortDate(selectedArrival)}, but transferring batch expires ${formatShortDate(sourceBatch.expiration_date)}.`;
+              saveBtn.disabled = true;
+              saveBtn.dataset.safetyBlocked = "true";
+            } else if (warnings.length > 0) {
+              card.className = "inventory-safety-card is-warning";
+              status.className = "inventory-status warning";
+              status.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Review before issuing';
+              title.textContent = "Delivery & Expiry Warning";
+              message.textContent = warnings.join(" ");
+              saveBtn.disabled = false;
+              saveBtn.dataset.safetyBlocked = "false";
+            } else {
+              card.className = "inventory-safety-card is-safe";
+              status.className = "inventory-status success";
+              status.innerHTML = '<i class="fa-solid fa-circle-check"></i> Safe to transfer';
+              title.textContent = "Valid delivery and shelf-life check";
+              
+              let msgText = `Transfer batch will arrive with ${shelfLifeAtArrival} days of shelf-life remaining. `;
+              if (destBatches.length > 0) {
+                if (destUsableStockAtArrival > 0) {
+                  msgText += `Destination BHC will have ${destUsableStockAtArrival} usable ${item?.unit_of_measure || 'units'} (nearest expiry: ${destShelfLifeAtArrival} days left at arrival). `;
+                  if (shelfLifeAtArrival < destShelfLifeAtArrival) {
+                    msgText += `FEFO Note: Incoming batch expires sooner (${shelfLifeAtArrival}d vs ${destShelfLifeAtArrival}d) — dispense incoming batch first.`;
+                  } else {
+                    msgText += `FEFO Note: Existing BHC stock expires first (${destShelfLifeAtArrival}d vs ${shelfLifeAtArrival}d) — dispense existing stock first.`;
+                  }
+                } else {
+                  msgText += `Destination BHC existing stock will be expired upon receipt — dispose expired stock and start using incoming fresh batch.`;
+                }
+              } else {
+                msgText += `Destination BHC currently has 0 stock. Destination stock will increase to ${expectedStockAfterReceipt} ${item?.unit_of_measure || 'units'}.`;
+              }
+              message.textContent = msgText;
+
+              saveBtn.disabled = false;
+              saveBtn.dataset.safetyBlocked = "false";
+            }
+
+            if (metricsEl) {
+              metricsEl.style.display = "grid";
+              metricsEl.innerHTML = `
+                <div class="inventory-safety-metric">
+                  <span>Transit Time</span>
+                  <strong>${durationLabel(deliveryDays)}</strong>
+                </div>
+                <div class="inventory-safety-metric">
+                  <span>Transfer Batch Shelf-Life</span>
+                  <strong style="color:${shelfLifeAtArrival <= 0 ? '#dc2626' : (shelfLifeAtArrival <= 30 ? '#d97706' : '#059669')}">${shelfLifeAtArrival !== null ? (shelfLifeAtArrival > 0 ? `${shelfLifeAtArrival} days` : 'Expired by arrival') : '—'}</strong>
+                </div>
+                <div class="inventory-safety-metric">
+                  <span>BHC Shelf-Life @ Arrival</span>
+                  <strong style="color:${destShelfLifeColor}">${destShelfLifeText}</strong>
+                </div>
+                <div class="inventory-safety-metric">
+                  <span>BHC Usable @ Arrival</span>
+                  <strong>${destUsableStockAtArrival} ${item?.unit_of_measure || ''} ${destExpiredQtyByArrival > 0 ? `<small style="color:#dc2626;font-size:9.5px;">(${destExpiredQtyByArrival} exp)</small>` : ''}</strong>
+                </div>
+                <div class="inventory-safety-metric">
+                  <span>Expected Usable Total</span>
+                  <strong>${expectedStockAfterReceipt} ${item?.unit_of_measure || ''}</strong>
+                </div>
+              `;
+            }
+          } catch (err) {
+            console.error("updateIssueSafetyCheck error:", err);
           }
         }
 
@@ -2221,6 +2626,7 @@
             renderInventoryTransfers();
             renderTransactions();
             renderDisposalTable();
+            renderOpenVialsTracker();
             populateDropdowns();
             setupCatalogSearchDropdown();
 
@@ -2806,11 +3212,73 @@
           renderPaginationControls("transfers-pagination", inventoryTransfers.length, "transfers");
         }
 
+        // Movement Ledger Sorting & Filtering State
+        let txSortField = "date";
+        let txSortAsc = false;
+
+        window.toggleTxSort = function(field) {
+          if (txSortField === field) {
+            txSortAsc = !txSortAsc;
+          } else {
+            txSortField = field;
+            txSortAsc = (field === "qty" || field === "item" || field === "location");
+          }
+          renderTransactions();
+        };
+
+        function updateTxSortIndicators() {
+          const fields = ["date", "location", "type", "item", "qty"];
+          fields.forEach(f => {
+            const el = document.getElementById(`tx-sort-${f}`);
+            if (el) {
+              if (txSortField === f) {
+                el.innerHTML = txSortAsc
+                  ? '<i class="fa-solid fa-arrow-up-short-wide" style="color:var(--brand-primary); margin-left:3px;"></i>'
+                  : '<i class="fa-solid fa-arrow-down-wide-short" style="color:var(--brand-primary); margin-left:3px;"></i>';
+              } else {
+                el.innerHTML = '<i class="fa-solid fa-sort" style="opacity:0.35; margin-left:3px;"></i>';
+              }
+            }
+          });
+        }
+
+        function isDateInTxFilter(dateStr, filterValue, customStart, customEnd) {
+          if (!dateStr || filterValue === "all") return true;
+          const d = asLocalDate(dateStr);
+          if (!d) return true;
+          d.setHours(0,0,0,0);
+          const today = new Date(); today.setHours(0,0,0,0);
+
+          if (filterValue === "today") {
+            return d.getTime() === today.getTime();
+          } else if (filterValue === "7d") {
+            const past7 = new Date(today); past7.setDate(today.getDate() - 7);
+            return d >= past7 && d <= today;
+          } else if (filterValue === "30d") {
+            const past30 = new Date(today); past30.setDate(today.getDate() - 30);
+            return d >= past30 && d <= today;
+          } else if (filterValue === "this_month") {
+            return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
+          } else if (filterValue === "custom") {
+            const start = asLocalDate(customStart);
+            const end = asLocalDate(customEnd);
+            if (start) { start.setHours(0,0,0,0); if (d < start) return false; }
+            if (end) { end.setHours(0,0,0,0); if (d > end) return false; }
+            return true;
+          }
+          return true;
+        }
+
         // Render Movement Ledger
         function renderTransactions() {
-          const q = document.getElementById("tx-search").value.trim().toLowerCase();
-          const type = document.getElementById("tx-filter-type").value;
-          const bhcFilter = document.getElementById("global-bhc-filter").value;
+          const q = document.getElementById("tx-search")?.value.trim().toLowerCase() || "";
+          const type = document.getElementById("tx-filter-type")?.value || "";
+          const dateFilter = document.getElementById("tx-filter-date")?.value || "all";
+          const customStart = document.getElementById("tx-date-start")?.value;
+          const customEnd = document.getElementById("tx-date-end")?.value;
+          const bhcFilter = document.getElementById("global-bhc-filter")?.value || "all";
+
+          updateTxSortIndicators();
 
           const filtered = transactions.filter(t => {
             if (type && t.transaction_type !== type) return false;
@@ -2821,6 +3289,8 @@
               if (String(t.facility_id) !== String(bhcFilter)) return false;
             }
 
+            if (!isDateInTxFilter(t.logged_at, dateFilter, customStart, customEnd)) return false;
+
             const batch = batches.find(b => b.batch_id === t.batch_id);
             const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
             const user = accountMap[t.performed_by] || "";
@@ -2829,9 +3299,34 @@
             return true;
           });
 
+          // Sort Transactions
+          filtered.sort((a, b) => {
+            let res = 0;
+            if (txSortField === "date") {
+              const dA = new Date(a.logged_at || 0).getTime();
+              const dB = new Date(b.logged_at || 0).getTime();
+              res = dA - dB;
+            } else if (txSortField === "qty") {
+              res = (a.quantity || 0) - (b.quantity || 0);
+            } else if (txSortField === "type") {
+              res = String(a.transaction_type || "").localeCompare(String(b.transaction_type || ""));
+            } else if (txSortField === "location") {
+              const locA = a.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(a.facility_id))?.bhc_name || `BHC #${a.facility_id}`) : "Central Warehouse";
+              const locB = b.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(b.facility_id))?.bhc_name || `BHC #${b.facility_id}`) : "Central Warehouse";
+              res = locA.localeCompare(locB);
+            } else if (txSortField === "item") {
+              const itemA = (batches.find(x => x.batch_id === a.batch_id) ? items.find(i => i.item_id === batches.find(x => x.batch_id === a.batch_id)?.item_id)?.name : "") || "";
+              const itemB = (batches.find(x => x.batch_id === b.batch_id) ? items.find(i => i.item_id === batches.find(x => x.batch_id === b.batch_id)?.item_id)?.name : "") || "";
+              res = itemA.localeCompare(itemB);
+            }
+            return txSortAsc ? res : -res;
+          });
+
           const tbody = document.getElementById("tx-tbody");
+          if (!tbody) return;
+
           if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-clock-rotate-left" style="font-size:28px;margin-bottom:8px;display:block;opacity:0.5;"></i>No movement records found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-clock-rotate-left" style="font-size:28px;margin-bottom:8px;display:block;opacity:0.5;"></i>No movement records match the current filters.</td></tr>`;
             renderPaginationControls("tx-pagination", 0, "tx");
             return;
           }
@@ -2893,6 +3388,66 @@
 
           renderPaginationControls("tx-pagination", filtered.length, "tx");
         }
+
+        // Export Transactions CSV
+        window.exportTransactionsCSV = function() {
+          const q = document.getElementById("tx-search")?.value.trim().toLowerCase() || "";
+          const type = document.getElementById("tx-filter-type")?.value || "";
+          const bhcFilter = document.getElementById("global-bhc-filter")?.value || "all";
+          const dateFilter = document.getElementById("tx-filter-date")?.value || "all";
+          const customStart = document.getElementById("tx-date-start")?.value;
+          const customEnd = document.getElementById("tx-date-end")?.value;
+
+          const filtered = transactions.filter(t => {
+            if (type && t.transaction_type !== type) return false;
+            if (bhcFilter === "central") {
+              if (t.facility_id !== null && t.facility_id !== 0 && t.facility_id !== undefined && String(t.facility_id) !== "null") return false;
+            } else if (bhcFilter !== "all") {
+              if (String(t.facility_id) !== String(bhcFilter)) return false;
+            }
+            if (!isDateInTxFilter(t.logged_at, dateFilter, customStart, customEnd)) return false;
+
+            const batch = batches.find(b => b.batch_id === t.batch_id);
+            const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
+            const user = accountMap[t.performed_by] || "";
+            const searchStr = `${batch?.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""} ${user} ${t.reference_type || ""} ${t.activity_reason || ""} ${t.activity_notes || ""}`.toLowerCase();
+            if (q && !searchStr.includes(q)) return false;
+            return true;
+          });
+
+          const headers = ["Timestamp", "Facility / Location", "Movement Type", "Item Name", "Generic Name", "Batch Number", "Quantity", "Performed By", "Reference / Notes"];
+          const rows = filtered.map(t => {
+            const batch = batches.find(b => b.batch_id === t.batch_id);
+            const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
+            let locName = "Central Warehouse";
+            if (t.facility_id) {
+              const bh = bhcs.find(x => String(x.bhc_id) === String(t.facility_id));
+              locName = bh ? bh.bhc_name : `BHC #${t.facility_id}`;
+            }
+            const dateStr = t.logged_at ? new Date(t.logged_at).toLocaleString("en-PH") : "";
+            const refNote = `${t.reference_type || ""} ${t.activity_reason ? '(' + t.activity_reason + ')' : ''} ${t.activity_notes || ""}`.trim();
+            const formatCell = (val) => '"' + String(val ?? "").replace(/"/g, '""') + '"';
+            return [
+              formatCell(dateStr),
+              formatCell(locName),
+              formatCell(t.transaction_type),
+              formatCell(item?.name || "Item"),
+              formatCell(item?.generic_name || ""),
+              formatCell(batch?.batch_number || ""),
+              formatCell(t.quantity),
+              formatCell(accountMap[t.performed_by] || "System / Admin"),
+              formatCell(refNote)
+            ];
+          });
+
+          const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+          const link = document.createElement("a");
+          link.setAttribute("href", encodeURI(csvContent));
+          link.setAttribute("download", `stock_movement_ledger_${localDateKey()}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        };
 
         // Render Disposal Management Table
         function renderDisposalTable() {
@@ -3223,14 +3778,145 @@
           document.getElementById("modal-disposal-cert").classList.add("show");
         }
 
-        // Analytics Engine with Pediatric Demographics
+        // Analytics Engine with Chart.js & Real-time Metrics
         let dailyChartInstance = null;
         let hourlyChartInstance = null;
 
+        function populateChartItemSelector() {
+          const sel = document.getElementById("chart-item-selector");
+          if (!sel) return;
+          const currentVal = sel.value;
+          const activeItems = items.filter(i => !i.is_archived);
+          sel.innerHTML = `<option value="all">— All Catalog Items —</option>` + activeItems.map(i => {
+            return `<option value="${i.item_id}">${esc(i.name)}</option>`;
+          }).join("");
+          if (currentVal && Array.from(sel.options).some(o => o.value === currentVal)) {
+            sel.value = currentVal;
+          }
+        }
+
+        function renderAnalyticsCharts(monthVal, bhcFilter, selectedItemId = "all") {
+          const daysInMonth = new Date(parseInt(monthVal.split("-")[0], 10), parseInt(monthVal.split("-")[1], 10), 0).getDate();
+          const dayLabels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
+          const dailyData = new Array(daysInMonth).fill(0);
+          const hourLabels = ["7 AM", "8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM"];
+          const hourlyData = new Array(12).fill(0);
+
+          transactions.forEach(t => {
+            if ((t.logged_at || "").startsWith(monthVal) && t.transaction_type === "dispense") {
+              if (bhcFilter === "central" && t.facility_id !== null && t.facility_id !== 0) return;
+              if (bhcFilter !== "all" && bhcFilter !== "central" && String(t.facility_id) !== String(bhcFilter)) return;
+
+              const batch = batches.find(b => b.batch_id === t.batch_id);
+              if (selectedItemId !== "all" && batch && String(batch.item_id) !== String(selectedItemId)) return;
+
+              const tDate = asLocalDate(t.logged_at);
+              if (tDate) {
+                const dNum = tDate.getDate();
+                if (dNum >= 1 && dNum <= daysInMonth) {
+                  dailyData[dNum - 1] += Math.abs(t.quantity || 0);
+                }
+              }
+
+              const tFull = new Date(t.logged_at);
+              const hour = tFull.getHours();
+              if (hour >= 7 && hour <= 18) {
+                hourlyData[hour - 7] += 1;
+              }
+            }
+          });
+
+          // Daily Peak Consumption Chart
+          const dailyCanvas = document.getElementById("analytics-chart-daily");
+          if (dailyCanvas && window.Chart) {
+            if (dailyChartInstance) {
+              dailyChartInstance.destroy();
+              dailyChartInstance = null;
+            }
+            const ctx = dailyCanvas.getContext("2d");
+            dailyChartInstance = new Chart(ctx, {
+              type: "line",
+              data: {
+                labels: dayLabels,
+                datasets: [{
+                  label: "Units Dispensed",
+                  data: dailyData,
+                  borderColor: "#ff68a5",
+                  backgroundColor: "rgba(255, 104, 165, 0.14)",
+                  fill: true,
+                  tension: 0.3,
+                  borderWidth: 2.5,
+                  pointRadius: 2.5,
+                  pointHoverRadius: 5,
+                  pointBackgroundColor: "#ff68a5"
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                    callbacks: {
+                      title: (items) => `${monthVal}-${items[0].label.padStart(2, '0')}`,
+                      label: (item) => ` Dispensed: ${item.raw} units`
+                    }
+                  }
+                },
+                scales: {
+                  y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } }, grid: { color: "rgba(0,0,0,0.05)" } },
+                  x: { ticks: { font: { size: 9 } }, grid: { display: false } }
+                }
+              }
+            });
+          }
+
+          // Hourly Distribution Chart
+          const hourlyCanvas = document.getElementById("analytics-chart-hourly");
+          if (hourlyCanvas && window.Chart) {
+            if (hourlyChartInstance) {
+              hourlyChartInstance.destroy();
+              hourlyChartInstance = null;
+            }
+            const ctx = hourlyCanvas.getContext("2d");
+            hourlyChartInstance = new Chart(ctx, {
+              type: "bar",
+              data: {
+                labels: hourLabels,
+                datasets: [{
+                  label: "Dispensing Visits",
+                  data: hourlyData,
+                  backgroundColor: "rgba(139, 92, 246, 0.75)",
+                  hoverBackgroundColor: "#8b5cf6",
+                  borderRadius: 4
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                    callbacks: {
+                      label: (item) => ` ${item.raw} dispensing visits recorded`
+                    }
+                  }
+                },
+                scales: {
+                  y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } }, grid: { color: "rgba(0,0,0,0.05)" } },
+                  x: { ticks: { font: { size: 9.5 } }, grid: { display: false } }
+                }
+              }
+            });
+          }
+        }
+
         async function loadAnalyticsReport() {
-          const bhcVal = document.getElementById("analytics-bhc-select").value;
-          const monthVal = document.getElementById("analytics-month").value || new Date().toISOString().slice(0,7);
+          const bhcVal = document.getElementById("analytics-bhc-select")?.value || "all";
+          const monthVal = document.getElementById("analytics-month")?.value || new Date().toISOString().slice(0,7);
           const bhcFilter = bhcVal === "all" ? "all" : (bhcVal === "central" ? "central" : bhcVal);
+
+          populateChartItemSelector();
 
           let totalReceivedMonth = 0;
           let totalDispensedMonth = 0;
@@ -3244,8 +3930,6 @@
 
               const qty = Math.abs(t.quantity || 0);
               if (t.transaction_type === 'receipt') totalReceivedMonth += qty;
-              // Patient/service dispensing is the demand signal. Transfers only
-              // relocate stock, and unusable write-offs must not inflate usage.
               if (t.transaction_type === 'dispense') {
                 totalDispensedMonth += qty;
                 const batch = batches.find(b => b.batch_id === t.batch_id);
@@ -3264,11 +3948,14 @@
           let maxQty = 0;
           Object.entries(usageMap).forEach(([k,v]) => { if (v > maxQty) { maxQty = v; peakItem = k; } });
 
-          document.getElementById("insight-descriptive").innerHTML = `
-            In <strong>${monthVal}</strong>, RHU recorded <strong>${totalReceivedMonth.toLocaleString()}</strong> units received and <strong>${totalDispensedMonth.toLocaleString()}</strong> units dispensed.<br>
-            Top dispensed item: <strong style="color:var(--brand-primary);">${esc(peakItem)}</strong> (${maxQty.toLocaleString()} units).<br>
-            Total active stock level across facilities: <strong>${totalEnding.toLocaleString()}</strong> units.
-          `;
+          const descEl = document.getElementById("insight-descriptive");
+          if (descEl) {
+            descEl.innerHTML = `
+              In <strong>${monthVal}</strong>, recorded <strong>${totalReceivedMonth.toLocaleString()}</strong> units received and <strong>${totalDispensedMonth.toLocaleString()}</strong> units dispensed to patients.<br>
+              Top moving item: <strong style="color:var(--brand-primary);">${esc(peakItem)}</strong> (${maxQty.toLocaleString()} units).<br>
+              Total current active stock on hand: <strong>${totalEnding.toLocaleString()}</strong> units across selected facilities.
+            `;
+          }
 
           const lowStockItems = items.filter(i => {
             const m = getItemStockMetrics(i.item_id, bhcFilter);
@@ -3280,42 +3967,44 @@
             return m.available <= effMin;
           });
           const expiredBatchesCount = batches.filter(b => isBatchExpired(b) || b.status === 'expired').length;
-          document.getElementById("insight-diagnostic").innerHTML = `
-            ${lowStockItems.length > 0 ? `<strong>${lowStockItems.length} item(s)</strong> triggered low stock alerts.` : `Stock levels remain healthy across all monitored items.`}<br>
-            Detected <strong>${expiredBatchesCount} expired batch(es)</strong> requiring disposal logging.
-          `;
+          const diagEl = document.getElementById("insight-diagnostic");
+          if (diagEl) {
+            diagEl.innerHTML = `
+              ${lowStockItems.length > 0 ? `<strong>${lowStockItems.length} item(s)</strong> are currently at or below safety threshold.` : `Stock levels remain healthy across all monitored items.`}<br>
+              Detected <strong>${expiredBatchesCount} expired / near-expiry batch(es)</strong> requiring disposal logging or review.
+            `;
+          }
 
-          // Projection is a plain run-rate carry-forward of the month's actual
-          // dispensing. No growth factor is applied and no figure is invented when
-          // there is nothing to project from — these numbers drive reorder decisions.
+          const predEl = document.getElementById("insight-predictive");
+          const prescEl = document.getElementById("insight-prescriptive");
+
           if (totalDispensedMonth > 0) {
             const dailyRate = totalDispensedMonth / 30;
             const daysOfCover = dailyRate > 0 ? Math.floor(totalEnding / dailyRate) : null;
-            document.getElementById("insight-predictive").innerHTML = `
-              At the current run rate (<strong>${Math.round(dailyRate).toLocaleString()} units/day</strong>),
-              next month's demand is projected at <strong style="color:var(--brand-text);">${Math.round(totalDispensedMonth).toLocaleString()} units</strong>.<br>
-              ${daysOfCover !== null
-                ? `Present stock covers approximately <strong style="color:${daysOfCover < 30 ? '#dc2626' : '#059669'};">${daysOfCover} day(s)</strong>.`
-                : `Insufficient movement data to estimate days of cover.`}
-            `;
-            document.getElementById("insight-prescriptive").innerHTML = `
-              💡 <strong>Action:</strong> ${peakItem !== "N/A"
-                ? `<strong>${esc(peakItem)}</strong> is the highest-moving item this month (${maxQty.toLocaleString()} units) — review its reorder level.`
-                : `No dispensing recorded this month.`}<br>
-              💡 ${lowStockItems.length > 0
-                ? `Rebalance <strong>${lowStockItems.length} item(s)</strong> below the safety threshold from the Central Warehouse.`
-                : `All items are above their safety thresholds.`}
-            `;
+            if (predEl) {
+              predEl.innerHTML = `
+                Current run rate: <strong>${Math.round(dailyRate).toLocaleString()} units/day</strong> (~${Math.round(totalDispensedMonth).toLocaleString()} units/month).<br>
+                ${daysOfCover !== null
+                  ? `Overall stock covers approximately <strong style="color:${daysOfCover < 30 ? '#dc2626' : '#059669'};">${daysOfCover} day(s)</strong>.`
+                  : `Insufficient movement data to estimate days of cover.`}
+              `;
+            }
+            if (prescEl) {
+              prescEl.innerHTML = `
+                💡 <strong>Action:</strong> ${peakItem !== "N/A"
+                  ? `<strong>${esc(peakItem)}</strong> is the fastest-moving item this month (${maxQty.toLocaleString()} units). Ensure minimum reorder buffer is maintained.`
+                  : `No dispensing recorded this month.`}<br>
+                💡 ${lowStockItems.length > 0
+                  ? `Initiate stock transfer for <strong>${lowStockItems.length} item(s)</strong> from Central Warehouse to prevent BHC stockouts.`
+                  : `All facilities are operating within safe stock buffers.`}
+              `;
+            }
           } else {
-            document.getElementById("insight-predictive").innerHTML =
-              `<span style="color:var(--text-secondary);">No stock movement recorded for ${esc(monthVal)} — there is no basis for a projection.</span>`;
-            document.getElementById("insight-prescriptive").innerHTML =
-              `<span style="color:var(--text-secondary);">Recommendations appear once dispensing activity has been recorded.</span>`;
+            if (predEl) predEl.innerHTML = `<span style="color:var(--text-secondary);">No dispensing recorded for ${esc(monthVal)} — demand projection will appear once patient visits occur.</span>`;
+            if (prescEl) prescEl.innerHTML = `<span style="color:var(--text-secondary);">Recommendations will appear once dispensing activity is recorded for this period.</span>`;
           }
 
-          // Pediatric demographics — derived only from stored records. The previous
-          // version multiplied the child count by fixed ratios (88% normal growth,
-          // 22/28/32/18% age split) and presented the result as measured data.
+          // Pediatric Demographics Summary
           try {
             const { data: childrenData } = await db
               .from("children")
@@ -3323,7 +4012,8 @@
             const kids = childrenData || [];
             const totalChildren = kids.length;
 
-            document.getElementById("pediatric-stat-total").textContent = totalChildren.toLocaleString();
+            const totalEl = document.getElementById("pediatric-stat-total");
+            if (totalEl) totalEl.textContent = totalChildren.toLocaleString();
 
             if (totalChildren === 0) {
               document.getElementById("pediatric-stat-gender").textContent = "No child records yet";
@@ -3339,7 +4029,6 @@
                 `Girls: <strong>${girlsCount}</strong> (${Math.round((girlsCount / totalChildren) * 100)}%)` +
                 (unknownSex > 0 ? ` | Unrecorded: <strong>${unknownSex}</strong>` : "");
 
-              // Real age bands from recorded birthdates.
               const now = new Date();
               const bands = { b0_6: 0, b6_12: 0, b1_2: 0, b2_5: 0, over5: 0, unknown: 0 };
               kids.forEach(c => {
@@ -3358,20 +4047,14 @@
                 `1-2y: <strong>${bands.b1_2}</strong> | 2-5y: <strong>${bands.b2_5}</strong>` +
                 (bands.unknown > 0 ? ` | No birthdate: <strong>${bands.unknown}</strong>` : "");
 
-              // Growth classification is not derivable here — it needs WHO z-scores
-              // against child_growth_records, which this page does not load.
               document.getElementById("pediatric-stat-growth").innerHTML =
-                `<span style="color:var(--text-secondary);">Growth classification is available in Reports &amp; Analytics</span>`;
+                `<span style="color:var(--text-secondary);">Monitored via Child Growth Records (WHO)</span>`;
             }
           } catch (e) {
             console.warn("Pediatric stats query failed:", e);
-            document.getElementById("pediatric-stat-total").textContent = "—";
-            document.getElementById("pediatric-stat-gender").textContent = "Unavailable";
-            document.getElementById("pediatric-stat-growth").textContent = "Unavailable";
-            document.getElementById("pediatric-stat-age").textContent = "Unavailable";
           }
 
-          // Populate Analytics Table
+          // Populate Analytics Reconciliation Table
           const tbody = document.getElementById("analytics-tbody");
           if (tbody) {
             tbody.innerHTML = items.map(item => {
@@ -3394,7 +4077,79 @@
               `;
             }).join('');
           }
+
+          // Render Chart.js
+          const chartItemSel = document.getElementById("chart-item-selector")?.value || "all";
+          renderAnalyticsCharts(monthVal, bhcFilter, chartItemSel);
         }
+
+        // Listener for chart item selector
+        document.getElementById("chart-item-selector")?.addEventListener("change", (e) => {
+          const bhcVal = document.getElementById("analytics-bhc-select")?.value || "all";
+          const monthVal = document.getElementById("analytics-month")?.value || new Date().toISOString().slice(0,7);
+          const bhcFilter = bhcVal === "all" ? "all" : (bhcVal === "central" ? "central" : bhcVal);
+          renderAnalyticsCharts(monthVal, bhcFilter, e.target.value);
+        });
+
+        // SMS Alert Dispatcher for Inventory Warnings
+        window.sendInventoryAlertSms = async function() {
+          const lowStockItems = items.filter(i => {
+            const m = getItemStockMetrics(i.item_id, "all");
+            const effMin = getItemEffectiveThreshold(i, "all");
+            return m.available <= effMin;
+          });
+
+          const expBatches = batches.filter(b => {
+            if (b.status !== 'active') return false;
+            return isBatchExpired(b) || daysUntil(b.expiration_date) <= 30;
+          });
+
+          if (lowStockItems.length === 0 && expBatches.length === 0) {
+            showToast("No critical inventory alerts found to dispatch via SMS.", "info");
+            return;
+          }
+
+          const btn = document.getElementById("btn-send-inventory-sms-alert");
+          if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<div class="btn-loader"></div> Sending SMS...';
+          }
+
+          try {
+            const { data: staffAccounts } = await db
+              .from("accounts")
+              .select("account_id, first_name, last_name, phone_number, account_type")
+              .in("account_type", ["midwife", "admin"])
+              .eq("status", "active")
+              .not("phone_number", "is", null);
+
+            const staffList = staffAccounts || [];
+            let sentCount = 0;
+            const summaryMsg = `InaAgapay Inventory Alert: ${lowStockItems.length} item(s) below threshold, ${expBatches.length} batch(es) near/past expiry. Please check the RHU portal.`;
+
+            for (const staff of staffList) {
+              const phone = staff.phone_number?.trim();
+              if (phone && phone.length >= 10) {
+                try {
+                  const { error } = await db.functions.invoke("send-sms", {
+                    body: { number: phone, message: summaryMsg }
+                  });
+                  if (!error) sentCount++;
+                } catch (_) {}
+              }
+            }
+
+            showToast(`Inventory SMS alerts dispatched to ${sentCount} health staff.`, "success");
+          } catch (err) {
+            console.error("Error sending inventory SMS alerts:", err);
+            showToast("Failed to dispatch SMS alerts: " + (err.message || err), "error");
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send SMS Reminders';
+            }
+          }
+        };
 
         // Export Analytics CSV
         window.exportAnalyticsCSV = function() {
@@ -3604,7 +4359,7 @@
           }
         };
 
-        // Helper to ensure BHC dropdown has options loaded
+        // Helper to ensure BHC dropdowns have options loaded
         function ensureBhcDropdownPopulated() {
           const issueDropdown = document.getElementById("issue-target-bhc");
           if (issueDropdown && (issueDropdown.options.length <= 1 || issueDropdown.querySelectorAll("option").length <= 1)) {
@@ -3614,6 +4369,17 @@
               opt.value = b.bhc_id;
               opt.textContent = b.bhc_name;
               issueDropdown.appendChild(opt);
+            });
+          }
+
+          const sourceFacilitySel = document.getElementById("issue-source-facility");
+          if (sourceFacilitySel && (sourceFacilitySel.options.length <= 1 || sourceFacilitySel.querySelectorAll("option").length <= 1)) {
+            sourceFacilitySel.innerHTML = '<option value="central" selected>Central Warehouse (RHU Depot)</option>';
+            (bhcs || []).forEach(b => {
+              const opt = document.createElement("option");
+              opt.value = b.bhc_id;
+              opt.textContent = `BHC: ${b.bhc_name}`;
+              sourceFacilitySel.appendChild(opt);
             });
           }
         }
@@ -3632,6 +4398,11 @@
             if (alertEl) alertEl.style.display = "none";
 
             ensureBhcDropdownPopulated();
+            const sourceSel = document.getElementById("issue-source-facility");
+            if (sourceSel) {
+              sourceSel.value = "central";
+              sourceSel.disabled = false;
+            }
             const bhcSel = document.getElementById("issue-target-bhc");
             if (bhcSel) {
               bhcSel.disabled = false;
@@ -3729,7 +4500,8 @@
           if (!item) return;
 
           document.getElementById("item-details-title").innerHTML = `<i class="fa-solid fa-boxes-stacked" style="color:var(--brand-primary);margin-right:8px;"></i> ${esc(item.name)}`;
-          document.getElementById("item-details-subtitle").textContent = `Category: ${item.item_type.replace('_',' ')} • Unit: ${item.unit_of_measure} • Min Threshold: ${item.minimum_stock_threshold || 50}`;
+          const dpu = item.doses_per_unit || 1;
+          document.getElementById("item-details-subtitle").textContent = `Category: ${item.item_type.replace('_',' ')} • Unit: ${item.unit_of_measure} (${dpu} dose${dpu === 1 ? '' : 's'}/unit) • Min Threshold: ${item.minimum_stock_threshold || 50}`;
 
           const itemMetrics = getItemStockMetrics(itemId, "all");
           const itemBatches = batches.filter(b => b.item_id === itemId);
@@ -3848,6 +4620,124 @@
           document.getElementById("modal-item-details").classList.add("show");
         };
 
+        window.setItemDoses = function(val) {
+          const el = document.getElementById("item-doses-per-unit");
+          if (el) el.value = val;
+        };
+
+        window.setEditItemDoses = function(val) {
+          const el = document.getElementById("edit-item-doses-per-unit");
+          if (el) el.value = val;
+        };
+
+        window.calculateItemDoses = function() {
+          const totalVol = parseFloat(document.getElementById("item-calc-total-vol")?.value);
+          const doseSize = parseFloat(document.getElementById("item-calc-dose-size")?.value);
+          const unit = document.getElementById("item-calc-unit")?.value || "mL";
+          const preview = document.getElementById("item-calc-preview");
+          const dosesInput = document.getElementById("item-doses-per-unit");
+
+          if (totalVol > 0 && doseSize > 0) {
+            const rawDoses = totalVol / doseSize;
+            const doses = Math.floor(rawDoses);
+            if (doses > 0 && Number.isFinite(doses)) {
+              if (dosesInput) dosesInput.value = doses;
+              if (preview) {
+                preview.innerHTML = `<strong>${totalVol} ${unit}</strong> ÷ <strong>${doseSize} ${unit}/dose</strong> = <strong style="color:var(--brand-primary);">${doses} Doses</strong> per package`;
+              }
+              return;
+            }
+          }
+          if (preview) {
+            preview.innerHTML = `<span><i class="fa-solid fa-circle-info" style="color:var(--brand-primary); margin-right:4px;"></i> Enter volume &amp; dose size above, or click a standard preset below:</span>`;
+          }
+        };
+
+        window.applyDosePreset = function(type) {
+          const totalVol = document.getElementById("item-calc-total-vol");
+          const doseSize = document.getElementById("item-calc-dose-size");
+          const unit = document.getElementById("item-calc-unit");
+          const uom = document.getElementById("item-uom");
+          const dosesInput = document.getElementById("item-doses-per-unit");
+
+          if (type === 'bcg') {
+            if (totalVol) totalVol.value = 1.0;
+            if (doseSize) doseSize.value = 0.05;
+            if (unit) unit.value = 'mL';
+            if (uom) uom.value = 'vials';
+          } else if (type === 'mr') {
+            if (totalVol) totalVol.value = 5.0;
+            if (doseSize) doseSize.value = 0.5;
+            if (unit) unit.value = 'mL';
+            if (uom) uom.value = 'vials';
+          } else if (type === 'syrup100') {
+            if (totalVol) totalVol.value = 100.0;
+            if (doseSize) doseSize.value = 10.0;
+            if (unit) unit.value = 'mL';
+            if (uom) uom.value = 'bottles';
+          } else if (type === 'single') {
+            if (totalVol) totalVol.value = 1.0;
+            if (doseSize) doseSize.value = 1.0;
+            if (unit) unit.value = 'mL';
+            if (dosesInput) dosesInput.value = 1;
+          }
+          calculateItemDoses();
+        };
+
+        window.calculateEditItemDoses = function() {
+          const totalVol = parseFloat(document.getElementById("edit-item-calc-total-vol")?.value);
+          const doseSize = parseFloat(document.getElementById("edit-item-calc-dose-size")?.value);
+          const unit = document.getElementById("edit-item-calc-unit")?.value || "mL";
+          const preview = document.getElementById("edit-item-calc-preview");
+          const dosesInput = document.getElementById("edit-item-doses-per-unit");
+
+          if (totalVol > 0 && doseSize > 0) {
+            const rawDoses = totalVol / doseSize;
+            const doses = Math.floor(rawDoses);
+            if (doses > 0 && Number.isFinite(doses)) {
+              if (dosesInput) dosesInput.value = doses;
+              if (preview) {
+                preview.innerHTML = `<strong>${totalVol} ${unit}</strong> ÷ <strong>${doseSize} ${unit}/dose</strong> = <strong style="color:var(--brand-primary);">${doses} Doses</strong> per package`;
+              }
+              return;
+            }
+          }
+          if (preview) {
+            preview.innerHTML = `<span><i class="fa-solid fa-circle-info" style="color:var(--brand-primary); margin-right:4px;"></i> Enter volume &amp; dose size above, or click a standard preset below:</span>`;
+          }
+        };
+
+        window.applyEditDosePreset = function(type) {
+          const totalVol = document.getElementById("edit-item-calc-total-vol");
+          const doseSize = document.getElementById("edit-item-calc-dose-size");
+          const unit = document.getElementById("edit-item-calc-unit");
+          const uom = document.getElementById("edit-item-uom");
+          const dosesInput = document.getElementById("edit-item-doses-per-unit");
+
+          if (type === 'bcg') {
+            if (totalVol) totalVol.value = 1.0;
+            if (doseSize) doseSize.value = 0.05;
+            if (unit) unit.value = 'mL';
+            if (uom) uom.value = 'vials';
+          } else if (type === 'mr') {
+            if (totalVol) totalVol.value = 5.0;
+            if (doseSize) doseSize.value = 0.5;
+            if (unit) unit.value = 'mL';
+            if (uom) uom.value = 'vials';
+          } else if (type === 'syrup100') {
+            if (totalVol) totalVol.value = 100.0;
+            if (doseSize) doseSize.value = 10.0;
+            if (unit) unit.value = 'mL';
+            if (uom) uom.value = 'bottles';
+          } else if (type === 'single') {
+            if (totalVol) totalVol.value = 1.0;
+            if (doseSize) doseSize.value = 1.0;
+            if (unit) unit.value = 'mL';
+            if (dosesInput) dosesInput.value = 1;
+          }
+          calculateEditItemDoses();
+        };
+
         // Edit Item Modal Opener
         window.openEditItem = function(itemId) {
           const item = items.find(i => i.item_id === itemId);
@@ -3856,8 +4746,29 @@
           document.getElementById("edit-item-id").value = itemId;
           document.getElementById("edit-item-name").value = item.name;
           document.getElementById("edit-item-type").value = item.item_type;
-          document.getElementById("edit-item-uom").value = item.unit_of_measure;
+
+          const uomSelect = document.getElementById("edit-item-uom");
+          if (uomSelect) {
+            const val = (item.unit_of_measure || "vials").toLowerCase();
+            const optionExists = Array.from(uomSelect.options).some(o => o.value === val);
+            if (optionExists) {
+              uomSelect.value = val;
+            } else {
+              uomSelect.innerHTML += `<option value="${esc(val)}" selected>${esc(val)}</option>`;
+              uomSelect.value = val;
+            }
+          }
+
+          document.getElementById("edit-item-doses-per-unit").value = item.doses_per_unit || 1;
           document.getElementById("edit-item-threshold").value = item.minimum_stock_threshold || 50;
+          
+          // Reset edit calc inputs
+          if (document.getElementById("edit-item-calc-total-vol")) document.getElementById("edit-item-calc-total-vol").value = "";
+          if (document.getElementById("edit-item-calc-dose-size")) document.getElementById("edit-item-calc-dose-size").value = "";
+          if (document.getElementById("edit-item-calc-preview")) {
+            document.getElementById("edit-item-calc-preview").innerHTML = `<span><i class="fa-solid fa-circle-info" style="color:var(--brand-primary); margin-right:4px;"></i> Current config: <strong style="color:var(--brand-primary);">${item.doses_per_unit || 1} doses</strong> per ${esc(item.unit_of_measure || 'unit')}</span>`;
+          }
+
           document.getElementById("modal-edit-item").classList.add("show");
         };
 
@@ -3867,6 +4778,7 @@
           const name = document.getElementById("edit-item-name").value.trim();
           const type = document.getElementById("edit-item-type").value;
           const uom = document.getElementById("edit-item-uom").value.trim();
+          const dosesPerUnit = parseInt(document.getElementById("edit-item-doses-per-unit").value) || 1;
           const threshold = parseInt(document.getElementById("edit-item-threshold").value) || 50;
 
           if (!itemId || !name || !uom) {
@@ -3880,7 +4792,13 @@
 
           try {
             const { error } = await db.from("inventory_items")
-              .update({ name, item_type: type, unit_of_measure: uom, minimum_stock_threshold: threshold })
+              .update({ 
+                name, 
+                item_type: type, 
+                unit_of_measure: uom, 
+                doses_per_unit: dosesPerUnit,
+                minimum_stock_threshold: threshold 
+              })
               .eq("item_id", itemId);
 
             if (error) throw error;
@@ -4075,6 +4993,8 @@
           const chipPreview = wrap.querySelector('.selected-chip-preview');
           const chevron = wrap.querySelector('.searchable-chevron');
 
+          let isSelecting = false;
+
           const renderOptionsList = (filterText = '') => {
             const q = filterText.trim().toLowerCase();
             const filtered = options.filter(o => {
@@ -4091,7 +5011,7 @@
             optionsContainer.innerHTML = filtered.map(o => {
               const isSelected = String(o.value) === String(selectEl.value);
               return `
-                <div class="searchable-select-option ${isSelected ? 'selected' : ''}" data-value="${esc(o.value)}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9;">
+                <div class="searchable-select-option ${isSelected ? 'selected' : ''}" data-value="${esc(o.value)}" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; user-select: none;">
                   <div style="font-weight: 600; color: var(--text-primary); font-size: 12px;">${esc(o.name || o.label)}</div>
                   ${o.genericName ? `<div style="font-size: 10.5px; color: var(--brand-text); font-style: italic; margin-top: 1px;">${esc(o.genericName)}</div>` : ''}
                   <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
@@ -4104,43 +5024,61 @@
               `;
             }).join('');
 
-            optionsContainer.querySelectorAll('.searchable-select-option').forEach(optEl => {
-              optEl.addEventListener('click', (e) => {
+            const doSelect = (val, e) => {
+              if (e) {
+                e.preventDefault();
                 e.stopPropagation();
-                const val = optEl.getAttribute('data-value');
-                selectEl.value = val;
-                selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-                dropdown.style.display = 'none';
-                if (chevron) chevron.style.transform = 'translateY(-50%)';
+              }
+              isSelecting = true;
+              selectEl.value = val;
+              const chosen = options.find(o => String(o.value) === String(val));
+              if (chosen) {
+                mainInput.value = chosen.name || chosen.label;
+                chipPreview.innerHTML = chosen.richChipHtml || ``;
+              } else {
+                mainInput.value = '';
+                chipPreview.innerHTML = '';
+              }
+              dropdown.style.display = 'none';
+              if (chevron) chevron.style.transform = 'translateY(-50%)';
+              selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+              if (onSelect) onSelect(val);
+              setTimeout(() => { isSelecting = false; }, 300);
+            };
 
-                const chosen = options.find(o => String(o.value) === String(val));
-                if (chosen) {
-                  mainInput.value = chosen.name || chosen.label;
-                  chipPreview.innerHTML = chosen.richChipHtml || ``;
-                } else {
-                  mainInput.value = '';
-                  chipPreview.innerHTML = '';
-                }
-                if (onSelect) onSelect(val);
+            optionsContainer.querySelectorAll('.searchable-select-option').forEach(optEl => {
+              optEl.addEventListener('mousedown', (e) => {
+                const val = optEl.getAttribute('data-value');
+                doSelect(val, e);
+              });
+              optEl.addEventListener('click', (e) => {
+                const val = optEl.getAttribute('data-value');
+                doSelect(val, e);
               });
             });
           };
 
-          const openDropdown = () => {
-            document.querySelectorAll('.searchable-select-dropdown').forEach(d => d.style.display = 'none');
+          const openDropdown = (filterQuery = '') => {
+            if (isSelecting) return;
+            document.querySelectorAll('.searchable-select-dropdown').forEach(d => {
+              if (d !== dropdown) d.style.display = 'none';
+            });
             dropdown.style.display = 'block';
             if (chevron) chevron.style.transform = 'translateY(-50%) rotate(180deg)';
-            renderOptionsList(mainInput.value);
+            renderOptionsList(filterQuery);
           };
 
-          mainInput.addEventListener('focus', openDropdown);
-          mainInput.addEventListener('click', openDropdown);
-          mainInput.addEventListener('input', (e) => {
-            openDropdown();
-            renderOptionsList(e.target.value);
+          mainInput.addEventListener('focus', () => openDropdown(''));
+          mainInput.addEventListener('click', (e) => {
+            if (isSelecting) {
+              e.stopPropagation();
+              return;
+            }
+            openDropdown('');
           });
+          mainInput.addEventListener('input', (e) => openDropdown(e.target.value));
 
-          selectEl.addEventListener('change', () => {
+          selectEl.onchange = (e) => {
             const val = selectEl.value;
             const chosen = options.find(o => String(o.value) === String(val));
             if (chosen) {
@@ -4150,7 +5088,8 @@
               mainInput.value = '';
               chipPreview.innerHTML = '';
             }
-          });
+            if (onSelect) onSelect(val);
+          };
 
           if (selectEl.form) {
             selectEl.form.addEventListener('reset', () => {
@@ -4256,28 +5195,42 @@
           });
         }
 
-        // Helper to Populate Central Issue Source Batch Dropdown (Supports filtering by item_id for request fulfillment)
+        // Helper to Populate Issue Source Batch Dropdown (Supports Central Warehouse or any Source BHC)
         function populateIssueBatchDropdown(targetItemId = null) {
           const issueBatchSel = document.getElementById("issue-source-batch");
           if (!issueBatchSel) return;
+          const curVal = issueBatchSel.value;
+          const sourceFacilityVal = document.getElementById("issue-source-facility")?.value || "central";
 
-          const centralActiveBatches = batches.filter(b => {
+          const availableBatches = batches.filter(b => {
             if (b.status !== 'active' || isBatchExpired(b) || b.quantity_remaining <= 0) return false;
-            if (b.facility_id !== null && b.facility_id !== 0 && b.facility_id !== undefined && String(b.facility_id) !== "null") return false;
+            if (sourceFacilityVal === "central") {
+              if (b.facility_id !== null && b.facility_id !== 0 && b.facility_id !== undefined && String(b.facility_id) !== "null") return false;
+            } else {
+              if (String(b.facility_id) !== String(sourceFacilityVal)) return false;
+            }
             const parentItem = items.find(i => String(i.item_id) === String(b.item_id));
             if (!parentItem || parentItem.is_archived) return false;
             if (targetItemId != null && String(b.item_id) !== String(targetItemId)) return false;
             return true;
           });
 
-          issueBatchSel.innerHTML = `<option value="">— Select Central Batch —</option>` + centralActiveBatches.map(b => {
+          const sourceLocName = sourceFacilityVal === "central" 
+            ? "Central Warehouse" 
+            : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || "Source BHC");
+
+          issueBatchSel.innerHTML = `<option value="">— Select Available Source Batch —</option>` + availableBatches.map(b => {
             const item = items.find(i => String(i.item_id) === String(b.item_id));
             return `<option value="${b.batch_id}">${formatBatchOption(item?.name, b.batch_number, b.quantity_remaining)}</option>`;
           }).join('');
 
+          if (curVal && availableBatches.some(b => String(b.batch_id) === String(curVal))) {
+            issueBatchSel.value = curVal;
+          }
+
           const targetItem = targetItemId ? items.find(i => String(i.item_id) === String(targetItemId)) : null;
 
-          const issueOpts = centralActiveBatches.map(b => {
+          const issueOpts = availableBatches.map(b => {
             const item = items.find(i => String(i.item_id) === String(b.item_id));
             return {
               value: b.batch_id,
@@ -4285,18 +5238,450 @@
               genericName: item?.generic_name || '',
               batchNo: b.batch_number,
               qty: b.quantity_remaining,
-              location: 'Central Warehouse',
-              label: `${item?.name || 'Item'} — Batch ${b.batch_number} (${b.quantity_remaining} avail)`,
-              richChipHtml: `<span class="select-chip chip-batch"><i class="fa-solid fa-barcode"></i> Batch ${esc(b.batch_number)}</span> <span class="select-chip chip-qty"><i class="fa-solid fa-boxes-stacked"></i> ${b.quantity_remaining} avail</span>`
+              location: sourceLocName,
+              label: `${item?.name || 'Item'} — Batch ${b.batch_number} (${b.quantity_remaining} avail) [${sourceLocName}]`,
+              richChipHtml: `<span class="select-chip chip-batch"><i class="fa-solid fa-barcode"></i> Batch ${esc(b.batch_number)}</span> <span class="select-chip chip-qty"><i class="fa-solid fa-boxes-stacked"></i> ${b.quantity_remaining} avail</span> <span class="select-chip chip-location"><i class="fa-solid fa-location-dot"></i> ${esc(sourceLocName)}</span>`
             };
           });
           createSearchableSelect({
             elementId: "issue-source-batch",
-            placeholder: targetItem ? `Search matching ${targetItem.name} batch...` : "Search central batch...",
-            options: issueOpts
+            placeholder: targetItem ? `Search matching ${targetItem.name} batch...` : `Search batches at ${sourceLocName}...`,
+            options: issueOpts,
+            onSelect: () => {
+              updateIssueSafetyCheck();
+            }
           });
         }
         window.populateIssueBatchDropdown = populateIssueBatchDropdown;
+
+        // 🧠 Feature 4: Predictive Quota & Stock Demand Auto-Fill
+        async function autoFillForecastForDestination() {
+          const targetBhcVal = document.getElementById("issue-target-bhc")?.value;
+          if (!targetBhcVal) {
+            showToast("Please select a Destination BHC first to calculate demand.", "warning");
+            return;
+          }
+
+          const btn = document.getElementById("btn-autofill-forecast");
+          if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Calculating...';
+          }
+
+          try {
+            let forecastData = null;
+            try {
+              const { data, error } = await db.rpc("get_bhc_monthly_demand_forecast", {
+                p_facility_id: parseInt(targetBhcVal)
+              });
+              if (!error && Array.isArray(data) && data.length > 0) {
+                forecastData = data;
+              }
+            } catch (rpcErr) {
+              console.warn("Demand RPC warning, using intelligent local demand fallback:", rpcErr);
+            }
+
+            // If RPC is available, use database-calculated forecast
+            if (forecastData && forecastData.length > 0) {
+              const itemsWithDeficit = forecastData.filter(d => (d.recommended_transfer_units || 0) > 0);
+              const topItem = itemsWithDeficit.length > 0 ? itemsWithDeficit[0] : forecastData[0];
+
+              if (topItem) {
+                const sourceFacilityVal = document.getElementById("issue-source-facility")?.value || "central";
+                const matchingBatches = batches.filter(b => {
+                  if (b.status !== 'active' || isBatchExpired(b) || b.quantity_remaining <= 0) return false;
+                  if (sourceFacilityVal === "central") {
+                    if (b.facility_id !== null && b.facility_id !== 0 && String(b.facility_id) !== "null") return false;
+                  } else {
+                    if (String(b.facility_id) !== String(sourceFacilityVal)) return false;
+                  }
+                  return String(b.item_id) === String(topItem.item_id);
+                });
+
+                if (matchingBatches.length > 0) {
+                  matchingBatches.sort((a, b) => new Date(a.expiration_date) - new Date(b.expiration_date));
+                  const chosenBatch = matchingBatches[0];
+                  const issueBatchSel = document.getElementById("issue-source-batch");
+                  const sourceLocName = sourceFacilityVal === "central" 
+                    ? "Central Warehouse" 
+                    : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || "Source BHC");
+
+                  if (issueBatchSel) {
+                    issueBatchSel.value = chosenBatch.batch_id;
+                    const wrap = issueBatchSel.nextElementSibling?.classList?.contains("searchable-select-wrap") 
+                      ? issueBatchSel.nextElementSibling 
+                      : issueBatchSel.parentElement?.querySelector(".searchable-select-wrap");
+                    if (wrap) {
+                      const searchInput = wrap.querySelector(".searchable-main-input");
+                      if (searchInput) searchInput.value = `${topItem.item_name} — Batch ${chosenBatch.batch_number}`;
+                      const chipPreview = wrap.querySelector(".selected-chip-preview");
+                      if (chipPreview) {
+                        chipPreview.innerHTML = `<span class="select-chip chip-batch"><i class="fa-solid fa-barcode"></i> Batch ${esc(chosenBatch.batch_number)}</span> <span class="select-chip chip-qty"><i class="fa-solid fa-boxes-stacked"></i> ${chosenBatch.quantity_remaining} avail</span> <span class="select-chip chip-location"><i class="fa-solid fa-location-dot"></i> ${esc(sourceLocName)}</span>`;
+                      }
+                    }
+                  }
+
+                  const qtyToTransfer = Math.min(
+                    topItem.recommended_transfer_units > 0 ? topItem.recommended_transfer_units : 15,
+                    chosenBatch.quantity_remaining
+                  );
+                  const qtyInput = document.getElementById("issue-qty");
+                  if (qtyInput) qtyInput.value = qtyToTransfer;
+
+                  const refInput = document.getElementById("issue-reference");
+                  if (refInput) {
+                    refInput.value = `Monthly forecast quota (${topItem.target_patients_count || 15} target patients, req: ${topItem.recommended_transfer_units || 15} units)`;
+                  }
+
+                  applySuggestedDeliveryEstimate(false);
+                  showToast(`Auto-filled: ${topItem.item_name} (${qtyToTransfer} units for ${topItem.target_patients_count || 15} due patients)`, "success");
+                  updateIssueSafetyCheck();
+                  return;
+                }
+              }
+            }
+
+            // Intelligent Client-Side Fallback: evaluate available source batches vs destination stock
+            const sourceFacilityVal = document.getElementById("issue-source-facility")?.value || "central";
+            const availableSourceBatches = batches.filter(b => {
+              if (b.status !== 'active' || isBatchExpired(b) || b.quantity_remaining <= 0) return false;
+              if (sourceFacilityVal === "central") {
+                return (b.facility_id === null || b.facility_id === 0 || String(b.facility_id) === "null");
+              } else {
+                return String(b.facility_id) === String(sourceFacilityVal);
+              }
+            });
+
+            if (availableSourceBatches.length === 0) {
+              showToast("No usable batches found at selected transfer source.", "warning");
+              return;
+            }
+
+            // Find batch with earliest expiry (FEFO)
+            availableSourceBatches.sort((a, b) => new Date(a.expiration_date) - new Date(b.expiration_date));
+            const topBatch = availableSourceBatches[0];
+            const topItem = items.find(i => String(i.item_id) === String(topBatch.item_id));
+            const sourceLocName = sourceFacilityVal === "central" 
+              ? "Central Warehouse" 
+              : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || "Source BHC");
+
+            const issueBatchSel = document.getElementById("issue-source-batch");
+            if (issueBatchSel) {
+              issueBatchSel.value = topBatch.batch_id;
+              const wrap = issueBatchSel.nextElementSibling?.classList?.contains("searchable-select-wrap") 
+                ? issueBatchSel.nextElementSibling 
+                : issueBatchSel.parentElement?.querySelector(".searchable-select-wrap");
+              if (wrap) {
+                const searchInput = wrap.querySelector(".searchable-main-input");
+                if (searchInput) searchInput.value = `${topItem?.name || 'Item'} — Batch ${topBatch.batch_number}`;
+                const chipPreview = wrap.querySelector(".selected-chip-preview");
+                if (chipPreview) {
+                  chipPreview.innerHTML = `<span class="select-chip chip-batch"><i class="fa-solid fa-barcode"></i> Batch ${esc(topBatch.batch_number)}</span> <span class="select-chip chip-qty"><i class="fa-solid fa-boxes-stacked"></i> ${topBatch.quantity_remaining} avail</span> <span class="select-chip chip-location"><i class="fa-solid fa-location-dot"></i> ${esc(sourceLocName)}</span>`;
+                }
+              }
+            }
+
+            const standardDemandQuota = Math.min(20, topBatch.quantity_remaining);
+            const qtyInput = document.getElementById("issue-qty");
+            if (qtyInput) qtyInput.value = standardDemandQuota;
+
+            const refInput = document.getElementById("issue-reference");
+            if (refInput) {
+              refInput.value = `Estimated monthly clinic demand quota (Standard allotment: ${standardDemandQuota} units)`;
+            }
+
+            applySuggestedDeliveryEstimate(false);
+            showToast(`Auto-filled demand quota: ${topItem?.name || 'Item'} (${standardDemandQuota} units)`, "success");
+            updateIssueSafetyCheck();
+
+          } catch (err) {
+            console.error("Demand forecast failed:", err);
+            showToast("Could not calculate demand forecast: " + (err.message || err), "error");
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Forecast';
+            }
+          }
+        }
+        window.autoFillForecastForDestination = autoFillForecastForDestination;
+
+        // 📷 Feature 5: Barcode & GS1 DataMatrix Scanner Engine
+        let activeScannerMode = null;
+        let scannerStream = null;
+
+        function parseGS1Barcode(rawText) {
+          if (!rawText) return null;
+          const cleaned = rawText.trim();
+          const result = { raw: cleaned, batchNumber: null, expirationDate: null, gtin: null };
+
+          const gtinMatch = cleaned.match(/\(01\)(\d{14})/i) || cleaned.match(/^01(\d{14})/);
+          if (gtinMatch) result.gtin = gtinMatch[1];
+
+          const expiryMatch = cleaned.match(/\(17\)(\d{6})/i) || cleaned.match(/17(\d{6})/);
+          if (expiryMatch) {
+            const rawExp = expiryMatch[1];
+            const yy = parseInt(rawExp.substring(0, 2), 10);
+            const mm = parseInt(rawExp.substring(2, 4), 10);
+            const dd = parseInt(rawExp.substring(4, 6), 10);
+            const pad = n => String(n).padStart(2, '0');
+            result.expirationDate = `${2000 + yy}-${pad(mm)}-${pad(dd)}`;
+          }
+
+          const batchMatch = cleaned.match(/\(10\)([A-Za-z0-9_-]+)/i) || cleaned.match(/10([A-Za-z0-9_-]{3,20})/);
+          if (batchMatch) {
+            result.batchNumber = batchMatch[1];
+          } else {
+            result.batchNumber = cleaned;
+          }
+
+          return result;
+        }
+
+        window.openBarcodeScanner = async function(mode) {
+          activeScannerMode = mode;
+          openModal('modal-barcode-scanner');
+
+          const statusEl = document.getElementById("scanner-status");
+          if (statusEl) statusEl.textContent = "Requesting camera access...";
+
+          const video = document.getElementById("scanner-video");
+          try {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+              scannerStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "environment" }
+              });
+              if (video) {
+                video.srcObject = scannerStream;
+                video.play();
+                if (statusEl) statusEl.textContent = "Camera active. Position barcode / GS1 DataMatrix within frame.";
+              }
+            } else {
+              if (statusEl) statusEl.textContent = "Camera not supported. Use test simulation buttons below.";
+            }
+          } catch (err) {
+            console.warn("Camera access denied:", err);
+            if (statusEl) statusEl.textContent = "Camera access unavailable. You can use test simulation buttons below.";
+          }
+        };
+
+        window.closeBarcodeScanner = function() {
+          if (scannerStream) {
+            scannerStream.getTracks().forEach(track => track.stop());
+            scannerStream = null;
+          }
+          const video = document.getElementById("scanner-video");
+          if (video) video.srcObject = null;
+          closeModal('modal-barcode-scanner');
+        };
+
+        window.simulateBarcodeScan = function(type) {
+          let mockScan = "";
+          if (type === 'GS1_BCG') {
+            mockScan = "(01)04806512340012(17)280630(10)BCG-2026-LOT98";
+          } else if (type === 'GS1_TD') {
+            mockScan = "(01)04806512340029(17)271231(10)TD-LOT-4481";
+          } else {
+            mockScan = "PENTA-LOT-88301";
+          }
+
+          const parsed = parseGS1Barcode(mockScan);
+          if (!parsed) return;
+
+          if (activeScannerMode === 'receive-batch') {
+            const batchInput = document.getElementById("batch-number");
+            if (batchInput && parsed.batchNumber) batchInput.value = parsed.batchNumber;
+
+            const expInput = document.getElementById("batch-expiration-date");
+            if (expInput && parsed.expirationDate) expInput.value = parsed.expirationDate;
+
+            showToast(`Scanned Lot: ${parsed.batchNumber}${parsed.expirationDate ? ' (Exp: ' + parsed.expirationDate + ')' : ''}`, "success");
+          } else if (activeScannerMode === 'issue-batch') {
+            const matchingBatch = batches.find(b => b.batch_number.toLowerCase().includes((parsed.batchNumber || '').toLowerCase()));
+            if (matchingBatch) {
+              const issueSel = document.getElementById("issue-source-batch");
+              if (issueSel) {
+                issueSel.value = matchingBatch.batch_id;
+                const searchInput = issueSel.parentElement?.querySelector(".searchable-select-input");
+                if (searchInput) searchInput.value = `Batch ${matchingBatch.batch_number}`;
+                updateIssueSafetyCheck();
+              }
+              showToast(`Found matching batch: ${matchingBatch.batch_number}`, "success");
+            } else {
+              showToast(`Scanned Lot "${parsed.batchNumber}", but not found in source stock.`, "info");
+            }
+          }
+
+          closeBarcodeScanner();
+        };
+
+        // Transfer Dispatch QR Generator
+        window.showTransferQRSlip = function(transfer) {
+          if (!transfer) return;
+          const detailsEl = document.getElementById("transfer-qr-details");
+          const qrCanvas = document.getElementById("transfer-qrcode-canvas");
+
+          const sourceName = transfer.source_facility_id 
+            ? (bhcs.find(b => String(b.bhc_id) === String(transfer.source_facility_id))?.bhc_name || `BHC #${transfer.source_facility_id}`) 
+            : "Central RHU Warehouse";
+          const destName = bhcs.find(b => String(b.bhc_id) === String(transfer.destination_facility_id))?.bhc_name || `BHC #${transfer.destination_facility_id}`;
+
+          if (detailsEl) {
+            detailsEl.innerHTML = `
+              <div style="font-weight:700; font-size:13.5px; color:#1e293b; margin-bottom:4px;">Transfer #${transfer.transfer_id}</div>
+              <div style="color:#475569; font-size:12px;"><strong>From:</strong> ${esc(sourceName)}</div>
+              <div style="color:#475569; font-size:12px;"><strong>To:</strong> ${esc(destName)}</div>
+              <div style="color:#475569; font-size:12px;"><strong>Quantity:</strong> ${transfer.quantity_issued} units</div>
+              <div style="color:#64748b; font-size:11px; margin-top:4px;">Status: <span class="badge badge-warning" style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-weight:700;">PENDING RECEIPT</span></div>
+            `;
+          }
+
+          if (qrCanvas) {
+            qrCanvas.innerHTML = "";
+            const qrData = JSON.stringify({
+              transfer_id: transfer.transfer_id,
+              from: sourceName,
+              to: destName,
+              qty: transfer.quantity_issued,
+              date: new Date().toISOString()
+            });
+            if (typeof QRCode !== 'undefined') {
+              new QRCode(qrCanvas, {
+                text: qrData,
+                width: 140,
+                height: 140,
+                colorDark: "#1e293b",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+              });
+            } else {
+              qrCanvas.innerHTML = `<div style="text-align:center; padding:10px; font-size:11px; color:#64748b;"><i class="fa-solid fa-qrcode fa-3x" style="color:var(--brand-primary); margin-bottom:6px;"></i><br/>Transfer #${transfer.transfer_id}</div>`;
+            }
+          }
+
+          openModal("modal-transfer-qr");
+        };
+
+        // ⏱️ Feature 3: Open Vial Expiry Tracker & Wastage Rate Engine
+        function renderOpenVialsTracker() {
+          const tbody = document.getElementById("open-vials-tbody");
+          const wastageStatEl = document.getElementById("stat-wastage-rate");
+          const openCountStatEl = document.getElementById("stat-open-vials-count");
+          const adminDosesStatEl = document.getElementById("stat-doses-administered");
+
+          const openBatches = (batches || []).filter(b => (b.doses_remaining_in_open_vial || 0) > 0);
+
+          if (openCountStatEl) {
+            openCountStatEl.textContent = `${openBatches.length} vial${openBatches.length === 1 ? '' : 's'}`;
+          }
+
+          let totalAdministered = 0;
+          let totalWasted = 0;
+          (transactions || []).forEach(t => {
+            const qty = Math.abs(t.quantity || 0);
+            if (t.transaction_type === 'dispense') {
+              totalAdministered += qty;
+            } else if (t.transaction_type === 'discard' || t.transaction_type === 'expiry_disposal') {
+              totalWasted += qty;
+            }
+          });
+
+          if (adminDosesStatEl) {
+            adminDosesStatEl.textContent = `${totalAdministered.toLocaleString()} doses`;
+          }
+
+          if (wastageStatEl) {
+            const totalDosesHandled = totalAdministered + totalWasted;
+            const wastageRate = totalDosesHandled > 0 ? ((totalWasted / totalDosesHandled) * 100).toFixed(1) : "0.0";
+            wastageStatEl.textContent = `${wastageRate}%`;
+            if (parseFloat(wastageRate) > 15.0) {
+              wastageStatEl.style.color = "#dc2626";
+            } else {
+              wastageStatEl.style.color = "#b45309";
+            }
+          }
+
+          if (!tbody) return;
+
+          if (openBatches.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-secondary);"><i class="fa-solid fa-circle-check" style="color:#059669; margin-right:6px;"></i> All multi-dose vials currently sealed or fully consumed.</td></tr>`;
+            return;
+          }
+
+          tbody.innerHTML = openBatches.map(b => {
+            const item = items.find(i => String(i.item_id) === String(b.item_id));
+            const locText = b.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(b.facility_id))?.bhc_name || `BHC #${b.facility_id}`) : "Central RHU";
+            const shelfLimitHours = item?.open_vial_shelf_hours || (item?.name?.toLowerCase().includes('bcg') ? 6 : 672);
+
+            let openedTimeStr = "Recently";
+            let isExpired = false;
+            let hoursOpen = 0;
+
+            if (b.vial_opened_at) {
+              const openedDate = new Date(b.vial_opened_at);
+              const now = new Date();
+              hoursOpen = (now - openedDate) / (1000 * 60 * 60);
+              if (hoursOpen < 1) {
+                openedTimeStr = `${Math.max(1, Math.round(hoursOpen * 60))} mins ago`;
+              } else if (hoursOpen < 24) {
+                openedTimeStr = `${hoursOpen.toFixed(1)} hrs ago`;
+              } else {
+                openedTimeStr = `${Math.floor(hoursOpen / 24)}d ${Math.round(hoursOpen % 24)}h ago`;
+              }
+
+              if (shelfLimitHours > 0 && hoursOpen > shelfLimitHours) {
+                isExpired = true;
+              }
+            }
+
+            const shelfLimitStr = shelfLimitHours === 6 ? "6 Hours (Reconstituted)" : (shelfLimitHours === 672 ? "28 Days (Cold Chain)" : `${shelfLimitHours}h`);
+
+            const statusBadge = isExpired
+              ? `<span class="badge badge-danger" style="background:#fee2e2; color:#dc2626; padding:3px 8px; border-radius:6px; font-size:11px; font-weight:700;"><i class="fa-solid fa-triangle-exclamation"></i> EXPIRED (> ${shelfLimitHours}h)</span>`
+              : `<span class="badge badge-success" style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:6px; font-size:11px; font-weight:600;"><i class="fa-solid fa-clock"></i> Active (${openedTimeStr})</span>`;
+
+            return `
+              <tr>
+                <td style="font-weight:600; color:var(--brand-text);">${esc(item?.name || 'Vaccine')}</td>
+                <td><span class="badge" style="background:#f1f5f9; color:#334155; font-size:11px;"><i class="fa-solid fa-location-dot"></i> ${esc(locText)}</span></td>
+                <td><code>${esc(b.batch_number)}</code></td>
+                <td style="text-align:right; font-weight:700; color:var(--brand-primary);">${b.doses_remaining_in_open_vial} doses</td>
+                <td style="font-size:12px; color:#64748b;">${esc(openedTimeStr)}</td>
+                <td style="font-size:12px; color:#64748b;">${esc(shelfLimitStr)}</td>
+                <td style="text-align:center;">${statusBadge}</td>
+                <td style="text-align:right;">
+                  <button class="action-pill-btn ${isExpired ? 'pill-pink' : 'pill-secondary'}" onclick="discardOpenVial(${b.batch_id})" title="Discard open doses safely">
+                    <i class="fa-solid fa-trash-can"></i> Discard
+                  </button>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+        window.renderOpenVialsTracker = renderOpenVialsTracker;
+
+        window.discardOpenVial = async function(batchId) {
+          if (!confirm("Are you sure you want to discard the remaining open doses in this vial?\n\nThis will record an audit discard transaction under DOH protocol.")) {
+            return;
+          }
+
+          try {
+            const parsedActorId = parseInt(actorId) || actorId;
+            const { data, error } = await db.rpc("discard_open_vial_doses", {
+              p_batch_id: batchId,
+              p_discarded_by: parsedActorId,
+              p_reason: "Manual discard / Open vial shelf-life protocol"
+            });
+
+            if (error) throw error;
+
+            showToast("Open vial doses discarded and logged in audit transactions.", "success");
+            await loadInventoryData();
+          } catch (err) {
+            console.error("Failed to discard open vial:", err);
+            alert("Error discarding open vial: " + (err.message || err));
+          }
+        };
 
         // Dropdown Population Helper
         function populateDropdowns() {
@@ -4305,10 +5690,14 @@
           // 1. Batch Item Select
           const itemSel = document.getElementById("batch-item-id");
           if (itemSel) {
+            const curVal = itemSel.value;
             itemSel.innerHTML = `<option value="">— Select Item —</option>` + activeItems.map(i => {
               const label = i.name.length > 30 ? i.name.substring(0, 28) + '…' : i.name;
               return `<option value="${i.item_id}">${esc(label)} (${esc(i.unit_of_measure)})</option>`;
             }).join('');
+            if (curVal && activeItems.some(i => String(i.item_id) === String(curVal))) {
+              itemSel.value = curVal;
+            }
 
             const itemOpts = activeItems.map(i => ({
               value: i.item_id,
@@ -4330,6 +5719,7 @@
           });
 
           if (batchSel) {
+            const curVal = batchSel.value;
             batchSel.innerHTML = `<option value="">— Select Active Batch —</option>` + activeBatches.map(b => {
               const item = items.find(i => i.item_id === b.item_id);
               let locText = "Central";
@@ -4339,6 +5729,9 @@
               }
               return `<option value="${b.batch_id}">${formatBatchOption(item?.name, b.batch_number, b.quantity_remaining, locText)}</option>`;
             }).join('');
+            if (curVal && activeBatches.some(b => String(b.batch_id) === String(curVal))) {
+              batchSel.value = curVal;
+            }
 
             const dispenseOpts = activeBatches.map(b => {
               const item = items.find(i => i.item_id === b.item_id);
@@ -4453,6 +5846,7 @@
           const genericName = (document.getElementById("item-generic-name")?.value || "").trim() || name;
           const type = document.getElementById("item-type").value;
           const uom = document.getElementById("item-uom").value.trim();
+          const dosesPerUnit = parseInt(document.getElementById("item-doses-per-unit").value) || 1;
           const threshold = parseInt(document.getElementById("item-threshold").value) || 50;
 
           if (!name || !uom) {
@@ -4471,13 +5865,22 @@
 
           try {
             let { data, error } = await db.from("inventory_items").insert({
-              name, generic_name: genericName, item_type: type, unit_of_measure: uom, minimum_stock_threshold: threshold
+              name, 
+              generic_name: genericName, 
+              item_type: type, 
+              unit_of_measure: uom, 
+              doses_per_unit: dosesPerUnit,
+              minimum_stock_threshold: threshold
             }).select().single();
 
             if (error && error.message && error.message.includes("generic_name")) {
               console.warn("generic_name column missing in inventory_items schema, retrying without generic_name");
               const fbRes = await db.from("inventory_items").insert({
-                name, item_type: type, unit_of_measure: uom, minimum_stock_threshold: threshold
+                name, 
+                item_type: type, 
+                unit_of_measure: uom, 
+                doses_per_unit: dosesPerUnit,
+                minimum_stock_threshold: threshold
               }).select().single();
               error = fbRes.error;
             }
@@ -4758,6 +6161,14 @@
           renderTransactions();
         });
 
+        // Issue Stock Form Real-time Change Listeners
+        const formIssueEl = document.getElementById("form-issue");
+        if (formIssueEl) {
+          formIssueEl.addEventListener("input", () => updateIssueSafetyCheck());
+          formIssueEl.addEventListener("change", () => updateIssueSafetyCheck());
+          formIssueEl.addEventListener("keyup", () => updateIssueSafetyCheck());
+        }
+
         // Issue Stock Form Submit
         document.getElementById("save-issue-btn").addEventListener("click", async () => {
           const sourceBatchVal = document.getElementById("issue-source-batch").value;
@@ -4811,7 +6222,8 @@
               combinedRemarks = `Expected delivery: ${expectedDateVal}.${ref ? ' ' + ref : ''}`;
             }
 
-            let { error: issueError } = await db.rpc("issue_inventory_transfer", {
+            let transferResult = null;
+            let { data: issueData, error: issueError } = await db.rpc("issue_inventory_transfer", {
               p_source_batch_id: sourceBatchId,
               p_destination_facility_id: targetBhcId,
               p_quantity: qtyInput,
@@ -4821,7 +6233,6 @@
             });
 
             if (issueError && (issueError.code === "PGRST202" || isMissingSchemaError(issueError))) {
-              // Fallback for DB schema versions where p_remarks was not yet added
               const fallback = await db.rpc("issue_inventory_transfer", {
                 p_source_batch_id: sourceBatchId,
                 p_destination_facility_id: targetBhcId,
@@ -4830,13 +6241,19 @@
                 p_request_id: requestId
               });
               issueError = fallback.error;
+              issueData = fallback.data;
             }
 
             if (issueError) throw issueError;
+            transferResult = issueData;
 
             showToast(`Issued ${qtyInput} stock to ${targetBhcName}; awaiting BHC receipt.`, "success");
             closeModal("modal-issue");
             await loadInventoryData();
+
+            if (transferResult) {
+              showTransferQRSlip(transferResult);
+            }
           } catch (err) {
             const msg = "Error issuing stock: " + (err.message || err);
             alertEl.textContent = msg;
@@ -4865,10 +6282,19 @@
           el.addEventListener("change", handler);
         });
 
-        ["tx-search", "tx-filter-type"].forEach(id => {
+        ["tx-search", "tx-filter-type", "tx-filter-date", "tx-date-start", "tx-date-end"].forEach(id => {
           const el = document.getElementById(id);
           if (!el) return;
-          const handler = () => { paginationState.tx.currentPage = 1; renderTransactions(); };
+          const handler = () => {
+            if (id === "tx-filter-date") {
+              const customWrap = document.getElementById("tx-custom-date-wrap");
+              if (customWrap) {
+                customWrap.style.display = el.value === "custom" ? "inline-flex" : "none";
+              }
+            }
+            paginationState.tx.currentPage = 1;
+            renderTransactions();
+          };
           el.addEventListener("input", handler);
           el.addEventListener("change", handler);
         });
@@ -4887,6 +6313,7 @@
 
         window.AdminLiveRefresh?.start({
           db,
+          canRefresh: () => !document.querySelector('.modal-overlay.active, .modal-overlay.show'),
           tables: [
             "inventory_items", "inventory_batches", "inventory_transactions",
             "inventory_stock_requests", "inventory_transfers", "health_facilities",

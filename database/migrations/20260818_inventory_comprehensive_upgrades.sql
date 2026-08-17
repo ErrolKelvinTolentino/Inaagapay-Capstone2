@@ -1,132 +1,56 @@
 -- ====================================================================
--- InaAgapay — Clean Inventory & Seed Vaccines + Prenatal Supplements
--- Clean up all inventory tables and re-populate only Vaccines and
--- Maternal/Prenatal Checkup Supplements connected to health facilities.
--- Run this in the Supabase SQL Editor.
+-- InaAgapay Migration: Comprehensive Inventory Upgrades & Clinical Integration
+-- 
+-- 1. Multi-dose vial support (doses_per_unit, open vial dose tracking)
+-- 2. Enhanced child immunization multi-dose FEFO deduction
+-- 3. Prenatal checkup inventory deduction (Td vaccine & maternal supplements)
+-- 4. Central-only supplier receipt safeguards
 -- ====================================================================
 
 BEGIN;
 
--- 0. Ensure required schema columns exist
-ALTER TABLE public.inventory_items ADD COLUMN IF NOT EXISTS generic_name VARCHAR(255);
-ALTER TABLE public.inventory_items ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE public.inventory_items ADD COLUMN IF NOT EXISTS doses_per_unit INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE public.inventory_batches ADD COLUMN IF NOT EXISTS doses_remaining_in_open_vial INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE public.inventory_batches ADD COLUMN IF NOT EXISTS open_vials_count INTEGER NOT NULL DEFAULT 0;
+-- 1. Multi-Dose Vial and Packaging Schema Enhancements
+ALTER TABLE public.inventory_items
+  ADD COLUMN IF NOT EXISTS doses_per_unit INTEGER NOT NULL DEFAULT 1;
 
--- 1. Wipe existing inventory movement ledger, requests, transfers, batches, and items
-TRUNCATE TABLE public.inventory_transactions CASCADE;
-TRUNCATE TABLE public.inventory_transfers CASCADE;
-TRUNCATE TABLE public.inventory_stock_requests CASCADE;
-TRUNCATE TABLE public.inventory_batches CASCADE;
-DELETE FROM public.inventory_items;
+ALTER TABLE public.inventory_batches
+  ADD COLUMN IF NOT EXISTS doses_remaining_in_open_vial INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS open_vials_count INTEGER NOT NULL DEFAULT 0;
 
--- 2. Insert ONLY Vaccines and Prenatal / Checkup Supplements into inventory_items
-INSERT INTO public.inventory_items (name, generic_name, item_type, unit_of_measure, doses_per_unit, minimum_stock_threshold, is_archived)
-VALUES
-  -- DOH Child & Maternal Vaccines
-  ('BCG Vaccine', 'Bacillus Calmette-Guérin (Tuberculosis)', 'vaccine', 'vials', 20, 20, false),
-  ('Hepatitis B Vaccine', 'Hepatitis B (Pediatric Birth Dose)', 'vaccine', 'vials', 1, 25, false),
-  ('Pentavalent Vaccine', 'DPT-HepB-Hib Combination', 'vaccine', 'vials', 1, 30, false),
-  ('OPV Polio Vaccine', 'Oral Polio Vaccine (bOPV)', 'vaccine', 'vials', 20, 30, false),
-  ('IPV Polio Vaccine', 'Inactivated Polio Vaccine', 'vaccine', 'vials', 1, 20, false),
-  ('PCV-13 Vaccine', 'Pneumococcal Conjugate 13-Valent', 'vaccine', 'vials', 1, 25, false),
-  ('MR Vaccine', 'Measles-Rubella Vaccine', 'vaccine', 'vials', 10, 20, false),
-  ('MMR Vaccine', 'Measles-Mumps-Rubella Vaccine', 'vaccine', 'vials', 10, 20, false),
-  ('Tetanus Diphtheria (Td) Vaccine', 'Tetanus-Diphtheria Toxoid (Maternal)', 'vaccine', 'vials', 10, 30, false),
+-- Update standard DOH doses per vial/packaging
+UPDATE public.inventory_items
+SET doses_per_unit = 20
+WHERE name ILIKE '%bcg%' OR name ILIKE '%opv%';
 
-  -- Prenatal & Maternal Checkup Supplements
-  ('Ferrous Sulfate + Folic Acid', 'Iron 60mg + Folic Acid 400mcg', 'supplement', 'tablets', 1, 200, false),
-  ('Calcium Carbonate', 'Elemental Calcium 500mg (Prenatal)', 'supplement', 'tablets', 1, 150, false),
-  ('Vitamin A 200,000 IU', 'Retinol Palmitate High-Dose', 'supplement', 'capsules', 1, 100, false),
-  ('Micronutrient Powder (MNP)', 'Multiple Micronutrient Sachets', 'supplement', 'sachets', 1, 150, false),
-  ('Ascorbic Acid (Vitamin C)', 'Vitamin C 500mg Tablet', 'supplement', 'tablets', 1, 100, false);
+UPDATE public.inventory_items
+SET doses_per_unit = 10
+WHERE name ILIKE '%mr%' OR name ILIKE '%mmr%' OR name ILIKE '%measles%' OR name ILIKE '%tetanus%' OR name ILIKE '%td%';
 
--- 3. Seed Central Warehouse Batches for all items (facility_id IS NULL)
-INSERT INTO public.inventory_batches (item_id, facility_id, batch_number, quantity_received, quantity_remaining, received_date, expiration_date, manufacturer, status)
-SELECT 
-  item_id, 
-  NULL, 
-  'BATCH-CENTRAL-' || item_id || '-01', 
-  500, 
-  500, 
-  CURRENT_DATE - INTERVAL '15 days', 
-  CURRENT_DATE + INTERVAL '365 days', 
-  'DOH Central Supply Depot', 
-  'active'
-FROM public.inventory_items;
+UPDATE public.inventory_items
+SET doses_per_unit = 1
+WHERE name ILIKE '%penta%' OR name ILIKE '%pcv%' OR name ILIKE '%hep%' OR name ILIKE '%ipv%'
+   OR item_type = 'supplement';
 
--- 4. Seed Active BHC Stock Batches for each BHC facility
--- Connects inventory to all active Barangay Health Centers in public.health_facilities
-INSERT INTO public.inventory_batches (item_id, facility_id, batch_number, quantity_received, quantity_remaining, received_date, expiration_date, manufacturer, status)
-SELECT 
-  i.item_id, 
-  hf.facility_id, 
-  'BATCH-BHC' || hf.facility_id || '-' || i.item_id, 
-  100, 
-  100, 
-  CURRENT_DATE - INTERVAL '10 days', 
-  CURRENT_DATE + INTERVAL '300 days', 
-  'DOH Regional Distribution Hub', 
-  'active'
-FROM public.inventory_items i
-CROSS JOIN public.health_facilities hf
-WHERE hf.facility_type = 'BHC';
-
--- Fallback: If health_facilities table has no BHC records, insert default batches for BHC IDs 1..5
-INSERT INTO public.inventory_batches (item_id, facility_id, batch_number, quantity_received, quantity_remaining, received_date, expiration_date, manufacturer, status)
-SELECT 
-  i.item_id, 
-  f.bhc_id, 
-  'BATCH-BHC' || f.bhc_id || '-' || i.item_id, 
-  100, 
-  100, 
-  CURRENT_DATE - INTERVAL '10 days', 
-  CURRENT_DATE + INTERVAL '300 days', 
-  'DOH Regional Distribution Hub', 
-  'active'
-FROM public.inventory_items i
-CROSS JOIN (VALUES (1), (2), (3), (4), (5)) AS f(bhc_id)
-WHERE NOT EXISTS (SELECT 1 FROM public.health_facilities WHERE facility_type = 'BHC');
-
--- 5. Record Initial Receipt Transactions in Movement Ledger
-INSERT INTO public.inventory_transactions (batch_id, facility_id, transaction_type, quantity, reference_type, performed_by, logged_at)
-SELECT 
-  batch_id, 
-  facility_id, 
-  'receipt', 
-  quantity_received, 
-  'Initial DOH Vaccine & Prenatal Supplement Allocation', 
-  1, 
-  CURRENT_TIMESTAMP - INTERVAL '10 days'
-FROM public.inventory_batches;
-
--- 6. Link Clinical Vaccines table to Physical Inventory Items
+-- 2. Ensure clinical vaccines and inventory items are linked
 ALTER TABLE public.vaccines 
-ADD COLUMN IF NOT EXISTS inventory_item_id BIGINT REFERENCES public.inventory_items(item_id) ON DELETE SET NULL;
+  ADD COLUMN IF NOT EXISTS inventory_item_id BIGINT REFERENCES public.inventory_items(item_id) ON DELETE SET NULL;
 
-ALTER TABLE public.immunization_records 
-ADD COLUMN IF NOT EXISTS administration_place VARCHAR(30) DEFAULT 'local_facility' CHECK (administration_place IN ('local_facility', 'external_facility')),
-ADD COLUMN IF NOT EXISTS facility_id BIGINT REFERENCES public.health_facilities(facility_id) ON DELETE SET NULL,
-ADD COLUMN IF NOT EXISTS inventory_batch_id BIGINT REFERENCES public.inventory_batches(batch_id) ON DELETE SET NULL,
-ADD COLUMN IF NOT EXISTS inventory_deducted BOOLEAN DEFAULT false;
-
--- Map clinical vaccine entries to physical inventory items
 UPDATE public.vaccines v
 SET inventory_item_id = i.item_id
 FROM public.inventory_items i
-WHERE (v.vaccine_name ILIKE '%bcg%' AND i.name ILIKE '%bcg%')
-   OR (v.vaccine_name ILIKE '%penta%' AND i.name ILIKE '%penta%')
-   OR (v.vaccine_name ILIKE '%pcv%' AND i.name ILIKE '%pcv%')
-   OR (v.vaccine_name ILIKE '%opv%' AND i.name ILIKE '%opv%')
-   OR (v.vaccine_name ILIKE '%ipv%' AND i.name ILIKE '%ipv%')
-   OR (v.vaccine_name ILIKE '%measles%' AND (i.name ILIKE '%mr%' OR i.name ILIKE '%measles%'))
-   OR (v.vaccine_name ILIKE '%mmr%' AND (i.name ILIKE '%mr%' OR i.name ILIKE '%mmr%'))
-   OR (v.vaccine_name ILIKE '%hep%' AND i.name ILIKE '%hep%')
-   OR (v.vaccine_name ILIKE '%tetanus%' AND i.name ILIKE '%tetanus%')
-   OR (v.vaccine_name ILIKE '%td%' AND i.name ILIKE '%td%');
+WHERE v.inventory_item_id IS NULL
+  AND ((v.vaccine_name ILIKE '%bcg%' AND i.name ILIKE '%bcg%')
+    OR (v.vaccine_name ILIKE '%penta%' AND i.name ILIKE '%penta%')
+    OR (v.vaccine_name ILIKE '%pcv%' AND i.name ILIKE '%pcv%')
+    OR (v.vaccine_name ILIKE '%opv%' AND i.name ILIKE '%opv%')
+    OR (v.vaccine_name ILIKE '%ipv%' AND i.name ILIKE '%ipv%')
+    OR (v.vaccine_name ILIKE '%measles%' AND (i.name ILIKE '%mr%' OR i.name ILIKE '%measles%'))
+    OR (v.vaccine_name ILIKE '%mmr%' AND (i.name ILIKE '%mr%' OR i.name ILIKE '%mmr%'))
+    OR (v.vaccine_name ILIKE '%hep%' AND i.name ILIKE '%hep%')
+    OR (v.vaccine_name ILIKE '%tetanus%' AND i.name ILIKE '%tetanus%')
+    OR (v.vaccine_name ILIKE '%td%' AND i.name ILIKE '%td%'));
 
--- 7. Stored Procedure for Automatic Multi-Dose & Single-Dose FEFO Stock Deduction
+-- 3. Immunization Record multi-dose stock deduction RPC
 CREATE OR REPLACE FUNCTION public.deduct_immunization_stock(
   p_immunization_record_id BIGINT
 ) RETURNS jsonb AS $$
@@ -137,6 +61,7 @@ DECLARE
   v_doses_per_unit INTEGER := 1;
   v_facility_id BIGINT;
 BEGIN
+  -- Fetch immunization record details
   SELECT ir.*, v.inventory_item_id, v.vaccine_name, m.assigned_bhc_id
   INTO v_rec
   FROM public.immunization_records ir
@@ -148,6 +73,7 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'message', 'Record not found');
   END IF;
 
+  -- Skip if external facility or already deducted
   IF v_rec.administration_place = 'external_facility' OR v_rec.inventory_deducted = true THEN
     RETURN jsonb_build_object('success', true, 'message', 'No stock deduction required for outside administration');
   END IF;
@@ -164,6 +90,7 @@ BEGIN
 
   v_doses_per_unit := COALESCE(v_inv_item.doses_per_unit, 1);
 
+  -- Multi-dose handling: Check for an active batch with an open vial first (FEFO)
   IF v_doses_per_unit > 1 THEN
     SELECT * INTO v_batch
     FROM public.inventory_batches
@@ -177,6 +104,7 @@ BEGIN
     FOR UPDATE;
 
     IF v_batch IS NOT NULL THEN
+      -- Use 1 dose from open vial
       UPDATE public.inventory_batches
       SET doses_remaining_in_open_vial = doses_remaining_in_open_vial - 1,
           open_vials_count = CASE WHEN (doses_remaining_in_open_vial - 1) = 0 THEN GREATEST(0, open_vials_count - 1) ELSE open_vials_count END
@@ -208,6 +136,7 @@ BEGIN
     END IF;
   END IF;
 
+  -- No open vial with doses available: find sealed batch expiring earliest (FEFO)
   SELECT * INTO v_batch
   FROM public.inventory_batches
   WHERE item_id = v_rec.inventory_item_id
@@ -224,6 +153,7 @@ BEGIN
   END IF;
 
   IF v_doses_per_unit > 1 THEN
+    -- Open 1 new sealed vial: deduct 1 vial from sealed quantity, credit remaining doses to open vial pool
     UPDATE public.inventory_batches
     SET quantity_remaining = quantity_remaining - 1,
         open_vials_count = open_vials_count + 1,
@@ -241,6 +171,7 @@ BEGIN
       NOW()
     );
   ELSE
+    -- Single-dose item: deduct 1 unit directly
     UPDATE public.inventory_batches
     SET quantity_remaining = quantity_remaining - 1
     WHERE batch_id = v_batch.batch_id;
@@ -267,7 +198,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 8. Stored Procedure for Prenatal Checkup Inventory Deduction (Supplements & Td Vaccine)
+
+-- 4. Stored Procedure for Prenatal Checkup Inventory Deduction (Supplements & Td Vaccine)
 CREATE OR REPLACE FUNCTION public.deduct_prenatal_encounter_inventory(
   p_encounter_id BIGINT,
   p_facility_id BIGINT DEFAULT NULL,
@@ -287,6 +219,7 @@ DECLARE
   v_deductions_count INTEGER := 0;
   v_warnings TEXT[] := ARRAY[]::TEXT[];
 BEGIN
+  -- Get clinical encounter and prenatal checkup details
   SELECT ce.*, m.assigned_bhc_id
   INTO v_enc
   FROM public.clinical_encounters ce
@@ -303,6 +236,7 @@ BEGIN
   FROM public.prenatal_checkups
   WHERE encounter_id = p_encounter_id;
 
+  -- 4A. Deduct Given Supplements (Ferrous Sulfate + Folic Acid, Calcium Carbonate, etc.)
   FOR v_med IN 
     SELECT gm.* 
     FROM public.given_medications gm 
@@ -310,6 +244,7 @@ BEGIN
   LOOP
     v_qty_needed := v_med.quantity;
     IF v_qty_needed > 0 THEN
+      -- Resolve inventory item id based on medication name
       SELECT item_id INTO v_item_id
       FROM public.inventory_items
       WHERE (v_med.given_medication_name ILIKE '%ferrous%' AND (name ILIKE '%ferrous%' OR generic_name ILIKE '%iron%'))
@@ -318,6 +253,7 @@ BEGIN
       LIMIT 1;
 
       IF v_item_id IS NOT NULL THEN
+        -- Find active batch at facility expiring earliest (FEFO)
         SELECT * INTO v_batch
         FROM public.inventory_batches
         WHERE item_id = v_item_id
@@ -359,6 +295,7 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- 4B. Deduct Td Vaccine (if administered on-site during this checkup)
   IF p_deduct_td AND v_pc IS NOT NULL AND v_pc.td_vaccine_dose IS NOT NULL AND v_pc.td_vaccine_dose <> '-' AND v_pc.td_vaccine_dose <> 'none' THEN
     SELECT item_id, doses_per_unit INTO v_td_item_id, v_td_doses_per_unit
     FROM public.inventory_items
@@ -366,6 +303,7 @@ BEGIN
     LIMIT 1;
 
     IF v_td_item_id IS NOT NULL THEN
+      -- First check for open Td vial at this facility
       SELECT * INTO v_batch
       FROM public.inventory_batches
       WHERE item_id = v_td_item_id
@@ -398,6 +336,7 @@ BEGIN
 
         v_deductions_count := v_deductions_count + 1;
       ELSE
+        -- Open a new sealed Td vial (FEFO)
         SELECT * INTO v_batch
         FROM public.inventory_batches
         WHERE item_id = v_td_item_id
