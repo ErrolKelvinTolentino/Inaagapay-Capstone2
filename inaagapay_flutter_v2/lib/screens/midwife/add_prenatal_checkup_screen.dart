@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/auth_storage.dart';
 import '../../services/blood_pressure_reference.dart';
+import '../../services/fetal_heart_rate_reference.dart';
 import '../../services/groq_service.dart';
 import '../../services/weight_gain_engine.dart';
 import '../../models/weight_gain_models.dart';
@@ -1028,14 +1029,22 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     // 2. Fetal Heart Rate Thresholds
     if (fetalBeat != null) {
       notable.add('Fetal heart rate: $fetalBeat bpm');
-      if (fetalBeat < 110 || fetalBeat > 160) {
+      final fhr = FetalHeartRateReference.assess(
+        fetalBeat,
+        gestationalWeeks: _aogWeeks,
+      );
+      if (fhr.isOutsideBaseline) {
         isHigh = true;
+        // Names the range the rate falls outside, not an abnormality. Written
+        // once here because it is stored on `pregnancy_risk_factors` and read
+        // back by the midwife dashboard.
         factors.add(_RiskFactorItem(
-          factor: 'Abnormal fetal heart rate ($fetalBeat bpm)',
+          factor: 'Fetal heart rate outside '
+              '${FhrThresholds.standard.baselineMin}–'
+              '${FhrThresholds.standard.baselineMax} ($fetalBeat bpm)',
           influence: 'high',
         ));
-        actions.add(
-            'Repeat fetal heart monitoring; correlate with fetal movement.');
+        actions.add('${fhr.action.label}. ${fhr.finding}');
       }
     }
 
@@ -1761,6 +1770,83 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           ],
         ],
       ),
+    );
+  }
+
+  /// The line under the fetal heart rate field.
+  ///
+  /// It used to read "Normal range: 110 – 160 bpm" in every state, changing
+  /// only its colour — so an out-of-range rate was announced by a red line
+  /// whose words still said "normal", and a midwife who could not separate the
+  /// two colours was told nothing at all. The words now change with the
+  /// reading, and the numbers come from [FhrThresholds] rather than being
+  /// typed here, so a facility that revises the range does not leave this
+  /// field quoting the old one in green.
+  ///
+  /// Amber, not red: the app reserves red for "refer today", and an
+  /// out-of-range rate is repeated first — rates move with fetal sleep and
+  /// activity, and a low one is sometimes the mother's own pulse.
+  Widget _fhrRangeHint() {
+    const limits = FhrThresholds.standard;
+    final range = '${limits.baselineMin} – ${limits.baselineMax} bpm';
+    final assessment = FetalHeartRateReference.assess(
+      int.tryParse(_fetalBeatCtrl.text.trim()),
+      gestationalWeeks: _aogWeeks,
+    );
+
+    final String text;
+    final Color tone;
+    switch (assessment.category) {
+      case FhrCategory.unreadable:
+        text = 'Baseline range: $range';
+        tone = AppColors.textSecondary;
+      case FhrCategory.withinRange:
+        text = '${assessment.category.label} ($range)';
+        tone = AppColors.success;
+      case FhrCategory.belowRange:
+      case FhrCategory.aboveRange:
+        text = '${assessment.category.label} ($range). '
+            '${assessment.action.label}.';
+        tone = AppColors.warning;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              assessment.isOutsideBaseline
+                  ? Icons.warning_amber_rounded
+                  : Icons.info_outline,
+              size: 14,
+              color: tone,
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(fontSize: 12, height: 1.35, color: tone),
+              ),
+            ),
+          ],
+        ),
+        if (assessment.note != null) ...[
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 18),
+            child: Text(
+              assessment.note!,
+              style: const TextStyle(
+                fontSize: 11,
+                height: 1.35,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -3690,25 +3776,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 6),
-              Row(
-                children: [
-                  const Icon(Icons.info_outline,
-                      size: 14, color: AppColors.textSecondary),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Normal range: 110 \u2013 160 bpm',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: () {
-                        final v = int.tryParse(_fetalBeatCtrl.text.trim());
-                        if (v == null) return AppColors.textSecondary;
-                        if (v >= 110 && v <= 160) return AppColors.success;
-                        return AppColors.error;
-                      }(),
-                    ),
-                  ),
-                ],
-              ),
+              _fhrRangeHint(),
             ],
           ),
         ),

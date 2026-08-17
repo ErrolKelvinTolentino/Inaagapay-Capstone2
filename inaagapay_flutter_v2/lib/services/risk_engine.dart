@@ -1,6 +1,22 @@
 // lib/services/risk_engine.dart
 // Simplified legacy risk engine – used only to provide a low/high risk flag
 // based on the latest check‑up data.
+//
+// Blood pressure and fetal heart rate are not judged here. They come from
+// `blood_pressure_reference.dart` and `fetal_heart_rate_reference.dart`, the
+// same objects the checkup screen and the mother's profile read, so this
+// engine cannot drift away from what the midwife was shown when she recorded
+// the visit. It used to hold its own copy of both, and the heart rate copy had
+// already drifted: it called 110–119 bpm a finding where the recording screen
+// called it normal.
+//
+// It still judges a single visit — that is its purpose, and the card it feeds
+// only falls back to it when no risk level has been stored. Whether a raised
+// reading *repeated* is a property of the series and belongs to
+// [BloodPressureReference.assess], which the trend card uses.
+
+import 'blood_pressure_reference.dart';
+import 'fetal_heart_rate_reference.dart';
 
 class RiskAssessment {
   final String level; // 'low' or 'high'
@@ -22,21 +38,41 @@ class RiskEngine {
   }) {
     final findings = <String>[];
 
-    // Blood pressure thresholds
+    // Blood pressure — cited thresholds, one object
+    const bp = BpThresholds.standard;
     final bpSys = _num(latestCheckup['blood_pressure_systolic']);
     final bpDia = _num(latestCheckup['blood_pressure_diastolic']);
     if (bpSys != null && bpDia != null) {
-      if (bpSys >= 140 || bpDia >= 90) {
-        findings.add('BP ${bpSys.toInt()}/${bpDia.toInt()} (above 140/90)');
-      } else if (bpSys < 90 || bpDia < 60) {
-        findings.add('BP ${bpSys.toInt()}/${bpDia.toInt()} (below 90/60)');
+      final reading = 'BP ${bpSys.toInt()}/${bpDia.toInt()}';
+      switch (BloodPressureReference.categorise(
+          bpSys.round(), bpDia.round())) {
+        case BpCategory.severe:
+          findings.add('$reading (at or above '
+              '${bp.severeSystolic}/${bp.severeDiastolic})');
+        case BpCategory.raised:
+          findings.add('$reading (at or above '
+              '${bp.raisedSystolic}/${bp.raisedDiastolic})');
+        case BpCategory.low:
+          findings.add(
+              '$reading (below ${bp.lowSystolic}/${bp.lowDiastolic})');
+        case BpCategory.unreadable:
+          // Systolic at or below diastolic. Previously this fell into the
+          // raised branch — 80/120 was reported as being above 140/90 — so a
+          // transposed entry produced a confident finding about a reading
+          // that was never valid.
+          findings.add('$reading (not readable)');
+        case BpCategory.normal:
+          break;
       }
     }
 
-    // Fetal heart rate thresholds (120‑160 bpm is normal)
+    // Fetal heart rate — cited baseline, one object
     final fhr = _intVal(latestCheckup['fetal_heart_beat']);
-    if (fhr != null && (fhr < 120 || fhr > 160)) {
-      findings.add('FHR $fhr bpm (outside 120‑160 range)');
+    final fhrAssessment = FetalHeartRateReference.assess(fhr);
+    if (fhrAssessment.isOutsideBaseline) {
+      findings.add('FHR $fhr bpm (outside '
+          '${FhrThresholds.standard.baselineMin}–'
+          '${FhrThresholds.standard.baselineMax})');
     }
 
     // Edema – flag moderate or severe

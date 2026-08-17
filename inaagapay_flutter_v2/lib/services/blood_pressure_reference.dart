@@ -13,9 +13,17 @@
 //
 // They are gone. Every blood pressure judgement in the app now comes from
 // here: the prenatal checkup screen (pill, guidance card, risk engine, step
-// validation, detected-factor chips and the text handed to the AI) and the
-// mother's profile (trend card and per-visit insights). A facility on a
-// different guideline changes [BpThresholds] and nothing else.
+// validation, detected-factor chips and the text handed to the AI), the
+// mother's profile (trend card and per-visit insights), and
+// `risk_engine.dart` behind the profile risk card. A facility on a different
+// guideline changes [BpThresholds] and nothing else.
+//
+// A tenth copy lived in `smart_risk_engine.dart`, which had no call sites and
+// carried a `sys >= 135` "borderline" threshold appearing in no guideline
+// cited in this project and nowhere else in this codebase. That file was
+// deleted rather than migrated: the pattern it was reaching for — a raised
+// reading that repeated — is what [BpAssessment.everMetCriterion] and
+// [BpAssessment.priorRaisedEpisode] already do, against a cited threshold.
 //
 // TWO THINGS THIS FILE DELIBERATELY DOES NOT DO
 //
@@ -150,6 +158,12 @@ class BpReading {
   final int systolic;
   final int diastolic;
   final DateTime? takenOn;
+
+  /// Gestation at the time of the reading, in weeks, fractional part allowed.
+  ///
+  /// Displayed as **completed** weeks: 10 weeks 6 days is week 10, not week
+  /// 11. Rounding it read a stored visit back as a week later than the screen
+  /// that recorded it, so the same day appeared as "week 11 and week 10".
   final double? gestationalWeeks;
 
   String get formatted => '$systolic/$diastolic';
@@ -437,7 +451,7 @@ class BloodPressureReference {
       final weeks = raisedRun
           .map((r) => r.gestationalWeeks == null
               ? null
-              : 'week ${r.gestationalWeeks!.round()}')
+              : 'week ${r.gestationalWeeks!.floor()}')
           .whereType<String>()
           .toList();
       final where = weeks.length == raisedRun.length
@@ -459,7 +473,7 @@ class BloodPressureReference {
       final weeks = priorEpisode
           .map((r) => r.gestationalWeeks == null
               ? null
-              : 'week ${r.gestationalWeeks!.round()}')
+              : 'week ${r.gestationalWeeks!.floor()}')
           .whereType<String>()
           .toList();
       final where =

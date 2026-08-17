@@ -23,6 +23,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../services/blood_pressure_reference.dart';
+import '../../services/fetal_heart_rate_reference.dart';
 
 // Blood type is no longer chosen on this screen, so the option list that used
 // to back a dropdown here is gone. It listed 'Unknown' as a ninth choice, which
@@ -817,6 +818,11 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         BloodPressureReference.categorise(bpSys?.round(), bpDia?.round());
     const bpLimits = BpThresholds.standard;
 
+    // Likewise for the heart rate. This block used 120–160 in three places
+    // while the screen that records the reading used 110–160, so a normal
+    // baseline of 112 was written up here as a finding.
+    final fhrAssessment = FetalHeartRateReference.assess(fhr);
+
     String overallAssessment =
         'Current prenatal checkup findings appear stable overall.';
     if (bpCategory == BpCategory.severe) {
@@ -833,9 +839,9 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     } else if (bpCategory == BpCategory.low) {
       overallAssessment =
           'Blood pressure is lower than typical range; monitor hydration, symptoms, and follow-up trends.';
-    } else if (fhr != null && (fhr < 120 || fhr > 160)) {
+    } else if (fhrAssessment.isOutsideBaseline) {
       overallAssessment =
-          'Fetal heart rate is outside the usual expected range and should be reviewed clinically.';
+          '${fhrAssessment.finding} ${fhrAssessment.action.label}.';
     } else if (edema != '-' && edema != 'none') {
       overallAssessment =
           'Mild edema is noted; monitor progression and correlate with blood pressure and symptoms.';
@@ -874,11 +880,18 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     }
 
     if (fhr != null) {
-      if (fhr >= 120 && fhr <= 160) {
-        buffer.write(
-            '- Fetal Status - Heart Rate: $fhr bpm [WITHIN NORMAL LIMITS].\n');
-      } else {
-        buffer.write('- Fetal Status - Heart Rate: $fhr bpm [REVIEW].\n');
+      switch (fhrAssessment.category) {
+        case FhrCategory.belowRange:
+        case FhrCategory.aboveRange:
+          buffer.write('- Fetal Status - Heart Rate: $fhr bpm [REVIEW].\n');
+        case FhrCategory.withinRange:
+          buffer.write(
+              '- Fetal Status - Heart Rate: $fhr bpm [WITHIN NORMAL LIMITS].\n');
+        case FhrCategory.unreadable:
+          // A rate the form would have rejected. Not a normal reading, and
+          // not one to report as though it had been measured.
+          buffer.write(
+              '- Fetal Status - Heart Rate: $fhr bpm [REVIEW MANUALLY].\n');
       }
     } else if (fhrRaw != '-') {
       buffer.write('- Fetal Status - Heart Rate: $fhrRaw [REVIEW MANUALLY].\n');
@@ -912,7 +925,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         .write('- Monitor maternal warning signs and fetal movement daily.\n');
     if (bpCategory == BpCategory.raised ||
         bpCategory == BpCategory.severe ||
-        (fhr != null && (fhr < 120 || fhr > 160))) {
+        fhrAssessment.isOutsideBaseline) {
       buffer.write(
           '- Prioritize clinician review for blood pressure and/or fetal heart findings.\n');
     }
@@ -5434,18 +5447,40 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   Widget _buildBpChart(List<BpReading> readings) {
     const t = BpThresholds.standard;
 
+    // One position per visit, in the order they were taken — not one position
+    // per gestational week.
+    //
+    // Plotting against the week collapsed visits that shared one: two
+    // checkups on the same day resolve to the same gestational age, so they
+    // landed on the same x and the second hid behind the first. The card then
+    // showed a single dot where two occasions had been recorded — on the very
+    // card whose purpose is to show whether a raised reading repeated. And a
+    // repeat inside the same week is not an edge case here; it is precisely
+    // what the two-occasion criterion asks a midwife to do after a raised
+    // reading, so it is the case this chart most has to get right.
+    //
+    // The cost is that spacing no longer tracks elapsed time — a four-week
+    // gap and a same-day repeat are drawn the same distance apart. The week
+    // sits under each point, and the finding below names the weeks outright.
     final systolicSpots = <FlSpot>[];
     final diastolicSpots = <FlSpot>[];
+    final weekAtVisit = <int, int>{};
     for (int i = 0; i < readings.length; i++) {
-      final x = readings[i].gestationalWeeks ?? i.toDouble();
+      final x = i.toDouble();
       systolicSpots.add(FlSpot(x, readings[i].systolic.toDouble()));
       diastolicSpots.add(FlSpot(x, readings[i].diastolic.toDouble()));
+
+      // Completed weeks, matching the finding text below the chart. A visit at
+      // 10 weeks 6 days is week 10; rounding labelled it W11 while the finding
+      // called it week 10 — one reading, two weeks, in one card.
+      final weeks = readings[i].gestationalWeeks;
+      if (weeks != null) weekAtVisit[i] = weeks.floor();
     }
 
-    final readingWeeks = systolicSpots.map((s) => s.x.round()).toSet();
-    final xs = systolicSpots.map((s) => s.x).toList();
-    final minX = (xs.reduce((a, b) => a < b ? a : b) - 1).clamp(0.0, 42.0);
-    final maxX = (xs.reduce((a, b) => a > b ? a : b) + 1).clamp(1.0, 42.0);
+    // Enough room that the first and last dots are not clipped by the frame.
+    const xPadding = 0.4;
+    final minX = -xPadding;
+    final maxX = (readings.length - 1) + xPadding;
 
     final allY = [
       ...systolicSpots.map((s) => s.y),
@@ -5471,7 +5506,9 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           show: true,
           drawVerticalLine: true,
           horizontalInterval: 20,
-          verticalInterval: 4,
+          // One gridline per visit now that x counts visits, so every dot has
+          // a line tying it to its label.
+          verticalInterval: 1,
           getDrawingHorizontalLine: (value) =>
               FlLine(color: Colors.grey.shade100, strokeWidth: 1),
           getDrawingVerticalLine: (value) =>
@@ -5488,13 +5525,16 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               showTitles: true,
               reservedSize: 24,
               interval: 1,
-              // A label under each actual visit, rather than every fourth week.
-              // A fixed interval on three or four readings spanning five weeks
-              // put labels where no reading was and left readings unlabelled,
-              // so a dot could not be tied to a week.
+              // One label per visit, directly under its dot. Two visits in the
+              // same week each keep their own label — "W10 W11 W11" reads as
+              // three visits, where a single "W11" hid one of them.
               getTitlesWidget: (value, meta) {
-                final week = value.round();
-                if (!readingWeeks.contains(week)) {
+                final visit = value.round();
+                if ((value - visit).abs() > 0.01) {
+                  return const SizedBox.shrink();
+                }
+                final week = weekAtVisit[visit];
+                if (week == null) {
                   return const SizedBox.shrink();
                 }
                 return Padding(

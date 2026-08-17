@@ -281,6 +281,32 @@ void main() {
     });
   });
 
+  group('gestational age is stated in completed weeks', () {
+    test('a part-week reading is not promoted to the next week', () {
+      // A visit at 10 weeks 6 days is week 10. Rounding made it week 11, and
+      // because a stored visit comes back as weeks + days/7 while the visit
+      // being typed is already floored, one afternoon could read as
+      // "week 11 and week 10" — two occasions that were in fact the same week.
+      final result = BloodPressureReference.assess([
+        r(142, 91, weeks: 10 + 6 / 7),
+        r(145, 95, weeks: 10),
+      ]);
+
+      expect(result.finding, contains('(week 10 and week 10)'));
+      expect(result.finding.contains('week 11'), isFalse);
+    });
+
+    test('the same holds for an episode that has since settled', () {
+      final result = BloodPressureReference.assess([
+        r(142, 91, weeks: 10 + 6 / 7),
+        r(145, 95, weeks: 11 + 5 / 7),
+        r(118, 76, weeks: 13),
+      ]);
+
+      expect(result.finding, contains('(week 10 and week 11)'));
+    });
+  });
+
   group('the screens keep no rule set of their own', () {
     // This is the guard on the consolidation. The contradiction it prevents
     // came from a second opinion growing up beside the first: a pill drawn
@@ -292,6 +318,7 @@ void main() {
     const screens = [
       'lib/screens/midwife/add_prenatal_checkup_screen.dart',
       'lib/screens/mother/mother_profile_page.dart',
+      'lib/services/risk_engine.dart',
     ];
 
     String codeOf(String path) {
