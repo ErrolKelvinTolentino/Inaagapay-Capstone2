@@ -38,11 +38,26 @@ class DriveDose {
     required this.vaccineId,
     this.doseNumber,
     this.recommendedAgeMonths,
+    this.minimumIntervalWeeks,
+    this.maximumAgeMonths,
   });
 
   final int vaccineId;
   final int? doseNumber;
   final double? recommendedAgeMonths;
+
+  /// How long must have passed since the previous dose before this one may be
+  /// given. Null on first doses, which have no predecessor to wait on.
+  ///
+  /// Age alone decides nothing for a catch-up. A child given Pentavalent 1
+  /// last week is old enough for Pentavalent 2 and must still wait four weeks
+  /// for it — and a dose given inside the interval may not count, so inviting
+  /// her wastes a vial and leaves her believing she is covered.
+  final int? minimumIntervalWeeks;
+
+  /// Upper age limit past which the dose is no longer given at all. Only
+  /// Rotavirus carries one in the DOH childhood schedule.
+  final double? maximumAgeMonths;
 }
 
 /// A vaccine a drive can be held for, with what is on the shelf for it.
@@ -104,6 +119,7 @@ class DriveRecipient {
     this.phoneNumber,
     this.email,
     this.lastDoseOn,
+    this.childId,
     this.childName,
     this.dueLabel,
   });
@@ -111,6 +127,11 @@ class DriveRecipient {
   final int motherId;
   final int? accountId;
   final String name;
+
+  /// Which child the appointment is for, so the invitation can be recorded
+  /// against them rather than only against their mother. Null on a maternal
+  /// drive.
+  final int? childId;
 
   /// For a child drive, whose appointment this is. Null on a maternal drive.
   ///
@@ -216,6 +237,10 @@ class DriveNotificationResult {
 class VaccinationDriveService {
   const VaccinationDriveService._();
 
+  /// Same figure [ImmunizationSchedule] uses, so an age computed here and an
+  /// age computed there put a child in the same place.
+  static const double _daysPerMonth = 30.44;
+
   /// Doses in the tetanus-diphtheria series.
   ///
   /// Five, not two. TD2 is what protects the newborn against neonatal tetanus
@@ -307,6 +332,9 @@ class VaccinationDriveService {
                   doseNumber: _int(v['dose_number']),
                   recommendedAgeMonths:
                       (v['recommended_age_months'] as num?)?.toDouble(),
+                  minimumIntervalWeeks: _int(v['minimum_interval_weeks']),
+                  maximumAgeMonths:
+                      (v['maximum_age_months'] as num?)?.toDouble(),
                 ))
             .toList()
           ..sort((a, b) => (a.doseNumber ?? 0).compareTo(b.doseNumber ?? 0));
@@ -567,12 +595,18 @@ class VaccinationDriveService {
           .select('child_id, vaccine_id, vaccination_date')
           .inFilter('child_id', childIds);
 
-      final givenByChild = <int, Set<int>>{};
+      // Keyed by dose, valued by the date it was given. The date is what makes
+      // the minimum interval enforceable; collapsing these rows to a set of
+      // ids is what let a drive invite a child whose last dose was days ago.
+      // A record with no readable date still counts as given — the dose
+      // happened — and only loses the ability to hold the next one back.
+      final givenByChild = <int, Map<int, DateTime?>>{};
       for (final row in List<Map<String, dynamic>>.from(records)) {
         final childId = _int(row['child_id']);
         final vaccineId = _int(row['vaccine_id']);
         if (childId != null && vaccineId != null) {
-          givenByChild.putIfAbsent(childId, () => <int>{}).add(vaccineId);
+          givenByChild.putIfAbsent(childId, () => <int, DateTime?>{})[vaccineId] =
+              DateTime.tryParse(row['vaccination_date']?.toString() ?? '');
         }
       }
 
@@ -587,19 +621,16 @@ class VaccinationDriveService {
         final birthdate = _birthdate(child);
         if (birthdate == null) continue;
 
-        final ageMonths = when.difference(birthdate).inDays / 30.44;
-        final given = givenByChild[childId] ?? const <int>{};
+        final ageMonths = when.difference(birthdate).inDays / _daysPerMonth;
 
-        // The earliest dose of this vaccine she has not had and is old enough
-        // for. A Pentavalent drive serves children due for dose 1, 2 or 3, so
-        // the whole series is considered rather than a single row.
-        DriveDose? dueDose;
-        for (final dose in vaccine.doses) {
-          if (given.contains(dose.vaccineId)) continue;
-          if (ageMonths < (dose.recommendedAgeMonths ?? 0)) continue;
-          dueDose = dose;
-          break;
-        }
+        // The dose she is actually due — old enough for, has not had, still
+        // within its age ceiling, and far enough past the previous one.
+        final dueDose = dueDoseFor(
+          vaccine: vaccine,
+          birthdate: birthdate,
+          given: givenByChild[childId] ?? const <int, DateTime?>{},
+          driveDate: when,
+        );
         if (dueDose == null) continue;
 
         final scheduledAt = dueDose.recommendedAgeMonths ?? 0;
@@ -629,6 +660,7 @@ class VaccinationDriveService {
           motherId: motherId,
           accountId: _int(motherRow['account_id']),
           name: motherName.isEmpty ? 'Unnamed mother' : motherName,
+          childId: childId,
           childName: childName.isEmpty ? 'Child' : childName,
           currentDose: 0,
           dueLabel: overdue.isEmpty
@@ -646,6 +678,73 @@ class VaccinationDriveService {
       if (kDebugMode) debugPrint('[Drive] Child recipient lookup failed: $e');
       return [];
     }
+  }
+
+  /// Which dose of [vaccine] this child should receive at a drive on
+  /// [driveDate], or null if she should not be invited.
+  ///
+  /// [given] maps each vaccine row already recorded for her to the date it was
+  /// given. Presence of the key is what marks a dose as had; the date is what
+  /// makes the minimum interval enforceable, and it used to be discarded — the
+  /// query fetched `vaccination_date` and then collapsed the rows into a set
+  /// of ids, so a Pentavalent drive would list a child who had dose 1 last
+  /// week.
+  ///
+  /// The judgement itself is [ImmunizationSchedule]'s, the same rules the
+  /// child's own profile applies, so she cannot read as due here and "wait
+  /// four weeks" there. Everything is measured against the drive date rather
+  /// than today: a drive three weeks out should include a child whose interval
+  /// elapses next week, and exclude one whose interval elapses after it.
+  static DriveDose? dueDoseFor({
+    required DriveVaccine vaccine,
+    required DateTime? birthdate,
+    required Map<int, DateTime?> given,
+    required DateTime driveDate,
+  }) {
+    if (birthdate == null) return null;
+
+    final ageMonths = driveDate.difference(birthdate).inDays / _daysPerMonth;
+
+    // The most recent dose actually recorded. A dose skipped because it can no
+    // longer be given never becomes the predecessor of the next one.
+    DriveDose? lastGiven;
+
+    for (final dose in vaccine.doses) {
+      if (given.containsKey(dose.vaccineId)) {
+        lastGiven = dose;
+        continue;
+      }
+
+      final scheduledAt = dose.recommendedAgeMonths ?? 0;
+      final status = ImmunizationSchedule.statusOfDose(
+        alreadyGiven: false,
+        childAgeMonths: ageMonths,
+        scheduledAtMonths: scheduledAt,
+        maximumAgeMonths: dose.maximumAgeMonths,
+        earliestAllowed: ImmunizationSchedule.earliestAllowedDate(
+          birthdate: birthdate,
+          scheduledAtMonths: scheduledAt,
+          previousDoseGivenOn:
+              lastGiven == null ? null : given[lastGiven.vaccineId],
+          minimumIntervalWeeks: dose.minimumIntervalWeeks,
+        ),
+        today: driveDate,
+      );
+
+      if (status == DoseStatus.due || status == DoseStatus.pastDue) {
+        return dose;
+      }
+
+      // Past its age ceiling — this dose will never be given, but a later one
+      // in the series may still be due.
+      if (status == DoseStatus.noLongerGiven) continue;
+
+      // notYetDue (too young) or dueSoon (old enough, interval still running).
+      // Either way she is not invited, and no later dose can be closer.
+      return null;
+    }
+
+    return null;
   }
 
   static DateTime? _birthdate(Map<String, dynamic> child) {
@@ -704,6 +803,81 @@ class VaccinationDriveService {
       }
     }
     return null;
+  }
+
+  /// The rows [recordInvitations] writes, built separately so the shape can be
+  /// checked without a database.
+  ///
+  /// Blank contact details are omitted rather than stored as empty strings: a
+  /// missing number and an empty one mean the same thing to a person and
+  /// different things to a query, and tomorrow's reminder decides who to text
+  /// by asking whether a number is there.
+  static List<Map<String, dynamic>> invitationRows({
+    required int scheduleId,
+    required List<DriveRecipient> recipients,
+  }) {
+    String? clean(String? value) {
+      final trimmed = value?.trim();
+      return (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+    }
+
+    return recipients.map((r) {
+      final phone = clean(r.phoneNumber);
+      final email = clean(r.email);
+      final child = clean(r.childName);
+
+      return <String, dynamic>{
+        'immunization_schedule_id': scheduleId,
+        'mother_id': r.motherId,
+        if (r.childId != null) 'child_id': r.childId,
+        if (child != null) 'child_name': child,
+        if (phone != null) 'phone_number': phone,
+        if (email != null) 'email_address': email,
+      };
+    }).toList();
+  }
+
+  /// Records who this drive is for, so they can be reminded the day before.
+  ///
+  /// Called with the same list that is about to be messaged, including anyone
+  /// unreachable: the record answers "who was due for this drive", which is a
+  /// different question from "who could we contact". A mother with no phone
+  /// still belongs in it — that she was due and could not be reached is worth
+  /// knowing, and is invisible today.
+  ///
+  /// Failures are swallowed on purpose. The invitations are a record and a
+  /// convenience for tomorrow's reminder; losing them must never stop today's
+  /// messages going out or make a saved drive look like it failed.
+  ///
+  /// Returns how many rows were written.
+  static Future<int> recordInvitations({
+    required int scheduleId,
+    required List<DriveRecipient> recipients,
+  }) async {
+    if (recipients.isEmpty) return 0;
+
+    final rows = invitationRows(
+      scheduleId: scheduleId,
+      recipients: recipients,
+    );
+
+    try {
+      // A plain insert, not an upsert. `createDrive` always writes a new
+      // schedule row, so the id is fresh every time and there is nothing to
+      // conflict with. The unique index behind this table is a guard against a
+      // double submit, and if it fires the batch it rejects is a duplicate of
+      // one already recorded — so nothing is lost by letting it fail.
+      final saved = await SupabaseService.client
+          .from('drive_invitations')
+          .insert(rows)
+          .select('invitation_id');
+      return List<Map<String, dynamic>>.from(saved).length;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Drive] Could not record invitations: $e');
+      }
+      return 0;
+    }
   }
 
   /// Messages every recipient. Call only after a person has confirmed.

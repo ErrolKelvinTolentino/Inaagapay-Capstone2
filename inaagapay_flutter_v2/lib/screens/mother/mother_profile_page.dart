@@ -1661,6 +1661,32 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
   // ── Record detail navigation ────────────────────────────────────────────
 
+  /// One record's image, loaded only when that record is opened.
+  ///
+  /// These columns hold base64 data — a single ultrasound reached 3 MB — so
+  /// they are excluded from the list query and read one row at a time here.
+  /// Returns null on failure rather than throwing: a record that cannot show
+  /// its image should still show its findings.
+  Future<String?> _fetchRecordImage({
+    required String table,
+    required String column,
+    required dynamic encounterId,
+  }) async {
+    if (encounterId == null) return null;
+    try {
+      final row = await SupabaseService.client
+          .from(table)
+          .select(column)
+          .eq('encounter_id', encounterId)
+          .maybeSingle()
+          .timeout(const Duration(seconds: 20));
+      return row?[column]?.toString();
+    } catch (e) {
+      debugPrint('[$table] image unavailable for $encounterId — $e');
+      return null;
+    }
+  }
+
   void _showRecordDetails({
     required String title,
     required List<MapEntry<String, String>> rows,
@@ -1675,6 +1701,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     Map<String, dynamic>? weightGainEval,
     String? approvedByName,
     bool? isMidwifeApproved,
+    String? remarksSource,
   }) {
     Navigator.push(
       context,
@@ -1682,6 +1709,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         builder: (_) => RecordDetailScreen(
           approvedByName: approvedByName,
           isMidwifeApproved: isMidwifeApproved,
+          remarksSource: remarksSource,
           title: title,
           rows: rows,
           icon: icon,
@@ -1904,17 +1932,22 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   checkupDetails['symptomSummary'] ?? 'None recorded';
             }
 
-            if (aiAnalysis == null || aiAnalysis.trim().isEmpty) {
-              aiAnalysis =
-                  await MotherProfileService.getCheckupAIAnalysis(checkupId);
-            }
           }
 
-          if (aiAnalysis == null || aiAnalysis.trim().isEmpty) {
-            aiAnalysis = _generatePrenatalAIInsights(checkup);
-          } else {
-            aiAnalysis = aiAnalysis.trim();
-          }
+          // The checkup summary is the remarks the midwife wrote and edited
+          // during the visit — nothing else, and nothing composed now.
+          //
+          // It used to come from `ai_responses` with two fallbacks behind it,
+          // the last of which *generated fresh text at view time*. So a record
+          // could show a summary the midwife had never seen, written after she
+          // closed the checkup, sitting above her own remarks in a separate
+          // row that said something different. Reopening the record could
+          // change it again.
+          //
+          // A record is what was recorded. If she wrote nothing, the summary
+          // card does not appear.
+          final typedRemarks = checkup['remarks']?.toString().trim() ?? '';
+          aiAnalysis = typedRemarks.isEmpty ? null : typedRemarks;
 
           if (!mounted) return;
 
@@ -1964,6 +1997,9 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             icon: Icons.medical_services,
             approvedByName: midwifeName == '—' ? null : midwifeName,
             isMidwifeApproved: checkup['is_midwife_approved'] == true,
+            // Says how the remarks came to be: typed by the midwife, drafted
+            // by AI and approved, or drafted and then corrected by her.
+            remarksSource: checkup['remarks_source']?.toString(),
             rows: [
               MapEntry('Conducted by', midwifeName),
               MapEntry('Fetal Count', fetalCount.toString()),
@@ -1985,7 +2021,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               MapEntry('Calcium', calciumSummary),
               MapEntry('TD Vaccine', _formatValue(checkup['td_vaccine_dose'])),
               MapEntry('Edema', _formatValue(checkup['edema'])),
-              MapEntry('Remarks', _formatValue(checkup['remarks'])),
+              // Remarks are the Checkup Summary card now, not a row. Showing
+              // both put the same paragraph on the screen twice.
               MapEntry('Next Schedule', _formatDate(checkup['next_schedule'])),
             ],
             aiAnalysis: aiAnalysis,
@@ -2029,6 +2066,15 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
         try {
           List<String> imageUrls = [];
+
+          // Fetched now, not with the list. See the note in
+          // mother_profile_service.dart — carrying these bytes into the list
+          // query is what timed the whole section out.
+          ultrasound['ultrasound_image'] ??= await _fetchRecordImage(
+            table: 'ultrasounds',
+            column: 'ultrasound_image',
+            encounterId: ultrasound['encounter_id'],
+          );
 
           if (ultrasound['ultrasound_image'] != null) {
             final imageField = ultrasound['ultrasound_image'].toString();
@@ -2132,6 +2178,12 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
         try {
           List<String> imageUrls = [];
+
+          labTest['lab_test_image'] ??= await _fetchRecordImage(
+            table: 'lab_tests',
+            column: 'lab_test_image',
+            encounterId: labTest['encounter_id'],
+          );
 
           if (labTest['lab_test_image'] != null) {
             final imageField = labTest['lab_test_image'].toString();

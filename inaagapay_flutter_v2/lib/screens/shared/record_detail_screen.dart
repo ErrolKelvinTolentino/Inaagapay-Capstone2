@@ -32,7 +32,14 @@ class RecordDetailScreen extends StatefulWidget {
     this.ultrasoundClassification,
     this.approvedByName,
     this.isMidwifeApproved,
+    this.remarksSource,
   });
+
+  /// `prenatal_checkups.remarks_source` — one of `midwife_authored`,
+  /// `ai_generated_approved` or `ai_generated_edited`. Decides how the checkup
+  /// summary is labelled. Null on records that do not carry the column, where
+  /// the summary is labelled neutrally rather than credited to anyone.
+  final String? remarksSource;
 
   final String title;
   final List<MapEntry<String, String>> rows;
@@ -62,16 +69,17 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
   final Set<String> _expandedLabInsightAspects = <String>{};
   bool _showAiInFilipino = LanguageService.isFilipino;
 
-  // Section accent colors — pink palette variations
-  static const _accentRecord = Color(0xFFE6398D); // deep rose
-  static const _accentWorker = Color(0xFFD44B8A); // medium pink
-  static const _accentNotes = Color(0xFFC7607E); // warm coral-pink
+  // Section accents removed. Three near-identical pinks distinguished
+  // "Record" from "Health Worker" from "Notes" — a distinction the headings
+  // already make, in a colour the reader had to learn to ignore.
 
   // Visual hierarchy card colors
-  static const _aiCardBg = Color(0xFFFFF5F8); // light brand pink background
+  // _aiCardBg removed with the tinted AI panel — the summary is a white card
+  // like every other section now.
   static const _aiCardBorder = Color(0xFFFF68A5); // brand primary pink border
-  static const _recommendCardBg = Color(0xFFE8F5E9); // light green
-  static const _recommendCardBorder = Color(0xFF66BB6A); // green border
+  // Recommendation card colours removed with the card itself. Green was the
+  // fourth tinted panel on one screen, and it carried no meaning the heading
+  // did not already carry.
   static const _riskHighCardBg = Color(0xFFFBE9E7); // light red/orange
   static const _riskHighCardBorder = Color(0xFFEF5350); // red border
 
@@ -88,6 +96,14 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
   /// The point of this line is that a mother reading an AI-generated insight
   /// can see a named human reviewed it — so an unreviewed record says so
   /// plainly rather than rendering nothing.
+  /// The one line under the header: when this record was taken or added.
+  ///
+  /// Callers already pass this as [subtitle] ("Added on Aug 15, 2026"), and it
+  /// used to sit inside a card that repeated the title above it. It is kept as
+  /// a plain line because it is context, not a finding — the findings start
+  /// immediately below it.
+  String _recordStampLine() => widget.subtitle?.trim() ?? '';
+
   Widget _buildApprovalAttribution() {
     final approved = widget.isMidwifeApproved;
     if (approved == null) return const SizedBox.shrink();
@@ -890,62 +906,42 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppColors.bgSecondary,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(widget.icon, color: AppColors.brandPrimary),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.title,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.textPrimary,
-                                ),
+                  // A single quiet line, not a second title.
+                  //
+                  // The header above already names the record and carries its
+                  // icon; repeating both in a card 40px below said nothing new
+                  // and pushed the first actual finding further down the
+                  // screen. What was missing from the header is the part a
+                  // midwife checks first — when it was taken, and whether a
+                  // human has approved it.
+                  if (_recordStampLine().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2, bottom: 14),
+                      child: Row(
+                        children: [
+                          Icon(widget.icon,
+                              size: 14, color: AppColors.textSecondary),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              _recordStampLine(),
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                height: 1.35,
+                                color: AppColors.textSecondary,
                               ),
-                              if (widget.subtitle != null &&
-                                  widget.subtitle!.trim().isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                Text(
-                                  widget.subtitle!.trim(),
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
+                  // Whether a human has signed off belongs at the top, beside
+                  // the date — it is the first thing a clinician checks about
+                  // a record and the last thing they should have to hunt for.
+                  // It previously sat inside the AI card, which tied the
+                  // record's provenance to whether an AI narrative happened to
+                  // be present.
+                  _buildApprovalAttribution(),
                   if (widget.imageUrls != null && widget.imageUrls!.isNotEmpty) ...[
                     _buildImageGallery(widget.imageUrls!),
                     const SizedBox(height: 14),
@@ -955,9 +951,22 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                     const SizedBox(height: 14),
                     _buildPrenatalRiskSummaryCard(),
                   ],
+                  // Prenatal keeps a written summary, because a checkup
+                  // produces one — the midwife's own remarks, sometimes
+                  // AI-drafted, and the card says which.
+                  //
+                  // Ultrasound and lab records do not. What arrives with them
+                  // is a document, and what belongs on the record is what the
+                  // document said: the values, plus whatever interpretation
+                  // the sonologist or laboratory wrote. The model's own
+                  // assessment of those values was a third voice on a record
+                  // that already has two, and it is no longer shown.
                   if (hasAi) ...[
-                    const SizedBox(height: 14),
-                    _buildAiCard(widget.aiAnalysis!.trim()),
+                    if (isPrenatal) ...[
+                      const SizedBox(height: 14),
+                      _buildAiCard(widget.aiAnalysis!.trim()),
+                    ] else
+                      _buildExtractedFindings(widget.aiAnalysis!.trim()),
                   ],
                   _buildClinicalDisclaimerAndReferences(),
                 ],
@@ -1089,21 +1098,13 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     );
   }
 
-  Color _sectionAccent(String title) {
-    if (widget.title.toLowerCase().contains('prenatal checkup')) {
-      final t = title.toLowerCase();
-      if (t == 'vitals') return const Color(0xFFE6398D);
-      if (t == 'fetal assessment') return const Color(0xFFD44B8A);
-      if (t == 'symptoms') return const Color(0xFFF06292);
-      if (t == 'medications & supplements') return const Color(0xFFF06292);
-      if (t == 'schedule & remarks') return const Color(0xFFC7607E);
-    }
-
-    final t = title.toLowerCase();
-    if (t.contains('health worker')) return _accentWorker;
-    if (t.contains('notes')) return _accentNotes;
-    return _accentRecord;
-  }
+  // Removed: _sectionAccent, _sectionCardBackground, _sectionCardBorderColor.
+  //
+  // They gave each section its own colour — five near-identical pinks for a
+  // prenatal checkup, an orange card for Symptoms — none of which encoded
+  // anything. Sections are told apart by their heading and their icon, which
+  // is what headings and icons are for. Colour is reserved for the finding
+  // strips and risk chips, where it means severity.
 
   IconData _sectionIcon(String title) {
     if (widget.title.toLowerCase().contains('prenatal checkup')) {
@@ -1209,8 +1210,12 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
 
       for (final row in rows) {
         final key = _labelKey(row.key);
-        // Skip date from vitals - it's shown in the header/subtitle
-        if (key == 'date') continue;
+        // Shown in the header, the stamp line and the attribution — not
+        // repeated as a row inside Vitals, where "Conducted by" sat above the
+        // mother's weight as though it were one of her measurements.
+        if (key == 'date' || key == 'conductedby' || key == 'recordedby') {
+          continue;
+        }
 
         // Vitals: weight, height, BMI, blood pressure, AOG
         if ([
@@ -1238,10 +1243,14 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           symptoms.add(row);
         }
         // Medications & Supplements: plans, given meds, ferrous, calcium, TD vaccine
+        // `_labelKey` strips punctuation, so the old 'ferrous+fa' entry could
+        // never match anything and Ferrous fell through to Vitals — listed
+        // among the mother's measurements rather than with the supplements
+        // she was given.
         else if ([
           'medicationplans',
           'givenmedications',
-          'ferrous+fa',
+          'ferrousfa',
           'ferrous',
           'calcium',
           'tdvaccine',
@@ -1262,10 +1271,19 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
         }
       }
 
+      // Every section conditional, including Vitals. A checkup shows the
+      // containers it has content for and no others — an empty "Fetal
+      // Assessment" card announced that nothing was measured, which is not
+      // information the record needs a container for.
+      //
+      // `meds` was being collected and then dropped from this map entirely,
+      // so supplements and the TD dose never appeared under a heading of
+      // their own however carefully they were sorted into one.
       return {
-        'Vitals': vitals,
+        if (vitals.isNotEmpty) 'Vitals': vitals,
         if (fetal.isNotEmpty) 'Fetal Assessment': fetal,
         if (symptoms.isNotEmpty) 'Symptoms': symptoms,
+        if (meds.isNotEmpty) 'Medications & Supplements': meds,
         if (schedule.isNotEmpty) 'Schedule & Remarks': schedule,
       };
     }
@@ -1300,69 +1318,60 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     };
   }
 
-  Color _sectionCardBackground(String title) {
-    final t = title.toLowerCase();
-    if (t == 'symptoms') return const Color(0xFFFFF3E0); // light orange for findings
-    return Colors.white; // default white for vitals and others
-  }
-
-  Color? _sectionCardBorderColor(String title) {
-    final t = title.toLowerCase();
-    if (t == 'symptoms') return const Color(0xFFFFB74D).withValues(alpha: 0.3);
-    return null;
-  }
 
   Widget _buildDetailSection(
       String title, List<MapEntry<String, String>> rows) {
-    final accent = _sectionAccent(title);
     final icon = _sectionIcon(title);
-    final cardBg = _sectionCardBackground(title);
-    final cardBorder = _sectionCardBorderColor(title);
 
+    // One card, one shape, one weight — for every section of every record type.
+    //
+    // Each section used to carry its own accent on a 3.5px left border, its
+    // icon chip and its title, and Symptoms additionally sat on an orange
+    // card. A four-section record was therefore a four-colour page, and none
+    // of those colours meant anything: they distinguished "Vitals" from
+    // "Fetal Assessment", which are not different in kind or in urgency.
+    //
+    // Colour in this app has a job — it carries clinical severity, on the
+    // blood pressure finding strip and the risk chips. Spending it on section
+    // headings devalues it there, and on a record a midwife reads twenty times
+    // a day it is noise she has to look past to reach a number.
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: cardBorder != null ? Border.all(color: cardBorder) : null,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderPrimary),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(color: accent, width: 3.5),
-            ),
-          ),
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(7),
-                    ),
-                    child: Icon(icon, size: 15, color: accent),
-                  ),
-                  const SizedBox(width: 10),
+                  Icon(icon, size: 15, color: AppColors.brandPrimary),
+                  const SizedBox(width: 8),
                   Expanded(
+                    // Same heading treatment as the weight-gain and blood
+                    // pressure cards on the mother's profile: uppercase,
+                    // letterspaced, quiet. A record and a chart of the same
+                    // pregnancy should not be wearing two different designs.
                     child: Text(
-                      _localizedSectionTitle(title),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: accent,
+                      _localizedSectionTitle(title).toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                        color: Color(0xFF5A5A5A),
                       ),
                     ),
                   ),
@@ -1396,25 +1405,35 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                               symptom.toLowerCase() == 'walang sintomas' ||
                               symptom.toLowerCase() == 'hindi nailagay' ||
                               symptom.toLowerCase() == 'not provided';
+                          // Reported, not graded. This row is a comma-joined
+                          // string; nothing here knows which symptoms were
+                          // marked as danger signs, so colouring them amber
+                          // asserted a severity the screen cannot see. A
+                          // recorded symptom reads as recorded — the risk
+                          // summary above is where severity is stated.
                           return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: isNone
-                                  ? Colors.grey.shade100
-                                  : accent.withValues(alpha: 0.12),
+                                  ? Colors.transparent
+                                  : AppColors.bgSecondary,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: isNone
-                                    ? Colors.grey.shade300
-                                    : accent.withValues(alpha: 0.3),
+                                    ? AppColors.borderPrimary
+                                    : Colors.transparent,
                               ),
                             ),
                             child: Text(
                               symptom,
                               style: TextStyle(
-                                color: isNone ? AppColors.textSecondary : accent,
+                                color: isNone
+                                    ? AppColors.textSecondary
+                                    : AppColors.textPrimary,
                                 fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                                fontWeight:
+                                    isNone ? FontWeight.w500 : FontWeight.w600,
                               ),
                             ),
                           );
@@ -1445,31 +1464,65 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
 
+  /// Gestational age as completed weeks and days.
+  ///
+  /// It is stored as `weeks + days/7`, and was being printed straight through
+  /// — a checkup at 18 weeks 1 day read "18.142857142857142". Completed weeks
+  /// is the obstetric convention and matches how gestation is stated
+  /// everywhere else in the app.
+  String _formatGestationValue(String raw) {
+    final numeric = double.tryParse(raw.replaceAll(RegExp(r'[^0-9.]'), ''));
+    if (numeric == null || numeric <= 0 || numeric > 45) return raw;
+
+    final totalDays = (numeric * 7).round();
+    final weeks = totalDays ~/ 7;
+    final days = totalDays % 7;
+
+    final weekText = weeks == 1 ? '1 week' : '$weeks weeks';
+    if (days == 0) return weekText;
+    return '$weekText ${days == 1 ? '1 day' : '$days days'}';
+  }
+
+  /// A value that says nothing was recorded.
+  ///
+  /// A checkup only captures what the midwife actually did, and a row reading
+  /// "Not provided" is a line of screen spent saying so. Fields left blank are
+  /// dropped instead, so a container holds what was recorded and nothing else,
+  /// and a section with nothing in it does not appear at all.
+  bool _isBlankValue(String value) {
+    const blanks = {
+      '', '-', '—', 'n/a', 'na', 'none', 'notgiven', 'notprovided',
+      'notrecorded', 'norecord', 'hindinailagay', 'walang', 'wala',
+      'nonerecorded', 'notdocumented', 'unknown', 'null',
+    };
+    return blanks.contains(_normalizeForCompare(value));
+  }
+
   List<MapEntry<String, String>> _normalizedDisplayRows() {
     final filtered = <MapEntry<String, String>>[];
 
     for (final row in widget.rows) {
       final label = row.key.trim();
-      final value = row.value.trim();
+      var value = row.value.trim();
       if (label.isEmpty) continue;
 
       final labelKey = _normalizeForCompare(label);
       final valueKey = _normalizeForCompare(value);
 
-      final isEmptyValue = value.isEmpty || value == '-' || value == '—';
-      if (isEmptyValue &&
-          !(labelKey.contains('remarks') || labelKey.contains('notes'))) {
-        continue;
-      }
+      // Nothing recorded is not a finding. Every blank row dropped here is a
+      // row the reader no longer has to scan past to reach a real one.
+      if (_isBlankValue(value)) continue;
 
       if ((labelKey == 'location' || labelKey == 'labtestlocation') &&
           valueKey == 'mobileupload') {
         continue;
       }
 
-      final displayValue =
-          value == '-' || value == '—' ? _t('Not provided', 'Hindi nailagay') : value;
-      filtered.add(MapEntry(label, displayValue));
+      if (labelKey.contains('ageofgestation') || labelKey == 'aog') {
+        value = _formatGestationValue(value);
+      }
+
+      filtered.add(MapEntry(label, value));
     }
 
     return filtered;
@@ -1483,15 +1536,20 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+          // An extracted line without a colon is a statement, not a
+          // measurement. It is shown as written rather than under a blank
+          // label, which would leave a gap where a caption should be.
+          if (label.isNotEmpty) ...[
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
+            const SizedBox(height: 4),
+          ],
           Text(
             value,
             style: TextStyle(
@@ -1509,28 +1567,50 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     );
   }
 
+  /// How this summary came to exist, in the midwife's terms.
+  ///
+  /// `prenatal_checkups.remarks_source` already records one of three states
+  /// when the checkup is saved. The card used to be headed "AI Analysis" with
+  /// an "AI Generated" badge regardless — which is wrong twice over: it claims
+  /// authorship of text the midwife wrote herself, and it hides the case that
+  /// matters most, where a midwife read the AI's draft and corrected it.
+  ({String label, IconData icon}) _summaryProvenance() {
+    switch (_normalizeForCompare(widget.remarksSource ?? '')) {
+      case 'aigeneratedapproved':
+        return (label: _t('AI-assisted', 'Tulong ng AI'), icon: Icons.auto_awesome_rounded);
+      case 'aigeneratededited':
+        return (
+          label: _t('AI-assisted, edited by midwife', 'Tulong ng AI, inayos ng midwife'),
+          icon: Icons.edit_note_rounded
+        );
+      case 'midwifeauthored':
+        return (label: _t('Written by midwife', 'Isinulat ng midwife'), icon: Icons.person_outline_rounded);
+      default:
+        return (label: _t('Checkup summary', 'Buod ng checkup'), icon: Icons.notes_rounded);
+    }
+  }
+
   Widget _buildAiCard(String aiText) {
     final isPrenatal = widget.title.toLowerCase().contains('prenatal');
-
-    // Extract recommendations from AI text for separate display (localized based on selection)
-    final recommendations = _extractRecommendations(_getAiTextForLanguage(aiText));
-    final hasRecommendations = recommendations.isNotEmpty;
+    final provenance = _summaryProvenance();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // AI Analysis card — distinct purple-tinted background
+        // The same white card as every other section. It was a tinted, bordered
+        // panel that announced itself as different from the record it
+        // summarises — and the tint was doing the work a label should do.
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           decoration: BoxDecoration(
-            color: _aiCardBg,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _aiCardBorder.withValues(alpha: 0.3)),
+            border: Border.all(color: AppColors.borderPrimary),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -1540,44 +1620,31 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
             children: [
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: _aiCardBorder.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.psychology_rounded,
-                        size: 16, color: AppColors.brandAccent),
-                  ),
-                  const SizedBox(width: 10),
+                  Icon(provenance.icon,
+                      size: 15, color: AppColors.brandPrimary),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _tAi('AI Analysis', 'AI na Pagsusuri'),
+                      _t('CHECKUP SUMMARY', 'BUOD NG CHECKUP'),
                       style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.brandText,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                        color: Color(0xFF5A5A5A),
                       ),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.brandPrimary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      _tAi('AI Generated', 'Gawa ng AI'),
-                      style: const TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.brandText,
-                      ),
+                  Text(
+                    provenance.label,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               // Language toggle for AI insights
               Align(
                 alignment: Alignment.center,
@@ -1663,7 +1730,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               else
                 _buildFormattedAiText(_getAiTextForLanguage(aiText)),
               const SizedBox(height: 12),
-              _buildApprovalAttribution(),
+              // Approval moved to the top of the record — see build(). It
+              // describes the record, not this card.
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
@@ -1696,11 +1764,11 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           ),
         ),
 
-        // Recommendations card — distinct green-tinted background (if extracted)
-        if (hasRecommendations) ...[
-          const SizedBox(height: 14),
-          _buildRecommendationsCard(recommendations),
-        ],
+        // Recommendations card removed. It re-listed lines already present in
+        // the summary directly above it — "Monitor maternal warning signs"
+        // appeared twice on one screen, once as prose and once as a numbered
+        // item — and its first entry was often just the next visit date, which
+        // the Schedule section already states.
       ],
     );
   }
@@ -1772,93 +1840,6 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     return recommendations;
   }
 
-  /// Recommendations card with green tint
-  Widget _buildRecommendationsCard(List<String> recommendations) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _recommendCardBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _recommendCardBorder.withValues(alpha: 0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: _recommendCardBorder.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.lightbulb_outline,
-                    size: 16, color: Color(0xFF2E7D32)),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                _tAi('Recommendations', 'Mga Rekomendasyon'),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF2E7D32),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ...recommendations.asMap().entries.map((entry) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    margin: const EdgeInsets.only(top: 1),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF66BB6A).withValues(alpha: 0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        '${entry.key + 1}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF2E7D32),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      entry.value,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textPrimary,
-                        height: 1.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
 
   // In record_detail_screen.dart, replace _buildPrenatalAiInsights with:
 
@@ -3704,6 +3685,80 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       children: summaryWidgets,
     );
   }
+
+  /// Sections that are the model talking rather than the document saying.
+  ///
+  /// Extraction and narration were doing two different jobs in one block of
+  /// text. The values came off the page the mother handed over; the assessment
+  /// and recommendations were written about them. Only the first belongs on a
+  /// record of what the lab or the sonologist reported.
+  static const _narrativeSections = {
+    'OVERALL ASSESSMENT',
+    'RECOMMENDATIONS',
+    'RELEVANCE CHECK',
+    'RELEVANCE REASON',
+    'SUMMARY',
+    'EXPLANATION',
+    'WHAT THIS MEANS',
+    'KEY OBSERVATIONS',
+  };
+
+  /// What was read off the document, rendered exactly like every other
+  /// section of every other record.
+  ///
+  /// Deliberately built from [_buildDetailSection] rather than a lookalike:
+  /// cohesion that comes from sharing the widget cannot drift, and this screen
+  /// has eleven separate builders that each reinvented the same card.
+  ///
+  /// Returns an empty box when nothing survives the filter — a heading with no
+  /// values under it is worse than no heading.
+  Widget _buildExtractedFindings(String text) {
+    final sections = _extractAiSections(_getAiTextForLanguage(text));
+    if (sections.isEmpty) return const SizedBox.shrink();
+
+    final cards = <Widget>[];
+
+    for (final entry in sections.entries) {
+      if (_narrativeSections.contains(entry.key.toUpperCase().trim())) continue;
+
+      final rows = <MapEntry<String, String>>[];
+      for (final raw in entry.value) {
+        final line = raw.replaceFirst(RegExp(r'^[-•*\s]+'), '').trim();
+        if (line.isEmpty) continue;
+
+        // "Hemoglobin: 11.2 g/dL" is a measurement and reads as a labelled
+        // row. A line with no colon is a statement, and forcing a label onto
+        // it would invent one.
+        final split = line.indexOf(':');
+        if (split > 0 && split < line.length - 1) {
+          rows.add(MapEntry(
+            line.substring(0, split).trim(),
+            line.substring(split + 1).trim(),
+          ));
+        } else {
+          rows.add(MapEntry('', line));
+        }
+      }
+
+      if (rows.isEmpty) continue;
+      if (cards.isNotEmpty) cards.add(const SizedBox(height: 10));
+      cards.add(_buildDetailSection(_titleCase(entry.key), rows));
+    }
+
+    if (cards.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [const SizedBox(height: 10), ...cards],
+    );
+  }
+
+  String _titleCase(String value) => value
+      .toLowerCase()
+      .split(' ')
+      .where((w) => w.isNotEmpty)
+      .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+      .join(' ');
 
   Widget _buildStructuredAiInsights(String text) {
     final sections = _extractAiSections(text);

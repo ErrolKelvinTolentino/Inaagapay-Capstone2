@@ -172,12 +172,23 @@ class MotherProfileService {
               ''').inFilter('pregnancy_id', pregnancyIds),
 
           // [2] Ultrasounds
+          //
+          // `ultrasound_image` and `lab_test_image` are deliberately NOT
+          // selected here. They hold base64 image data inline — a single
+          // ultrasound measured 3 MB, and one mother's records came to 36 MB
+          // across fifteen rows. Pulling that to draw a list of dates killed
+          // the query at the Postgres statement timeout (57014), the Dart
+          // guard turned the failure into an empty list, and the screen said
+          // "No ultrasounds recorded yet" to a mother who had six.
+          //
+          // Nothing on the list needs the bytes; it renders a date and a type.
+          // The image is fetched by encounter_id when a record is opened, so
+          // one image loads instead of fifteen.
           client.from('ultrasounds').select('''
                 encounter_id,
                 pregnancy_id,
                 ultrasound_date,
                 ultrasound_location,
-                ultrasound_image,
                 remarks:findings_summary,
                 health_worker_name,
                 health_worker_institution,
@@ -192,7 +203,6 @@ class MotherProfileService {
                 pregnancy_id,
                 lab_test_type,
                 lab_test_location,
-                lab_test_image,
                 health_worker_name,
                 health_worker_institution,
                 health_worker_profession,
