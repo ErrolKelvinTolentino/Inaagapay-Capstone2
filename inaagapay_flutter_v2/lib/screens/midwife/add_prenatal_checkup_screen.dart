@@ -19,6 +19,10 @@ import '../../widgets/app_dropdown_field.dart';
 import '../../services/sms_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/prenatal_schedule_engine.dart';
+import '../../services/blood_pressure_reference.dart';
+import '../../services/fetal_heart_rate_reference.dart';
+import '../../services/maternal_td_service.dart';
+import 'maternal_td_screen.dart';
 
 class AddPrenatalCheckupScreen extends StatefulWidget {
   const AddPrenatalCheckupScreen({
@@ -128,68 +132,6 @@ class _RiskSnapshot {
   }
 }
 
-// ── BP classification ────────────────────────────────────────────────────────
-
-enum _BpStatus {
-  unknown,
-  low,
-  normal,
-  elevated,
-  stage1,
-  stage2,
-  severe;
-
-  String get label {
-    switch (this) {
-      case _BpStatus.low:
-        return 'Low BP';
-      case _BpStatus.normal:
-        return 'Normal';
-      case _BpStatus.elevated:
-        return 'Elevated';
-      case _BpStatus.stage1:
-        return 'HTN Stage 1';
-      case _BpStatus.stage2:
-        return 'HTN Stage 2';
-      case _BpStatus.severe:
-        return 'Hypertensive Crisis';
-      default:
-        return '';
-    }
-  }
-
-  Color get color {
-    switch (this) {
-      case _BpStatus.low:
-        return AppColors.info;
-      case _BpStatus.normal:
-        return AppColors.success;
-      case _BpStatus.elevated:
-        return AppColors.warning;
-      case _BpStatus.stage1:
-        return const Color(0xFFE65100);
-      case _BpStatus.stage2:
-        return AppColors.error;
-      case _BpStatus.severe:
-        return const Color(0xFFB71C1C);
-      default:
-        return AppColors.textSecondary;
-    }
-  }
-
-  IconData get icon {
-    switch (this) {
-      case _BpStatus.low:
-        return Icons.arrow_downward_rounded;
-      case _BpStatus.normal:
-        return Icons.check_circle_rounded;
-      case _BpStatus.unknown:
-        return Icons.help_outline;
-      default:
-        return Icons.warning_rounded;
-    }
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -234,8 +176,15 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   String? _midwifeName;
   int? _accountId;
   int _tdStockAvailable = 0;
+  int _tdOpenVialDoses = 0;
+  String? _tdOpenVialBatch;
+  DateTime? _tdOpenVialOpenedAt;
+  int _tdSealedVials = 0;
+  String? _tdNextBatch;
   int _ferrousStockAvailable = 0;
+  String? _ferrousBatchNumber;
   int _calciumStockAvailable = 0;
+  String? _calciumBatchNumber;
   bool _tdGivenOnSite = true;
   _RiskSnapshot? _riskSnapshot;
   String? _lastRiskSignature;
@@ -263,13 +212,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     'Absent',
   ];
 
-  static const List<String> _tdOptions = [
-    'TD 1',
-    'TD 2',
-    'TD 3',
-    'TD 4',
-    'TD 5',
-  ];
 
   @override
   void initState() {
@@ -499,13 +441,21 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     try {
       final batches = await Supabase.instance.client
           .from('inventory_batches')
-          .select('quantity_remaining, expiration_date, status, doses_remaining_in_open_vial, item:inventory_items(name, generic_name, item_type, doses_per_unit)')
+          .select('batch_number, quantity_remaining, expiration_date, status, doses_remaining_in_open_vial, vial_opened_at, item:inventory_items(name, generic_name, item_type, doses_per_unit)')
           .eq('facility_id', facilityId)
-          .eq('status', 'active');
+          .eq('status', 'active')
+          .order('expiration_date', ascending: true);
 
       int tdDoses = 0;
+      int tdOpenDoses = 0;
+      String? tdOpenBatch;
+      DateTime? tdOpenOpenedAt;
+      int tdSealed = 0;
+      String? tdNextBatch;
       int ferrousTabs = 0;
+      String? ferrousBatch;
       int calciumTabs = 0;
+      String? calciumBatch;
       final now = DateTime.now();
 
       for (final b in (batches as List)) {
@@ -522,21 +472,58 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
         final qty = (b['quantity_remaining'] as num?)?.toInt() ?? 0;
         final dosesPerUnit = (item['doses_per_unit'] as num?)?.toInt() ?? 1;
         final openDoses = (b['doses_remaining_in_open_vial'] as num?)?.toInt() ?? 0;
+        final batchNum = b['batch_number']?.toString();
+        final openedAtStr = b['vial_opened_at']?.toString();
+        final openedAt = openedAtStr != null ? DateTime.tryParse(openedAtStr) : null;
 
         if (name.contains('td') || name.contains('tetanus') || generic.contains('tetanus') || (type == 'vaccine' && name.contains('td'))) {
-          tdDoses += (qty * dosesPerUnit) + openDoses;
+          // Check if open vial is past 28-day DOH shelf limit (672 hours)
+          bool isOpenVialValid = true;
+          if (openDoses > 0 && openedAt != null) {
+            if (now.difference(openedAt).inHours >= 672) {
+              isOpenVialValid = false;
+            }
+          }
+
+          if (isOpenVialValid && openDoses > 0) {
+            tdDoses += openDoses;
+            if (tdOpenBatch == null) {
+              tdOpenDoses = openDoses;
+              tdOpenBatch = batchNum;
+              tdOpenOpenedAt = openedAt;
+            }
+          }
+
+          tdDoses += (qty * dosesPerUnit);
+          tdSealed += qty;
+          if (tdNextBatch == null && qty > 0) {
+            tdNextBatch = batchNum;
+          }
         } else if (name.contains('ferrous') || generic.contains('ferrous') || name.contains('iron')) {
           ferrousTabs += qty;
+          if (ferrousBatch == null && qty > 0) {
+            ferrousBatch = batchNum;
+          }
         } else if (name.contains('calcium') || generic.contains('calcium')) {
           calciumTabs += qty;
+          if (calciumBatch == null && qty > 0) {
+            calciumBatch = batchNum;
+          }
         }
       }
 
       if (mounted) {
         setState(() {
           _tdStockAvailable = tdDoses;
+          _tdOpenVialDoses = tdOpenDoses;
+          _tdOpenVialBatch = tdOpenBatch;
+          _tdOpenVialOpenedAt = tdOpenOpenedAt;
+          _tdSealedVials = tdSealed;
+          _tdNextBatch = tdNextBatch;
           _ferrousStockAvailable = ferrousTabs;
+          _ferrousBatchNumber = ferrousBatch;
           _calciumStockAvailable = calciumTabs;
+          _calciumBatchNumber = calciumBatch;
         });
       }
     } catch (e) {
@@ -896,7 +883,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     final fhrText = _fetalBeatCtrl.text.trim().isNotEmpty ? '${_fetalBeatCtrl.text.trim()} bpm' : null;
 
     final reasPoints = <String>[];
-    if (bpText != null && _bpStatus == _BpStatus.normal) {
+    if (bpText != null && _bpCategory == BpCategory.normal) {
       reasPoints.add('Blood pressure ($bpText)');
     }
     if (fhrText != null) {
@@ -936,7 +923,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     final fhrText = _fetalBeatCtrl.text.trim().isNotEmpty ? '${_fetalBeatCtrl.text.trim()} bpm' : null;
 
     final reasPoints = <String>[];
-    if (bpText != null && _bpStatus == _BpStatus.normal) {
+    if (bpText != null && _bpCategory == BpCategory.normal) {
       reasPoints.add('Ang blood pressure ($bpText)');
     }
     if (fhrText != null) {
@@ -1081,10 +1068,11 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     // 1. Blood Pressure Thresholds
     if (systolic != null && diastolic != null) {
       notable.add('Current BP: $systolic/$diastolic mmHg');
-      if (systolic >= 140 || diastolic >= 90) {
+      final bpCat = BloodPressureReference.categorise(systolic, diastolic);
+      if (bpCat == BpCategory.raised || bpCat == BpCategory.severe) {
         isHigh = true;
         factors.add(_RiskFactorItem(
-          factor: 'High blood pressure (>=140/90)',
+          factor: 'Raised blood pressure (>=140/90)',
           influence: 'high',
         ));
         actions
@@ -1095,10 +1083,11 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     // 2. Fetal Heart Rate Thresholds
     if (fetalBeat != null) {
       notable.add('Fetal heart rate: $fetalBeat bpm');
-      if (fetalBeat < 110 || fetalBeat > 160) {
+      final fhrAssessment = FetalHeartRateReference.assess(fetalBeat);
+      if (fhrAssessment.isOutsideBaseline) {
         isHigh = true;
         factors.add(_RiskFactorItem(
-          factor: 'Abnormal fetal heart rate ($fetalBeat bpm)',
+          factor: 'Fetal heart rate outside baseline ($fetalBeat bpm)',
           influence: 'high',
         ));
         actions.add(
@@ -1236,14 +1225,21 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     final String bpAssessmentStr;
 
     if (sysVal != null && diaVal != null) {
-      if (sysVal >= 140 || diaVal >= 90) {
-        bpAssessmentStr = 'HIGH / STAGE 1-2 HYPERTENSION IN PREGNANCY ($sysVal/$diaVal mmHg - Diastolic $diaVal mmHg >= 90 mmHg. DO NOT SAY THIS IS WITHIN EXPECTED RANGE! PUT THIS IN FLAGGED ITEMS SENTENCE 2!)';
-      } else if (sysVal >= 120 || diaVal >= 80) {
-        bpAssessmentStr = 'ELEVATED / PRE-HYPERTENSION ($sysVal/$diaVal mmHg - Systolic $sysVal or Diastolic $diaVal is elevated. DO NOT SAY THIS IS WITHIN EXPECTED RANGE! PUT THIS IN FLAGGED ITEMS SENTENCE 2!)';
-      } else if (sysVal < 90 || diaVal < 60) {
-        bpAssessmentStr = 'LOW / HYPOTENSION ($sysVal/$diaVal mmHg)';
-      } else {
-        bpAssessmentStr = 'WITHIN EXPECTED RANGE ($sysVal/$diaVal mmHg)';
+      final bpCat = BloodPressureReference.categorise(sysVal, diaVal);
+      switch (bpCat) {
+        case BpCategory.severe:
+        case BpCategory.raised:
+          bpAssessmentStr = 'RAISED / HIGH ($sysVal/$diaVal mmHg. DO NOT SAY THIS IS WITHIN EXPECTED RANGE! PUT THIS IN FLAGGED ITEMS SENTENCE 2!)';
+          break;
+        case BpCategory.low:
+          bpAssessmentStr = 'LOW / BELOW STANDARD RANGE ($sysVal/$diaVal mmHg)';
+          break;
+        case BpCategory.normal:
+          bpAssessmentStr = 'WITHIN EXPECTED RANGE ($sysVal/$diaVal mmHg)';
+          break;
+        case BpCategory.unreadable:
+          bpAssessmentStr = 'Not recorded';
+          break;
       }
     } else {
       bpAssessmentStr = 'Not recorded';
@@ -1260,13 +1256,13 @@ HEADER:
 - Tagalog header: "Buod ng Checkup — Linggo $aogWeekStr ng AOG"
 
 SENTENCE 1: THE REASSURANCE ANCHOR
-- Lead ONLY with vitals/findings that are WITHIN EXPECTED RANGE, including ACTUAL NUMBERS (e.g. "Fetal heart rate (${_fetalBeatCtrl.text.trim().isEmpty ? '120 bpm' : '${_fetalBeatCtrl.text.trim()} bpm'}) is within expected range this visit.").
-- CRITICAL BLOOD PRESSURE RULE: ONLY include Blood Pressure in Sentence 1 if Blood Pressure Assessment is explicitly "WITHIN EXPECTED RANGE". If BP is HIGH or ELEVATED (e.g. 120/90 mmHg where diastolic >= 80/90 mmHg), DO NOT put BP in Sentence 1! Place BP in Sentence 2 (Flagged Items)!
+- Lead ONLY with vitals/findings that are WITHIN EXPECTED RANGE, including ACTUAL NUMBERS (e.g. "Fetal heart rate (${_fetalBeatCtrl.text.trim().isEmpty ? '140 bpm' : '${_fetalBeatCtrl.text.trim()} bpm'}) is within expected range this visit.").
+- CRITICAL BLOOD PRESSURE RULE: ONLY include Blood Pressure in Sentence 1 if Blood Pressure Assessment is explicitly "WITHIN EXPECTED RANGE". If BP is RAISED or ELEVATED (e.g. raised systolic or diastolic), DO NOT put BP in Sentence 1! Place BP in Sentence 2 (Flagged Items)!
 - NEVER use the word "normal" or "normal values". Use "within expected range" or "within commonly expected range".
 
 SENTENCE 2: THE FLAGGED ITEMS (DATA, COMPARISON, REASSURANCE, SOFT ACTION)
-- If weight gain, blood pressure (e.g. 120/90 mmHg), edema, or symptoms are flagged or elevated:
-  1. State finding plainly with ACTUAL NUMBERS & COMPARISON (e.g. "Blood pressure was recorded at 120/90 mmHg (elevated diastolic), and weight gain is a bit ahead of pace for this BMI category (+2.0 kg vs. an expected 0–1.2 kg)").
+- If weight gain, blood pressure (e.g. raised reading), edema, or symptoms are flagged or elevated:
+  1. State finding plainly with ACTUAL NUMBERS & COMPARISON (e.g. "Blood pressure was recorded at $sysVal/$diaVal mmHg (raised reading), and weight gain is a bit ahead of pace for this BMI category (+2.0 kg vs. an expected 0–1.2 kg)").
   2. Immediately normalize it if common (e.g. "both are common at this stage and usually settle on their own").
   3. Suggest a soft non-urgent monitoring step (e.g. "but worth tracking closely at your next checkup").
 - If NO items are flagged, write: "All recorded vitals and findings are progressing smoothly for this stage of pregnancy."
@@ -1274,10 +1270,10 @@ SENTENCE 2: THE FLAGGED ITEMS (DATA, COMPARISON, REASSURANCE, SOFT ACTION)
 CRITICAL SAFETY & MIDWIFE POV RULES:
 - REMOVE ALL DISCLAIMER LINES. DO NOT include any line like "General summary, not a diagnosis..."!
 - MIDWIFE POV MANDATE: The midwife is the healthcare provider entering these remarks! NEVER say "with your midwife or healthcare provider" or "consult your midwife". Say "requires clinical evaluation / doctor consultation" if severe.
-- NEVER write "No abnormal vital signs were noted" or claim findings are normal if Blood pressure is HIGH (e.g. 120/100 mmHg) or Edema is Moderate/Severe!
-- If Blood pressure is HIGH (diastolic >= 90 mmHg or systolic >= 140 mmHg) or Edema is Moderate/Severe:
-  * Sentence 1 (Anchor): Lead ONLY with passed vitals (e.g. "Fetal heart rate (120 bpm) is within expected range this visit.").
-  * Sentence 2 (Flagged Items): Plainly state findings: "Blood pressure was recorded at 120/100 mmHg (high diastolic), weight gain is +2.0 kg (above expected), and moderate swelling was observed — these findings require close monitoring and doctor consultation."
+- NEVER write "No abnormal vital signs were noted" or claim findings are normal if Blood pressure is RAISED or Edema is Moderate/Severe!
+- If Blood pressure is RAISED or Edema is Moderate/Severe:
+  * Sentence 1 (Anchor): Lead ONLY with passed vitals (e.g. "Fetal heart rate is within expected range this visit.").
+  * Sentence 2 (Flagged Items): Plainly state findings: "Blood pressure was recorded at $sysVal/$diaVal mmHg (raised reading), weight gain is +2.0 kg (above expected), and moderate swelling was observed — these findings require close monitoring and doctor consultation."
 - KEEP EACH TRANSLATED SECTION CONCISE AND UNDER 280 CHARACTERS TOTAL.
 - Never say "pre-pregnancy weight not provided" or "interpretation is limited".
 - Do NOT use diagnostic or alarmist language.
@@ -1389,70 +1385,44 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     super.dispose();
   }
 
-  List<String> _dbTakenTdDoses = [];
+  /// Canonical maternal Td state.
+  ///
+  /// Read through [MaternalTdService] so this screen and [MaternalTdScreen]
+  /// share one definition of which doses a mother has had. This screen used to
+  /// run its own query and compare raw strings against `'Td$i'`, which silently
+  /// missed doses stored in the legacy `'TD 2'` spelling.
+  MaternalTdStatus _tdStatus = MaternalTdStatus.empty;
 
   Future<void> _loadTakenTdDoses() async {
-    try {
-      final res = await Supabase.instance.client
-          .from('clinical_encounters')
-          .select('prenatal_checkups!inner(td_vaccine_dose)')
-          .eq('mother_id', widget.motherId);
-      if (mounted) {
-        final doses = <String>[];
-        for (final row in (res as List)) {
-          final pc = row['prenatal_checkups'];
-          if (pc != null) {
-            final dose = pc['td_vaccine_dose']?.toString();
-            if (dose != null && dose.isNotEmpty && dose != '-') {
-              doses.add(dose);
-            }
-          }
-        }
-        if (mounted) {
-          setState(() {
-            _dbTakenTdDoses = doses;
-          });
-        }
-      }
-    } catch (_) {}
+    final status = await MaternalTdService.fetchStatus(
+      widget.motherId,
+      extraDoseKeys: widget.takenTdDoses,
+    );
+    if (mounted) {
+      setState(() => _tdStatus = status);
+    }
   }
 
-  Set<String> get _allTakenTdDoses {
-    final set = <String>{};
-    for (final d in widget.takenTdDoses) {
-      if (d.isNotEmpty && d != '-') set.add(d.trim());
-    }
-    for (final d in _dbTakenTdDoses) {
-      if (d.isNotEmpty && d != '-') set.add(d.trim());
-    }
-    return set;
-  }
+  /// One-line answer to "when is her next Td dose?", worded identically to the
+  /// dedicated Td screen.
+  String _prenatalTdTimingLabel() {
+    final next = _tdStatus.nextDoseKey;
+    if (next == null) return 'All 5 doses complete. No further Td needed.';
 
-  int? _parseTdNumber(String doseStr) {
-    final match = RegExp(r'\d+').firstMatch(doseStr);
-    if (match != null) {
-      return int.tryParse(match.group(0)!);
-    }
-    return null;
-  }
-
-  List<String> get _availableTdDoses {
-    final takenSet = _allTakenTdDoses;
-    int maxTakenDoseNum = 0;
-    for (final dose in takenSet) {
-      final num = _parseTdNumber(dose);
-      if (num != null && num > maxTakenDoseNum) {
-        maxTakenDoseNum = num;
-      }
-    }
-
-    if (maxTakenDoseNum > 0) {
-      return _tdOptions.where((opt) {
-        final optNum = _parseTdNumber(opt) ?? 0;
-        return optNum > maxTakenDoseNum;
-      }).toList();
-    } else {
-      return List.from(_tdOptions);
+    switch (_tdStatus.nextAction) {
+      case TdNextAction.eligibleNow:
+        return '$next may be given today.';
+      case TdNextAction.waiting:
+        final on = _tdStatus.nextEligibleDate;
+        final days = _tdStatus.daysUntilEligible;
+        return on == null
+            ? '$next is not due yet.'
+            : 'No Td needed today. $next is due ${DateFormat('MMMM d, yyyy').format(on)} '
+                '($days ${days == 1 ? 'day' : 'days'} to go).';
+      case TdNextAction.missingPrevious:
+        return '${_tdStatus.blockingDoseKey} is missing. Backfill it in the Td module before $next.';
+      case TdNextAction.complete:
+        return 'All 5 doses complete. No further Td needed.';
     }
   }
 
@@ -1501,46 +1471,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     return (days / 7).floorToDouble();
   }
 
-  _BpStatus get _bpStatus {
+  BpCategory get _bpCategory {
     final sys = int.tryParse(_sysCtrl.text.trim());
     final dia = int.tryParse(_diaCtrl.text.trim());
-
-    if (sys == null || dia == null) return _BpStatus.unknown;
-    if (sys <= 0 || dia <= 0) return _BpStatus.unknown;
-
-    // Physiological validation
-    if (sys <= dia) {
-      debugPrint('Warning: Systolic ≤ Diastolic - possible measurement error');
-      return _BpStatus.unknown;
-    }
-
-    // Hypertensive Crisis
-    if (sys > 180 || dia > 120) {
-      return _BpStatus.stage2;
-    }
-
-    // Stage 2 Hypertension
-    if (sys > 140 || dia > 90) {
-      return _BpStatus.stage2;
-    }
-
-    // Stage 1 Hypertension
-    if (sys > 130 || dia > 80) {
-      return _BpStatus.stage1;
-    }
-
-    // Elevated BP
-    if (sys > 120 && dia < 80) {
-      return _BpStatus.elevated;
-    }
-
-    // Hypotension
-    if (sys < 90 || dia < 60) {
-      return _BpStatus.low;
-    }
-
-    // Normal BP
-    return _BpStatus.normal;
+    return BloodPressureReference.categorise(sys, dia);
   }
 
   DateTime _normalizedDate(DateTime value) {
@@ -1674,24 +1608,27 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   }
 
   Widget _bpStatusPill() {
-    final s = _bpStatus;
-    if (s == _BpStatus.unknown) return const SizedBox.shrink();
+    final cat = _bpCategory;
+    if (cat == BpCategory.unreadable) return const SizedBox.shrink();
 
     final String pillLabel;
     final Color pillColor;
 
-    if (s == _BpStatus.normal) {
-      pillLabel = 'NORMAL';
+    if (cat == BpCategory.normal) {
+      pillLabel = 'STANDARD';
       pillColor = AppColors.success;
-    } else if (s == _BpStatus.low) {
+    } else if (cat == BpCategory.low) {
       pillLabel = 'LOW';
       pillColor = const Color(0xFF3B82F6);
+    } else if (cat == BpCategory.severe) {
+      pillLabel = 'CRITICAL';
+      pillColor = const Color(0xFFB71C1C);
     } else {
-      pillLabel = 'ELEVATED';
+      pillLabel = 'RAISED';
       pillColor = AppColors.warning;
     }
 
-    final isLow = s == _BpStatus.low;
+    final isLow = cat == BpCategory.low;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
@@ -1931,34 +1868,42 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     final sys = int.tryParse(_sysCtrl.text.trim());
     final dia = int.tryParse(_diaCtrl.text.trim());
 
-    if (sys == null || dia == null || sys < 70 || sys > 250 || dia < 40 || dia > 150 || sys <= dia) {
+    if (sys == null || dia == null) {
       return const SizedBox.shrink();
     }
 
-    final isLow = sys < 90 || dia < 60;
-    final isSevere = sys >= 160 || dia >= 110;
-    final isHypertensive = (sys >= 140 || dia >= 90) && !isSevere;
+    final category = BloodPressureReference.categorise(sys, dia);
+    if (category == BpCategory.unreadable) {
+      return const SizedBox.shrink();
+    }
 
     String statusText;
     Color statusColor;
     IconData statusIcon;
 
-    if (isSevere) {
-      statusText = 'Severe Hypertension (≥160/110 mmHg) — Immediate Referral Required';
-      statusColor = const Color(0xFFB71C1C);
-      statusIcon = Icons.error_rounded;
-    } else if (isHypertensive) {
-      statusText = 'Hypertension in Pregnancy (≥140/90 mmHg)';
-      statusColor = AppColors.error;
-      statusIcon = Icons.warning_rounded;
-    } else if (isLow) {
-      statusText = 'Low Blood Pressure (<90/60 mmHg)';
-      statusColor = Colors.blue.shade700;
-      statusIcon = Icons.arrow_downward_rounded;
-    } else {
-      statusText = 'Normal Blood Pressure (Within acceptable range)';
-      statusColor = AppColors.success;
-      statusIcon = Icons.check_circle_rounded;
+    switch (category) {
+      case BpCategory.severe:
+        statusText = 'Severely elevated (≥160/110 mmHg) — Immediate Referral Required';
+        statusColor = const Color(0xFFB71C1C);
+        statusIcon = Icons.error_rounded;
+        break;
+      case BpCategory.raised:
+        statusText = 'Raised blood pressure (≥140/90 mmHg) — Repeat and monitor';
+        statusColor = AppColors.error;
+        statusIcon = Icons.warning_rounded;
+        break;
+      case BpCategory.low:
+        statusText = 'Below standard range (<90/60 mmHg)';
+        statusColor = Colors.blue.shade700;
+        statusIcon = Icons.arrow_downward_rounded;
+        break;
+      case BpCategory.normal:
+        statusText = 'Within standard range';
+        statusColor = AppColors.success;
+        statusIcon = Icons.check_circle_rounded;
+        break;
+      case BpCategory.unreadable:
+        return const SizedBox.shrink();
     }
 
     return Container(
@@ -2248,7 +2193,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     setState(() => _nextSchedule = picked);
   }
 
-  Future<void> _insertSupplementRecords() async {
+  Future<void> _insertSupplementRecords(int encounterId) async {
     final client = Supabase.instance.client;
     final checkupDate = _normalizedDate(_checkupDateTime);
 
@@ -2257,7 +2202,9 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     final ferrousQty = int.tryParse(_ferrousQtyCtrl.text.trim());
     if (ferrousQty != null && ferrousQty > 0) {
       givenRows.add({
+        'encounter_id': encounterId,
         'mother_id': widget.motherId,
+        'facility_id': _midwifeBhcId,
         'given_medication_name': 'Ferrous + FA',
         'quantity': ferrousQty,
         'date_given': checkupDate.toIso8601String().split('T')[0],
@@ -2267,7 +2214,9 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     final calciumQty = int.tryParse(_calciumQtyCtrl.text.trim());
     if (calciumQty != null && calciumQty > 0) {
       givenRows.add({
+        'encounter_id': encounterId,
         'mother_id': widget.motherId,
+        'facility_id': _midwifeBhcId,
         'given_medication_name': 'Calcium',
         'quantity': calciumQty,
         'date_given': checkupDate.toIso8601String().split('T')[0],
@@ -2694,9 +2643,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
       await _insertSymptomRecords(encounterId);
 
-      await _insertSupplementRecords();
+      await _insertSupplementRecords(encounterId);
 
       // Atomic inventory deduction for supplements and maternal Td vaccine
+      String? inventorySyncSummary;
       if (_midwifeBhcId != null) {
         try {
           final shouldDeductTd = _tdGivenOnSite &&
@@ -2704,7 +2654,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               _tdDose!.trim().isNotEmpty &&
               _tdDose!.trim() != '-';
 
-          await Supabase.instance.client.rpc(
+          final invResult = await Supabase.instance.client.rpc(
             'deduct_prenatal_encounter_inventory',
             params: {
               'p_encounter_id': encounterId,
@@ -2713,6 +2663,31 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               'p_deduct_td': shouldDeductTd,
             },
           );
+
+          if (invResult is Map) {
+            final deductions = (invResult['deductions'] as List?) ?? [];
+            if (deductions.isNotEmpty) {
+              final parts = <String>[];
+              for (final d in deductions) {
+                if (d is Map) {
+                  final type = d['item_type']?.toString();
+                  if (type == 'supplement') {
+                    parts.add('${d['quantity']} tabs ${d['medication']}');
+                  } else if (type == 'vaccine') {
+                    final mode = d['mode']?.toString();
+                    if (mode == 'open_vial_dose') {
+                      parts.add('${d['dose']} from open vial (${d['doses_remaining_in_vial']} left)');
+                    } else {
+                      parts.add('${d['dose']} (opened sealed vial, ${d['doses_remaining_in_vial']} left in vial)');
+                    }
+                  }
+                }
+              }
+              if (parts.isNotEmpty) {
+                inventorySyncSummary = parts.join(', ');
+              }
+            }
+          }
         } catch (invErr) {
           debugPrint('Prenatal inventory deduction warning: $invErr');
         }
@@ -2781,7 +2756,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       }
 
       if (!mounted) return;
-      _showMessage('Prenatal checkup saved.', type: AppSnackType.success);
+      final successMsg = inventorySyncSummary != null
+          ? 'Prenatal checkup saved & Inventory synced ($inventorySyncSummary).'
+          : 'Prenatal checkup saved.';
+      _showMessage(successMsg, type: AppSnackType.success);
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -3342,13 +3320,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                       size: 14, color: AppColors.textSecondary),
                   const SizedBox(width: 4),
                   Text(
-                    'Normal range: 110 \u2013 160 bpm',
+                    'Standard baseline: ${FhrThresholds.standard.minBpm}–${FhrThresholds.standard.maxBpm} bpm',
                     style: TextStyle(
                       fontSize: 12,
                       color: () {
                         final v = int.tryParse(_fetalBeatCtrl.text.trim());
                         if (v == null) return AppColors.textSecondary;
-                        if (v >= 110 && v <= 160) return AppColors.success;
+                        final assessment = FetalHeartRateReference.assess(v);
+                        if (!assessment.isOutsideBaseline) return AppColors.success;
                         return AppColors.error;
                       }(),
                     ),
@@ -3788,373 +3767,398 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
   }
 
   Widget _buildStep3() {
-    final tdDoseDefinitions = [
-      {'dose': 'Td1', 'timing': 'Early in pregnancy', 'protection': 'Initial sensitization'},
-      {'dose': 'Td2', 'timing': 'At least 4 weeks after Td1', 'protection': '3 years infant & maternal protection'},
-      {'dose': 'Td3', 'timing': 'At least 6 months after Td2', 'protection': '5 years protection'},
-      {'dose': 'Td4', 'timing': 'At least 1 year after Td3', 'protection': '10 years protection'},
-      {'dose': 'Td5', 'timing': 'At least 1 year after Td4', 'protection': 'Lifetime maternal protection'},
-    ];
+    final ferrousEntered = int.tryParse(_ferrousQtyCtrl.text.trim()) ?? 0;
+    final calciumEntered = int.tryParse(_calciumQtyCtrl.text.trim()) ?? 0;
+    final ferrousExceeds = _midwifeBhcId != null && _ferrousStockAvailable > 0 && ferrousEntered > _ferrousStockAvailable;
+    final calciumExceeds = _midwifeBhcId != null && _calciumStockAvailable > 0 && calciumEntered > _calciumStockAvailable;
 
-    final takenSet = _allTakenTdDoses;
+    final highestTd = _tdStatus.highestCompletedDose;
+    final isProtectedAtBirth = _tdStatus.isProtectedAtBirth;
+    final isFim = _tdStatus.isFim;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── 1. Supplements Section ──────────────────────────────────────────
         _sectionCard(
-          title: 'Supplements Dispensing',
+          title: 'Maternal Micronutrient Supplements',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: AppInputField(
-                      hintText: 'Ferrous Sulfate + FA (tabs)',
+              // (A) Ferrous Sulfate + Folic Acid
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: ferrousExceeds ? AppColors.error : AppColors.borderPrimary.withValues(alpha: 0.6),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.medication_rounded, size: 16, color: Color(0xFFDC2626)),
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Ferrous Sulfate + Folic Acid',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        if (_midwifeBhcId != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: _ferrousStockAvailable > 0 ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _ferrousStockAvailable > 0 ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
+                              ),
+                            ),
+                            child: Text(
+                              _ferrousStockAvailable > 0 ? '$_ferrousStockAvailable in stock' : 'Out of stock',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: _ferrousStockAvailable > 0 ? const Color(0xFF065F46) : const Color(0xFF991B1B),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    AppInputField(
+                      hintText: 'Enter tablets to dispense (e.g. 30)',
                       controller: _ferrousQtyCtrl,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       errorText: _ferrousError,
+                      onChanged: (_) => setState(() {}),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    // Quick Presets
+                    Row(
+                      children: [
+                        _buildPresetChip('+30', () {
+                          setState(() => _ferrousQtyCtrl.text = '30');
+                        }),
+                        const SizedBox(width: 6),
+                        _buildPresetChip('+60', () {
+                          setState(() => _ferrousQtyCtrl.text = '60');
+                        }),
+                        const SizedBox(width: 6),
+                        _buildPresetChip('+90', () {
+                          setState(() => _ferrousQtyCtrl.text = '90');
+                        }),
+                        const Spacer(),
+                        if (_ferrousQtyCtrl.text.isNotEmpty)
+                          GestureDetector(
+                            onTap: () => setState(() => _ferrousQtyCtrl.clear()),
+                            child: Text(
+                              'Clear',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (ferrousExceeds) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '⚠️ Entered quantity exceeds BHC stock ($_ferrousStockAvailable available).',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.error),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              if (_midwifeBhcId != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 10, left: 4),
-                  child: Text(
-                    'Available at BHC: $_ferrousStockAvailable tabs',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                      color: _ferrousStockAvailable > 0 ? Colors.grey.shade600 : AppColors.error,
-                    ),
+              const SizedBox(height: 12),
+
+              // (B) Calcium Carbonate
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: calciumExceeds ? AppColors.error : AppColors.borderPrimary.withValues(alpha: 0.6),
                   ),
                 ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: AppInputField(
-                      hintText: 'Calcium Carbonate (tabs)',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.healing_rounded, size: 16, color: Color(0xFF2563EB)),
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Calcium Carbonate (500mg)',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        if (_midwifeBhcId != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: _calciumStockAvailable > 0 ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _calciumStockAvailable > 0 ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
+                              ),
+                            ),
+                            child: Text(
+                              _calciumStockAvailable > 0 ? '$_calciumStockAvailable in stock' : 'Out of stock',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: _calciumStockAvailable > 0 ? const Color(0xFF065F46) : const Color(0xFF991B1B),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    AppInputField(
+                      hintText: 'Enter tablets to dispense (e.g. 30)',
                       controller: _calciumQtyCtrl,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       errorText: _calciumError,
+                      onChanged: (_) => setState(() {}),
                     ),
-                  ),
-                ],
-              ),
-              if (_midwifeBhcId != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, left: 4),
-                  child: Text(
-                    'Available at BHC: $_calciumStockAvailable tabs',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                      color: _calciumStockAvailable > 0 ? Colors.grey.shade600 : AppColors.error,
+                    const SizedBox(height: 8),
+                    // Quick Presets
+                    Row(
+                      children: [
+                        _buildPresetChip('+30', () {
+                          setState(() => _calciumQtyCtrl.text = '30');
+                        }),
+                        const SizedBox(width: 6),
+                        _buildPresetChip('+60', () {
+                          setState(() => _calciumQtyCtrl.text = '60');
+                        }),
+                        const SizedBox(width: 6),
+                        _buildPresetChip('+90', () {
+                          setState(() => _calciumQtyCtrl.text = '90');
+                        }),
+                        const Spacer(),
+                        if (_calciumQtyCtrl.text.isNotEmpty)
+                          GestureDetector(
+                            onTap: () => setState(() => _calciumQtyCtrl.clear()),
+                            child: Text(
+                              'Clear',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
+                    if (calciumExceeds) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '⚠️ Entered quantity exceeds BHC stock ($_calciumStockAvailable available).',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.error),
+                      ),
+                    ],
+                  ],
                 ),
+              ),
             ],
           ),
         ),
         const SizedBox(height: 14),
 
-        // ── 2. Maternal Td Immunization Timeline & Inventory Section ────────
+        // ── 2. Maternal Td Immunization Status Card ──────────────────────────
         _sectionCard(
-          title: 'Maternal Td Immunization',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'DOH Td Vaccination Tracker',
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+          title: 'Maternal Td Immunization Status',
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isFim || isProtectedAtBirth ? const Color(0xFFF0FDF4) : const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isFim || isProtectedAtBirth ? const Color(0xFFBBF7D0) : const Color(0xFFFDE68A),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      isFim || isProtectedAtBirth ? Icons.shield_rounded : Icons.vaccines_rounded,
+                      size: 20,
+                      color: isFim || isProtectedAtBirth ? const Color(0xFF16A34A) : const Color(0xFFD97706),
                     ),
-                  ),
-                  if (_midwifeBhcId != null)
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isFim
+                            ? 'Fully Immunized Mother (FIM ⭐)'
+                            : (highestTd > 0 ? 'Td$highestTd Recorded' : 'No Td Recorded'),
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: isFim || isProtectedAtBirth ? const Color(0xFF166534) : const Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
-                        color: _tdStockAvailable > 0 ? Colors.teal.shade50 : Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _tdStockAvailable > 0 ? Colors.teal.shade200 : Colors.red.shade200,
-                        ),
+                        color: isFim || isProtectedAtBirth ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        'BHC Stock: $_tdStockAvailable dose${_tdStockAvailable == 1 ? '' : 's'}',
+                        isFim ? 'LIFETIME' : (isProtectedAtBirth ? 'PAB PROTECTED' : 'UNPROTECTED'),
                         style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: _tdStockAvailable > 0 ? Colors.teal.shade800 : AppColors.error,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: isFim || isProtectedAtBirth ? const Color(0xFF166534) : const Color(0xFF92400E),
                         ),
                       ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // DOH 5-Dose Protection Timeline Grid
-              Column(
-                children: tdDoseDefinitions.map((d) {
-                  final doseKey = d['dose']!;
-                  final isCompleted = takenSet.contains(doseKey);
-                  final isSelectedToday = _tdDose == doseKey;
-                  final isAvailable = _availableTdDoses.contains(doseKey);
-
-                  Color cardBg = Colors.white;
-                  Color borderColor = Colors.grey.shade200;
-                  Widget statusBadge = const SizedBox.shrink();
-
-                  if (isCompleted) {
-                    cardBg = Colors.green.shade50.withValues(alpha: 0.6);
-                    borderColor = Colors.green.shade200;
-                    statusBadge = Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade100,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_circle, size: 12, color: Colors.green.shade800),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Completed',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green.shade900,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  } else if (isSelectedToday) {
-                    cardBg = AppColors.brandPrimary.withValues(alpha: 0.08);
-                    borderColor = AppColors.brandPrimary;
-                    statusBadge = Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.brandPrimary,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text(
-                        'Giving Today',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    );
-                  } else if (isAvailable) {
-                    borderColor = Colors.amber.shade400;
-                    statusBadge = Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.amber.shade300),
-                      ),
-                      child: Text(
-                        'Next Recommended',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.amber.shade900,
-                        ),
-                      ),
-                    );
-                  }
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8.0),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: isCompleted
-                          ? null
-                          : () {
-                              setState(() {
-                                if (_tdDose == doseKey) {
-                                  _tdDose = null;
-                                } else {
-                                  _tdDose = doseKey;
-                                }
-                              });
-                            },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: cardBg,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: borderColor, width: isSelectedToday ? 1.5 : 1.0),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: isCompleted
-                                    ? Colors.green.shade600
-                                    : (isSelectedToday ? AppColors.brandPrimary : Colors.grey.shade100),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  doseKey,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: (isCompleted || isSelectedToday) ? Colors.white : Colors.grey.shade700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        d['timing']!,
-                                        style: const TextStyle(
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.textPrimary,
-                                        ),
-                                      ),
-                                      statusBadge,
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    d['protection']!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-
-              // Administration mode selection when a dose is chosen
-              if (_tdDose != null && _tdDose!.isNotEmpty && _tdDose != '-') ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.shade200),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isFim
+                      ? 'Lifetime maternal and neonatal tetanus protection achieved.'
+                      : (isProtectedAtBirth
+                          ? 'Baby is Protected at Birth (PAB). Manage or backfill remaining doses in the dedicated Td module.'
+                          : 'DOH recommends starting or updating Td doses as early as possible in pregnancy.'),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: isFim || isProtectedAtBirth ? const Color(0xFF14532D) : const Color(0xFF78350F),
+                    height: 1.3,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Vaccine Administration Source',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
+                ),
+
+                // Next-dose timing, mirroring the Td screen so the two views
+                // never tell the midwife different things.
+                if (!isFim) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isProtectedAtBirth
+                            ? const Color(0xFFBBF7D0)
+                            : const Color(0xFFFDE68A),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ChoiceChip(
-                              label: const Text('Administered at BHC'),
-                              selected: _tdGivenOnSite,
-                              selectedColor: AppColors.brandPrimary.withValues(alpha: 0.15),
-                              labelStyle: TextStyle(
-                                fontSize: 12,
-                                fontWeight: _tdGivenOnSite ? FontWeight.bold : FontWeight.normal,
-                                color: _tdGivenOnSite ? AppColors.brandPrimary : Colors.grey.shade700,
-                              ),
-                              onSelected: (val) {
-                                if (val) setState(() => _tdGivenOnSite = true);
-                              },
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _tdStatus.canAdministerToday
+                              ? Icons.event_available_rounded
+                              : Icons.schedule_rounded,
+                          size: 14,
+                          color: _tdStatus.canAdministerToday
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFF92400E),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _prenatalTdTimingLabel(),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: _tdStatus.canAdministerToday
+                                  ? const Color(0xFF15803D)
+                                  : const Color(0xFF78350F),
+                              height: 1.25,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ChoiceChip(
-                              label: const Text('Outside Clinic / Hospital'),
-                              selected: !_tdGivenOnSite,
-                              selectedColor: Colors.blue.shade50,
-                              labelStyle: TextStyle(
-                                fontSize: 12,
-                                fontWeight: !_tdGivenOnSite ? FontWeight.bold : FontWeight.normal,
-                                color: !_tdGivenOnSite ? Colors.blue.shade800 : Colors.grey.shade700,
-                              ),
-                              onSelected: (val) {
-                                if (val) setState(() => _tdGivenOnSite = false);
-                              },
-                            ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.brandPrimary,
+                      side: const BorderSide(color: AppColors.brandPrimary),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.vaccines_rounded, size: 16),
+                    label: const Text(
+                      'Manage Td Vaccine Records & Doses',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MaternalTdScreen(
+                            motherId: widget.motherId,
+                            assignedBhcId: _midwifeBhcId,
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: _tdGivenOnSite ? Colors.teal.shade50 : Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              _tdGivenOnSite ? Icons.inventory_2_outlined : Icons.info_outline,
-                              size: 14,
-                              color: _tdGivenOnSite ? Colors.teal.shade800 : Colors.blue.shade800,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                _tdGivenOnSite
-                                    ? '1 dose will be deducted from active BHC Td vaccine inventory on save.'
-                                    : 'Record only. No BHC inventory will be deducted.',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: _tdGivenOnSite ? Colors.teal.shade900 : Colors.blue.shade900,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      );
+                      // Refresh maternal Td state
+                      _loadTakenTdDoses();
+                    },
                   ),
                 ),
               ],
-            ],
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPresetChip(String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFCBD5E1)),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+        ),
+      ),
     );
   }
 
@@ -4490,12 +4494,20 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     final sys = int.tryParse(_sysCtrl.text.trim());
     final dia = int.tryParse(_diaCtrl.text.trim());
     if (sys != null && dia != null) {
-      if (sys >= 160 || dia >= 110) {
-        factors.add('Severe Hypertension (≥160/110 mmHg)');
-      } else if (sys >= 140 || dia >= 90) {
-        factors.add('Hypertension in Pregnancy (≥140/90 mmHg)');
-      } else if (sys < 90 || dia < 60) {
-        factors.add('Low Blood Pressure (<90/60 mmHg)');
+      final bpCat = BloodPressureReference.categorise(sys, dia);
+      switch (bpCat) {
+        case BpCategory.severe:
+          factors.add('Severely elevated blood pressure (≥160/110 mmHg)');
+          break;
+        case BpCategory.raised:
+          factors.add('Raised blood pressure (≥140/90 mmHg)');
+          break;
+        case BpCategory.low:
+          factors.add('Below standard blood pressure (<90/60 mmHg)');
+          break;
+        case BpCategory.normal:
+        case BpCategory.unreadable:
+          break;
       }
     }
 
@@ -4722,7 +4734,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             _summaryRow(
               'TD Vaccine Dose',
               _tdDose ??
-                  (_availableTdDoses.isEmpty
+                  (_tdStatus.isFim
                       ? 'Complete (all doses given)'
                       : 'None given today'),
             ),

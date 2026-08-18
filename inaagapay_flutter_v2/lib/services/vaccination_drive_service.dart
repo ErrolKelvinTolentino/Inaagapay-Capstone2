@@ -511,6 +511,34 @@ class VaccinationDriveService {
         }
       }
 
+      // Doses given through the dedicated Td module never touch a prenatal
+      // checkup row, so the join above cannot see them. Without this a mother
+      // who received Td2 in the Td screen last week would still be invited to
+      // a Td2 drive. `maternal_td_records` is the authoritative table.
+      try {
+        final tdRecords = await SupabaseService.client
+            .from('maternal_td_records')
+            .select('mother_id, dose_number, vaccination_date')
+            .inFilter('mother_id', mothersCurrentlyPregnant.toList());
+
+        for (final row in List<Map<String, dynamic>>.from(tdRecords)) {
+          final motherId = _int(row['mother_id']);
+          if (motherId == null) continue;
+
+          final dose = parseDoseNumber(row['dose_number']?.toString());
+          if (dose == null) continue;
+
+          if (dose > (highestDose[motherId] ?? 0)) {
+            highestDose[motherId] = dose;
+            final when =
+                DateTime.tryParse(row['vaccination_date']?.toString() ?? '');
+            if (when != null) doseGivenOn[motherId] = when;
+          }
+        }
+      } catch (_) {
+        // Non-fatal: fall back to the checkup-derived doses above.
+      }
+
       final when = driveDate ?? DateTime.now();
       final recipients = <DriveRecipient>[];
       for (final motherId in mothersCurrentlyPregnant) {
