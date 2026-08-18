@@ -141,7 +141,8 @@ class InventoryRepository {
             .select(
               'item_id, name, generic_name, item_code, '
               'strength_description, dosage_form, item_type, '
-              'unit_of_measure, minimum_stock_threshold',
+              'unit_of_measure, minimum_stock_threshold, '
+              'doses_per_unit, open_vial_shelf_hours',
             )
             .order('name'),
         _client
@@ -149,7 +150,8 @@ class InventoryRepository {
             .select(
               'batch_id, item_id, facility_id, batch_number, '
               'quantity_received, quantity_remaining, received_date, '
-              'expiration_date, manufacturer, status',
+              'expiration_date, manufacturer, status, '
+              'doses_remaining_in_open_vial, open_vials_count, vial_opened_at',
             )
             .eq('facility_id', context.facilityId)
             .order('expiration_date'),

@@ -16,6 +16,7 @@ import '../../widgets/main_header.dart';
 import '../../widgets/overview_info.dart';
 import '../../widgets/secondary_button.dart';
 import '../../widgets/tab_button.dart';
+import '../midwife/midwife_notification_center.dart';
 import 'inventory_models.dart' as live;
 import 'inventory_repository.dart';
 
@@ -62,7 +63,6 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
   int? _subscribedFacilityId;
   bool _notificationsInitialized = false;
   bool _notificationRefreshInFlight = false;
-  bool _notificationRealtimeConnected = false;
   bool _inventoryRealtimeConnected = false;
   bool _stockActivityAvailable = true;
   String? _stockActivityMessage;
@@ -151,6 +151,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               batchNumber: stock.batchLabel,
               batches: stock.batches,
               icon: _itemIcon(stock.catalog.itemType),
+              dosesPerUnit: stock.catalog.dosesPerUnit,
+              openVialShelfHours: stock.catalog.openVialShelfHours,
             ),
           )
           .toList();
@@ -378,6 +380,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
   List<InventoryItem> get _lowStockItems =>
       _inventory.where((item) => item.isLowStock).toList();
 
+  List<InventoryItem> get _openVialItems =>
+      _inventory.where((item) => item.hasOpenVial).toList();
+
   List<InventoryItem> get _expiryAttentionItems {
     final items = _inventory
         .where(
@@ -452,15 +457,10 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     _notificationPollingTimer?.cancel();
     _notificationAccountId = context.accountId;
     _notificationsInitialized = false;
-    _notificationRealtimeConnected = false;
 
     _notificationChannel = _repository.subscribeToInventoryNotifications(
       context: context,
       onNotification: _handleRealtimeInventoryNotification,
-      onConnectionChanged: (connected) {
-        if (!mounted || _notificationAccountId != context.accountId) return;
-        setState(() => _notificationRealtimeConnected = connected);
-      },
     );
 
     _notificationPollingTimer = Timer.periodic(
@@ -573,74 +573,18 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     );
   }
 
-  Future<void> _markInventoryNotificationsRead(
-    List<live.InventoryNotificationRecord> notifications,
-  ) async {
-    final unreadIds = notifications
-        .where((notification) => !notification.isRead)
-        .map((notification) => notification.notificationId)
-        .toSet();
-    if (unreadIds.isEmpty) return;
-
-    if (mounted) {
-      setState(() {
-        for (var index = 0; index < _inventoryNotifications.length; index++) {
-          final notification = _inventoryNotifications[index];
-          if (unreadIds.contains(notification.notificationId)) {
-            _inventoryNotifications[index] =
-                notification.copyWith(isRead: true);
-          }
-        }
-      });
-    }
-
-    try {
-      await _repository.markInventoryNotificationsRead(unreadIds);
-    } catch (_) {
-      // Reading the feed should not be blocked by a transient sync failure.
-    }
-  }
-
   Widget _buildInventoryHeader() {
-    final topInset = MediaQuery.paddingOf(context).top;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        MainHeader(
-          title: 'Inventory',
-          onNotificationTap: _showNotificationSheet,
-          onSettings: () => Navigator.pushNamed(context, '/settings'),
-          onLogout: _logout,
-        ),
-        if (_unreadNotificationCount > 0)
-          Positioned(
-            top: topInset + 9,
-            right: 61,
-            child: IgnorePointer(
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.brandAccent,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white, width: 1.5),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  _unreadNotificationCount > 99
-                      ? '99+'
-                      : '$_unreadNotificationCount',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    height: 1,
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
+    return MainHeader(
+      title: 'Inventory',
+      showBackButton: true,
+      onBack: () => Navigator.of(context).maybePop(),
+      onNotificationTap: () async {
+        await MidwifeNotificationCenter.show(context);
+        if (mounted) unawaited(_loadLiveInventory(refresh: true));
+      },
+      notificationCount: _unreadNotificationCount,
+      onSettings: () => Navigator.pushNamed(context, '/settings'),
+      onLogout: _logout,
     );
   }
 
@@ -1015,6 +959,16 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               child: _buildIncomingShipmentCard(shipment),
             ),
           ),
+        if (_openVialItems.isNotEmpty) ...[
+          const SizedBox(height: 26),
+          _sectionHeading(
+            'ACTIVE OPEN MULTI-DOSE VIALS',
+            actionLabel: 'View batches',
+            onAction: () => setState(() => _selectedTab = 1),
+          ),
+          const SizedBox(height: 12),
+          _buildOpenVialsOverviewCard(),
+        ],
         const SizedBox(height: 26),
         _sectionHeading(
           'EXPIRY ATTENTION',
@@ -1061,6 +1015,136 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         const SizedBox(height: 10),
         _buildRecentActivityCard(),
       ],
+    );
+  }
+
+  Widget _buildOpenVialsOverviewCard() {
+    final openItems = _openVialItems;
+    if (openItems.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFA7F3D0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF059669),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.colorize_rounded, size: 14, color: Colors.white),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'OPEN MULTI-DOSE VIALS',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF065F46),
+                  letterSpacing: 0.4,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD1FAE5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${openItems.length} in use',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF047857),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...openItems.map((item) {
+            final openBatches = item.batches.where((b) => b.isUsableOn() && b.dosesRemainingInOpenVial > 0);
+            return Column(
+              children: openBatches.map((b) {
+                final dpu = item.dosesPerUnit;
+                final dosesLeft = b.dosesRemainingInOpenVial;
+                final isExpired = b.isExpiredOpenVial(item.openVialShelfHours);
+                return Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isExpired ? const Color(0xFFFECACA) : const Color(0xFFD1FAE5),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.name,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.brandText,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Batch #${b.batchNumber} • $dosesLeft of $dpu doses remaining',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isExpired ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isExpired ? const Color(0xFFFEE2E2) : const Color(0xFFECFDF5),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          isExpired ? 'EXPIRED (> ${item.openVialShelfHours}h)' : 'Active (${item.openVialShelfHours}h limit)',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: isExpired ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          }),
+        ],
+      ),
     );
   }
 
@@ -2207,7 +2291,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                       const SizedBox(height: 2),
                     ],
                     Text(
-                      '${item.category} • ${item.usableBatches.length} usable batch${item.usableBatches.length == 1 ? '' : 'es'}',
+                      item.isMultiDose
+                          ? '${item.category} • ${item.dosesPerUnit} doses/unit${item.hasOpenVial ? ' • 💉 Open: ${item.openVialDoses} doses' : ''}'
+                          : '${item.category} • ${item.usableBatches.length} usable batch${item.usableBatches.length == 1 ? '' : 'es'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -2235,7 +2321,11 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               Expanded(
                 child: _DetailValue(
                   label: 'ON HAND',
-                  value: '${item.quantity} ${item.unit} usable',
+                  value: item.isMultiDose
+                      ? (item.hasOpenVial
+                          ? '${item.quantity} sealed + ${item.openVialDoses} open (${item.totalAvailableDoses} doses)'
+                          : '${item.quantity} ${item.unit} (${item.totalAvailableDoses} doses)')
+                      : '${item.quantity} ${item.unit} usable',
                   valueColor: AppColors.textPrimary,
                 ),
               ),
@@ -3301,8 +3391,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                                             : 'Choose a batch',
                                     leadingIcon: Icons.qr_code_2_rounded,
                                     options: batchOptions,
-                                    displayStringForOption: (option) =>
-                                        'Batch ${option.batchNumber} • ${option.quantityRemaining} left • ${_batchExpiryLabel(option)}',
+                                    displayStringForOption: (option) => selectedItem != null && selectedItem!.isMultiDose
+                                        ? 'Batch ${option.batchNumber} • ${option.quantityRemaining} sealed${option.dosesRemainingInOpenVial > 0 ? ' + ${option.dosesRemainingInOpenVial} open doses' : ''} • ${_batchExpiryLabel(option)}'
+                                        : 'Batch ${option.batchNumber} • ${option.quantityRemaining} left • ${_batchExpiryLabel(option)}',
                                     errorText: batchError,
                                     onSelected: (value) {
                                       setModalState(() {
@@ -3548,7 +3639,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               expired
                   ? '${_batchExpiryLabel(batch)}. This batch is blocked from dispensing.'
                   : isDispense
-                      ? 'Earliest-expiring batch • up to ${batch.quantityRemaining} ${item.unit} in this record • ${_batchExpiryLabel(batch)}.${item.quantity > batch.quantityRemaining ? ' Save once, then repeat for the next batch if more is needed.' : ''}'
+                      ? (item.isMultiDose
+                          ? 'Multi-dose (${item.dosesPerUnit} doses/unit) • ${batch.quantityRemaining} sealed vials${batch.dosesRemainingInOpenVial > 0 ? ' • 💉 ${batch.dosesRemainingInOpenVial} doses in open vial' : ''} • ${_batchExpiryLabel(batch)}.'
+                          : 'Earliest-expiring batch • up to ${batch.quantityRemaining} ${item.unit} in this record • ${_batchExpiryLabel(batch)}.${item.quantity > batch.quantityRemaining ? ' Save once, then repeat for the next batch if more is needed.' : ''}')
                       : '${batch.quantityRemaining} ${item.unit} remain in this batch • ${_batchExpiryLabel(batch)}.',
               style: const TextStyle(
                 color: AppColors.textPrimary,
@@ -3957,218 +4050,6 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     );
   }
 
-  Future<void> _showNotificationSheet() async {
-    final visibleNotifications =
-        List<live.InventoryNotificationRecord>.from(_inventoryNotifications);
-    final sheetFuture = showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        return SafeArea(
-          top: false,
-          child: FractionallySizedBox(
-            heightFactor: 0.76,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
-              decoration: const BoxDecoration(
-                color: AppColors.bgPrimary,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.borderPrimary,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'INVENTORY NOTIFICATIONS',
-                          style: TextStyle(
-                            color: AppColors.brandText,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: (_notificationRealtimeConnected
-                                  ? AppColors.success
-                                  : AppColors.warning)
-                              .withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                color: _notificationRealtimeConnected
-                                    ? AppColors.success
-                                    : AppColors.warning,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              _notificationRealtimeConnected
-                                  ? 'LIVE'
-                                  : 'AUTO-CHECK',
-                              style: TextStyle(
-                                color: _notificationRealtimeConnected
-                                    ? AppColors.success
-                                    : AppColors.warning,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  const Text(
-                    'RHU request updates and low-stock changes appear here automatically.',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                      height: 1.35,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Expanded(
-                    child: ListView(
-                      padding: EdgeInsets.zero,
-                      children: [
-                        if (visibleNotifications.isEmpty)
-                          const _NotificationTile(
-                            icon: Icons.notifications_none_rounded,
-                            color: AppColors.info,
-                            title: 'No RHU request updates yet',
-                            message:
-                                'New approvals, rejections, and stock issues will appear here.',
-                          )
-                        else
-                          ...visibleNotifications.map(
-                            (notification) => _NotificationTile(
-                              icon: _notificationIcon(notification.kind),
-                              color: _notificationColor(notification.kind),
-                              title: notification.displayTitle,
-                              message: notification.message,
-                              timestamp: _dateTimeLabel(notification.createdAt),
-                              isUnread: !notification.isRead,
-                              onTap: () {
-                                Navigator.pop(sheetContext);
-                                setState(() {
-                                  _selectedTab = switch (notification.kind) {
-                                    live.InventoryNotificationKind.issued => 0,
-                                    live.InventoryNotificationKind.lowStock =>
-                                      1,
-                                    _ => 2,
-                                  };
-                                });
-                              },
-                            ),
-                          ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'CURRENT ATTENTION',
-                          style: TextStyle(
-                            color: AppColors.brandText,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 9),
-                        if (_pendingShipmentCount > 0)
-                          _NotificationTile(
-                            icon: Icons.inventory_2_rounded,
-                            color: AppColors.brandPrimary,
-                            title: 'Incoming stock needs your confirmation',
-                            message:
-                                '$_pendingShipmentCount issue ${_pendingShipmentCount == 1 ? 'is' : 'are'} waiting from RHU Main.',
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              setState(() => _selectedTab = 0);
-                            },
-                          ),
-                        if (_lowStockItems.isNotEmpty)
-                          _NotificationTile(
-                            icon: Icons.warning_amber_rounded,
-                            color: AppColors.warning,
-                            title:
-                                '${_lowStockItems.length} item${_lowStockItems.length == 1 ? '' : 's'} need replenishing',
-                            message:
-                                'Open My Stock to review supplies below the re-order level.',
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              setState(() => _selectedTab = 1);
-                            },
-                          ),
-                        if (_pendingShipmentCount == 0 &&
-                            _lowStockItems.isEmpty)
-                          const _NotificationTile(
-                            icon: Icons.check_circle_outline_rounded,
-                            color: AppColors.success,
-                            title: 'Nothing needs attention',
-                            message:
-                                'Your current deliveries and stock levels are clear.',
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    unawaited(_markInventoryNotificationsRead(visibleNotifications));
-    await sheetFuture;
-  }
-
-  IconData _notificationIcon(live.InventoryNotificationKind kind) {
-    return switch (kind) {
-      live.InventoryNotificationKind.approved =>
-        Icons.check_circle_outline_rounded,
-      live.InventoryNotificationKind.rejected => Icons.cancel_outlined,
-      live.InventoryNotificationKind.issued => Icons.local_shipping_outlined,
-      live.InventoryNotificationKind.lowStock => Icons.warning_amber_rounded,
-    };
-  }
-
-  Color _notificationColor(live.InventoryNotificationKind kind) {
-    return switch (kind) {
-      live.InventoryNotificationKind.approved => AppColors.success,
-      live.InventoryNotificationKind.rejected => AppColors.error,
-      live.InventoryNotificationKind.issued => AppColors.brandPrimary,
-      live.InventoryNotificationKind.lowStock => AppColors.warning,
-    };
-  }
-
   Future<void> _logout() async {
     await PushNotificationService.removeToken();
     await AuthStorage.clearAll();
@@ -4355,6 +4236,8 @@ class InventoryItem {
     required this.batchNumber,
     required this.batches,
     required this.icon,
+    this.dosesPerUnit = 1,
+    this.openVialShelfHours = 6,
   });
 
   final int itemId;
@@ -4370,6 +4253,18 @@ class InventoryItem {
   final String batchNumber;
   final List<live.InventoryBatchRecord> batches;
   final IconData icon;
+  final int dosesPerUnit;
+  final int openVialShelfHours;
+
+  bool get isMultiDose => dosesPerUnit > 1;
+
+  int get openVialDoses => batches
+      .where((b) => b.isUsableOn())
+      .fold(0, (sum, b) => sum + b.dosesRemainingInOpenVial);
+
+  int get totalAvailableDoses => (quantity * dosesPerUnit) + openVialDoses;
+
+  bool get hasOpenVial => openVialDoses > 0;
 
   bool get isLowStock => quantity <= minimumStock;
 
@@ -4879,135 +4774,6 @@ class _FormLabel extends StatelessWidget {
         color: AppColors.textPrimary,
         fontSize: 13,
         fontWeight: FontWeight.w700,
-      ),
-    );
-  }
-}
-
-class _NotificationTile extends StatelessWidget {
-  const _NotificationTile({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.message,
-    this.timestamp,
-    this.isUnread = false,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String message;
-  final String? timestamp;
-  final bool isUnread;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: isUnread
-            ? AppColors.brandPrimary.withValues(alpha: 0.055)
-            : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isUnread
-                    ? AppColors.brandPrimary.withValues(alpha: 0.3)
-                    : AppColors.borderPrimary,
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: Icon(icon, color: color, size: 19),
-                ),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          if (isUnread) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              width: 8,
-                              height: 8,
-                              margin: const EdgeInsets.only(top: 4),
-                              decoration: const BoxDecoration(
-                                color: AppColors.brandAccent,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        message,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
-                          height: 1.35,
-                        ),
-                      ),
-                      if (timestamp != null) ...[
-                        const SizedBox(height: 7),
-                        Text(
-                          timestamp!,
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (onTap != null) ...[
-                  const SizedBox(width: 6),
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Icon(
-                      Icons.chevron_right_rounded,
-                      size: 20,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

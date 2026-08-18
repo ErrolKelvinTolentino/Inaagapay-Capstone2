@@ -18,6 +18,7 @@ import '../../widgets/app_snackbar.dart';
 import '../shared/record_detail_screen.dart';
 import '../../services/mother_profile_service.dart';
 import 'midwife_shell.dart';
+import 'midwife_notification_center.dart';
 
 class MidwifeDashboard extends StatefulWidget {
   final ValueNotifier<int>? refreshNotifier;
@@ -1981,7 +1982,69 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                             const SizedBox(height: 16),
                           ],
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
+
+                          // Stock & Clinical Alerts Quick Hub Banner
+                          GestureDetector(
+                            onTap: () => MidwifeNotificationCenter.show(context),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)],
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: const Color(0xFFFDE68A)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFF59E0B),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 16),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Active Alerts & Stock Notifications',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF92400E),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Tap to view inventory warnings, expiries, requests & clinical alerts',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.amber.shade900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(Icons.chevron_right_rounded, color: Color(0xFF92400E), size: 20),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
 
                           // What needs doing, before what has happened. The
                           // numbers further down describe the caseload; this

@@ -3,11 +3,13 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
+import '../../services/notification_service.dart';
 import '../../services/push_notification_service.dart';
 import 'midwife_dashboard.dart';
 import 'midwife_mothers_screen.dart';
 import 'midwife_children_screen.dart';
 import 'midwife_schedules_screen.dart';
+import 'midwife_notification_center.dart';
 import '../../widgets/main_header.dart';
 
 class MidwifeShell extends StatefulWidget {
@@ -31,6 +33,7 @@ class MidwifeShell extends StatefulWidget {
 
 class _MidwifeShellState extends State<MidwifeShell> {
   int _currentIndex = 0;
+  int _unreadAlertCount = 0;
   final ValueNotifier<int> _refreshNotifier = ValueNotifier<int>(0);
   final List<bool> _visitedTabs = [true, false, false, false];
 
@@ -41,11 +44,30 @@ class _MidwifeShellState extends State<MidwifeShell> {
     'SCHEDULES',
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _loadUnreadCount();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    try {
+      final accountId = await AuthStorage.getUserId();
+      if (accountId != null) {
+        final count = await NotificationService.getUnreadCount(accountId);
+        if (mounted) {
+          setState(() => _unreadAlertCount = count);
+        }
+      }
+    } catch (_) {}
+  }
+
   void _onTabSelected(int index) {
     setState(() {
       _currentIndex = index;
       _visitedTabs[index] = true;
     });
+    _loadUnreadCount();
     if (index == 0) {
       _refreshNotifier.value++;
     }
@@ -74,6 +96,11 @@ class _MidwifeShellState extends State<MidwifeShell> {
             // Header is here - only once
             MainHeader(
               title: _titles[_currentIndex],
+              onNotificationTap: () async {
+                await MidwifeNotificationCenter.show(context);
+                _loadUnreadCount();
+              },
+              notificationCount: _unreadAlertCount,
               onViewProfile: () => Navigator.pushNamed(context, '/profile'),
               onSettings: () => Navigator.pushNamed(context, '/settings'),
               onHelp: () => Navigator.pushNamed(context, '/help'),

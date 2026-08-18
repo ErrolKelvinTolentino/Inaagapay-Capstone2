@@ -66,7 +66,7 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
 
       childData = childResponse;
 
-      // Fetch immunization records with vaccine details
+      // Fetch immunization records with vaccine details and batch number
       final immunizationResponse = await Supabase.instance.client
           .from('immunization_records')
           .select('''
@@ -77,6 +77,9 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
               dose_number,
               recommended_age_months,
               notes
+            ),
+            batch:inventory_batch_id (
+              batch_number
             )
           ''')
           .eq('child_id', widget.childId)
@@ -291,11 +294,15 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
                             itemBuilder: (context, index) {
                               final record = records[index];
                               final vaccine = record['vaccine'] as Map<String, dynamic>?;
+                              final batch = record['batch'] as Map<String, dynamic>?;
                               final vaccineName = vaccine?['vaccine_name']?.toString() ?? 'Unknown Vaccine';
                               final doseNumber = vaccine?['dose_number']?.toString() ?? '';
                               final notes = vaccine?['notes']?.toString() ?? '';
                               final date = record['vaccination_date']?.toString() ?? '';
                               final remarks = record['remarks']?.toString() ?? '';
+                              final batchNumber = batch?['batch_number']?.toString();
+                              final source = record['source']?.toString();
+                              final facilityName = record['facility_name']?.toString();
 
                               return ImmunizationRecordCard(
                                 vaccineName: vaccineName,
@@ -303,6 +310,9 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
                                 notes: notes,
                                 date: formatDate(date),
                                 remarks: remarks,
+                                batchNumber: batchNumber,
+                                source: source,
+                                facilityName: facilityName,
                               );
                             },
                           ),
@@ -618,6 +628,9 @@ class ImmunizationRecordCard extends StatelessWidget {
   final String notes;
   final String date;
   final String remarks;
+  final String? batchNumber;
+  final String? source;
+  final String? facilityName;
 
   const ImmunizationRecordCard({
     super.key,
@@ -626,10 +639,15 @@ class ImmunizationRecordCard extends StatelessWidget {
     required this.notes,
     required this.date,
     required this.remarks,
+    this.batchNumber,
+    this.source,
+    this.facilityName,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isOutside = source == 'outside';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -737,6 +755,47 @@ class ImmunizationRecordCard extends StatelessWidget {
                   color: AppColors.textSecondary,
                 ),
               ),
+              const Spacer(),
+              if (batchNumber != null && batchNumber!.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.colorize_rounded, size: 11, color: Color(0xFF059669)),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Batch #$batchNumber',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF065F46)),
+                      ),
+                    ],
+                  ),
+                )
+              else if (isOutside)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.location_on_outlined, size: 11, color: Color(0xFF2563EB)),
+                      const SizedBox(width: 4),
+                      Text(
+                        facilityName != null && facilityName!.isNotEmpty ? facilityName! : 'External Clinic',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
           if (remarks.isNotEmpty) ...[

@@ -12,6 +12,9 @@ class MainHeader extends StatelessWidget {
   final VoidCallback? onSettings;
   final VoidCallback? onHelp;
   final VoidCallback? onLogout;
+  final bool showBackButton;
+  final VoidCallback? onBack;
+  final int notificationCount;
 
   const MainHeader({
     super.key,
@@ -22,6 +25,9 @@ class MainHeader extends StatelessWidget {
     this.onSettings,
     this.onHelp,
     this.onLogout,
+    this.showBackButton = false,
+    this.onBack,
+    this.notificationCount = 0,
   });
 
   void _showProfileMenu(BuildContext context) {
@@ -86,7 +92,7 @@ class MainHeader extends StatelessWidget {
       bottom: false,
       child: Container(
         height: 60,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           color: AppColors.bgPrimary,
           boxShadow: [
@@ -99,42 +105,93 @@ class MainHeader extends StatelessWidget {
         ),
         child: Row(
           children: [
-            /// LOGO
-            Image.asset(
-              'assets/images/logo.png',
-              height: 40,
-              errorBuilder: (context, error, stackTrace) => 
-                const Icon(Icons.favorite, color: AppColors.brandPrimary, size: 30),
-            ),
-
-            const SizedBox(width: 12),
+            if (showBackButton) ...[
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: onBack ?? () => Navigator.of(context).maybePop(),
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  size: 20,
+                  color: AppColors.brandText,
+                ),
+                tooltip: 'Back',
+              ),
+              const SizedBox(width: 4),
+            ] else ...[
+              /// LOGO
+              Image.asset(
+                'assets/images/logo.png',
+                height: 40,
+                errorBuilder: (context, error, stackTrace) => 
+                  const Icon(Icons.favorite, color: AppColors.brandPrimary, size: 30),
+              ),
+              const SizedBox(width: 12),
+            ],
 
             /// TITLE
-            Text(
-              title.toUpperCase(),
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppColors.brandText,
-                letterSpacing: 0.4,
+            Expanded(
+              child: Text(
+                title.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.brandText,
+                  letterSpacing: 0.4,
+                ),
               ),
             ),
-
-            const Spacer(),
 
             /// NOTIFICATIONS
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              onPressed: onNotificationTap,
-              icon: const Icon(
-                Icons.notifications_none_rounded,
-                size: 24,
-                color: AppColors.textPrimary,
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  onPressed: onNotificationTap,
+                  icon: Icon(
+                    notificationCount > 0
+                        ? Icons.notifications_active_rounded
+                        : Icons.notifications_none_rounded,
+                    size: 24,
+                    color: notificationCount > 0
+                        ? AppColors.brandPrimary
+                        : AppColors.textPrimary,
+                  ),
+                ),
+                if (notificationCount > 0)
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: IgnorePointer(
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          notificationCount > 99 ? '99+' : '$notificationCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
 
-            const SizedBox(width: 14),
+            const SizedBox(width: 10),
 
             /// AVATAR
             GestureDetector(

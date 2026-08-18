@@ -177,6 +177,9 @@ class InventoryBatchRecord {
     return current.difference(vialOpenedAt!).inHours >= shelfHours;
   }
 
+  bool isExpiredOpenVial(int shelfHours, [DateTime? now]) =>
+      isOpenVialExpired(now, shelfHours);
+
   DateTime? get expirationDay {
     final value = expirationDate;
     if (value == null) return null;

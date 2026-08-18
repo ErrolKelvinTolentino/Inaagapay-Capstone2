@@ -2942,12 +2942,14 @@
 
             const nearestUsable = getNearestUsableBatch(b.item_id, locFilter);
             const isFefoFirst = nearestUsable && b.batch_id === nearestUsable.batch_id;
+            const openDoses = b.doses_remaining_in_open_vial || 0;
 
             return `
               <tr>
                 <td>
                   <strong style="font-family:monospace;">${esc(b.batch_number)}</strong>
                   ${isFefoFirst ? `<span class="badge-health-success" style="font-size:9.5px;padding:1px 5px;margin-left:4px;" title="Earliest expiring usable batch (FEFO)"><i class="fa-solid fa-star"></i> Use First</span>` : ''}
+                  ${openDoses > 0 ? `<span class="badge" style="background:#ecfdf5;color:#059669;font-size:9.5px;padding:2px 6px;margin-left:4px;border-radius:4px;border:1px solid #a7f3d0;font-weight:700;"><i class="fa-solid fa-syringe"></i> Open (${openDoses} doses)</span>` : ''}
                 </td>
                 <td class="col-item-details">
                   <div style="display:flex;align-items:center;gap:4px;">
@@ -2960,10 +2962,13 @@
                 <td class="col-location" title="${esc(locName)}">${esc(locName)}</td>
                 <td style="font-size:11.5px;color:var(--text-secondary);">${b.received_date || '—'}</td>
                 <td style="font-size:11.5px;font-weight:600;">${b.expiration_date}</td>
-                <td style="text-align:right;font-weight:700;color:var(--brand-primary);">${b.quantity_remaining} <span style="font-size:10px;color:var(--text-secondary);font-weight:normal;">/ ${b.quantity_received}</span></td>
+                <td style="text-align:right;font-weight:700;color:var(--brand-primary);">
+                  ${b.quantity_remaining} <span style="font-size:10px;color:var(--text-secondary);font-weight:normal;">/ ${b.quantity_received}</span>
+                  ${openDoses > 0 ? `<div style="font-size:10px;font-weight:700;color:#059669;margin-top:2px;">+ ${openDoses} open doses</div>` : ''}
+                </td>
                 <td style="text-align:center;">${countdownBadge}</td>
                 <td style="text-align:center;">
-                  ${b.status === 'active' && !isBatchExpired(b) && b.quantity_remaining > 0 ? `<button class="btn btn-sm btn-outline-pink" onclick="quickDispense(${b.batch_id})" style="padding:2px 6px;font-size:10.5px;"><i class="fa-solid fa-minus"></i> Use</button>` : '—'}
+                  ${b.status === 'active' && !isBatchExpired(b) && (b.quantity_remaining > 0 || openDoses > 0) ? `<button class="btn btn-sm btn-outline-pink" onclick="quickDispense(${b.batch_id})" style="padding:2px 6px;font-size:10.5px;"><i class="fa-solid fa-minus"></i> Use</button>` : '—'}
                 </td>
               </tr>
             `;
@@ -5713,7 +5718,8 @@
           // 2. Dispense Batch Select
           const batchSel = document.getElementById("dispense-batch-id");
           const activeBatches = batches.filter(b => {
-            if (b.status !== 'active' || isBatchExpired(b) || b.quantity_remaining <= 0) return false;
+            const hasStock = (b.quantity_remaining > 0) || ((b.doses_remaining_in_open_vial || 0) > 0);
+            if (b.status !== 'active' || isBatchExpired(b) || !hasStock) return false;
             const parentItem = items.find(i => i.item_id === b.item_id);
             return parentItem && !parentItem.is_archived;
           });
@@ -5727,7 +5733,9 @@
                 const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
                 locText = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
               }
-              return `<option value="${b.batch_id}">${formatBatchOption(item?.name, b.batch_number, b.quantity_remaining, locText)}</option>`;
+              const openDoses = b.doses_remaining_in_open_vial || 0;
+              const extraOpen = openDoses > 0 ? ` + ${openDoses} open doses` : '';
+              return `<option value="${b.batch_id}">${formatBatchOption(item?.name, b.batch_number, b.quantity_remaining, locText)}${extraOpen}</option>`;
             }).join('');
             if (curVal && activeBatches.some(b => String(b.batch_id) === String(curVal))) {
               batchSel.value = curVal;
@@ -5740,15 +5748,20 @@
                 const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
                 locText = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
               }
+              const openDoses = b.doses_remaining_in_open_vial || 0;
+              const openDoseChip = openDoses > 0
+                ? `<span class="select-chip" style="background:#ecfdf5;color:#059669;font-weight:700;"><i class="fa-solid fa-syringe"></i> ${openDoses} open doses</span>`
+                : '';
               return {
                 value: b.batch_id,
                 name: item?.name || 'Item',
                 genericName: item?.generic_name || '',
                 batchNo: b.batch_number,
                 qty: b.quantity_remaining,
+                openDoses: openDoses,
                 location: locText,
-                label: `${item?.name || 'Item'} — Batch ${b.batch_number} (${b.quantity_remaining} avail) [${locText}]`,
-                richChipHtml: `<span class="select-chip chip-batch"><i class="fa-solid fa-barcode"></i> Batch ${esc(b.batch_number)}</span> <span class="select-chip chip-qty"><i class="fa-solid fa-boxes-stacked"></i> ${b.quantity_remaining} avail</span> <span class="select-chip chip-location"><i class="fa-solid fa-location-dot"></i> ${esc(locText)}</span>`
+                label: `${item?.name || 'Item'} — Batch ${b.batch_number} (${b.quantity_remaining} sealed${openDoses > 0 ? ` + ${openDoses} open doses` : ''}) [${locText}]`,
+                richChipHtml: `<span class="select-chip chip-batch"><i class="fa-solid fa-barcode"></i> Batch ${esc(b.batch_number)}</span> <span class="select-chip chip-qty"><i class="fa-solid fa-boxes-stacked"></i> ${b.quantity_remaining} sealed</span> ${openDoseChip} <span class="select-chip chip-location"><i class="fa-solid fa-location-dot"></i> ${esc(locText)}</span>`
               };
             });
             createSearchableSelect({ elementId: "dispense-batch-id", placeholder: "Search or select active batch...", options: dispenseOpts });

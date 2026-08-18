@@ -63,10 +63,11 @@ class FhrThresholds {
   /// accepts is never called unreadable here and vice versa.
   final int plausibleMax;
 
-  /// A hand-held Doppler cannot reliably pick up the heartbeat before about
-  /// this week. Not hearing one earlier is not a finding, and the app should
-  /// not present it as one.
   final int audibleFromWeeks;
+
+  /// Convenience getters for baseline range bounds
+  int get minBpm => baselineMin;
+  int get maxBpm => baselineMax;
 
   static const FhrThresholds standard = FhrThresholds();
 }

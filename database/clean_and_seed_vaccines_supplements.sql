@@ -263,7 +263,12 @@ BEGIN
       inventory_deducted = true
   WHERE immunization_record_id = p_immunization_record_id;
 
-  RETURN jsonb_build_object('success', true, 'batch_number', v_batch.batch_number, 'mode', 'new_vial_opened');
+  RETURN jsonb_build_object(
+    'success', true, 
+    'batch_number', v_batch.batch_number, 
+    'mode', CASE WHEN v_doses_per_unit > 1 THEN 'new_vial_opened' ELSE 'single_dose' END,
+    'doses_left_in_vial', CASE WHEN v_doses_per_unit > 1 THEN v_doses_per_unit - 1 ELSE 0 END
+  );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

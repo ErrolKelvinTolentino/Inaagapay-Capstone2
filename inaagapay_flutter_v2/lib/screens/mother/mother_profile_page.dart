@@ -11,6 +11,7 @@ import '../../services/supabase_service.dart';
 import '../midwife/add_ultrasound_page.dart';
 import '../midwife/lab_test_analyzer_screen.dart';
 import '../midwife/add_prenatal_checkup_screen.dart';
+import '../midwife/maternal_td_screen.dart';
 import '../../widgets/headline.dart';
 import '../../widgets/page_title.dart';
 import '../../widgets/main_button.dart';
@@ -6566,7 +6567,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             // Sits beside weight gain because both are read the same way: as
             // a line across the pregnancy, not as the latest number.
             _buildBloodPressureTrendCard(checkups, lmp),
-            const SizedBox(height: 16),
+            // ── Maternal Td Immunization ──────────────────────────────
+            _buildMaternalTdQuickCard(profile),
 
             // ── Prenatal Checkups ──
             _buildPreviewRecordSection(
@@ -6686,6 +6688,92 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMaternalTdQuickCard(Map<String, dynamic> profile) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderPrimary.withValues(alpha: 0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981).withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.vaccines_rounded, color: Color(0xFF059669), size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'MATERNAL TD IMMUNIZATION',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Lifetime 5-Dose Td Schedule',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Track PAB status, intervals, and doses',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              final assignedBhc = profile['assigned_bhc_id'] as int?;
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MaternalTdScreen(
+                    motherId: widget.motherId,
+                    motherName: profile['full_name']?.toString(),
+                    assignedBhcId: assignedBhc,
+                  ),
+                ),
+              );
+              _refresh();
+            },
+            child: const Text('Manage', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }
@@ -7532,6 +7620,28 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   onTap: () {
                     Navigator.pop(ctx);
                     _goToUltrasoundAnalyzer(pregnancy);
+                  },
+                ),
+                _buildQuickActionCard(
+                  context: ctx,
+                  icon: Icons.vaccines_rounded,
+                  title: 'Td Vaccine (Tetanus)',
+                  subtitle: 'Administer or backfill maternal Td doses',
+                  baseColor: const Color(0xFF10B981), // emerald
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final assignedBhc = profile['assigned_bhc_id'] as int?;
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MaternalTdScreen(
+                          motherId: widget.motherId,
+                          motherName: profile['full_name']?.toString(),
+                          assignedBhcId: assignedBhc,
+                        ),
+                      ),
+                    );
+                    _refresh();
                   },
                 ),
               ],
