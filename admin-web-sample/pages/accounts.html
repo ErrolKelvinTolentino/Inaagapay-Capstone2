@@ -45,7 +45,7 @@
                 <img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" />
             </div>
             <div class="header-right">
-                <span class="header-badge">RHU Portal</span>
+                <span class="header-badge">Admin Portal</span>
                 <div class="header-user">
                     <div class="header-avatar" id="header-avatar">A</div>
                     <span class="header-user-name" id="header-user-name">Admin</span>
@@ -59,8 +59,7 @@
                 <li><a href="dashboard.html"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
                 <li><a href="accounts.html" class="active"><i class="fa-solid fa-users"></i> Account Management</a></li>
                 <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
-          <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
-          <li><a href="transfers.html"><i class="fa-solid fa-truck-fast"></i> Transfers</a></li>
+                <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
                 <li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li>
             </ul>
             <div class="sidebar-divider"></div>
@@ -88,7 +87,7 @@
                 </div>
                 <div class="page-actions">
                     <span id="total-badge" class="badge badge-admin">— accounts</span>
-                    <a class="btn btn-primary" href="account-create.html"><i class="fa-solid fa-user-plus"></i> Create Account</a>
+                    <button class="btn btn-primary" id="open-create-btn"><i class="fa-solid fa-user-plus"></i> Create Account</button>
                 </div>
             </div>
 
@@ -221,6 +220,79 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-sm" id="edit-cancel">Cancel</button>
                 <button class="btn btn-primary btn-sm" id="edit-save"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Account Modal -->
+    <div class="modal-overlay" id="create-modal">
+        <div class="modal" style="max-width: 520px">
+            <div class="modal-header">
+                <h2 class="modal-title">Create Account</h2>
+                <button class="modal-close" id="create-modal-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div id="create-form-alert" class="alert alert-error" style="display: none; margin-bottom: 16px; padding: 12px; border-radius: 8px;"></div>
+                
+                <div class="form-group">
+                    <label class="form-label">Account Type</label>
+                    <select class="form-select" id="create-type">
+                        <option value="midwife">Midwife</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                
+                <div class="form-row" style="display: flex; gap: 12px; margin-bottom: 14px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label" for="create-first-name">First Name <span style="color:var(--brand-primary)">*</span></label>
+                        <input class="form-control" type="text" id="create-first-name" placeholder="e.g. Maria" required style="width: 100%;" />
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label" for="create-middle-name">Middle Name</label>
+                        <input class="form-control" type="text" id="create-middle-name" placeholder="Optional" style="width: 100%;" />
+                    </div>
+                </div>
+                
+                <div class="form-row" style="display: flex; gap: 12px; margin-bottom: 14px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label" for="create-last-name">Last Name <span style="color:var(--brand-primary)">*</span></label>
+                        <input class="form-control" type="text" id="create-last-name" placeholder="e.g. Santos" required style="width: 100%;" />
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label" for="create-extension-name">Extension Name</label>
+                        <input class="form-control" type="text" id="create-extension-name" placeholder="Jr., Sr." style="width: 100%;" />
+                    </div>
+                </div>
+                
+                <div class="form-row" style="display: flex; gap: 12px; margin-bottom: 14px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label" for="create-email">Email Address <span style="color:var(--brand-primary)">*</span></label>
+                        <input class="form-control" type="email" id="create-email" placeholder="example@gmail.com" required style="width: 100%;" />
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label" for="create-phone">Phone Number</label>
+                        <input class="form-control" type="tel" id="create-phone" placeholder="09XX-XXX-XXXX" style="width: 100%;" />
+                    </div>
+                </div>
+                
+                <!-- Dropdown BHC Selector (for Midwife type) -->
+                <div class="form-group" id="create-bhc-group" style="margin-bottom: 14px;">
+                    <label class="form-label" for="create-bhc">Designated BHC <span style="color:var(--brand-primary)">*</span></label>
+                    <select class="form-select" id="create-bhc" style="width: 100%;">
+                        <option value="">— Select BHC —</option>
+                    </select>
+                </div>
+
+                <div class="card" style="border-left: 4px solid var(--brand-primary); margin-top: 16px; background: var(--bg-primary); border: 1px solid var(--border-primary); border-left: 4px solid var(--brand-primary); border-radius: 8px;">
+                    <div class="card-body" style="padding: 12px 16px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.5;">
+                        <i class="fa-solid fa-key" style="color: var(--brand-primary); margin-right: 6px;"></i>
+                        <strong>Temporary Password:</strong> A secure temporary password will be automatically generated and sent to the user.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" id="create-cancel">Cancel</button>
+                <button class="btn btn-primary btn-sm" id="create-save"><i class="fa-solid fa-user-plus"></i> Create Account</button>
             </div>
         </div>
     </div>
@@ -360,10 +432,6 @@
                     const name = [a.first_name, a.middle_name, a.last_name].filter(Boolean).join(" ") + (a.extension_name ? " " + a.extension_name : "");
                     const initials = ((a.first_name?.[0] ?? "") + (a.last_name?.[0] ?? "")).toUpperCase() || "?";
                     const statusColors = { active: "badge-active", inactive: "badge-inactive", suspended: "badge-suspended" };
-                    // An admin must never be able to suspend, demote or delete their own
-                    // account — doing so can lock the organisation out of the portal.
-                    const isSelf = a.account_id === session.account_id;
-                    const selfNote = `<span class="badge badge-admin" title="You cannot modify your own account"><i class="fa-solid fa-user-lock"></i> You</span>`;
                     return `<tr>
                         <td>
                             <div style="display:flex;align-items:center;gap:10px;">
@@ -371,22 +439,20 @@
                                 <span style="font-weight:600;">${esc(name) || "—"}</span>
                             </div>
                         </td>
-                        <td style="color:var(--text-secondary);">${esc(a.email_address)}</td>
-                        <td><span class="badge badge-${esc(a.account_type)}">${esc(a.account_type)}</span></td>
-                        <td><span class="badge ${statusColors[a.status] || 'badge-inactive'}">${esc(a.status)}</span></td>
-                        <td style="color:var(--text-secondary);font-size:12.5px;">${fmtDate(a.created_at)}</td>
+                        <td style="color:var(--text-secondary);">${esc(a.email_address)}</div>
+                        <td><span class="badge badge-${a.account_type}">${a.account_type}</span></div>
+                        <td><span class="badge ${statusColors[a.status] || 'badge-inactive'}">${a.status}</span></div>
+                        <td style="color:var(--text-secondary);font-size:12.5px;">${fmtDate(a.created_at)}</div>
                         <td style="text-align:center;">
                             <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;align-items:center;">
-                                ${isSelf ? selfNote : `
-                                <button class="btn btn-sm btn-outline-pink btn-icon" onclick="openEdit(${a.account_id})" title="Edit" aria-label="Edit account"><i class="fa-solid fa-pen"></i></button>
-                                ${a.status !== 'active' ? `<button class="btn btn-sm btn-icon" style="background:var(--success-10);color:var(--success);border:none;" onclick="changeStatus(${a.account_id}, 'active')" title="Activate" aria-label="Activate account"><i class="fa-solid fa-play"></i></button>` : ''}
-                                ${a.status === 'active' ? `<button class="btn btn-sm btn-icon" style="background:var(--warning-10);color:var(--warning);border:none;" onclick="changeStatus(${a.account_id}, 'inactive')" title="Deactivate" aria-label="Deactivate account"><i class="fa-solid fa-pause"></i></button>` : ''}
-                                ${a.status === 'active' ? `<button class="btn btn-sm btn-icon" style="background:var(--error-10);color:var(--error);border:none;" onclick="changeStatus(${a.account_id}, 'suspended')" title="Suspend" aria-label="Suspend account"><i class="fa-solid fa-ban"></i></button>` : ''}
-                                ${a.status === 'suspended' ? `<button class="btn btn-sm btn-icon" style="background:var(--success-10);color:var(--success);border:none;" onclick="changeStatus(${a.account_id}, 'active')" title="Reactivate" aria-label="Reactivate account"><i class="fa-solid fa-undo"></i></button>` : ''}
-                                <button class="btn btn-sm btn-icon" style="background:var(--error-10);color:var(--error);border:none;" onclick="openDelete(${a.account_id})" title="Delete" aria-label="Delete account"><i class="fa-solid fa-trash"></i></button>
-                                `}
+                                <button class="btn btn-sm btn-outline-pink btn-icon" onclick="openEdit(${a.account_id})" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                                ${a.status !== 'active' ? `<button class="btn btn-sm btn-icon" style="background:var(--success-10);color:var(--success);border:none;" onclick="changeStatus(${a.account_id}, 'active')" title="Activate"><i class="fa-solid fa-play"></i></button>` : ''}
+                                ${a.status === 'active' ? `<button class="btn btn-sm btn-icon" style="background:var(--warning-10);color:var(--warning);border:none;" onclick="changeStatus(${a.account_id}, 'inactive')" title="Deactivate"><i class="fa-solid fa-pause"></i></button>` : ''}
+                                ${a.status === 'active' ? `<button class="btn btn-sm btn-icon" style="background:var(--error-10);color:var(--error);border:none;" onclick="changeStatus(${a.account_id}, 'suspended')" title="Suspend"><i class="fa-solid fa-ban"></i></button>` : ''}
+                                ${a.status === 'suspended' ? `<button class="btn btn-sm btn-icon" style="background:var(--success-10);color:var(--success);border:none;" onclick="changeStatus(${a.account_id}, 'active')" title="Reactivate"><i class="fa-solid fa-undo"></i></button>` : ''}
+                                <button class="btn btn-sm btn-icon" style="background:var(--error-10);color:var(--error);border:none;" onclick="openDelete(${a.account_id})" title="Delete"><i class="fa-solid fa-trash"></i></button>
                             </div>
-                        </td>
+                        </div>
                     </tr>`;
                 }).join("");
                 document.getElementById("page-info").textContent = `Showing ${start + 1}–${Math.min(start + PAGE_SIZE, filtered.length)} of ${filtered.length}`;
@@ -418,11 +484,7 @@
             window.changeStatus = (accountId, newStatus) => {
                 const account = allAccounts.find(a => a.account_id === accountId);
                 if (!account) return;
-                if (accountId === session.account_id) {
-                    showToast("You cannot change the status of your own account.", "error");
-                    return;
-                }
-
+                
                 const statusConfig = {
                     active: { icon: "fa-solid fa-play", color: "var(--success)", title: "Activate Account", message: `Are you sure you want to activate ${account.first_name} ${account.last_name}'s account?`, btnClass: "btn-success", btnText: "Activate" },
                     inactive: { icon: "fa-solid fa-pause", color: "var(--warning)", title: "Deactivate Account", message: `Are you sure you want to deactivate ${account.first_name} ${account.last_name}'s account? They will not be able to log in.`, btnClass: "btn-outline-pink", btnText: "Deactivate" },
@@ -491,10 +553,6 @@
             window.openEdit = (id) => {
                 editTarget = allAccounts.find(a => a.account_id === id);
                 if (!editTarget) return;
-                if (id === session.account_id) {
-                    showToast("You cannot edit your own account type or status.", "error");
-                    return;
-                }
                 const name = [editTarget.first_name, editTarget.last_name].filter(Boolean).join(" ") || "—";
                 const initials = ((editTarget.first_name?.[0] ?? "") + (editTarget.last_name?.[0] ?? "")).toUpperCase() || "?";
                 document.getElementById("edit-id").value = editTarget.account_id;
@@ -551,10 +609,6 @@
             window.openDelete = (id) => {
                 deleteTarget = allAccounts.find(a => a.account_id === id);
                 if (!deleteTarget) return;
-                if (id === session.account_id) {
-                    showToast("You cannot delete your own account.", "error");
-                    return;
-                }
                 const name = [deleteTarget.first_name, deleteTarget.last_name].filter(Boolean).join(" ") || deleteTarget.email_address;
                 document.getElementById("delete-name").textContent = name;
                 document.getElementById("delete-modal").classList.add("show");
@@ -607,12 +661,286 @@
                 applyFilters();
             });
 
+            function isValidPhilippineNumber(num) {
+                const cleaned = num.replace(/\D/g, "");
+                return /^(09|\+639|639)\d{9}$/.test(cleaned);
+            }
+
+            function formatPhilippineNumber(num) {
+                const cleaned = num.replace(/\D/g, "");
+                if (cleaned.startsWith("09")) {
+                    return `+63${cleaned.substring(1)}`;
+                } else if (cleaned.startsWith("639")) {
+                    return `+${cleaned}`;
+                }
+                return `+63${cleaned}`;
+            }
+
+            async function sendCredentialsSms(phone, pwd, type) {
+                try {
+                    if (!phone) return false;
+                    if (!isValidPhilippineNumber(phone)) {
+                        console.error("Invalid Philippine phone number:", phone);
+                        return false;
+                    }
+                    const formatted = formatPhilippineNumber(phone);
+                    const roleName = type === "midwife" ? "Midwife" : "Admin";
+                    const message = `Welcome to INAAGAPAY! An administrator created a ${roleName} account for you. Your temporary password is: ${pwd}\n\nPlease change it on your first login.`;
+                    
+                    const params = new URLSearchParams();
+                    params.append("apikey", "a011832dcab9b1b6520910c6dbb16028");
+                    params.append("number", formatted);
+                    params.append("message", message);
+                    params.append("sendername", "AGAPAY");
+
+                    const response = await fetch("https://api.semaphore.co/api/v4/messages", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/x-www-form-urlencoded",
+                            "Accept": "application/json"
+                        },
+                        body: params.toString()
+                    });
+
+                    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                    const data = await response.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        const firstMsg = data[0];
+                        return firstMsg.status === "Pending" || firstMsg.status === "Sent" || firstMsg.message_id != null;
+                    }
+                    return false;
+                } catch (e) {
+                    console.error("SMS sending failed:", e);
+                    return false;
+                }
+            }
+
+            // BHC loading logic
+            let bhcs = [];
+            async function loadBhcs() {
+                try {
+                    let bhcData = [];
+                    try {
+                        const { data, error } = await db.from("bhc").select("bhc_id, bhc_name").order("bhc_name");
+                        if (!error && data && data.length > 0) bhcData = data;
+                        else {
+                            const { data: facs } = await db.from("health_facilities").select("facility_id, name").order("name");
+                            bhcData = (facs || []).map(f => ({ bhc_id: f.facility_id, bhc_name: f.name }));
+                        }
+                    } catch (e) { console.warn("BHC load fallback:", e); }
+
+                    if (bhcData.length === 0) {
+                        bhcData = [
+                            { bhc_id: 1, bhc_name: 'Tiaong BHC' },
+                            { bhc_id: 2, bhc_name: 'Tarcan BHC' },
+                            { bhc_id: 3, bhc_name: 'Pinagbarilan BHC' },
+                            { bhc_id: 4, bhc_name: 'Makinabang BHC' },
+                            { bhc_id: 5, bhc_name: 'Sta. Barbara BHC' }
+                        ];
+                    }
+                    bhcs = bhcData;
+                    
+                    const select = document.getElementById("create-bhc");
+                    select.innerHTML = '<option value="">— Select BHC —</option>';
+                    bhcs.forEach(b => {
+                        const opt = document.createElement("option");
+                        opt.value = b.bhc_id;
+                        opt.textContent = b.bhc_name;
+                        select.appendChild(opt);
+                    });
+                } catch (e) { console.error("Failed to load BHCs:", e); }
+            }
+
+            // Create Modal toggles
+            document.getElementById("open-create-btn").addEventListener("click", () => {
+                document.getElementById("create-form-alert").style.display = "none";
+                document.getElementById("create-first-name").value = "";
+                document.getElementById("create-middle-name").value = "";
+                document.getElementById("create-last-name").value = "";
+                document.getElementById("create-extension-name").value = "";
+                document.getElementById("create-email").value = "";
+                document.getElementById("create-phone").value = "";
+                document.getElementById("create-type").value = "midwife";
+                document.getElementById("create-bhc").value = "";
+                document.getElementById("create-bhc-group").style.display = "block";
+                document.getElementById("create-modal").classList.add("show");
+            });
+
+            document.getElementById("create-type").addEventListener("change", (e) => {
+                const isMidwife = e.target.value === "midwife";
+                document.getElementById("create-bhc-group").style.display = isMidwife ? "block" : "none";
+            });
+
+            ["create-modal-close", "create-cancel"].forEach(id => {
+                document.getElementById(id).addEventListener("click", () => document.getElementById("create-modal").classList.remove("show"));
+            });
+            document.getElementById("create-modal").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("show"); });
+
+            document.getElementById("create-save").addEventListener("click", async () => {
+                const first = document.getElementById("create-first-name").value.trim();
+                const middle = document.getElementById("create-middle-name").value.trim();
+                const last = document.getElementById("create-last-name").value.trim();
+                const ext = document.getElementById("create-extension-name").value.trim();
+                const email = document.getElementById("create-email").value.trim();
+                const phone = document.getElementById("create-phone").value.trim();
+                const type = document.getElementById("create-type").value;
+                const bhcId = document.getElementById("create-bhc").value;
+                const alertEl = document.getElementById("create-form-alert");
+
+                alertEl.style.display = "none";
+                
+                if (!first || !last || !email) {
+                    alertEl.className = "alert alert-error";
+                    alertEl.textContent = "Please fill in all required fields.";
+                    alertEl.style.display = "block";
+                    return;
+                }
+                
+                if (type === "midwife" && !bhcId) {
+                    alertEl.className = "alert alert-error";
+                    alertEl.textContent = "Please select a designated BHC for the midwife.";
+                    alertEl.style.display = "block";
+                    return;
+                }
+
+                const btn = document.getElementById("create-save");
+                btn.disabled = true;
+                btn.innerHTML = '<div class="btn-loader"></div> Processing...';
+
+                try {
+                    // Generate temp password
+                    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%";
+                    let pwd = "";
+                    for (let i = 0; i < 10; i++) {
+                        pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+                    }
+
+                    // Hash password
+                    const bcrypt = dcodeIO.bcrypt;
+                    const hash = await bcrypt.hash(pwd, 10);
+
+                    // Insert account
+                    const insertPayload = {
+                        email_address: email,
+                        password_hash: hash,
+                        account_type: type,
+                        first_name: first,
+                        middle_name: middle || null,
+                        last_name: last,
+                        extension_name: ext || null,
+                        phone_number: phone || null,
+                        is_verified: true,
+                        status: "active",
+                        is_temporary_password: true,
+                        created_by: String(session.account_id)
+                    };
+
+                    let res = await db.from("accounts").insert(insertPayload).select().single();
+                    let newAcct = res.data;
+                    let acctErr = res.error;
+
+                    if (acctErr) throw acctErr;
+
+                    // Midwife specific assignments
+                    if (type === "midwife") {
+                        const parsedBhc = parseInt(bhcId);
+                        try {
+                            await db.from("midwives").insert({
+                                account_id: newAcct.account_id,
+                                assigned_bhc_id: parsedBhc
+                            });
+                        } catch (mErr) { console.warn("midwives insert note:", mErr); }
+
+                        try {
+                            await db.from("facility_assignments").insert({
+                                account_id: newAcct.account_id,
+                                facility_id: parsedBhc,
+                                is_active: true
+                            });
+                        } catch (fErr) { console.warn("facility_assignments insert note:", fErr); }
+                    }
+
+                    // Audit trail log
+                    try {
+                        await db.from("audit_trail").insert({
+                            account_id: session.account_id,
+                            action: "create_account",
+                            table_name: "accounts",
+                            description: `Created ${type} account for ${first} ${last} (${email})${type === "midwife" ? " assigned to BHC ID: " + bhcId : ""}`,
+                            new_data: { email, account_type: type, bhc_id: type === "midwife" ? bhcId : null },
+                        });
+                    } catch (e) {}
+
+                    // Send SMS credentials if phone number is provided
+                    let smsSent = false;
+                    let smsErrorMsg = "";
+                    if (phone) {
+                        try {
+                            if (!isValidPhilippineNumber(phone)) {
+                                smsErrorMsg = "SMS delivery was skipped due to invalid Philippine phone number format.";
+                            } else {
+                                const smsOk = await sendCredentialsSms(phone, pwd, type);
+                                if (smsOk) {
+                                    smsSent = true;
+                                } else {
+                                    smsErrorMsg = "SMS provider rejected or failed to send the message.";
+                                }
+                            }
+                        } catch (sErr) {
+                            smsErrorMsg = `SMS sending error: ${sErr.message}`;
+                        }
+                    }
+
+                    // Show success with temporary password
+                    alertEl.className = "alert alert-warning";
+                    alertEl.style.display = "block";
+
+                    let deliveryInfo = "";
+                    if (phone) {
+                        if (smsSent) {
+                            deliveryInfo = `<br/><br/><span style="color:#059669; font-weight:600;"><i class="fa-solid fa-circle-check"></i> Credentials have been successfully sent to ${phone} via SMS.</span>`;
+                        } else {
+                            deliveryInfo = `<br/><br/><span style="color:#dc2626; font-weight:600;"><i class="fa-solid fa-circle-xmark"></i> SMS Delivery Failed: ${smsErrorMsg}</span>`;
+                        }
+                    } else {
+                        deliveryInfo = `<br/><br/><span style="font-size:12px;color:var(--text-secondary);">No phone number was provided to send credentials via SMS automatically.</span>`;
+                    }
+
+                    alertEl.innerHTML = `
+                        <strong>Success!</strong> Account created successfully.<br/><br/>
+                        <strong>Temporary Password:</strong> <code style="font-size: 15px; font-weight:700; background:#fff; padding:2px 6px; border:1px solid #ccc; border-radius:4px; margin-right:8px; color:var(--text-title);">${pwd}</code>
+                        <button class="btn btn-xs btn-primary" onclick="navigator.clipboard.writeText('${pwd}'); showToast('Password copied to clipboard!', 'success');" style="padding: 2px 8px; font-size:11px; background:var(--brand-primary); color:white; border:none; border-radius:4px; cursor:pointer;"><i class="fa-solid fa-copy"></i> Copy</button>
+                        ${deliveryInfo}
+                        <br/><br/>
+                        <span style="font-size:12px;color:var(--text-secondary);">Provide these credentials to the user. They will be prompted to change it on their first login.</span>
+                    `;
+
+                    // Disable fields
+                    document.getElementById("create-first-name").value = "";
+                    document.getElementById("create-middle-name").value = "";
+                    document.getElementById("create-last-name").value = "";
+                    document.getElementById("create-extension-name").value = "";
+                    document.getElementById("create-email").value = "";
+                    document.getElementById("create-phone").value = "";
+                    document.getElementById("create-bhc").value = "";
+
+                    loadAccounts(); // Reload list
+                } catch (e) {
+                    alertEl.className = "alert alert-error";
+                    alertEl.textContent = "Failed to create account: " + e.message;
+                    alertEl.style.display = "block";
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Create Account';
+                }
+            });
 
             loadAccounts();
+            loadBhcs();
             window.AdminLiveRefresh?.start({
                 db,
-                tables: ["accounts", "midwives", "facility_assignments"],
-                refresh: loadAccounts,
+                tables: ["accounts", "midwives", "facility_assignments", "bhc", "health_facilities"],
+                refresh: () => Promise.all([loadAccounts(), loadBhcs()]),
             });
         })();
     </script>

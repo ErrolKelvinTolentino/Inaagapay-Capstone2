@@ -39,7 +39,7 @@
           />
         </div>
         <div class="header-right">
-          <span class="header-badge">RHU Portal</span>
+          <span class="header-badge">Admin Portal</span>
           <div class="header-user">
             <div class="header-avatar" id="header-avatar">A</div>
             <span class="header-user-name" id="header-user-name">Admin</span>
@@ -55,7 +55,6 @@
           <li><a href="accounts.html"><i class="fa-solid fa-users"></i> Account Management</a></li>
           <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
           <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
-          <li><a href="transfers.html"><i class="fa-solid fa-truck-fast"></i> Transfers</a></li>
           <li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li>
         </ul>
         <div class="sidebar-divider"></div>
@@ -84,7 +83,7 @@
           </div>
           <div class="page-actions" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <button class="btn btn-secondary btn-sm" id="toggle-privacy-btn" title="Toggle Data Privacy Act Sensitive Field Masking">
-              <i class="fa-solid fa-user-shield" style="color:var(--success);"></i> Privacy Masking: ON
+              <i class="fa-solid fa-user-shield" style="color:var(--brand-primary);"></i> Privacy Masking: OFF
             </button>
             <button class="btn btn-primary btn-sm" id="export-pdf-btn">
               <i class="fa-solid fa-file-pdf"></i> Download PDF Report
@@ -160,7 +159,7 @@
                   </tr>
                 </thead>
                 <tbody id="mothers-tbody">
-                  <tr><td colspan="7" class="loading-cell"><div class="spinner" style="margin: 0 auto 12px;"></div> Loading mothers...</td></tr>
+                  <tr><td colspan="7" class="loading-cell"><div class="spinner" style="margin: 0 auto 12px;"></div> Loading mothers...<\/div></td>
                 </tbody>
               </table>
             </div>
@@ -203,7 +202,7 @@
                   </tr>
                 </thead>
                 <tbody id="pregnancies-tbody">
-                  <tr><td colspan="7" class="loading-cell"><div class="spinner" style="margin: 0 auto 12px;"></div> Loading pregnancies...</td></tr>
+                  <tr><td colspan="7" class="loading-cell"><div class="spinner" style="margin: 0 auto 12px;"></div> Loading pregnancies...<\/div></td>
                 </tbody>
               </table>
             </div>
@@ -234,7 +233,7 @@
                   </tr>
                 </thead>
                 <tbody id="checkups-tbody">
-                  <tr><td colspan="8" class="loading-cell"><div class="spinner" style="margin: 0 auto 12px;"></div> Loading checkups...</td></tr>
+                  <tr><td colspan="8" class="loading-cell"><div class="spinner" style="margin: 0 auto 12px;"></div> Loading checkups...<\/div></td>
                 </tbody>
               </table>
             </div>
@@ -263,7 +262,7 @@
                   </tr>
                 </thead>
                 <tbody id="ultrasounds-tbody">
-                  <tr><td colspan="6" class="loading-cell"><div class="spinner" style="margin: 0 auto 12px;"></div> Loading ultrasounds...</td></tr>
+                  <tr><td colspan="6" class="loading-cell"><div class="spinner" style="margin: 0 auto 12px;"></div> Loading ultrasounds...<\/div></td>
                 </tbody>
               </table>
             </div>
@@ -293,7 +292,7 @@
                   </tr>
                 </thead>
                 <tbody id="labtests-tbody">
-                  <tr><td colspan="7" class="loading-cell"><div class="spinner" style="margin: 0 auto 12px;"></div> Loading lab tests...</td></tr>
+                  <tr><td colspan="7" class="loading-cell"><div class="spinner" style="margin: 0 auto 12px;"></div> Loading lab tests...<\/div></td>
                 </tbody>
               </table>
             </div>
@@ -323,7 +322,7 @@
                   </tr>
                 </thead>
                 <tbody id="children-tbody">
-                  <tr><td colspan="7" class="loading-cell"><div class="spinner" style="margin: 0 auto 12px;"></div> Loading children...</td></tr>
+                  <tr><td colspan="7" class="loading-cell"><div class="spinner" style="margin: 0 auto 12px;"></div> Loading children...<\/div></td>
                 </tbody>
               </table>
             </div>
@@ -437,17 +436,26 @@
           ((session.first_name?.[0] ?? "") + (session.last_name?.[0] ?? "")).toUpperCase() || "A";
         
         // --- Data Privacy Act (DPA 2012) Masking State ---
-        // Defaults to ON: patient PII stays hidden until an admin deliberately unmasks,
-        // and the unmask is written to the audit trail.
-        let isPrivacyMasked = true;
+        let isPrivacyMasked = false;
 
-        // Masks any free-text PII cell (name, barangay, email) and HTML-escapes it.
-        // Every table cell goes through here, so it must always return safe markup.
-        function maskText(value) {
-          if (value === null || value === undefined || value === "") return "—";
-          return window.maskText
-            ? window.maskText(value, isPrivacyMasked)
-            : esc(value);
+        function maskPhone(phone) {
+          if (!phone) return '—';
+          if (!isPrivacyMasked) return esc(phone);
+          const str = String(phone).trim();
+          if (str.length >= 7) {
+            return str.substring(0, 4) + "-***-" + str.substring(str.length - 4);
+          }
+          return '***-***';
+        }
+
+        function maskEmail(email) {
+          if (!email) return '—';
+          if (!isPrivacyMasked) return esc(email);
+          const parts = String(email).split('@');
+          if (parts.length === 2) {
+            return parts[0].charAt(0) + '***@' + parts[1];
+          }
+          return '***@***';
         }
 
         const privacyBtn = document.getElementById("toggle-privacy-btn");
@@ -510,21 +518,6 @@
           setTimeout(() => { t.style.animation = "fadeOut .3s ease forwards"; t.addEventListener("animationend", () => t.remove()); }, 4500);
         }
 
-        // Re-renders whichever tab is currently visible. Used when a display-wide
-        // setting changes (e.g. privacy masking) so the active table reflects it.
-        function renderCurrentTab() {
-          const active = document.querySelector(".tab-btn-modern.active")?.dataset.tab;
-          const renderers = {
-            mothers: renderMothers,
-            pregnancies: renderPregnancies,
-            checkups: renderCheckups,
-            ultrasounds: renderUltrasounds,
-            labtests: renderLabTests,
-            children: renderChildren,
-          };
-          renderers[active]?.();
-        }
-
         // ---------- Cached data ----------
         let cachedMothers = null;
         let cachedPregnancies = null;
@@ -539,36 +532,34 @@
           const tbody = document.getElementById("mothers-tbody");
           const search = document.getElementById("search-mothers")?.value.toLowerCase() || "";
           const bhcFilter = document.getElementById("filter-bhc-mothers")?.value || "";
-          if (!cachedMothers) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
+          if (!cachedMothers) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...<\/td><\/tr>'; return; }
           
           let filtered = cachedMothers.filter(m => {
             const name = [m.accounts?.first_name, m.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
-            const email = (m.accounts?.email_address || "").toLowerCase();
-            const barangay = (m.barangay || "").toLowerCase();
-            if (search && !name.includes(search) && !email.includes(search) && !barangay.includes(search)) return false;
-            if (bhcFilter && String(m.assigned_bhc_id) !== String(bhcFilter)) return false;
+            if (search && !(name.includes(search) || (m.accounts?.email_address||"").toLowerCase().includes(search) || (m.barangay||"").toLowerCase().includes(search))) return false;
+            if (bhcFilter && m.assigned_bhc_id != bhcFilter) return false;
             return true;
           });
+          document.getElementById("total-badge").textContent = `${filtered.length} mothers`;
           document.getElementById("mothers-count").textContent = filtered.length;
-          document.getElementById("total-badge").textContent = `${filtered.length} records`;
-
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-folder-open"></i> No mothers found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-users-slash"></i> No mothers found.<\/td><\/tr>';
             return;
           }
           tbody.innerHTML = filtered.map(m => {
             const name = [m.accounts?.first_name, m.accounts?.last_name].filter(Boolean).join(" ") || "—";
             const initials = name.charAt(0) || "?";
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern">${esc(initials)}</div><span style="font-weight:600;">${maskText(name)}</span></td></tr>
-              <td>${maskText(m.accounts?.email_address)}</td>
-              <td>${maskText(m.barangay)}</td>
+              <td><div class="mother-info"><div class="avatar-modern">${esc(initials)}</div><span style="font-weight:600;">${esc(name)}</span></div></td>
+              <td>${maskEmail(m.accounts?.email_address)}</td>
+              <td>${esc(m.barangay || "—")}</td>
               <td><span class="badge badge-admin">${esc(m.bhc?.bhc_name || "—")}</span></td>
-              <td>${fmtDate(m.birthdate)}</td>
-              <td><span class="badge-modern ${m.status === 'active' ? 'badge-active' : 'badge-inactive'}">${m.status || "active"}</span></td>
+              <td>${fmtDate(m.birthdate)}</div>
+              <td><span class="badge-modern ${m.status === 'active' ? 'badge-active' : 'badge-inactive'}">${m.status || "active"}</span></div>
               <td style="text-align:center;">
                 <button class="view-btn-modern" onclick="viewMotherDetails(${m.mother_id})"><i class="fa-solid fa-eye"></i> View</button>
-              </td>
+                <button class="view-btn-modern" style="background: var(--brand-primary); color: white; margin-left: 6px;" onclick="analyzeMother(${m.mother_id})"><i class="fa-solid fa-microchip"></i> Analyze</button>
+              </div>
             </tr>`;
           }).join("");
         }
@@ -578,7 +569,7 @@
           const search = document.getElementById("search-pregnancies")?.value.toLowerCase() || "";
           const riskFilter = document.getElementById("filter-risk")?.value || "";
           const statusFilter = document.getElementById("filter-pregnancy-status")?.value || "";
-          if (!cachedPregnancies) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
+          if (!cachedPregnancies) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...<\/td><\/tr>'; return; }
           
           let filtered = cachedPregnancies.filter(p => {
             const motherName = [p.mothers?.accounts?.first_name, p.mothers?.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
@@ -589,7 +580,7 @@
           });
           document.getElementById("pregnancies-count").textContent = filtered.length;
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-person-pregnant"></i> No pregnancies found.</td></tr>';
+            tbody.innerHTML = '</tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-person-pregnant"></i> No pregnancies found.<\/td><\/tr>';
             return;
           }
           tbody.innerHTML = filtered.map(p => {
@@ -597,23 +588,24 @@
             const riskClass = p.pregnancy_risk_level === 'low' ? 'badge-low' : (p.pregnancy_risk_level === 'medium' ? 'badge-medium' : 'badge-high');
             const statusClass = p.status === 'ongoing' ? 'badge-ongoing' : 'badge-ended';
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--warning);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></td></tr>
-              <td>${fmtDate(p.last_menstrual_period)}</td>
-              <td>${fmtDate(p.expected_date_of_delivery)}</td>
-              <td><span class="badge-modern ${riskClass}">${p.pregnancy_risk_level || "—"}</span></td>
-              <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">👶 ${p.fetal_count || 1}</span></td>
-              <td><span class="badge-modern ${statusClass}">${p.status}</span></td>
-              <td style="text-align:center;">
-                <button class="view-btn-modern" onclick="viewPregnancyDetails(${p.pregnancy_id})"><i class="fa-solid fa-eye"></i> View</button>
-              </td>
-            </tr>`;
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--warning);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${esc(name)}</span></div></td>
+              <td>${fmtDate(p.last_menstrual_period)}</div>
+              <td>${fmtDate(p.expected_date_of_delivery)}</div>
+              <td><span class="badge-modern ${riskClass}">${p.pregnancy_risk_level || "—"}</span></div>
+              <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">👶 ${p.fetal_count || 1}</span></div>
+              <td><span class="badge-modern ${statusClass}">${p.status}</span></div>
+              <td style=\"text-align:center;\">
+                <button class=\"view-btn-modern\" onclick=\"viewPregnancyDetails(${p.pregnancy_id})\"><i class=\"fa-solid fa-eye\"></i> View</button>
+                <button class=\"view-btn-modern\" style=\"background: var(--brand-primary); color: white; margin-left: 6px;\" onclick=\"analyzePregnancy(${p.pregnancy_id})\"><i class=\"fa-solid fa-microchip\"></i> Analyze</button>
+              </div>
+            </table>`;
           }).join("");
         }
 
         function renderCheckups() {
           const tbody = document.getElementById("checkups-tbody");
           const search = document.getElementById("search-checkups")?.value.toLowerCase() || "";
-          if (!cachedCheckups) { tbody.innerHTML = '<tr><td colspan="8" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
+          if (!cachedCheckups) { tbody.innerHTML = '<tr><td colspan="8" class="loading-cell"><div class="spinner"></div> Loading...<\/td><\/tr>'; return; }
           
           let filtered = cachedCheckups.filter(c => {
             const motherName = [c.pregnancies?.mothers?.accounts?.first_name, c.pregnancies?.mothers?.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
@@ -621,7 +613,7 @@
           });
           document.getElementById("checkups-count").textContent = filtered.length;
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="loading-cell"><i class="fa-solid fa-stethoscope"></i> No checkups found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="loading-cell"><i class="fa-solid fa-stethoscope"></i> No checkups found.<\/td><\/tr>';
             return;
           }
           tbody.innerHTML = filtered.map(c => {
@@ -629,14 +621,14 @@
             const bp = `${c.blood_pressure_systolic || "—"}/${c.blood_pressure_diastolic || "—"}`;
             const isHigh = (c.blood_pressure_systolic >= 140 || c.blood_pressure_diastolic >= 90);
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--info);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></td></tr>
-              <td>${fmtDateTime(c.checkup_datetime)}</td>
-              <td>${c.age_of_gestation || "—"} wks</td>
-              <td>${c.checkup_weight || "—"} kg</td>
-              <td><span ${isHigh ? 'style="color:var(--error);font-weight:bold;"' : ""}>${bp}</span></td>
-              <td>${c.fetal_heart_beat || "—"} bpm</td>
-              <td><span class="badge-modern" style="${c.edema === 'severe' ? 'background:var(--error-10);color:var(--error);' : 'background:var(--warning-10);color:var(--warning);'}">${c.edema || "none"}</span></td>
-              <td>${fmtDate(c.next_schedule)}</td>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--info);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${esc(name)}</span></div></td>
+              <td>${fmtDateTime(c.checkup_datetime)}</div>
+              <td>${c.age_of_gestation || "—"} wks</div>
+              <td>${c.checkup_weight || "—"} kg</div>
+              <td><span ${isHigh ? 'style="color:var(--error);font-weight:bold;"' : ""}>${bp}</span></div>
+              <td>${c.fetal_heart_beat || "—"} bpm</div>
+              <td><span class="badge-modern" style="${c.edema === 'severe' ? 'background:var(--error-10);color:var(--error);' : 'background:var(--warning-10);color:var(--warning);'}">${c.edema || "none"}</span></div>
+              <td style="text-align:center;"><button class="view-btn-modern" style="background: var(--brand-primary); color: white;" onclick="analyzeCheckup(${c.prenatal_checkup_id})"><i class="fa-solid fa-microchip"></i> Analyze</button></td>
             </tr>`;
           }).join("");
         }
@@ -644,7 +636,7 @@
         function renderUltrasounds() {
           const tbody = document.getElementById("ultrasounds-tbody");
           const search = document.getElementById("search-ultrasounds")?.value.toLowerCase() || "";
-          if (!cachedUltrasounds) { tbody.innerHTML = '<tr><td colspan="6" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
+          if (!cachedUltrasounds) { tbody.innerHTML = '<tr><td colspan="6" class="loading-cell"><div class="spinner"></div> Loading...<\/td><\/tr>'; return; }
           
           let filtered = cachedUltrasounds.filter(u => {
             const motherName = [u.pregnancies?.mothers?.accounts?.first_name, u.pregnancies?.mothers?.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
@@ -652,7 +644,7 @@
           });
           document.getElementById("ultrasounds-count").textContent = filtered.length;
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="loading-cell"><i class="fa-solid fa-waveform"></i> No ultrasounds found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="loading-cell"><i class="fa-solid fa-waveform"></i> No ultrasounds found.<\/td><\/tr>';
             return;
           }
           tbody.innerHTML = filtered.map(u => {
@@ -664,11 +656,11 @@
             const jsonUrls = JSON.stringify(imageUrls).replace(/"/g, '&quot;');
             const imgId = `us_${u.ultrasound_id}_${Date.now()}`;
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--brand-primary);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></td></tr>
-              <td>${fmtDate(u.ultrasound_date)}</td>
-              <td>${esc(u.ultrasound_location || "—")}</td>
-              <td>${esc(u.health_worker_name || "—")}</td>
-              <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(u.remarks || "—")}</td>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--brand-primary);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${esc(name)}</span></div></td>
+              <td>${fmtDate(u.ultrasound_date)}</div>
+              <td>${esc(u.ultrasound_location || "—")}</div>
+              <td>${esc(u.health_worker_name || "—")}</div>
+              <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(u.remarks || "—")}</div>
               <td style="text-align:center; display:flex; gap:6px; justify-content:center; align-items:center;">
                 ${hasImage ? 
                   `<div class="image-container" id="container_${imgId}" style="display:inline-block;">
@@ -676,8 +668,9 @@
                      ${moreCount ? `<span class="image-count-badge">${moreCount}</span>` : ''}
                    </div>` : 
                    '<div class="no-image"><i class="fa-solid fa-image"></i></div>'}
+                <button class="view-btn-modern" style="background: var(--brand-primary); color: white; padding: 6px 10px;" onclick="analyzeUltrasound(${u.ultrasound_id})"><i class="fa-solid fa-microchip"></i></button>
               </td>
-            </tr>`;
+            <tr>`;
           }).join("");
           setTimeout(() => {
             filtered.forEach(u => {
@@ -694,7 +687,7 @@
         function renderLabTests() {
           const tbody = document.getElementById("labtests-tbody");
           const search = document.getElementById("search-labtests")?.value.toLowerCase() || "";
-          if (!cachedLabTests) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
+          if (!cachedLabTests) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...<\/td><\/tr>'; return; }
           
           let filtered = cachedLabTests.filter(l => {
             const motherName = [l.pregnancies?.mothers?.accounts?.first_name, l.pregnancies?.mothers?.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
@@ -702,7 +695,7 @@
           });
           document.getElementById("labtests-count").textContent = filtered.length;
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-flask"></i> No lab tests found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-flask"></i> No lab tests found.<\/td><\/tr>';
             return;
           }
           tbody.innerHTML = filtered.map(l => {
@@ -714,12 +707,12 @@
             const jsonUrls = JSON.stringify(imageUrls).replace(/"/g, '&quot;');
             const imgId = `lt_${l.lab_test_id}_${Date.now()}`;
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--warning);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></td></tr>
-              <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">${esc(l.lab_test_type || "—")}</span></td>
-              <td>${fmtDate(l.lab_test_date)}</td>
-              <td>${esc(l.lab_test_location || "—")}</td>
-              <td>${esc(l.health_worker_name || "—")}</td>
-              <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(l.remarks || "—")}</td>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--warning);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${esc(name)}</span></div></td>
+              <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">${esc(l.lab_test_type || "—")}</span></div>
+              <td>${fmtDate(l.lab_test_date)}</div>
+              <td>${esc(l.lab_test_location || "—")}</div>
+              <td>${esc(l.health_worker_name || "—")}</div>
+              <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(l.remarks || "—")}</div>
               <td style="text-align:center; display:flex; gap:6px; justify-content:center; align-items:center;">
                 ${hasImage ? 
                   `<div class="image-container" id="container_${imgId}" style="display:inline-block;">
@@ -727,6 +720,7 @@
                      ${moreCount ? `<span class="image-count-badge">${moreCount}</span>` : ''}
                    </div>` : 
                   '<div class="no-image"><i class="fa-solid fa-file-alt"></i></div>'}
+                <button class="view-btn-modern" style="background: var(--brand-primary); color: white; padding: 6px 10px;" onclick="analyzeLabTest(${l.lab_test_id})"><i class="fa-solid fa-microchip"></i></button>
               </td>
             </tr>`;
           }).join("");
@@ -745,7 +739,7 @@
         function renderChildren() {
           const tbody = document.getElementById("children-tbody");
           const search = document.getElementById("search-children")?.value.toLowerCase() || "";
-          if (!cachedChildren) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
+          if (!cachedChildren) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...<\/td><\/tr>'; return; }
           
           let filtered = cachedChildren.filter(c => {
             const childName = [c.first_name, c.last_name].filter(Boolean).join(" ").toLowerCase();
@@ -754,7 +748,7 @@
           });
           document.getElementById("children-count").textContent = filtered.length;
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-baby"></i> No children found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-baby"></i> No children found.<\/td><\/tr>';
             return;
           }
           tbody.innerHTML = filtered.map(c => {
@@ -762,15 +756,16 @@
             const motherName = [c.mothers?.accounts?.first_name, c.mothers?.accounts?.last_name].filter(Boolean).join(" ") || "—";
             const genderIcon = c.sex === 'male' ? 'fa-mars' : (c.sex === 'female' ? 'fa-venus' : 'fa-genderless');
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--success);"><i class="fa-solid ${genderIcon}"></i></div><span style="font-weight:600;">${maskText(childName)}</span></td></tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--brand-primary);">${esc(motherName.charAt(0) || "?")}</div><span>${maskText(motherName)}</span></td></tr>
-              <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">${c.sex || "—"}</span></td>
-              <td>${fmtDate(c.birth_details?.birthdate)}</td>
-              <td>${c.birth_details?.birth_weight || "—"} kg</td>
-              <td>${esc(c.birth_details?.birthplace_city_municipality || "—")}</td>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--success);"><i class="fa-solid ${genderIcon}"></i></div><span style="font-weight:600;">${esc(childName)}</span></div></td>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--brand-primary);">${esc(motherName.charAt(0) || "?")}</div><span>${esc(motherName)}</span></div></td>
+              <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">${c.sex || "—"}</span></div>
+              <td>${fmtDate(c.birth_details?.birthdate)}</div>
+              <td>${c.birth_details?.birth_weight || "—"} kg</div>
+              <td>${esc(c.birth_details?.birthplace_city_municipality || "—")}</div>
               <td style="text-align:center;">
                 <button class="view-btn-modern" onclick="viewChildDetails(${c.child_id})"><i class="fa-solid fa-eye"></i> View</button>
-              </td>
+                <button class="view-btn-modern" style="background: var(--brand-primary); color: white; margin-left: 6px;" onclick="analyzeChild(${c.child_id})"><i class="fa-solid fa-microchip"></i> Analyze</button>
+              </div>
             </tr>`;
           }).join("");
         }
@@ -1062,6 +1057,237 @@
             showToast("Image downloaded successfully!", "success");
           } catch (error) {
             showToast("Failed to download image.", "error");
+          }
+        };
+
+        // ---------- AI: Analyze Patient (with corrected age) ----------
+        window.analyzeMother = async (motherId) => {
+          showToast('Fetching patient data...', 'info');
+          try {
+            const { data: mother, error: mErr } = await db
+              .from("mothers")
+              .select(`*, accounts(*), bhc(*)`)
+              .eq("mother_id", motherId)
+              .single();
+            if (mErr) throw mErr;
+
+            // Compute age and add to mother object
+            mother.age_years = computeAge(mother.birthdate);
+
+            const { data: pregnancies, error: pErr } = await db
+              .from("pregnancies")
+              .select(`
+                *,
+                pregnancy_outcomes(*),
+                prenatal_checkups(*),
+                ultrasounds(*),
+                lab_tests(*)
+              `)
+              .eq("mother_id", motherId);
+            if (pErr) throw pErr;
+
+            const { data: children, error: cErr } = await db
+              .from("children")
+              .select(`*, birth_details(*)`)
+              .eq("mother_id", motherId);
+            if (cErr) throw cErr;
+
+            const patientProfile = {
+              mother: mother,
+              pregnancies: pregnancies || [],
+              children: children || []
+            };
+
+            const analysis = await window.analyzePatient(patientProfile);
+            window.showAIAnalysis(`Patient Analysis: ${mother.accounts?.first_name} ${mother.accounts?.last_name}`, analysis);
+          } catch (err) {
+            showToast('Analysis failed: ' + err.message, 'error');
+          }
+        };
+
+        window.analyzePregnancy = async (pregnancyId) => {
+          showToast('Fetching pregnancy data...', 'info');
+          try {
+            const { data: pregnancy, error: pErr } = await db
+              .from("pregnancies")
+              .select(`*, mothers(mother_id, account_id, accounts(first_name, last_name)), prenatal_checkups(*), ultrasounds(*), lab_tests(*), pregnancy_outcomes(*)`)
+              .eq("pregnancy_id", pregnancyId)
+              .single();
+            if (pErr) throw pErr;
+
+            const { data: mother, error: mErr } = await db
+              .from("mothers")
+              .select(`*`)
+              .eq("mother_id", pregnancy.mother_id)
+              .single();
+            if (mErr) throw mErr;
+
+            // Compute age
+            mother.age_years = computeAge(mother.birthdate);
+
+            const patientProfile = {
+              mother: mother,
+              pregnancies: [pregnancy],
+              children: []
+            };
+
+            const analysis = await window.analyzePatient(patientProfile);
+            window.showAIAnalysis(`Pregnancy Analysis: ${pregnancy.mothers?.accounts?.first_name} ${pregnancy.mothers?.accounts?.last_name}`, analysis);
+          } catch (err) {
+            showToast('Analysis failed: ' + err.message, 'error');
+          }
+        };
+
+        window.analyzeCheckup = async (checkupId) => {
+          showToast('Fetching checkup data...', 'info');
+          try {
+            const { data: checkup, error: cErr } = await db
+              .from("prenatal_checkups")
+              .select(`*, pregnancies(pregnancy_id, mother_id, mothers(mother_id, accounts(first_name, last_name)))`)
+              .eq("prenatal_checkup_id", checkupId)
+              .single();
+            if (cErr) throw cErr;
+
+            const { data: pregnancy, error: pErr } = await db
+              .from("pregnancies")
+              .select(`*, prenatal_checkups(*), ultrasounds(*), lab_tests(*), pregnancy_outcomes(*)`)
+              .eq("pregnancy_id", checkup.pregnancy_id)
+              .single();
+            if (pErr) throw pErr;
+
+            const { data: mother, error: mErr } = await db
+              .from("mothers")
+              .select(`*`)
+              .eq("mother_id", checkup.pregnancies.mother_id)
+              .single();
+            if (mErr) throw mErr;
+
+            mother.age_years = computeAge(mother.birthdate);
+
+            const patientProfile = {
+              mother: mother,
+              pregnancies: [pregnancy],
+              children: []
+            };
+
+            const analysis = await window.analyzePatient(patientProfile);
+            window.showAIAnalysis(`Checkup Analysis: ${checkup.pregnancies?.mothers?.accounts?.first_name} ${checkup.pregnancies?.mothers?.accounts?.last_name}`, analysis);
+          } catch (err) {
+            showToast('Analysis failed: ' + err.message, 'error');
+          }
+        };
+
+        window.analyzeUltrasound = async (ultrasoundId) => {
+          showToast('Fetching ultrasound data...', 'info');
+          try {
+            const { data: ultrasound, error: uErr } = await db
+              .from("ultrasounds")
+              .select(`*, pregnancies(pregnancy_id, mother_id, mothers(mother_id, accounts(first_name, last_name)))`)
+              .eq("ultrasound_id", ultrasoundId)
+              .single();
+            if (uErr) throw uErr;
+
+            const { data: pregnancy, error: pErr } = await db
+              .from("pregnancies")
+              .select(`*, prenatal_checkups(*), ultrasounds(*), lab_tests(*), pregnancy_outcomes(*)`)
+              .eq("pregnancy_id", ultrasound.pregnancy_id)
+              .single();
+            if (pErr) throw pErr;
+
+            const { data: mother, error: mErr } = await db
+              .from("mothers")
+              .select(`*`)
+              .eq("mother_id", ultrasound.pregnancies.mother_id)
+              .single();
+            if (mErr) throw mErr;
+
+            mother.age_years = computeAge(mother.birthdate);
+
+            const patientProfile = {
+              mother: mother,
+              pregnancies: [pregnancy],
+              children: []
+            };
+
+            const analysis = await window.analyzePatient(patientProfile);
+            window.showAIAnalysis(`Ultrasound Analysis: ${ultrasound.pregnancies?.mothers?.accounts?.first_name} ${ultrasound.pregnancies?.mothers?.accounts?.last_name}`, analysis);
+          } catch (err) {
+            showToast('Analysis failed: ' + err.message, 'error');
+          }
+        };
+
+        window.analyzeLabTest = async (labTestId) => {
+          showToast('Fetching lab test data...', 'info');
+          try {
+            const { data: labTest, error: lErr } = await db
+              .from("lab_tests")
+              .select(`*, pregnancies(pregnancy_id, mother_id, mothers(mother_id, accounts(first_name, last_name)))`)
+              .eq("lab_test_id", labTestId)
+              .single();
+            if (lErr) throw lErr;
+
+            const { data: pregnancy, error: pErr } = await db
+              .from("pregnancies")
+              .select(`*, prenatal_checkups(*), ultrasounds(*), lab_tests(*), pregnancy_outcomes(*)`)
+              .eq("pregnancy_id", labTest.pregnancy_id)
+              .single();
+            if (pErr) throw pErr;
+
+            const { data: mother, error: mErr } = await db
+              .from("mothers")
+              .select(`*`)
+              .eq("mother_id", labTest.pregnancies.mother_id)
+              .single();
+            if (mErr) throw mErr;
+
+            mother.age_years = computeAge(mother.birthdate);
+
+            const patientProfile = {
+              mother: mother,
+              pregnancies: [pregnancy],
+              children: []
+            };
+
+            const analysis = await window.analyzePatient(patientProfile);
+            window.showAIAnalysis(`Lab Test Analysis: ${labTest.pregnancies?.mothers?.accounts?.first_name} ${labTest.pregnancies?.mothers?.accounts?.last_name}`, analysis);
+          } catch (err) {
+            showToast('Analysis failed: ' + err.message, 'error');
+          }
+        };
+
+        window.analyzeChild = async (childId) => {
+          showToast('Fetching child data...', 'info');
+          try {
+            const { data: child, error: chErr } = await db
+              .from("children")
+              .select(`*, mothers(mother_id, accounts(first_name, last_name)), birth_details(*)`)
+              .eq("child_id", childId)
+              .single();
+            if (chErr) throw chErr;
+
+            const { data: mother, error: mErr } = await db
+              .from("mothers")
+              .select(`*`)
+              .eq("mother_id", child.mother_id)
+              .single();
+            if (mErr) throw mErr;
+
+            // For child analysis, we also compute child's age
+            const childAge = computeAge(child.birth_details?.birthdate);
+            if (childAge !== null) {
+              child.age_years = childAge;
+            }
+
+            const patientProfile = {
+              mother: mother,
+              pregnancies: [],
+              children: [child]
+            };
+
+            const analysis = await window.analyzePatient(patientProfile);
+            window.showAIAnalysis(`Child Analysis: ${child.mothers?.accounts?.first_name} ${child.mothers?.accounts?.last_name}'s ${child.first_name}`, analysis);
+          } catch (err) {
+            showToast('Analysis failed: ' + err.message, 'error');
           }
         };
 

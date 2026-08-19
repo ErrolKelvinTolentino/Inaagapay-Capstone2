@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transfers — InaAgapay Admin</title>
+    <meta name="description" content="InaAgapay facility stock transfers" />
+    <link rel="icon" type="image/png" href="../images/logo_icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link rel="stylesheet" href="../styles/main.css" />
+    <link rel="stylesheet" href="../styles/transfers.css" />
+  </head>
+  <body>
+    <div class="app-layout">
+      <header class="app-header">
+        <div class="header-brand">
+          <button class="header-sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar"><i class="fa-solid fa-bars"></i></button>
+          <img src="../images/logo_icon.png" alt="InaAgapay" class="header-logo" />
+          <img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" />
+        </div>
+        <div class="header-right">
+          <span class="header-badge">Admin Portal</span>
+          <div class="header-user">
+            <div class="header-avatar" id="header-avatar">A</div>
+            <span class="header-user-name" id="header-user-name">Admin</span>
+          </div>
+        </div>
+      </header>
+
+      <aside class="app-sidebar">
+        <span class="sidebar-section-label">Main Menu</span>
+        <ul class="sidebar-nav">
+          <li><a href="dashboard.html"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
+          <li><a href="accounts.html"><i class="fa-solid fa-users"></i> Account Management</a></li>
+          <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
+          <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
+          <li><a href="transfers.html" class="active"><i class="fa-solid fa-truck-fast"></i> Transfers</a></li>
+          <li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">Patient Management</span>
+        <ul class="sidebar-nav">
+          <li><a href="patient-records.html"><i class="fa-solid fa-folder-open"></i> Patient Records</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">System</span>
+        <ul class="sidebar-nav">
+          <li><a href="audit-trail.html"><i class="fa-solid fa-clipboard-list"></i> Audit Trail</a></li>
+          <li><a href="backup.html"><i class="fa-solid fa-database"></i> Backup &amp; Restore</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-footer-nav">
+          <button class="sidebar-logout" id="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+        </div>
+      </aside>
+
+      <main class="app-main">
+        <div class="page-header transfer-page-header">
+          <div class="page-title-block transfer-page-copy">
+            <span class="transfer-eyebrow"><i class="fa-solid fa-truck-fast"></i> Inventory logistics</span>
+            <h1 class="page-title">Transfers</h1>
+            <p class="page-subtitle">Plan, send, and monitor facility stock transfers while keeping batch expiry and receiving confirmation visible.</p>
+          </div>
+          <div class="page-actions transfer-page-actions">
+            <button type="button" class="btn btn-secondary" id="open-batch-modal-btn"><i class="fa-solid fa-box-open"></i> Record Stock Received</button>
+            <button type="button" class="btn btn-primary" id="open-issue-modal-btn"><i class="fa-solid fa-truck-arrow-right"></i> Send Stock</button>
+          </div>
+        </div>
+
+        <div class="transfer-kpi-grid" aria-label="Transfer summary">
+          <article class="transfer-stat-card">
+            <span class="transfer-stat-icon"><i class="fa-solid fa-truck-fast"></i></span>
+            <span><strong class="transfer-stat-value" id="kpi-in-transit">—</strong><span class="transfer-stat-label">Transfers in transit</span></span>
+          </article>
+          <article class="transfer-stat-card" data-tone="warning">
+            <span class="transfer-stat-icon"><i class="fa-regular fa-clock"></i></span>
+            <span><strong class="transfer-stat-value" id="kpi-due-soon">—</strong><span class="transfer-stat-label">Expected within 7 days</span></span>
+          </article>
+          <article class="transfer-stat-card" data-tone="success">
+            <span class="transfer-stat-icon"><i class="fa-solid fa-circle-check"></i></span>
+            <span><strong class="transfer-stat-value" id="kpi-received-month">—</strong><span class="transfer-stat-label">Received this month</span></span>
+          </article>
+          <article class="transfer-stat-card" data-tone="neutral">
+            <span class="transfer-stat-icon"><i class="fa-solid fa-boxes-stacked"></i></span>
+            <span><strong class="transfer-stat-value" id="kpi-units-transit">—</strong><span class="transfer-stat-label">Units currently moving</span></span>
+          </article>
+        </div>
+
+        <div class="transfer-guidance">
+          <i class="fa-solid fa-circle-info"></i>
+          <span>New supply is recorded at Central Storage first. Use <strong>Send Stock</strong> to dispatch it to a health center; stock is added to the destination only after the receiving midwife confirms receipt.</span>
+        </div>
+
+        <section class="transfer-card" aria-labelledby="transfer-list-title">
+          <div class="transfer-card-header">
+            <div>
+              <h2 class="transfer-card-heading" id="transfer-list-title"><i class="fa-solid fa-route"></i> Facility transfers</h2>
+              <p class="transfer-card-description">Review delivery timing, batch shelf life, and the receipt status for every dispatched transfer.</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="refresh-transfers-btn"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+          </div>
+          <div class="transfer-toolbar">
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input class="form-control" type="search" id="transfer-search" placeholder="Search transfer, item, or destination" aria-label="Search transfers" />
+            </div>
+            <select class="form-select" id="transfer-filter-status" aria-label="Filter transfers by status">
+              <option value="">All transfer statuses</option>
+              <option value="pending_receipt">In transit</option>
+              <option value="received">Received</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div class="transfer-table-wrap">
+            <table class="transfer-table">
+              <thead>
+                <tr>
+                  <th>Transfer</th>
+                  <th>Destination</th>
+                  <th>Item / batch</th>
+                  <th>Quantity</th>
+                  <th>Issue date</th>
+                  <th>Delivery plan</th>
+                  <th>Receipt status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="transfers-tbody">
+                <tr><td colspan="8" class="transfer-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading facility transfers…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+
+      <footer class="app-footer"><i class="fa-solid fa-shield-halved"></i> InaAgapay Admin Portal <span>•</span> Data Privacy Act of 2012 (RA 10173)</footer>
+    </div>
+
+    <!-- Record Stock Received -->
+    <div class="transfer-modal-overlay" id="modal-batch" role="dialog" aria-modal="true" aria-labelledby="batch-modal-title" aria-hidden="true">
+      <div class="transfer-modal" role="document">
+        <div class="transfer-modal-header">
+          <h2 class="transfer-modal-title" id="batch-modal-title"><i class="fa-solid fa-box-open"></i> Record Stock Received</h2>
+          <button type="button" class="transfer-modal-close" data-close-modal="modal-batch" aria-label="Close stock received form"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="transfer-modal-body">
+          <p class="transfer-modal-intro">New supply is recorded at Central Storage first. Use Send Stock afterward to distribute it to a health center.</p>
+          <div id="batch-form-error" class="transfer-form-error" role="alert"></div>
+          <form id="form-batch" novalidate>
+            <div class="transfer-form-section-label">Item and batch</div>
+            <div class="transfer-form-group">
+              <label class="transfer-form-label" for="batch-item-id">Inventory Item <span class="transfer-required">*</span></label>
+              <select class="transfer-select" id="batch-item-id" required><option value="">— Select Item —</option></select>
+            </div>
+            <div class="transfer-form-row">
+              <div class="transfer-form-group">
+                <label class="transfer-form-label" for="batch-number">Batch / Lot Number <span class="transfer-required">*</span></label>
+                <input class="transfer-control" type="text" id="batch-number" placeholder="e.g. BATCH-2026-09A" required />
+              </div>
+              <div class="transfer-form-group">
+                <label class="transfer-form-label" for="batch-qty">Received Quantity <span class="transfer-required">*</span></label>
+                <input class="transfer-control" type="number" id="batch-qty" min="1" placeholder="e.g. 500" required />
+              </div>
+            </div>
+            <div class="transfer-form-section-label">Dates and stock source</div>
+            <div class="transfer-form-row">
+              <div class="transfer-form-group">
+                <label class="transfer-form-label" for="batch-received-date">Received Date <span class="transfer-required">*</span></label>
+                <input class="transfer-control" type="date" id="batch-received-date" required />
+              </div>
+              <div class="transfer-form-group">
+                <label class="transfer-form-label" for="batch-expiration-date">Expiration Date <span class="transfer-required">*</span></label>
+                <input class="transfer-control" type="date" id="batch-expiration-date" required />
+              </div>
+            </div>
+            <div class="transfer-form-group">
+              <label class="transfer-form-label" for="batch-facility-id">Receiving Location</label>
+              <select class="transfer-select" id="batch-facility-id" disabled><option value="central">Central Storage</option></select>
+              <span class="transfer-form-hint">Health center stock increases only after a confirmed facility transfer.</span>
+            </div>
+            <div class="transfer-form-group">
+              <label class="transfer-form-label" for="batch-manufacturer">Manufacturer / Stock Source</label>
+              <input class="transfer-control" type="text" id="batch-manufacturer" placeholder="e.g. DOH Central, Pfizer, GSK" />
+            </div>
+          </form>
+        </div>
+        <div class="transfer-modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="modal-batch">Cancel</button>
+          <button type="button" class="btn btn-primary" id="save-batch-btn"><i class="fa-solid fa-check"></i> Save Stock Received</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Send Stock -->
+    <div class="transfer-modal-overlay" id="modal-issue" role="dialog" aria-modal="true" aria-labelledby="issue-modal-title" aria-hidden="true">
+      <div class="transfer-modal" role="document">
+        <div class="transfer-modal-header">
+          <h2 class="transfer-modal-title" id="issue-modal-title"><i class="fa-solid fa-truck-arrow-right"></i> Send Stock</h2>
+          <button type="button" class="transfer-modal-close" data-close-modal="modal-issue" aria-label="Close send stock form"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="transfer-modal-body">
+          <p class="transfer-modal-intro">Plan the delivery before issuing. The check below compares arrival time, batch expiry, destination stock, and stock already in transit.</p>
+          <div id="issue-form-error" class="transfer-form-error" role="alert"></div>
+          <form id="form-issue" novalidate>
+            <section class="transfer-issue-section">
+              <h3 class="transfer-issue-section-title"><span class="transfer-step-number">1</span> Stock and destination</h3>
+              <div class="transfer-form-group">
+                <label class="transfer-form-label" for="issue-source-batch">Source Batch — Central Storage <span class="transfer-required">*</span></label>
+                <select class="transfer-select" id="issue-source-batch" required><option value="">— Select Central Batch —</option></select>
+                <span class="transfer-form-hint">“Use First” follows earliest-expiry-first-out. The safety check will warn if that batch cannot arrive before it expires.</span>
+              </div>
+              <div class="transfer-delivery-grid">
+                <div class="transfer-form-group">
+                  <label class="transfer-form-label" for="issue-target-bhc">Destination Health Center <span class="transfer-required">*</span></label>
+                  <select class="transfer-select" id="issue-target-bhc" required><option value="">— Select Health Center —</option></select>
+                </div>
+                <div class="transfer-form-group">
+                  <label class="transfer-form-label" for="issue-qty">Quantity to Send <span class="transfer-required">*</span></label>
+                  <input class="transfer-control" type="number" id="issue-qty" min="1" placeholder="e.g. 20" required />
+                </div>
+              </div>
+            </section>
+            <section class="transfer-issue-section">
+              <h3 class="transfer-issue-section-title"><span class="transfer-step-number">2</span> Delivery plan</h3>
+              <div class="transfer-delivery-grid">
+                <div class="transfer-form-group">
+                  <label class="transfer-form-label" for="issue-expected-date">Expected Delivery Date <span class="transfer-required">*</span></label>
+                  <input class="transfer-control" type="date" id="issue-expected-date" required />
+                  <span class="transfer-form-hint" id="issue-delivery-source">Select a destination and choose the agreed arrival date from the calendar.</span>
+                </div>
+                <div class="transfer-arrival-card" aria-live="polite">
+                  <span>Expected arrival</span>
+                  <strong id="issue-expected-arrival">—</strong>
+                  <small id="issue-delivery-duration-copy">Choose a date to calculate delivery duration.</small>
+                </div>
+              </div>
+            </section>
+            <section class="transfer-safety-card" id="issue-safety-check" aria-live="polite">
+              <div class="transfer-safety-card-head">
+                <div><span class="transfer-safety-eyebrow">Before sending</span><h3 id="issue-safety-title">Delivery and expiry check</h3></div>
+                <span class="transfer-safety-badge" id="issue-safety-status"><i class="fa-solid fa-list-check"></i> Waiting for details</span>
+              </div>
+              <p id="issue-safety-message">Select a batch, destination, quantity, and delivery time to check whether the stock should arrive before expiry and before the health center runs out.</p>
+            </section>
+            <div class="transfer-form-group" style="margin-top: 16px;">
+              <label class="transfer-form-label" for="issue-reference">Reference or Remarks</label>
+              <input class="transfer-control" type="text" id="issue-reference" placeholder="e.g. Monthly stock allocation" />
+              <span class="transfer-form-hint">The expected arrival and shelf life are saved with the transfer and compared with the actual receipt later.</span>
+            </div>
+          </form>
+        </div>
+        <div class="transfer-modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="modal-issue">Cancel</button>
+          <button type="button" class="btn btn-primary" id="save-issue-btn"><i class="fa-solid fa-truck-arrow-right"></i> Send Stock</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Update Delivery Plan -->
+    <div class="transfer-modal-overlay" id="modal-transfer-update" role="dialog" aria-modal="true" aria-labelledby="update-modal-title" aria-hidden="true">
+      <div class="transfer-modal" role="document">
+        <div class="transfer-modal-header">
+          <h2 class="transfer-modal-title" id="update-modal-title"><i class="fa-solid fa-calendar-days"></i> Update Delivery Plan</h2>
+          <button type="button" class="transfer-modal-close" data-close-modal="modal-transfer-update" aria-label="Close transfer update form"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="transfer-modal-body">
+          <p class="transfer-modal-intro">Update the expected arrival or record a delivery situation. Item, quantity, destination, and receipt status cannot be changed here.</p>
+          <div id="update-form-error" class="transfer-form-error" role="alert"></div>
+          <input type="hidden" id="transfer-update-id" />
+          <div class="transfer-summary-grid" id="transfer-update-summary"></div>
+          <form id="form-transfer-update" novalidate>
+            <div class="transfer-delivery-grid">
+              <div class="transfer-form-group">
+                <label class="transfer-form-label" for="transfer-update-date">New Expected Arrival <span class="transfer-required">*</span></label>
+                <input class="transfer-control" type="date" id="transfer-update-date" required />
+              </div>
+              <div class="transfer-form-group">
+                <label class="transfer-form-label" for="transfer-update-situation">Delivery Situation <span class="transfer-required">*</span></label>
+                <select class="transfer-select" id="transfer-update-situation" required>
+                  <option value="on_schedule">On schedule</option>
+                  <option value="delayed">Delayed</option>
+                  <option value="rescheduled">Rescheduled</option>
+                  <option value="transport_issue">Transport issue</option>
+                  <option value="facility_coordination">Facility coordination</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+            <div class="transfer-form-group">
+              <label class="transfer-form-label" for="transfer-update-note">Situation Note</label>
+              <textarea class="transfer-textarea" id="transfer-update-note" maxlength="500" placeholder="Explain the delay, reschedule, transport issue, or other change."></textarea>
+              <span class="transfer-form-hint">A note is required when the delivery is delayed, rescheduled, affected by an issue, or expected to arrive after batch expiry.</span>
+            </div>
+          </form>
+          <section class="transfer-safety-card" id="transfer-update-check" aria-live="polite">
+            <div class="transfer-safety-card-head">
+              <div><span class="transfer-safety-eyebrow">Updated plan</span><h3 id="transfer-update-check-title">Choose an expected arrival date</h3></div>
+              <span class="transfer-safety-badge" id="transfer-update-check-status"><i class="fa-regular fa-calendar"></i> Waiting for date</span>
+            </div>
+            <p id="transfer-update-check-message">The system will compare the new arrival date with the batch expiration date.</p>
+          </section>
+          <div class="transfer-lock-note"><i class="fa-solid fa-lock"></i><span>Receipt remains <strong>In Transit</strong> until the receiving midwife confirms it. Updating this plan does not move or add stock.</span></div>
+        </div>
+        <div class="transfer-modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="modal-transfer-update">Cancel</button>
+          <button type="button" class="btn btn-primary" id="save-transfer-update-btn"><i class="fa-solid fa-floppy-disk"></i> Save Delivery Update</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="common-security.js"></script>
+    <script src="live-refresh.js"></script>
+    <script src="transfers.js"></script>
+  </body>
+</html>

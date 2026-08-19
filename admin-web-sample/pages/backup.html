@@ -90,7 +90,7 @@
           />
         </div>
         <div class="header-right">
-          <span class="header-badge">RHU Portal</span>
+          <span class="header-badge">Admin Portal</span>
           <div class="header-user">
             <div class="header-avatar" id="header-avatar">A</div>
             <span class="header-user-name" id="header-user-name">Admin</span>
@@ -120,11 +120,6 @@
           <li>
             <a href="inventory.html"
               ><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a
-            >
-          </li>
-          <li>
-            <a href="transfers.html"
-              ><i class="fa-solid fa-truck-fast"></i> Transfers</a
             >
           </li>
           <li>
@@ -176,18 +171,6 @@
         </div>
 
         <!-- Warning Banner -->
-        <div class="alert alert-error" style="margin-bottom: 16px">
-          <i class="fa-solid fa-user-shield"></i>
-          <div>
-            <strong>Handle as confidential patient data.</strong> This export
-            contains identifiable maternal and child health records covered by the
-            Data Privacy Act of 2012 (RA 10173). Credential columns
-            (password hashes, auth identifiers) are stripped automatically, but the
-            file is <strong>not encrypted</strong>. Store it on approved RHU storage
-            only — never in personal cloud drives or email.
-          </div>
-        </div>
-
         <div class="alert alert-warning" style="margin-bottom: 24px">
           <i class="fa-solid fa-triangle-exclamation"></i>
           <div>
@@ -659,47 +642,20 @@
           });
         }
 
-        /* ── Credential columns never leave the database ──
-           The export lands as a plaintext file in an admin's Downloads folder.
-           Password hashes there are offline-crackable, and auth identifiers let a
-           leaked backup be correlated against live accounts. Neither is needed to
-           restore operational data. */
-        const SENSITIVE_COLUMNS = [
-          "password_hash",
-          "auth_id",
-          "temporary_password",
-          "reset_token",
-          "otp_code",
-        ];
-
-        function redactRows(rows) {
-          if (!Array.isArray(rows)) return rows;
-          return rows.map((row) => {
-            if (!row || typeof row !== "object") return row;
-            const copy = { ...row };
-            SENSITIVE_COLUMNS.forEach((col) => {
-              if (col in copy) copy[col] = null;
-            });
-            return copy;
-          });
-        }
-
-        /* ── Tables list, in dependency order (parents first) ──
-           Restore follows this order so foreign keys resolve; a child table
-           restored before its parent fails the FK constraint. */
+        /* ── Tables list ── */
         const TABLES = [
           "accounts",
-          "bhc",
           "midwives",
           "mothers",
+          "bhc",
           "pregnancies",
           "prenatal_checkups",
           "children",
           "birth_details",
           "child_details",
           "vaccines",
-          "immunization_schedule",
           "immunization_record",
+          "immunization_schedule",
           "emergency_contacts",
           "medical_conditions",
           "allergies",
@@ -715,51 +671,6 @@
           "inventory_transactions",
           "audit_trail",
         ];
-
-        /* Explicit primary keys for the upsert conflict target.
-           Previously the restore used Object.keys(rows[0])[0] — the first JSON key of
-           the first row — which upserts on the wrong column as soon as column order
-           differs, silently duplicating or overwriting records.
-
-           These names are taken from the columns the application itself queries
-           against the live database. Note that database/active-draftschema.sql has
-           drifted from the deployed schema (it models ultrasounds/lab_tests on
-           encounter_id, while the app filters on ultrasound_id/lab_test_id), so it is
-           not a reliable source here.
-
-           A table absent from this map is skipped rather than guessed at. Add an
-           entry only after confirming the key against the live database. */
-        const PRIMARY_KEYS = {
-          accounts: "account_id",
-          bhc: "bhc_id",
-          midwives: "midwife_id",
-          mothers: "mother_id",
-          pregnancies: "pregnancy_id",
-          prenatal_checkups: "prenatal_checkup_id",
-          children: "child_id",
-          birth_details: "birth_details_id",
-          vaccines: "vaccine_id",
-          immunization_schedule: "immunization_schedule_id",
-          emergency_contacts: "emergency_contact_id",
-          medical_conditions: "med_condition_id",
-          allergies: "allergy_id",
-          ultrasounds: "ultrasound_id",
-          lab_tests: "lab_test_id",
-          mother_medications: "mother_medication_id",
-          given_medications: "given_medication_id",
-          journal_entries: "entry_id",
-          inventory_items: "item_id",
-          inventory_batches: "batch_id",
-          inventory_transactions: "transaction_id",
-          audit_trail: "audit_id",
-          // Unverified — confirm the key before enabling restore for these:
-          // child_details, immunization_record, deliveries, checkup_schedule
-        };
-
-        function restoreRank(table) {
-          const idx = TABLES.indexOf(table);
-          return idx === -1 ? TABLES.length : idx;
-        }
 
         /* ── Render custom checkboxes ── */
         const checksContainer = document.getElementById("table-checkboxes");
@@ -828,8 +739,6 @@
 
             const backup = {
               exported_at: new Date().toISOString(),
-              exported_by: session.account_id,
-              redacted_columns: SENSITIVE_COLUMNS,
               tables: {},
             };
             let done = 0;
@@ -839,7 +748,7 @@
               try {
                 const { data, error } = await db.from(table).select("*");
                 if (error) throw error;
-                backup.tables[table] = redactRows(data || []);
+                backup.tables[table] = data || [];
               } catch (e) {
                 backup.tables[table] = { error: e.message };
               }
@@ -964,48 +873,24 @@
             prog.style.display = "block";
 
             let done = 0;
-            // Restore parents before children so foreign keys resolve. Tables not
-            // listed here run afterwards in file order.
-            const orderedTables = [...tables].sort(
-              (a, b) => restoreRank(a) - restoreRank(b),
-            );
-
-            for (const table of orderedTables) {
-              txt.textContent = `Restoring ${table}… (${done + 1}/${orderedTables.length})`;
+            for (const table of tables) {
+              txt.textContent = `Restoring ${table}… (${done + 1}/${tables.length})`;
               const rows = restoreData.tables[table];
               if (!Array.isArray(rows) || rows.length === 0) {
                 done++;
-                bar.style.width = `${(done / orderedTables.length) * 100}%`;
+                bar.style.width = `${(done / tables.length) * 100}%`;
                 continue;
               }
-
-              const conflictKey = PRIMARY_KEYS[table];
-              if (!conflictKey) {
-                errors.push(`${table}: no known primary key — skipped to avoid corrupting rows`);
-                done++;
-                bar.style.width = `${(done / orderedTables.length) * 100}%`;
-                continue;
-              }
-
               try {
-                // Redacted credential columns are exported as null. Sending them back
-                // would overwrite every live password hash with null and lock all
-                // users out, so drop those keys entirely instead of upserting them.
-                const payload = rows.map((row) => {
-                  const copy = { ...row };
-                  SENSITIVE_COLUMNS.forEach((col) => delete copy[col]);
-                  return copy;
-                });
-
                 const { error } = await db
                   .from(table)
-                  .upsert(payload, { onConflict: conflictKey });
+                  .upsert(rows, { onConflict: Object.keys(rows[0])[0] });
                 if (error) throw error;
               } catch (e) {
                 errors.push(`${table}: ${e.message}`);
               }
               done++;
-              bar.style.width = `${(done / orderedTables.length) * 100}%`;
+              bar.style.width = `${(done / tables.length) * 100}%`;
             }
 
             /* Audit */
@@ -1045,7 +930,7 @@
           const tbody = document.getElementById("history-tbody");
           if (!data || data.length === 0) {
             tbody.innerHTML =
-              '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--text-secondary);">No backup/restore history.</td></tr>';
+              '<tr><td colspan="4" style="text-align:center;padding:28px;color:var(--text-secondary);">No backup/restore history.</div></tr>';
             return;
           }
           tbody.innerHTML = data
@@ -1057,15 +942,15 @@
                 : "System";
               const isBackup = l.action === "database_backup";
               return `<tr>
-        <td style="font-size:12.5px;color:var(--text-secondary);white-space:nowrap;">${fmtDT(l.action_timestamp)}</td>
-        <td style="font-weight:600;">${esc(who)}</td>
+        <td style="font-size:12.5px;color:var(--text-secondary);white-space:nowrap;">${fmtDT(l.action_timestamp)}</div>
+        <td style="font-weight:600;">${esc(who)}</div>
         <td>
           <span class="badge ${isBackup ? "badge-low" : "badge-medium"}">
             <i class="fa-solid ${isBackup ? "fa-download" : "fa-upload"}"></i>
             ${isBackup ? "Backup" : "Restore"}
           </span>
-        </td>
-        <td style="font-size:13px;color:var(--text-secondary);">${esc(l.description || "—")}</td>
+        </div>
+        <td style="font-size:13px;color:var(--text-secondary);">${esc(l.description || "—")}</div>
       </tr>`;
             })
             .join("");

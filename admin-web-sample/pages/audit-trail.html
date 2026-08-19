@@ -30,7 +30,7 @@
           <img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" />
         </div>
         <div class="header-right">
-          <span class="header-badge">RHU Portal</span>
+          <span class="header-badge">Admin Portal</span>
           <div class="header-user">
             <div class="header-avatar" id="header-avatar">A</div>
             <span class="header-user-name" id="header-user-name">Admin</span>
@@ -45,7 +45,6 @@
           <li><a href="accounts.html"><i class="fa-solid fa-users"></i> Account Management</a></li>
           <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
           <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
-          <li><a href="transfers.html"><i class="fa-solid fa-truck-fast"></i> Transfers</a></li>
           <li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li>
         </ul>
         <div class="sidebar-divider"></div>
@@ -596,6 +595,28 @@
           else if(el) el.addEventListener('change',applyFilters);
         });
         loadAudit();
+
+        // AI: Analyze current activity logs
+        document.getElementById('analyze-activity-btn').addEventListener('click', async () => {
+          if (!filtered.length) {
+            showToast('No activity logs to analyze.', 'warning');
+            return;
+          }
+          const btn = document.getElementById('analyze-activity-btn');
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Analyzing...';
+          
+          try {
+            const analysis = await window.analyzeActivity(filtered);
+            window.showAIAnalysis('Audit Trail Analysis', analysis);
+          } catch (err) {
+            showToast('Analysis failed: ' + err.message, 'error');
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+          }
+        });
 
         function showToast(msg, type) {
           const icons = { success: "fa-circle-check", error: "fa-circle-xmark", warning: "fa-triangle-exclamation", info: "fa-circle-info" };
