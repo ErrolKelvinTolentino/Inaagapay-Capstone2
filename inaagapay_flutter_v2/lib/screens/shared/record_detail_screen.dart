@@ -15,6 +15,7 @@ import '../../widgets/secondary_header.dart';
 import '../../widgets/profile_section.dart';
 import '../../widgets/profile_header_card.dart';
 import '../../services/blood_pressure_reference.dart';
+import '../../services/lab_test_reference.dart';
 import '../../services/lab_cbc_interpretation_engine.dart';
 import '../../services/ultrasound_interpretation_engine.dart' show MonitoringClassification, Trimester, UltrasoundInterpretationEngine;
 
@@ -70,12 +71,24 @@ class RecordDetailScreen extends StatefulWidget {
     this.isMidwifeApproved,
     this.remarksSource,
     this.patient,
+    this.resultRows = const [],
+    this.resultsTitle,
   });
 
   /// `prenatal_checkups.remarks_source` — one of `midwife_authored`,
   /// `ai_generated_approved` or `ai_generated_edited`. Decides how the checkup
   /// summary is labelled. Null on records that do not carry the column, where
   /// the summary is labelled neutrally rather than credited to anyone.
+  /// The test's own results, as label/value pairs from [LabTestReference].
+  ///
+  /// Rendered above the record's metadata, because the result is the reason
+  /// anyone opens a lab record. Blood Group: B, Rh Factor: POSITIVE was
+  /// previously the last thing on the screen, under who typed it and where.
+  final List<MapEntry<String, String>> resultRows;
+
+  /// Heading for that section — "Glucose Tolerance", "Blood Count".
+  final String? resultsTitle;
+
   /// Whose record this is. Pinned above everything else.
   final RecordPatient? patient;
 
@@ -183,8 +196,15 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
         fullName: patient.name,
         patientNumber: patient.idLabel,
         chips: [
+          // Labelled, because this record now carries two dates that are
+          // easily confused: when the scan or sample was taken, and when it
+          // reached the health centre. The pill states the second; the first
+          // is a labelled row in the details below.
           if (when.isNotEmpty)
-            ProfileHeaderChip(icon: widget.icon, text: when),
+            ProfileHeaderChip(
+              icon: Icons.event_available_outlined,
+              text: "${_t("Recorded", "Naitala")} $when",
+            ),
           if (who.isNotEmpty && who != "—")
             ProfileHeaderChip(
               icon: Icons.person_outline_rounded,
@@ -1319,6 +1339,14 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Results first. Everything below this is provenance.
+        if (widget.resultRows.isNotEmpty) ...[
+          _buildDetailSection(
+            widget.resultsTitle ?? _t("Results", "Mga Resulta"),
+            widget.resultRows,
+          ),
+          const SizedBox(height: 10),
+        ],
         if (rows.isEmpty)
           Container(
             width: double.infinity,
@@ -1774,6 +1802,29 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     if (k.contains("institution")) return Icons.apartment_rounded;
     if (k.contains("profession")) return Icons.badge_outlined;
     if (k.contains("name")) return Icons.person_outline_rounded;
+
+    // Lab result fields. Without these the timed glucose samples fell through
+    // to the fallback and drew a column of dashes down the left of the
+    // results card, which read as empty rather than as neutral.
+    if (k.contains("fasting") || k.contains("hour")) {
+      return Icons.water_drop_outlined;
+    }
+    if (k.contains("haemoglobin") ||
+        k.contains("hemoglobin") ||
+        k.contains("haematocrit") ||
+        k.contains("hematocrit")) {
+      return Icons.bloodtype_outlined;
+    }
+    if (k.contains("whitebloodcells") || k.contains("platelets")) {
+      return Icons.scatter_plot_outlined;
+    }
+    if (k.contains("protein") || k.contains("glucose")) {
+      return Icons.science_outlined;
+    }
+    if (k.contains("hbsag") || k.contains("vdrl") || k.contains("hiv")) {
+      return Icons.coronavirus_outlined;
+    }
+
     return Icons.remove_rounded;
   }
 

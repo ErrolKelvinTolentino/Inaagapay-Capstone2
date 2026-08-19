@@ -99,6 +99,18 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
   final TextEditingController _glucose2hrCtrl = TextEditingController();
   final TextEditingController _glucose3hrCtrl = TextEditingController();
 
+  // CBC, urinalysis and hepatitis B. Columns for all of these have existed on
+  // lab_tests since the schema was drawn; nothing ever wrote them, so the
+  // values were read off the document, rendered into a sentence of prose and
+  // then discarded.
+  final TextEditingController _hemoglobinCtrl = TextEditingController();
+  final TextEditingController _hematocritCtrl = TextEditingController();
+  final TextEditingController _wbcCtrl = TextEditingController();
+  final TextEditingController _plateletCtrl = TextEditingController();
+  final TextEditingController _urineGlucoseCtrl = TextEditingController();
+  String? _urineProtein;
+  String? _hepatitisBStatus;
+
   /// True once OCR has read at least one glucose value off the report.
   bool _glucoseFromReport = false;
 
@@ -139,6 +151,63 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
         type.contains('ogtt') ||
         type.contains('sugar') ||
         type.contains('fbs');
+  }
+
+  String get _typeForGating => (_selectedLabType == 'Other'
+          ? _customLabTypeCtrl.text
+          : _selectedLabType)
+      .toLowerCase();
+
+  /// Same rule as [_isGlucoseTest]: the section follows the selected type as
+  /// well as the extraction, so a midwife holding a printed report the OCR
+  /// could not read still has somewhere to type it.
+  bool get _isCbcTest =>
+      _cbcFromReport ||
+      _typeForGating.contains('blood count') ||
+      _typeForGating.contains('cbc');
+
+  bool get _isUrinalysisTest =>
+      _urinalysisFromReport ||
+      _typeForGating.contains('urinalysis') ||
+      _typeForGating.contains('urine');
+
+  bool get _isHepatitisTest =>
+      _hepatitisFromReport ||
+      _typeForGating.contains('hepatitis') ||
+      _typeForGating.contains('hbsag');
+
+  bool _cbcFromReport = false;
+  bool _urinalysisFromReport = false;
+  bool _hepatitisFromReport = false;
+
+  /// The urinalysis protein scale the database will accept.
+  ///
+  /// `urinalysis_protein` carries a CHECK constraint listing exactly these
+  /// values. Anything else — "Negative" capitalised, "nil", "absent", a bare
+  /// number — is rejected by Postgres, and because this write shares a
+  /// statement with the lab test itself, one stray token would lose the whole
+  /// record. So the value is validated here rather than hoped for.
+  static const List<String> urineProteinScale = [
+    'negative',
+    'trace',
+    '1+',
+    '2+',
+    '3+',
+    '4+',
+  ];
+
+  static String? normaliseUrineProtein(Object? raw) {
+    final value = raw?.toString().trim().toLowerCase();
+    if (value == null || value.isEmpty) return null;
+    return urineProteinScale.contains(value) ? value : null;
+  }
+
+  /// Writes an extracted value into a field only when the document produced
+  /// one, so a null never overwrites something the midwife has already typed.
+  void _fillIfPresent(TextEditingController ctrl, Object? value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty || text.toLowerCase() == 'null') return;
+    ctrl.text = text;
   }
 
   GlucoseValues get _enteredGlucose => GlucoseValues(
@@ -202,6 +271,11 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
     _glucose1hrCtrl.dispose();
     _glucose2hrCtrl.dispose();
     _glucose3hrCtrl.dispose();
+    _hemoglobinCtrl.dispose();
+    _hematocritCtrl.dispose();
+    _wbcCtrl.dispose();
+    _plateletCtrl.dispose();
+    _urineGlucoseCtrl.dispose();
     super.dispose();
   }
 
@@ -524,6 +598,32 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                       data['glucose_3hr_mg_dl'],
                     );
 
+                // CBC / urinalysis / hepatitis, filled the same way the
+                // glucose samples are: the extraction proposes, the midwife
+                // reviews on screen, and only what is in the fields at save
+                // time is written. Nothing here goes to the database unseen.
+                _fillIfPresent(_hemoglobinCtrl, data['hemoglobin_g_dl']);
+                _fillIfPresent(_hematocritCtrl, data['hematocrit_pct']);
+                _fillIfPresent(_wbcCtrl, data['wbc_count']);
+                _fillIfPresent(_plateletCtrl, data['platelet_count']);
+                _fillIfPresent(_urineGlucoseCtrl, data['urinalysis_glucose']);
+
+                final protein = normaliseUrineProtein(data['urinalysis_protein']);
+                if (protein != null) _urineProtein = protein;
+
+                final hbsag = data['hepatitis_b_status']?.toString().trim();
+                if (hbsag != null && hbsag.isNotEmpty && hbsag.toLowerCase() != 'null') {
+                  _hepatitisBStatus = hbsag;
+                }
+
+                _cbcFromReport = _hemoglobinCtrl.text.isNotEmpty ||
+                    _hematocritCtrl.text.isNotEmpty ||
+                    _wbcCtrl.text.isNotEmpty ||
+                    _plateletCtrl.text.isNotEmpty;
+                _urinalysisFromReport =
+                    _urineProtein != null || _urineGlucoseCtrl.text.isNotEmpty;
+                _hepatitisFromReport = _hepatitisBStatus != null;
+
                 _ocrExtracted = true;
               });
             }
@@ -839,6 +939,34 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
         labTestData['glucose_3hr_mg_dl'] = glucose.threeHour;
       }
 
+      // CBC, urinalysis and hepatitis B, from the reviewed fields.
+      //
+      // Absent keys leave the columns NULL rather than writing zeros or empty
+      // strings, on the same principle as the glucose samples: a measurement
+      // of nothing is not a measurement.
+      void putNum(String column, TextEditingController ctrl) {
+        final value = num.tryParse(ctrl.text.trim());
+        if (value != null) labTestData[column] = value;
+      }
+
+      putNum('hemoglobin_g_dl', _hemoglobinCtrl);
+      putNum('hematocrit_pct', _hematocritCtrl);
+      putNum('wbc_count', _wbcCtrl);
+      putNum('platelet_count', _plateletCtrl);
+
+      // Validated against the CHECK constraint before it is sent. A value
+      // outside the scale is dropped rather than allowed to fail the insert
+      // and take the whole lab record with it.
+      final protein = normaliseUrineProtein(_urineProtein);
+      if (protein != null) labTestData['urinalysis_protein'] = protein;
+
+      if (_urineGlucoseCtrl.text.trim().isNotEmpty) {
+        labTestData['urinalysis_glucose'] = _urineGlucoseCtrl.text.trim();
+      }
+      if ((_hepatitisBStatus ?? '').trim().isNotEmpty) {
+        labTestData['hepatitis_b_status'] = _hepatitisBStatus!.trim();
+      }
+
       await Supabase.instance.client.from('lab_tests').insert(labTestData);
 
       // 3. Blood type, only when the midwife's selection differs from what is
@@ -1142,6 +1270,104 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
     );
   }
 
+  Widget _labResultHeading(String title) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppColors.brandText,
+          ),
+        ),
+      );
+
+  static const String _blankFieldHint =
+      'Leave a box empty if that value is not on the report.';
+
+  Widget _buildCbcFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _labResultHeading('Blood Count'),
+        const Text(_blankFieldHint,
+            style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(child: _glucoseInput(_hemoglobinCtrl, 'Haemoglobin g/dL')),
+            const SizedBox(width: 10),
+            Expanded(child: _glucoseInput(_hematocritCtrl, 'Haematocrit %')),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(child: _countInput(_wbcCtrl, 'White blood cells')),
+            const SizedBox(width: 10),
+            Expanded(child: _countInput(_plateletCtrl, 'Platelets')),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUrinalysisFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _labResultHeading('Urinalysis'),
+        const Text(_blankFieldHint,
+            style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        const SizedBox(height: 10),
+        // A dropdown, not free text: the column accepts exactly this scale and
+        // rejects anything else, so the form offers only what can be saved.
+        AppDropdownField<String>(
+          hintText: 'Protein',
+          value: _urineProtein,
+          options: urineProteinScale,
+          displayStringForOption: (v) => v,
+          onSelected: (v) => setState(() => _urineProtein = v),
+        ),
+        const SizedBox(height: 10),
+        AppInputField(
+          controller: _urineGlucoseCtrl,
+          hintText: 'Glucose (as printed)',
+          onChanged: (_) => setState(() {}),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHepatitisFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _labResultHeading('Hepatitis B'),
+        const SizedBox(height: 6),
+        AppDropdownField<String>(
+          hintText: 'HBsAg',
+          value: _hepatitisBStatus,
+          options: const ['Reactive', 'Non-reactive'],
+          displayStringForOption: (v) => v,
+          onSelected: (v) => setState(() => _hepatitisBStatus = v),
+        ),
+      ],
+    );
+  }
+
+  Widget _countInput(TextEditingController controller, String label) {
+    return AppInputField(
+      controller: controller,
+      hintText: label,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'^\d{0,9}(\.\d{0,2})?$')),
+      ],
+      onChanged: (_) => setState(() {}),
+    );
+  }
+
   Widget _glucoseInput(TextEditingController controller, String label) {
     return AppInputField(
       controller: controller,
@@ -1318,6 +1544,18 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                             if (_isGlucoseTest) ...[
                               const SizedBox(height: 20),
                               _buildGlucoseFields(),
+                            ],
+                            if (_isCbcTest) ...[
+                              const SizedBox(height: 20),
+                              _buildCbcFields(),
+                            ],
+                            if (_isUrinalysisTest) ...[
+                              const SizedBox(height: 20),
+                              _buildUrinalysisFields(),
+                            ],
+                            if (_isHepatitisTest) ...[
+                              const SizedBox(height: 20),
+                              _buildHepatitisFields(),
                             ],
                           ],
                         ),

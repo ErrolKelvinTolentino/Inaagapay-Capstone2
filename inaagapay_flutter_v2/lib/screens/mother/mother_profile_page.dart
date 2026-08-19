@@ -24,6 +24,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../services/blood_pressure_reference.dart';
+import '../../services/lab_test_reference.dart';
 import '../../services/fetal_heart_rate_reference.dart';
 
 // Blood type is no longer chosen on this screen, so the option list that used
@@ -1755,6 +1756,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     String? approvedByName,
     bool? isMidwifeApproved,
     String? remarksSource,
+    List<MapEntry<String, String>> resultRows = const [],
+    String? resultsTitle,
   }) {
     Navigator.push(
       context,
@@ -1764,6 +1767,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           isMidwifeApproved: isMidwifeApproved,
           remarksSource: remarksSource,
           patient: _recordPatient(),
+          resultRows: resultRows,
+          resultsTitle: resultsTitle,
           title: title,
           rows: rows,
           icon: icon,
@@ -2101,7 +2106,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   }
 
   Widget _buildUltrasoundCard(Map<String, dynamic> ultrasound) {
-    final date = _formatDate(ultrasound['ultrasound_date']);
 
     return UltrasoundRecordCard(
       ultrasound: ultrasound,
@@ -2176,7 +2180,13 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
           _showRecordDetails(
             title: 'Ultrasound',
-            subtitle: date,
+            // When the record was entered, with the time — not when the scan
+            // was performed. A mother can be scanned at a private clinic on
+            // Monday and bring the film to the BHC on Thursday, and a header
+            // showing the scan date makes the record look days old the moment
+            // it is filed. The scan date is a row in Scan Details, where it
+            // belongs and is labelled.
+            subtitle: _formatDateTime(ultrasound['created_at']),
             icon: Icons.monitor_heart,
             imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
             approvedByName: midwifeName == '—' ? null : midwifeName,
@@ -2212,7 +2222,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   }
 
   Widget _buildLabTestCard(Map<String, dynamic> labTest) {
-    final date = _formatDate(labTest['lab_test_date']);
     final type = labTest['lab_test_type'] ?? 'Lab Test';
 
     return LabTestRecordCard(
@@ -2280,11 +2289,19 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
           _showRecordDetails(
             title: type,
-            subtitle: date,
+            // The date the result was entered here, not the date the sample
+            // was taken. See the ultrasound note above.
+            subtitle: _formatDateTime(labTest['created_at']),
             icon: Icons.science,
             imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
             approvedByName: midwifeName == '—' ? null : midwifeName,
             isMidwifeApproved: labTest['is_midwife_approved'] == true,
+            // What the test found, from the columns built to hold it. The
+            // panel is chosen by test type, so an OGTT shows its timed
+            // samples and a blood count shows haemoglobin — without this
+            // screen needing to know either of those things.
+            resultRows: LabTestReference.resultRows(type, labTest),
+            resultsTitle: LabTestReference.panelFor(type)?.title,
             rows: [
               MapEntry('Recorded by', midwifeName),
               MapEntry('Lab Test Type', type),
