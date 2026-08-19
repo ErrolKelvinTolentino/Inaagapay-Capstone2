@@ -216,15 +216,16 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
             .maybeSingle();
 
         if (profile != null) {
-          final fName = profile['first_name']?.toString() ?? '';
-          final lName = profile['last_name']?.toString() ?? '';
-          final fullName = '$fName $lName'.trim();
-          if (fullName.isNotEmpty) {
-            _workerNameCtrl.text = fullName;
-          }
-          if (profile['account_type'] != null && _profession == null) {
-            _profession = profile['account_type'].toString();
-          }
+          // Deliberately NOT pre-filled from the signed-in account.
+          //
+          // These fields describe whoever is named ON THE DOCUMENT — the
+          // laboratory or technologist that ran the test. Seeding them from
+          // the logged-in midwife meant a test run at Redcliffe Labs was
+          // filed with the midwife's name and "Profession: midwife", because
+          // OCR corrected the name field and left the profession alone.
+          //
+          // Blank is honest. OCR fills these from the document where it can,
+          // and the midwife names the performer where it cannot.
         }
       }
     } catch (e) {

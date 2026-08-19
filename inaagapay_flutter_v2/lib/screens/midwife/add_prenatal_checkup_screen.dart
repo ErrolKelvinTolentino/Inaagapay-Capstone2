@@ -2616,6 +2616,12 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             'age_of_gestation_weeks': aogWeeks,
             'age_of_gestation_days': aogDays,
             'midwife_notes': _remarksCtrl.text.trim().isEmpty ? null : _remarksCtrl.text.trim(),
+            // Recorded beside the text it describes, so a record can say
+            // whether the midwife wrote these words, approved an AI draft of
+            // them, or corrected one. It was previously kept only inside an
+            // audit_trail JSON blob, where nothing could read it back and the
+            // record view had to label every summary identically.
+            'remarks_source': _remarksCtrl.text.trim().isEmpty ? null : _remarksSource,
           })
           .select('encounter_id')
           .maybeSingle();

@@ -157,7 +157,13 @@ void main() {
       // guard was `v >= 110 && v <= 160`, inside a colour callback under the
       // input field — a name-based pattern walked straight past it, and the
       // field went on quoting its own range regardless of the rule.
-      final comparison = RegExp(r'[<>]=?\s*(110|120|160)\b');
+      // Matches a *range* check — a lower bound and 160 within a short span —
+      // rather than any lone comparison. A fetal heart range always states
+      // both ends. The earlier pattern also flagged "years < 120" in an age
+      // sanity check in another file, and a guard that cries wolf is a guard
+      // somebody deletes.
+      final comparison =
+          RegExp(r'[<>]=?\s*(110|120)\b[\s\S]{0,80}?[<>]=?\s*160\b');
       for (final path in sources) {
         final match = comparison.firstMatch(codeOf(path));
         expect(match, isNull,

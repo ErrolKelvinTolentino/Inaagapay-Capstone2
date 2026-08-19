@@ -130,6 +130,7 @@ class MotherProfileService {
                 age_of_gestation_weeks,
                 age_of_gestation_days,
                 midwife_notes,
+                remarks_source,
                 is_midwife_approved,
                 recorded_by:midwives (
                   midwife_id,
@@ -475,6 +476,9 @@ class MotherProfileService {
             final days = (encounter['age_of_gestation_days'] as num?)?.toDouble() ?? 0;
             checkup['age_of_gestation'] = weeks + days / 7.0;
             checkup['remarks'] = encounter['midwife_notes'];
+            // Carried alongside the note so the record view can say how it was
+            // written rather than labelling every summary the same way.
+            checkup['remarks_source'] = encounter['remarks_source'];
             checkup['symptoms'] = encounter['symptoms'];
             checkup['weight_gain'] = encounter['weight_gain'];
             checkup['is_midwife_approved'] = encounter['is_midwife_approved'];

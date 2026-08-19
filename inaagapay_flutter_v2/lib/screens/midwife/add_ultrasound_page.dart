@@ -114,15 +114,20 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
             .maybeSingle();
 
         if (profile != null) {
-          final fName = profile['first_name']?.toString() ?? '';
-          final lName = profile['last_name']?.toString() ?? '';
-          final fullName = '$fName $lName'.trim();
-          if (fullName.isNotEmpty) {
-            _workerNameCtrl.text = fullName;
-          }
-          if (profile['account_type'] != null && _profession == null) {
-            _profession = profile['account_type'].toString();
-          }
+          // Deliberately NOT pre-filled from the signed-in account.
+          //
+          // These fields describe the person named ON THE DOCUMENT — the
+          // sonologist who performed the scan, the laboratory that ran the
+          // test. Seeding them with the logged-in midwife's name and
+          // account_type meant a scan performed and signed by an OB-GYN was
+          // filed with "Profession: midwife": the name field got corrected and
+          // the profession quietly did not. The record then asserted, in
+          // writing, that a midwife had performed an obstetric ultrasound.
+          //
+          // Blank is honest. OCR fills these from the document where it can,
+          // and the midwife names the performer where it cannot. If she
+          // performed it herself she enters herself — one field, on a
+          // clinical record.
         }
       }
     } catch (e) {

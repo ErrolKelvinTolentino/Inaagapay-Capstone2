@@ -12,8 +12,44 @@ import '../../theme/app_colors.dart';
 import '../../services/language_service.dart';
 import '../../widgets/full_screen_image_viewer.dart';
 import '../../widgets/secondary_header.dart';
+import '../../widgets/profile_section.dart';
+import '../../widgets/profile_header_card.dart';
+import '../../services/blood_pressure_reference.dart';
 import '../../services/lab_cbc_interpretation_engine.dart';
 import '../../services/ultrasound_interpretation_engine.dart' show MonitoringClassification, Trimester, UltrasoundInterpretationEngine;
+
+/// Who this record belongs to.
+///
+/// Every clinical record view has to answer "whose is this?" before it answers
+/// anything else. None of these screens did: the header said "Ultrasound", the
+/// body said 16 weeks, and a midwife with three charts open — or a hospital
+/// reading an exported PDF — had nothing to check the record against.
+///
+/// Two identifiers minimum, which is why [idLabel] is carried alongside
+/// [name]: names collide, and in a barangay caseload they collide often.
+class RecordPatient {
+  const RecordPatient({
+    required this.name,
+    this.idLabel,
+    this.age,
+    this.obstetric,
+    this.bloodType,
+  });
+
+  final String name;
+  final String? idLabel;
+  final String? age;
+
+  /// G/P at a glance — the shorthand a midwife reads before anything else.
+  final String? obstetric;
+
+  /// Carried here rather than left inside a lab record, because an Rh-negative
+  /// mother needs anti-D at around 28 weeks and that decision must not depend
+  /// on someone remembering to open the right document.
+  final String? bloodType;
+
+  bool get isEmpty => name.trim().isEmpty;
+}
 
 class RecordDetailScreen extends StatefulWidget {
   const RecordDetailScreen({
@@ -33,12 +69,16 @@ class RecordDetailScreen extends StatefulWidget {
     this.approvedByName,
     this.isMidwifeApproved,
     this.remarksSource,
+    this.patient,
   });
 
   /// `prenatal_checkups.remarks_source` — one of `midwife_authored`,
   /// `ai_generated_approved` or `ai_generated_edited`. Decides how the checkup
   /// summary is labelled. Null on records that do not carry the column, where
   /// the summary is labelled neutrally rather than credited to anyone.
+  /// Whose record this is. Pinned above everything else.
+  final RecordPatient? patient;
+
   final String? remarksSource;
 
   final String title;
@@ -104,9 +144,140 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
   /// immediately below it.
   String _recordStampLine() => widget.subtitle?.trim() ?? '';
 
+  /// Who this record came from, said plainly.
+  ///
+  /// "Conducted by" for a checkup the midwife performed herself; "Recorded by"
+  /// for an ultrasound or lab result she transcribed from someone else's
+  /// document. The distinction is not cosmetic — one is her clinical work, the
+  /// other is her entering a sonologist's or a laboratory's findings, and a
+  /// record that blurs the two overstates what she examined.
+  String _attributionLabel() {
+    final t = widget.title.toLowerCase();
+    if (t.contains("prenatal") || t.contains("checkup")) {
+      return _t("Conducted by", "Isinagawa ni");
+    }
+    return _t("Recorded by", "Itinala ni");
+  }
+
+  /// The patient banner. First thing on the screen, before the record itself.
+  ///
+  /// Name and identifier on one line, then age, obstetric score and blood type
+  /// on the next. It is deliberately plain rather than branded: this is the
+  /// line a clinician checks against the chart in their other hand, and it has
+  /// to be readable at a glance and legible when printed in monochrome.
+  Widget _buildPatientHeader() {
+    final patient = widget.patient;
+    if (patient == null || patient.isEmpty) return _buildRecordStamp();
+
+    // The same header the profile overview uses, reused rather than imitated.
+    //
+    // What changes is the pill row: a record has nothing to say about phone
+    // numbers. It carries when it was taken, who took it, and the two facts a
+    // clinician reads before anything else — her age and her blood type.
+    final who = widget.approvedByName?.trim() ?? "";
+    final when = _recordStampLine();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: ProfileHeaderCard(
+        fullName: patient.name,
+        patientNumber: patient.idLabel,
+        chips: [
+          if (when.isNotEmpty)
+            ProfileHeaderChip(icon: widget.icon, text: when),
+          if (who.isNotEmpty && who != "—")
+            ProfileHeaderChip(
+              icon: Icons.person_outline_rounded,
+              text: "${_attributionLabel()}: $who",
+            ),
+          if ((patient.age ?? "").isNotEmpty)
+            ProfileHeaderChip(
+                icon: Icons.cake_outlined, text: patient.age!),
+          if ((patient.bloodType ?? "").isNotEmpty)
+            ProfileHeaderChip(
+                icon: Icons.bloodtype_outlined, text: patient.bloodType!),
+        ],
+      ),
+    );
+  }
+
+  /// The two facts a clinician checks before reading any record: when, and by
+  /// whom. Kept as one quiet block directly under the header, each line led by
+  /// a symbol so the eye can find either without reading both.
+  Widget _buildRecordStamp() {
+    final when = _recordStampLine();
+    final who = widget.approvedByName?.trim() ?? "";
+    final hasWho = who.isNotEmpty && who != "—";
+
+    if (when.isEmpty && !hasWho) return const SizedBox.shrink();
+
+    Widget line(IconData icon, String label, String value) => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 14, color: AppColors.textSecondary),
+              const SizedBox(width: 7),
+              if (label.isNotEmpty) ...[
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Expanded(
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    fontWeight:
+                        label.isEmpty ? FontWeight.w400 : FontWeight.w600,
+                    color: label.isEmpty
+                        ? AppColors.textSecondary
+                        : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (when.isNotEmpty) line(widget.icon, "", when),
+          if (hasWho)
+            line(Icons.person_outline_rounded, "${_attributionLabel()}:", who),
+        ],
+      ),
+    );
+  }
+
   Widget _buildApprovalAttribution() {
     final approved = widget.isMidwifeApproved;
     if (approved == null) return const SizedBox.shrink();
+
+    // Nothing in this app ever writes `is_midwife_approved`. It is selected in
+    // five places and set in none, so the flag is false on every record ever
+    // saved and this banner could only ever read "Pending midwife review".
+    //
+    // A permanent "pending" is worse than silence in both directions: on the
+    // midwife's own screen it tells her that the record she just wrote is
+    // awaiting her review, and on the mother's screen it tells her that not
+    // one document in her file has been looked at. Neither is true — the
+    // workflow simply does not exist yet.
+    //
+    // So the badge appears only when a record is genuinely approved. If an
+    // approval step is added later, give it a write path and this starts
+    // working on its own; until then it says nothing rather than something
+    // false.
+    if (!approved) return const SizedBox.shrink();
 
     final name = widget.approvedByName?.trim();
     final hasName = name != null && name.isNotEmpty;
@@ -197,9 +368,35 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     buf.writeln('INAAGAPAY — ${widget.title.toUpperCase()} REPORT');
     buf.writeln(divider);
 
+    // Patient first, before anything clinical.
+    //
+    // An exported report is the copy that leaves this app — handed to a
+    // referral hospital, printed for a chart, forwarded in a message. It
+    // previously carried a record type and a date and no patient at all,
+    // which makes it unfileable at best and attachable to the wrong chart at
+    // worst. The banner on screen is worthless if the export drops it.
+    final patient = widget.patient;
+    if (patient != null && !patient.isEmpty) {
+      buf.writeln("PATIENT: ${patient.name}");
+      if ((patient.idLabel ?? "").isNotEmpty) {
+        buf.writeln("ID: ${patient.idLabel}");
+      }
+      final facts = <String>[
+        if ((patient.age ?? "").isNotEmpty) patient.age!,
+        if ((patient.obstetric ?? "").isNotEmpty) patient.obstetric!,
+        if ((patient.bloodType ?? "").isNotEmpty) "Blood type ${patient.bloodType}",
+      ];
+      if (facts.isNotEmpty) buf.writeln(facts.join("  |  "));
+      buf.writeln(divider);
+    }
+
     // Subtitle (often contains date / mother info)
     if (widget.subtitle != null && widget.subtitle!.trim().isNotEmpty) {
       buf.writeln(widget.subtitle!.trim());
+    }
+    final who = widget.approvedByName?.trim() ?? "";
+    if (who.isNotEmpty && who != "—") {
+      buf.writeln("${_attributionLabel()}: $who");
     }
     buf.writeln();
 
@@ -914,33 +1111,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                   // screen. What was missing from the header is the part a
                   // midwife checks first — when it was taken, and whether a
                   // human has approved it.
-                  if (_recordStampLine().isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2, bottom: 14),
-                      child: Row(
-                        children: [
-                          Icon(widget.icon,
-                              size: 14, color: AppColors.textSecondary),
-                          const SizedBox(width: 7),
-                          Expanded(
-                            child: Text(
-                              _recordStampLine(),
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                height: 1.35,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  // Whether a human has signed off belongs at the top, beside
-                  // the date — it is the first thing a clinician checks about
-                  // a record and the last thing they should have to hunt for.
-                  // It previously sat inside the AI card, which tied the
-                  // record's provenance to whether an AI narrative happened to
-                  // be present.
+                  _buildPatientHeader(),
                   _buildApprovalAttribution(),
                   if (widget.imageUrls != null && widget.imageUrls!.isNotEmpty) ...[
                     _buildImageGallery(widget.imageUrls!),
@@ -1116,9 +1287,24 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       if (t == 'schedule & remarks') return Icons.event_note;
     }
 
+    // One symbol per section, chosen so the shape alone identifies it when
+    // scrolling — a stethoscope for the record itself, a person for whoever
+    // produced it, a note for what they wrote, a ruler for measurements read
+    // off the document.
     final t = title.toLowerCase();
-    if (t.contains('health worker')) return Icons.person_outline;
-    if (t.contains('notes')) return Icons.sticky_note_2_outlined;
+    if (t.contains('performed by') || t.contains('health worker')) {
+      return Icons.badge_outlined;
+    }
+    if (t.contains('interpretation') || t.contains('notes')) {
+      return Icons.sticky_note_2_outlined;
+    }
+    if (t.contains('measurement') || t.contains('biometry')) {
+      return Icons.straighten_rounded;
+    }
+    if (t.contains('result') || t.contains('laboratory')) {
+      return Icons.science_outlined;
+    }
+    if (t.contains('anatom')) return Icons.child_care_outlined;
     if (t.contains('ultrasound')) return Icons.monitor_heart_outlined;
     if (t.contains('checkup')) return Icons.medical_services_outlined;
     return Icons.biotech_outlined;
@@ -1163,11 +1349,15 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     );
   }
 
+  /// Names the section after what it holds rather than after the record.
+  ///
+  /// "Ultrasound Information" on a screen already titled Ultrasound says only
+  /// that the rows below concern the ultrasound, which the reader knew.
   String _recordInfoTitle() {
     final t = widget.title.toLowerCase();
-    if (t.contains('ultrasound')) return 'Ultrasound Information';
-    if (t.contains('checkup')) return 'Checkup Information';
-    return 'Lab Test Information';
+    if (t.contains('ultrasound')) return 'Scan Details';
+    if (t.contains('checkup')) return 'Visit Details';
+    return 'Test Details';
   }
 
   String _labelKey(String label) {
@@ -1294,6 +1484,12 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
 
     for (final row in rows) {
       final key = _labelKey(row.key);
+
+      // Shown by the attribution line under the header. Repeating it as a row
+      // put "Recorded by" between the test type and the test date, where it
+      // read like a property of the specimen.
+      if (key == 'conductedby' || key == 'recordedby') continue;
+
       if (key.contains('remarks') || key.contains('notes')) {
         notes.add(row);
         continue;
@@ -1311,10 +1507,14 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       record.add(row);
     }
 
+    // "Performed by" rather than "Health Worker Information": these rows are
+    // the sonologist or the laboratory that produced the document, which is a
+    // different person from the midwife who entered it. Naming the section
+    // after the role keeps that separation visible.
     return {
-      _recordInfoTitle(): record,
-      'Health Worker Information': worker,
-      'Notes': notes,
+      if (record.isNotEmpty) _recordInfoTitle(): record,
+      if (worker.isNotEmpty) 'Performed by': worker,
+      if (notes.isNotEmpty) 'Interpretation': notes,
     };
   }
 
@@ -1444,14 +1644,9 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                 ] else ...[
                   _buildDetailRow(rows[i].key, rows[i].value),
                 ],
-                if (i < rows.length - 1)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Divider(
-                      height: 1,
-                      color: AppColors.borderPrimary,
-                    ),
-                  ),
+                // No rules between rows. ProfileInfoRow carries its own
+                // spacing, and a full-width divider after every field was
+                // drawing more lines than there were facts.
               ],
             ],
           ),
@@ -1502,7 +1697,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     final filtered = <MapEntry<String, String>>[];
 
     for (final row in widget.rows) {
-      final label = row.key.trim();
+      var label = row.key.trim();
       var value = row.value.trim();
       if (label.isEmpty) continue;
 
@@ -1522,71 +1717,258 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
         value = _formatGestationValue(value);
       }
 
+      // "Weight (kg)" + "52" reads as "Weight" + "52 kg".
+      //
+      // A unit is a property of the measurement, not of the field name. Kept
+      // in the label it padded the left column — enough that a status pill
+      // beside it wrapped onto a second line — and left the value looking
+      // like a bare number the reader had to go back and qualify.
+      //
+      // Only applied when the value is bare digits: a label like
+      // "Ferrous + FA (tablets)" with a value of "Not given" keeps its label.
+      final unitInLabel =
+          RegExp(r'^(.*?)\s*\(([^)]{1,10})\)\s*$').firstMatch(label);
+      if (unitInLabel != null) {
+        final bare = unitInLabel.group(1)!.trim();
+        final unit = unitInLabel.group(2)!.trim();
+        if (bare.isNotEmpty &&
+            RegExp(r"^[0-9]+([.,][0-9]+)?$").hasMatch(value) &&
+            !value.toLowerCase().contains(unit.toLowerCase())) {
+          label = bare;
+          value = "$value $unit";
+        }
+      }
+
       filtered.add(MapEntry(label, value));
     }
 
     return filtered;
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    final isNotProvided = value.toLowerCase() == 'not provided' ||
-        value.toLowerCase() == 'hindi nailagay';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // An extracted line without a colon is a statement, not a
-          // measurement. It is shown as written rather than under a blank
-          // label, which would leave a gap where a caption should be.
-          if (label.isNotEmpty) ...[
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 4),
-          ],
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              color: isNotProvided
-                  ? AppColors.textSecondary
-                  : AppColors.textPrimary,
-              fontStyle: isNotProvided ? FontStyle.italic : FontStyle.normal,
-              height: 1.35,
-            ),
+  /// A symbol for a field, so a row can be found by shape before it is read.
+  ///
+  /// A midwife looking for a blood pressure on a screen of fifteen rows should
+  /// not have to read fifteen labels to find it.
+  IconData _rowIcon(String label) {
+    final k = _labelKey(label);
+    if (k.contains("bloodpressure")) return Icons.monitor_heart_outlined;
+    if (k.contains("bloodtype")) return Icons.bloodtype_outlined;
+    if (k.contains("weight")) return Icons.monitor_weight_outlined;
+    if (k.contains("height")) return Icons.straighten_rounded;
+    if (k.contains("bmi")) return Icons.speed_rounded;
+    if (k.contains("ageofgestation") || k == "aog") return Icons.pregnant_woman_outlined;
+    if (k.contains("fetalcount")) return Icons.child_care_outlined;
+    if (k.contains("fetalheart")) return Icons.favorite_border;
+    if (k.contains("fetalposition")) return Icons.rotate_right_rounded;
+    if (k.contains("edema")) return Icons.water_drop_outlined;
+    if (k.contains("symptom")) return Icons.healing_outlined;
+    if (k.contains("vaccine") || k.contains("tddose")) return Icons.vaccines_outlined;
+    if (k.contains("ferrous") || k.contains("calcium") || k.contains("medication")) {
+      return Icons.medication_outlined;
+    }
+    if (k.contains("schedule") || k.contains("nextvisit")) return Icons.event_outlined;
+    if (k.contains("remarks") || k.contains("notes")) return Icons.sticky_note_2_outlined;
+    if (k.contains("labtesttype")) return Icons.science_outlined;
+    if (k.contains("date")) return Icons.calendar_today_outlined;
+    if (k.contains("location")) return Icons.place_outlined;
+    if (k.contains("institution")) return Icons.apartment_rounded;
+    if (k.contains("profession")) return Icons.badge_outlined;
+    if (k.contains("name")) return Icons.person_outline_rounded;
+    return Icons.remove_rounded;
+  }
+
+  /// The weight-gain reading, as a pill beside the weight it describes.
+  ///
+  /// Weight alone says nothing — 43 kg is unremarkable or concerning entirely
+  /// depending on where she started and how far along she is. The engine
+  /// already computes that against the IOM target; this puts the answer next
+  /// to the number instead of leaving the reader to hold both in their head.
+  ///
+  /// Colour is earned here: amber means the gain is off target and is the same
+  /// amber the blood pressure card uses for "repeat this". Paired with a word,
+  /// never colour alone.
+  Widget? _weightGainChip() {
+    final eval = widget.weightGainEval;
+    if (eval == null) return null;
+
+    final raw = (eval["status"] ?? "").toString().toLowerCase();
+    if (raw.isEmpty) return null;
+
+    final bool below = raw.contains("low") || raw.contains("below");
+    final bool above = raw.contains("high") || raw.contains("above");
+
+    final String label;
+    final Color tone;
+    if (below) {
+      label = _t("Below expected", "Kulang sa inaasahan");
+      tone = AppColors.warning;
+    } else if (above) {
+      label = _t("Above expected", "Lampas sa inaasahan");
+      tone = AppColors.warning;
+    } else {
+      label = _t("Within expected", "Nasa inaasahan");
+      tone = AppColors.success;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: tone.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: tone,
+        ),
+      ),
+    );
+  }
+
+  /// Where a recorded blood pressure sits, as a pill beside the reading.
+  ///
+  /// The wording comes from [BloodPressureReference] rather than being written
+  /// here. "Elevated" would have been the natural word for a pill, and it is
+  /// exactly the word this project spent two rounds removing: it belongs to
+  /// the non-pregnancy AHA scale, and a record that says "elevated" where the
+  /// rule says "at or above the 140/90 threshold" is a second opinion wearing
+  /// a shorter label.
+  Widget? _bloodPressureChip(String value) {
+    final parts = value.split("/");
+    if (parts.length < 2) return null;
+    final sys = int.tryParse(parts[0].replaceAll(RegExp(r"[^0-9]"), ""));
+    final dia = int.tryParse(parts[1].replaceAll(RegExp(r"[^0-9]"), ""));
+
+    final category = BloodPressureReference.categorise(sys, dia);
+
+    final String label;
+    final Color tone;
+    switch (category) {
+      case BpCategory.unreadable:
+        return null;
+      case BpCategory.severe:
+        label = _t("Severe range", "Malubhang antas");
+        tone = AppColors.error;
+      case BpCategory.raised:
+        label = _t("At threshold", "Nasa threshold");
+        tone = AppColors.warning;
+      case BpCategory.low:
+        label = _t("Below range", "Mababa sa saklaw");
+        tone = AppColors.info;
+      case BpCategory.normal:
+        label = _t("Within range", "Nasa saklaw");
+        tone = AppColors.success;
+    }
+    return _statusPill(label, tone);
+  }
+
+  Widget _statusPill(String label, Color tone) => Container(
+        margin: const EdgeInsets.only(left: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: tone.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: tone.withValues(alpha: 0.35)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: tone,
           ),
-        ],
+        ),
+      );
+
+  /// One row, in the same shape the Medical Information card uses.
+  ///
+  /// Built on [ProfileInfoRow] rather than a lookalike, so the two surfaces
+  /// cannot drift apart. It also halves the vertical cost: label-above-value
+  /// with a full-width divider between every pair is the most expensive
+  /// pattern available, and it was fitting about six fields on a screen. Label
+  /// left, value right, no rules — roughly twice the density with less ink.
+  Widget _buildDetailRow(String label, String value) {
+    final isNotProvided = value.toLowerCase() == "not provided" ||
+        value.toLowerCase() == "hindi nailagay";
+
+    final key = _labelKey(label);
+    final chip = key.contains("weight")
+        ? _weightGainChip()
+        : key.contains("bloodpressure")
+            ? _bloodPressureChip(value)
+            : null;
+
+    return ProfileInfoRow(
+      icon: label.isEmpty ? null : _rowIcon(label),
+      label: label,
+      // A label carrying a pill needs more of the row than the default 2:3
+      // split allows, or "Weight (kg)" breaks across two lines and leaves the
+      // pill hanging under it.
+      labelFlex: chip == null ? 2 : 4,
+      labelWidget: chip == null
+          ? null
+          : Row(
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+                Flexible(child: chip),
+              ],
+            ),
+      valueWidget: Text(
+        value,
+        textAlign: TextAlign.end,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: isNotProvided ? FontWeight.w400 : FontWeight.w600,
+          height: 1.35,
+          fontStyle: isNotProvided ? FontStyle.italic : FontStyle.normal,
+          color: isNotProvided ? AppColors.textSecondary : AppColors.inputText,
+        ),
       ),
     );
   }
 
   /// How this summary came to exist, in the midwife's terms.
   ///
-  /// `prenatal_checkups.remarks_source` already records one of three states
-  /// when the checkup is saved. The card used to be headed "AI Analysis" with
-  /// an "AI Generated" badge regardless — which is wrong twice over: it claims
+  /// `prenatal_checkups.remarks_source` records one of three states when the
+  /// checkup is saved. The card used to be headed "AI Analysis" with an
+  /// "AI Generated" badge regardless — which is wrong twice over: it claims
   /// authorship of text the midwife wrote herself, and it hides the case that
   /// matters most, where a midwife read the AI's draft and corrected it.
   ({String label, IconData icon}) _summaryProvenance() {
     switch (_normalizeForCompare(widget.remarksSource ?? '')) {
       case 'aigeneratedapproved':
-        return (label: _t('AI-assisted', 'Tulong ng AI'), icon: Icons.auto_awesome_rounded);
+        return (
+          label: _t('AI-assisted', 'Tulong ng AI'),
+          icon: Icons.auto_awesome_rounded
+        );
       case 'aigeneratededited':
         return (
-          label: _t('AI-assisted, edited by midwife', 'Tulong ng AI, inayos ng midwife'),
+          label: _t('AI-assisted, edited by midwife',
+              'Tulong ng AI, inayos ng midwife'),
           icon: Icons.edit_note_rounded
         );
       case 'midwifeauthored':
-        return (label: _t('Written by midwife', 'Isinulat ng midwife'), icon: Icons.person_outline_rounded);
+        return (
+          label: _t('Written by midwife', 'Isinulat ng midwife'),
+          icon: Icons.person_outline_rounded
+        );
       default:
-        return (label: _t('Checkup summary', 'Buod ng checkup'), icon: Icons.notes_rounded);
+        // Nothing recorded about how the remarks were written. The header
+        // already says REMARKS; echoing a label beside it
+        // told the reader the same thing twice and looked like a value.
+        return (label: "", icon: Icons.notes_rounded);
     }
   }
 
@@ -1625,7 +2007,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _t('CHECKUP SUMMARY', 'BUOD NG CHECKUP'),
+                      _t('REMARKS', 'MGA TALA'),
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
@@ -1634,14 +2016,15 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                       ),
                     ),
                   ),
-                  Text(
-                    provenance.label,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
+                  if (provenance.label.isNotEmpty)
+                    Text(
+                      provenance.label,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -1730,36 +2113,17 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               else
                 _buildFormattedAiText(_getAiTextForLanguage(aiText)),
               const SizedBox(height: 12),
-              // Approval moved to the top of the record — see build(). It
-              // describes the record, not this card.
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _aiCardBorder.withValues(alpha: 0.15)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.gpp_maybe_outlined, size: 14, color: AppColors.brandAccent),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _tAi(
-                          'This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation.',
-                          'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife.',
-                        ),
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: AppColors.textSecondary,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              // Disclaimer removed.
+              //
+              // It said the text "restates the findings recorded by the
+              // sonologist" — on a prenatal checkup, where there is no
+              // sonologist and the words are the midwife's own. And where she
+              // has edited the draft, the sentence is simply false: the text
+              // is hers, which is exactly what the label in the header now
+              // says. A disclaimer that has to be ignored to be understood
+              // teaches people to ignore disclaimers.
+              //
+              // Provenance is stated once, plainly, at the top of the card.
             ],
           ),
         ),

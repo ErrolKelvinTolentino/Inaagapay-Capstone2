@@ -177,6 +177,11 @@ class ProfileInfoRow extends StatelessWidget {
   final Color? valueColor;
   final IconData? icon;
 
+  /// Width share for the label column. Raised when the label carries a status
+  /// pill beside it, which otherwise wraps the label onto a second line and
+  /// leaves the pill floating under it.
+  final int labelFlex;
+
   const ProfileInfoRow({
     super.key,
     this.label,
@@ -185,6 +190,7 @@ class ProfileInfoRow extends StatelessWidget {
     this.valueWidget,
     this.valueColor,
     this.icon,
+    this.labelFlex = 2,
   });
 
   @override
@@ -198,7 +204,7 @@ class ProfileInfoRow extends StatelessWidget {
             const SizedBox(width: 10),
           ],
           Expanded(
-            flex: 2,
+            flex: labelFlex,
             child: labelWidget ??
                 Text(
                   label ?? '',
