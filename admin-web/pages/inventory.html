@@ -639,7 +639,7 @@
         <div class="page-header" style="margin-bottom: 20px;">
           <div class="page-title-block">
             <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-              <h1 class="page-title" style="margin: 0;">RHU &amp; BHC Inventory Management</h1>
+              <h1 class="page-title" id="page-title-inventory" style="margin: 0;">RHU &amp; BHC Inventory Management</h1>
               <span id="live-sync-indicator" class="badge badge-active" style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255,104,165,0.12); color: var(--brand-primary); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px;">
                 <i class="fa-solid fa-signal" style="font-size: 10px;"></i> Connecting Live Sync...
               </span>
@@ -810,7 +810,7 @@
                   <tr>
                     <th>Item Details</th>
                     <th style="text-align: right">Central Warehouse</th>
-                    <!-- Dynamic BHC Headers loaded in JS -->
+                    <!-- Replaced with the live depot name, then one column per downstream facility, in renderBarangayStockMatrix -->
                     <th style="text-align: right">Total Stock</th>
                   </tr>
                 </thead>
@@ -1591,7 +1591,7 @@
                   <label class="form-label" for="issue-source-facility" style="font-weight: 600; font-size: 12.5px; margin:0;">Transfer Source <span class="req" style="color:#dc2626;">*</span></label>
                 </div>
                 <select class="form-select" id="issue-source-facility" required style="width:100%; border-radius: 8px;" onchange="populateIssueBatchDropdown(); updateIssueSafetyCheck();">
-                  <option value="central" selected>Central Warehouse (RHU Depot)</option>
+                  <option value="central" selected>Central Warehouse</option>
                 </select>
               </div>
               <div class="form-group">
@@ -1853,6 +1853,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="common-security.js"></script>
+    <script src="portal-scope.js"></script>
     <script src="live-refresh.js"></script>
 
     <!-- Main Logic Script -->
@@ -1865,9 +1866,18 @@
 
         const SESSION_KEY = "inaagapay_admin_session";
         const session = (() => { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } })();
-        if (!session || session.account_type !== "admin") { window.location.href = "../index.html"; return; }
+        if (!window.isPortalAccount(session)) { window.location.href = "../index.html"; return; }
 
         if (window.verifyAdminSessionWithDB) { window.verifyAdminSessionWithDB(db); }
+
+        // The sidebar Logout button had no handler on this page, so it did nothing.
+        document.getElementById("logout-btn")?.addEventListener("click", () => {
+          if (confirm("Logout?")) {
+            localStorage.removeItem(SESSION_KEY);
+            PortalScope.clear();
+            window.location.href = "../index.html";
+          }
+        });
 
         // Every stock movement must be attributable to the admin who performed it.
         // Never fall back to a hardcoded account id — that silently misattributes
@@ -2050,11 +2060,13 @@
           return Number(batch.quantity_remaining || 0) > 0;
         }
 
+        // "central" has always meant "this portal's own depot". For the Municipal
+        // Health Office that is still the warehouse rows with facility_id NULL;
+        // for a Rural Health Unit it is that RHU's own facility_id. Routing the
+        // sentinel through PortalScope is what lets one page serve both tiers.
         function batchMatchesFacility(batch, facilityFilter) {
           if (!facilityFilter || facilityFilter === "all" || facilityFilter === "") return true;
-          if (facilityFilter === "central") {
-            return batch.facility_id === null || batch.facility_id === 0 || batch.facility_id === undefined || String(batch.facility_id) === "null";
-          }
+          if (facilityFilter === "central") return PortalScope.isDepot(batch.facility_id);
           return String(batch.facility_id) === String(facilityFilter);
         }
 
@@ -2083,7 +2095,10 @@
         }
 
         function calculateInTransitPerItem(itemId, facilityId) {
-          if (!facilityId || facilityId === "central") return 0;
+          // An RHU depot can itself have stock in transit from the municipal
+          // warehouse, so resolve the sentinel before giving up on it.
+          if (facilityId === "central") facilityId = PortalScope.depotFacilityId;
+          if (!facilityId) return 0;
           return (inventoryTransfers || [])
             .filter(transfer => {
               if (!isTransferInTransit(transfer)) return false;
@@ -2466,7 +2481,7 @@
         // Detailed facility-by-facility health check for an item
         function getItemFacilityHealth(item) {
           const baseMin = item.minimum_stock_threshold || 50;
-          const locations = [{ id: "central", name: "Central Warehouse" }];
+          const locations = [{ id: "central", name: PortalScope.depotName }];
           if (Array.isArray(bhcs)) {
             bhcs.forEach(b => locations.push({ id: String(b.bhc_id), name: b.bhc_name || `BHC #${b.bhc_id}` }));
           }
@@ -2580,10 +2595,34 @@
             }
 
             items = itemRes.data || [];
-            batches = batchRes.data || [];
-            transactions = txRes.data || [];
-            stockRequests = reqRes.data || [];
-            inventoryTransfers = transRes.data || [];
+
+            // Keep only what this office is responsible for. The item catalogue
+            // is municipality-wide, but stock, movements and requests belong to
+            // a facility: the municipal office sees its warehouse and the RHUs,
+            // an RHU sees its own depot and its barangay health centres.
+            const inScope = (facilityId) => PortalScope.inScope(facilityId);
+            const batchInScope = new Map();
+
+            batches = (batchRes.data || []).filter(b => {
+              const ok = inScope(b.facility_id);
+              batchInScope.set(b.batch_id, ok);
+              return ok;
+            });
+
+            transactions = (txRes.data || []).filter(t => {
+              // Older ledger rows predate facility_id; fall back to their batch.
+              if (t.facility_id === null || t.facility_id === undefined) {
+                if (batchInScope.has(t.batch_id)) return batchInScope.get(t.batch_id);
+              }
+              return inScope(t.facility_id);
+            });
+
+            stockRequests = (reqRes.data || []).filter(r => inScope(r.facility_id));
+
+            inventoryTransfers = (transRes.data || []).filter(tr =>
+              inScope(tr.destination_facility_id) ||
+              batchInScope.get(tr.source_batch_id) === true
+            );
 
             // Registered patient load per BHC — drives the allocation quota share.
             try {
@@ -2853,7 +2892,7 @@
           let headersHtml = `
             <tr>
               <th>Item Details</th>
-              <th style="text-align: right">Central Warehouse</th>
+              <th style="text-align: right">${PortalScope.depotName}</th>
           `;
           bhcs.forEach(b => {
             headersHtml += `<th style="text-align: right">${esc(b.bhc_name)}</th>`;
@@ -2932,7 +2971,7 @@
             const item = items.find(i => i.item_id === b.item_id);
             const countdownBadge = getExpiryCountdownBadge(b.expiration_date, b.status);
 
-            let locName = "Central Warehouse";
+            let locName = PortalScope.depotName;
             let locFilter = "central";
             if (b.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
@@ -3191,15 +3230,27 @@
                 ? '<span class="badge-health-danger"><i class="fa-solid fa-ban"></i> Cancelled</span>'
                 : '<span class="badge-health-warning"><i class="fa-solid fa-clock"></i> Pending Receipt</span>';
 
+            // A transfer whose destination is this office's own depot is an
+            // allocation coming *down* to us — from the municipal warehouse to an
+            // RHU. That one we confirm receipt of; the rest we issued ourselves
+            // and may still cancel.
+            const isIncoming = PortalScope.isDepot(transfer.destination_facility_id);
+
             let actionBtn = "—";
             if (transfer.status === "pending_receipt") {
-              actionBtn = `<button class="btn btn-sm btn-secondary" onclick="cancelTransfer(${transfer.transfer_id})" style="color:#dc2626;border-color:#fca5a5;"><i class="fa-solid fa-ban"></i> Cancel Transfer</button>`;
+              actionBtn = isIncoming
+                ? `<button class="btn btn-sm btn-primary" onclick="receiveTransfer(${transfer.transfer_id})"><i class="fa-solid fa-inbox"></i> Confirm Receipt</button>`
+                : `<button class="btn btn-sm btn-secondary" onclick="cancelTransfer(${transfer.transfer_id})" style="color:#dc2626;border-color:#fca5a5;"><i class="fa-solid fa-ban"></i> Cancel Transfer</button>`;
             }
+
+            const destinationLabel = isIncoming
+              ? `${esc(PortalScope.depotName)} <span class="badge-health-info" style="margin-left:6px;"><i class="fa-solid fa-arrow-down"></i> Incoming</span>`
+              : esc(bhc?.bhc_name || PortalScope.facilityLabel(transfer.destination_facility_id, bhcs));
 
             return `
               <tr>
                 <td><strong>#${transfer.transfer_id}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">${issued}</div></td>
-                <td>${esc(bhc?.bhc_name || `BHC #${transfer.destination_facility_id}`)}</td>
+                <td>${destinationLabel}</td>
                 <td class="col-item-details">
                   <div style="display:flex;align-items:center;gap:4px;">
                     <strong style="color:var(--text-primary);cursor:pointer;" onclick="openItemDetails(${item?.item_id || 0})">${esc(item ? item.name : 'Inventory item')}</strong>
@@ -3316,8 +3367,8 @@
             } else if (txSortField === "type") {
               res = String(a.transaction_type || "").localeCompare(String(b.transaction_type || ""));
             } else if (txSortField === "location") {
-              const locA = a.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(a.facility_id))?.bhc_name || `BHC #${a.facility_id}`) : "Central Warehouse";
-              const locB = b.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(b.facility_id))?.bhc_name || `BHC #${b.facility_id}`) : "Central Warehouse";
+              const locA = a.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(a.facility_id))?.bhc_name || `BHC #${a.facility_id}`) : PortalScope.depotName;
+              const locB = b.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(b.facility_id))?.bhc_name || `BHC #${b.facility_id}`) : PortalScope.depotName;
               res = locA.localeCompare(locB);
             } else if (txSortField === "item") {
               const itemA = (batches.find(x => x.batch_id === a.batch_id) ? items.find(i => i.item_id === batches.find(x => x.batch_id === a.batch_id)?.item_id)?.name : "") || "";
@@ -3365,7 +3416,7 @@
                  ${t.activity_notes ? `<div style="font-size:10.5px;margin-top:2px;"><strong>Midwife note:</strong> ${esc(t.activity_notes)}</div>` : ""}`
               : `${esc(t.reference_type || "")} ${esc(t.reference_id ? '#' + t.reference_id : '')}`;
 
-            let locName = "Central Warehouse";
+            let locName = PortalScope.depotName;
             if (t.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(t.facility_id));
               locName = bh ? bh.bhc_name : `BHC #${t.facility_id}`;
@@ -3424,7 +3475,7 @@
           const rows = filtered.map(t => {
             const batch = batches.find(b => b.batch_id === t.batch_id);
             const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
-            let locName = "Central Warehouse";
+            let locName = PortalScope.depotName;
             if (t.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(t.facility_id));
               locName = bh ? bh.bhc_name : `BHC #${t.facility_id}`;
@@ -3474,7 +3525,7 @@
               !!t.client_operation_key &&
               String(t.reference_type || "").startsWith("BHC unusable report")
             );
-            let locName = "Central Warehouse";
+            let locName = PortalScope.depotName;
             if (b.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
               locName = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
@@ -3532,7 +3583,7 @@
           const expiredBatches = batches.filter(b => b.status === 'discarded' || b.status === 'expired' || isBatchExpired(b));
           const rows = expiredBatches.map(b => {
             const item = items.find(i => i.item_id === b.item_id);
-            let locName = "Central Warehouse";
+            let locName = PortalScope.depotName;
             if (b.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
               locName = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
@@ -3739,7 +3790,7 @@
           const certNo = disposal.certificate_no
             || `DISP-${disposedAt.getFullYear()}-${disposal.disposal_id ?? batchId}`;
 
-          let loc = "Central Warehouse";
+          let loc = PortalScope.depotName;
           const facilityId = disposal.facility_id ?? batch?.facility_id;
           if (facilityId) {
             const bh = bhcs.find(x => String(x.bhc_id) === String(facilityId));
@@ -4000,7 +4051,7 @@
                   ? `<strong>${esc(peakItem)}</strong> is the fastest-moving item this month (${maxQty.toLocaleString()} units). Ensure minimum reorder buffer is maintained.`
                   : `No dispensing recorded this month.`}<br>
                 💡 ${lowStockItems.length > 0
-                  ? `Initiate stock transfer for <strong>${lowStockItems.length} item(s)</strong> from Central Warehouse to prevent BHC stockouts.`
+                  ? `Initiate stock transfer for <strong>${lowStockItems.length} item(s)</strong> from ${PortalScope.depotName} to prevent stockouts.`
                   : `All facilities are operating within safe stock buffers.`}
               `;
             }
@@ -4319,8 +4370,34 @@
         };
 
         // Cancel Transfer
+        // Confirming an allocation sent down to this office's own depot. Until
+        // the MHO tier existed only a midwife could do this, because a BHC was
+        // the only possible destination; receive_inventory_transfer now accepts
+        // a portal account whose assigned facility is the destination.
+        window.receiveTransfer = async function(transferId) {
+          const transfer = inventoryTransfers.find(t => String(t.transfer_id) === String(transferId));
+          if (!transfer) return;
+          if (!confirm(`Confirm receipt of transfer #${transferId} (${transfer.quantity_issued} units) into ${PortalScope.depotName}?`)) return;
+
+          try {
+            const { error } = await db.rpc("receive_inventory_transfer", {
+              p_transfer_id: transferId,
+              p_received_by: parseInt(actorId) || actorId,
+            });
+            if (error) throw error;
+
+            showToast(`Transfer #${transferId} received into ${PortalScope.depotName}.`, "success");
+            loadInventoryData();
+          } catch (err) {
+            const msg = isMissingSchemaError(err)
+              ? "Receiving is not available yet — run database/migrations/20260821_mho_tier.sql in Supabase."
+              : (err.message || "Could not confirm receipt.");
+            showToast(msg, "error");
+          }
+        };
+
         window.cancelTransfer = async function(transferId) {
-          if (!confirm(`Cancel pending transfer #${transferId}? Central stock will be restored.`)) return;
+          if (!confirm(`Cancel pending transfer #${transferId}? ${PortalScope.depotName} stock will be restored.`)) return;
 
           try {
             const transfer = inventoryTransfers.find(t => t.transfer_id === transferId);
@@ -4379,7 +4456,7 @@
 
           const sourceFacilitySel = document.getElementById("issue-source-facility");
           if (sourceFacilitySel && (sourceFacilitySel.options.length <= 1 || sourceFacilitySel.querySelectorAll("option").length <= 1)) {
-            sourceFacilitySel.innerHTML = '<option value="central" selected>Central Warehouse (RHU Depot)</option>';
+            sourceFacilitySel.innerHTML = `<option value="central" selected>${esc(PortalScope.depotName)}</option>`;
             (bhcs || []).forEach(b => {
               const opt = document.createElement("option");
               opt.value = b.bhc_id;
@@ -4527,7 +4604,7 @@
           const centralMetrics = getItemStockMetrics(itemId, "central");
           const centralRow = `
             <tr style="background:rgba(255,104,165,0.05);">
-              <td><strong>Central Warehouse</strong></td>
+              <td><strong>${PortalScope.depotName}</strong></td>
               <td style="text-align:right;">+${centralMetrics.added}</td>
               <td style="text-align:right;">${centralMetrics.issued}</td>
               <td style="text-align:right;color:#d97706;">${centralMetrics.allocated}</td>
@@ -4538,7 +4615,7 @@
           const batchRows = itemBatches.length === 0
             ? '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:20px;">No batches recorded for this item yet.</td></tr>'
             : itemBatches.map(b => {
-                let loc = "Central Warehouse";
+                let loc = PortalScope.depotName;
                 if (b.facility_id) {
                   const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
                   loc = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
@@ -4865,7 +4942,7 @@
           }).map(b => {
             const item = items.find(i => i.item_id === b.item_id);
             const expired = isBatchExpired(b);
-            let loc = "Central Warehouse";
+            let loc = PortalScope.depotName;
             if (b.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
               loc = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
@@ -4936,7 +5013,7 @@
           const headers = ["Batch Number", "Item Trade Name", "Generic Name", "Location", "Received Date", "Expiration Date", "Quantity Received", "Quantity Remaining", "Manufacturer", "Status"];
           const rows = batches.map(b => {
             const item = items.find(i => i.item_id === b.item_id);
-            let locName = "Central Warehouse";
+            let locName = PortalScope.depotName;
             if (b.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
               locName = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
@@ -5221,7 +5298,7 @@
           });
 
           const sourceLocName = sourceFacilityVal === "central" 
-            ? "Central Warehouse" 
+            ? PortalScope.depotName 
             : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || "Source BHC");
 
           issueBatchSel.innerHTML = `<option value="">— Select Available Source Batch —</option>` + availableBatches.map(b => {
@@ -5308,7 +5385,7 @@
                   const chosenBatch = matchingBatches[0];
                   const issueBatchSel = document.getElementById("issue-source-batch");
                   const sourceLocName = sourceFacilityVal === "central" 
-                    ? "Central Warehouse" 
+                    ? PortalScope.depotName 
                     : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || "Source BHC");
 
                   if (issueBatchSel) {
@@ -5367,7 +5444,7 @@
             const topBatch = availableSourceBatches[0];
             const topItem = items.find(i => String(i.item_id) === String(topBatch.item_id));
             const sourceLocName = sourceFacilityVal === "central" 
-              ? "Central Warehouse" 
+              ? PortalScope.depotName 
               : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || "Source BHC");
 
             const issueBatchSel = document.getElementById("issue-source-batch");
@@ -5528,7 +5605,7 @@
 
           const sourceName = transfer.source_facility_id 
             ? (bhcs.find(b => String(b.bhc_id) === String(transfer.source_facility_id))?.bhc_name || `BHC #${transfer.source_facility_id}`) 
-            : "Central RHU Warehouse";
+            : PortalScope.depotName;
           const destName = bhcs.find(b => String(b.bhc_id) === String(transfer.destination_facility_id))?.bhc_name || `BHC #${transfer.destination_facility_id}`;
 
           if (detailsEl) {
@@ -5615,7 +5692,7 @@
 
           tbody.innerHTML = openBatches.map(b => {
             const item = items.find(i => String(i.item_id) === String(b.item_id));
-            const locText = b.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(b.facility_id))?.bhc_name || `BHC #${b.facility_id}`) : "Central RHU";
+            const locText = b.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(b.facility_id))?.bhc_name || `BHC #${b.facility_id}`) : PortalScope.depotName;
             const shelfLimitHours = item?.open_vial_shelf_hours || (item?.name?.toLowerCase().includes('bcg') ? 6 : 672);
 
             let openedTimeStr = "Recently";
@@ -5680,11 +5757,24 @@
 
             if (error) throw error;
 
-            showToast("Open vial doses discarded and logged in audit transactions.", "success");
+            // The RPC reports a refusal in its payload, not as a transport
+            // error, so a "nothing to discard" answer used to be shown as a
+            // success.
+            if (data && data.success === false) {
+              throw new Error(data.error || data.message || "The vial could not be discarded.");
+            }
+
+            const wasted = data?.doses_discarded;
+            showToast(
+              wasted
+                ? `Discarded ${wasted} open dose(s); logged in the movement ledger.`
+                : "Open vial doses discarded and logged in the movement ledger.",
+              "success"
+            );
             await loadInventoryData();
           } catch (err) {
             console.error("Failed to discard open vial:", err);
-            alert("Error discarding open vial: " + (err.message || err));
+            showToast("Error discarding open vial: " + (err.message || err), "error");
           }
         };
 
@@ -5728,7 +5818,7 @@
             const curVal = batchSel.value;
             batchSel.innerHTML = `<option value="">— Select Active Batch —</option>` + activeBatches.map(b => {
               const item = items.find(i => i.item_id === b.item_id);
-              let locText = "Central";
+              let locText = PortalScope.depotName;
               if (b.facility_id) {
                 const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
                 locText = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
@@ -5743,7 +5833,7 @@
 
             const dispenseOpts = activeBatches.map(b => {
               const item = items.find(i => i.item_id === b.item_id);
-              let locText = "Central";
+              let locText = PortalScope.depotName;
               if (b.facility_id) {
                 const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
                 locText = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
@@ -6093,31 +6183,109 @@
           }
         });
 
-        // BHC Loader
+        // This page was written for one RHU handing stock down to its barangay
+        // health centres. At municipal level the same screens hand stock down to
+        // Rural Health Units instead, so the vocabulary changes but nothing else
+        // does. Swapping the wording once, over the page's fixed labels, beats
+        // threading a term through sixty render sites — the data cells below
+        // them already carry real facility names from PortalScope.
+        const MUNICIPAL_TERMS = [
+          [/Barangay Health Centers/g, "Rural Health Units"],
+          [/Barangay Health Center/g,  "Rural Health Unit"],
+          [/\bBHCs\b/g,                "RHUs"],
+          [/\bBHC\b/g,                 "RHU"],
+          [/Central RHU Warehouse/g,   "Municipal Warehouse"],
+          [/Central Warehouse/g,       "Municipal Warehouse"],
+          [/RHU \/ BHC/g,              "MHO / RHU"],
+          [/\bMidwife\b/g,             "RHU Officer"],
+          [/\bmidwives\b/g,            "RHU officers"],
+          [/Barangay Stock/g,          "RHU Stock"],
+          [/Barangay \//g,             "RHU /"],
+        ];
+
+        function municipalWording(text) {
+          if (!PortalScope.isMho || !text) return text;
+          return MUNICIPAL_TERMS.reduce((acc, [re, to]) => acc.replace(re, to), text);
+        }
+
+        // Only fixed chrome — headings, labels, buttons, column headers. Table
+        // bodies are re-rendered from live data and are never touched here.
+        const SCOPE_LABEL_SELECTOR =
+          ".app-main h1, .app-main h2, .app-main h3, .app-main h4, .app-main th, " +
+          ".app-main label, .app-main option, .app-main .tab-btn, .app-main button, " +
+          ".app-main p, .app-main strong, .app-main span.header-badge";
+
+        function applyScopeLabels() {
+          const depot = PortalScope.depotName;
+
+          const title = document.getElementById("page-title-inventory");
+          if (title) {
+            title.textContent = PortalScope.isMho
+              ? "Municipal & RHU Inventory Management"
+              : `${PortalScope.facilityName || "RHU"} & BHC Inventory Management`;
+          }
+
+          const alertsTitle = document.getElementById("alerts-banner-title");
+          if (alertsTitle) {
+            alertsTitle.textContent =
+              `${PortalScope.isMho ? "Municipal" : "RHU"} Inventory Alerts Requiring Attention`;
+          }
+
+          if (PortalScope.isMho) {
+            document.querySelectorAll(SCOPE_LABEL_SELECTOR).forEach(el => {
+              // Leaf text only, so an element's children are never flattened.
+              el.childNodes.forEach(node => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                  const swapped = municipalWording(node.nodeValue);
+                  if (swapped !== node.nodeValue) node.nodeValue = swapped;
+                }
+              });
+            });
+          }
+
+          // Every "this portal's own depot" choice carries the same sentinel, so
+          // its label is set from the scope rather than from the markup.
+          document.querySelectorAll('option[value="central"]').forEach(opt => {
+            opt.textContent = depot;
+          });
+        }
+
+        // Downstream facility loader.
+        //
+        // `bhcs` is the list of facilities this portal allocates stock to, and
+        // the whole page renders one column per entry. For the Municipal Health
+        // Office that is the four Rural Health Units; for an RHU it is the
+        // barangay health centres reporting to it. The {bhc_id, bhc_name} shape
+        // is kept because sixty-odd call sites downstream depend on it.
         async function loadBhcs() {
           try {
             let bhcData = [];
-            try {
-              const { data: facs } = await db.from("health_facilities").select("facility_id, name").eq("facility_type", "BHC").order("name");
-              if (facs && facs.length > 0) {
-                bhcData = facs.map(f => ({ bhc_id: f.facility_id, bhc_name: f.name }));
-              } else {
-                const { data } = await db.from("bhc").select("bhc_id, bhc_name").order("bhc_name");
-                bhcData = data || [];
-              }
-            } catch (e) {}
 
-            if (bhcData.length === 0) {
-              bhcData = [
-                { bhc_id: 1, bhc_name: 'Tiaong BHC' },
-                { bhc_id: 2, bhc_name: 'Tarcan BHC' },
-                { bhc_id: 3, bhc_name: 'Pinagbarilan BHC' },
-                { bhc_id: 4, bhc_name: 'Makinabang BHC' },
-                { bhc_id: 5, bhc_name: 'Sta. Barbara BHC' }
-              ];
+            // Preferred source: the hierarchy resolved at login.
+            const scoped = PortalScope.childFacilities;
+            if (scoped.length > 0) {
+              bhcData = scoped.map(f => ({
+                bhc_id: f.facility_id,
+                bhc_name: f.name,
+                facility_code: f.facility_code,
+                facility_type: f.facility_type,
+                barangay: f.barangay,
+              }));
+            } else {
+              // Database without 20260821_mho_tier.sql: behave as before.
+              try {
+                const { data: facs } = await db.from("health_facilities").select("facility_id, name").eq("facility_type", "BHC").order("name");
+                if (facs && facs.length > 0) {
+                  bhcData = facs.map(f => ({ bhc_id: f.facility_id, bhc_name: f.name }));
+                } else {
+                  const { data } = await db.from("bhc").select("bhc_id, bhc_name").order("bhc_name");
+                  bhcData = data || [];
+                }
+              } catch (e) {}
             }
+
             bhcs = bhcData;
-            
+
             const filterDropdown = document.getElementById("global-bhc-filter");
             if (filterDropdown && filterDropdown.options.length <= 2) {
               bhcs.forEach(b => {
@@ -6152,7 +6320,7 @@
             if (analyticsDropdown && analyticsDropdown.options.length === 0) {
               const optAll = document.createElement("option"); optAll.value = "all"; optAll.textContent = "All Facilities (Combined)";
               analyticsDropdown.appendChild(optAll);
-              const optCentral = document.createElement("option"); optCentral.value = "central"; optCentral.textContent = "Central Warehouse";
+              const optCentral = document.createElement("option"); optCentral.value = "central"; optCentral.textContent = PortalScope.depotName;
               analyticsDropdown.appendChild(optCentral);
 
               bhcs.forEach(b => {
@@ -6321,8 +6489,15 @@
           });
         });
 
-        // Initial Page Boot
-        loadInventoryData();
+        // Initial Page Boot. Resolve the office this account runs first: the
+        // depot, the facilities under it and the rows it may see all follow from
+        // it, and loadInventoryData filters against them.
+        (async () => {
+          await PortalScope.refresh(db);
+          PortalScope.applyChrome();
+          applyScopeLabels();
+          await loadInventoryData();
+        })();
 
         window.AdminLiveRefresh?.start({
           db,

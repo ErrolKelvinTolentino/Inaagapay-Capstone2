@@ -410,6 +410,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="common-security.js"></script>
+    <script src="portal-scope.js"></script>
     <script src="live-refresh.js"></script>
     <script>
       (function () {
@@ -423,14 +424,23 @@
           catch { return null; }
         })();
         
-        if (!session || session.account_type !== "admin") {
+        if (!window.isPortalAccount(session)) {
           window.location.href = "../index.html";
           return;
         }
 
         if (window.verifyAdminSessionWithDB) { window.verifyAdminSessionWithDB(db); }
 
-        document.getElementById("header-user-name").textContent = 
+        // The sidebar Logout button had no handler on this page, so it did nothing.
+        document.getElementById("logout-btn")?.addEventListener("click", () => {
+          if (confirm("Logout?")) {
+            localStorage.removeItem(SESSION_KEY);
+            PortalScope.clear();
+            window.location.href = "../index.html";
+          }
+        });
+
+        document.getElementById("header-user-name").textContent =
           [session.first_name, session.last_name].filter(Boolean).join(" ") || "Admin";
         document.getElementById("header-avatar").textContent = 
           ((session.first_name?.[0] ?? "") + (session.last_name?.[0] ?? "")).toUpperCase() || "A";
@@ -779,15 +789,9 @@
           try {
             let mothersData = [], pregnanciesData = [], checkupsData = [], ultrasoundsData = [], labTestsData = [], childrenData = [], bhcData = [];
 
-            // 1. Try BHC
-            try {
-              const { data: bData } = await db.from("bhc").select("bhc_id, bhc_name").order("bhc_name");
-              if (bData && bData.length) bhcData = bData;
-              else {
-                const { data: fData } = await db.from("health_facilities").select("facility_id, name").order("name");
-                bhcData = (fData || []).map(f => ({ bhc_id: f.facility_id, bhc_name: f.name }));
-              }
-            } catch (e) { console.warn("BHC query fallback:", e); }
+            // 1. Barangay health centres this office covers: every one in the
+            //    municipality for the MHO, only its own for an RHU.
+            bhcData = await PortalScope.loadBhcList(db);
             bhcs = bhcData;
 
             // 2. Try Accounts & Base Tables
@@ -811,6 +815,14 @@
                 }));
               }
             } catch (e) { console.warn("Mothers query fallback:", e); }
+
+            // A patient belongs to a barangay health centre, so an RHU sees only
+            // the mothers registered at its own centres and the Municipal Health
+            // Office sees all of them. Rows with no centre recorded stay visible,
+            // otherwise a data-entry slip would hide a patient from everyone.
+            mothersData = mothersData.filter(
+              m => !m.assigned_bhc_id || PortalScope.coversBhc(m.assigned_bhc_id)
+            );
 
             // 4. Load Pregnancies
             try {
@@ -876,6 +888,22 @@
                 });
               }
             } catch (e) { console.warn("Children query fallback:", e); }
+
+            // Everything else hangs off a mother, so scope it the same way.
+            const scopedMotherIds = new Set(mothersData.map(m => String(m.mother_id)));
+            const belongsToScope = (motherId) =>
+              motherId === null || motherId === undefined || scopedMotherIds.has(String(motherId));
+
+            pregnanciesData = pregnanciesData.filter(p => belongsToScope(p.mother_id));
+
+            const scopedPregnancyIds = new Set(pregnanciesData.map(p => String(p.pregnancy_id)));
+            const inScopedPregnancy = (pregnancyId) =>
+              pregnancyId === null || pregnancyId === undefined || scopedPregnancyIds.has(String(pregnancyId));
+
+            checkupsData    = checkupsData.filter(c => inScopedPregnancy(c.pregnancy_id));
+            ultrasoundsData = ultrasoundsData.filter(u => inScopedPregnancy(u.pregnancy_id));
+            labTestsData    = labTestsData.filter(l => inScopedPregnancy(l.pregnancy_id));
+            childrenData    = childrenData.filter(ch => belongsToScope(ch.mother_id));
 
             cachedMothers = mothersData;
             cachedPregnancies = pregnanciesData;
@@ -1290,7 +1318,13 @@
         });
 
         // ---------- Start ----------
-        preloadAllData();
+        // The office scope decides which barangay health centres — and therefore
+        // which patients — this portal may read, so resolve it before loading.
+        (async () => {
+          await PortalScope.refresh(db);
+          PortalScope.applyChrome();
+          await preloadAllData();
+        })();
         initTabs();
         addFilterListeners();
         window.AdminLiveRefresh?.start({

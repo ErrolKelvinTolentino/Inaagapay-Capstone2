@@ -27,10 +27,19 @@
   }
   window.isAdminSessionExpired = isSessionExpired;
 
+  // Both tiers of the portal live in these pages: the Municipal Health Office
+  // ("mho") and one Rural Health Unit per "admin" account. Scope, not access,
+  // is what separates them — see portal-scope.js.
+  const PORTAL_ACCOUNT_TYPES = ["admin", "mho"];
+  window.PORTAL_ACCOUNT_TYPES = PORTAL_ACCOUNT_TYPES;
+  window.isPortalAccount = function (s) {
+    return !!s && PORTAL_ACCOUNT_TYPES.includes(s.account_type);
+  };
+
   // 1. RBAC Session Enforcement
   const isLoginPage = window.location.pathname.endsWith("index.html") || window.location.pathname.endsWith("/");
   if (!isLoginPage) {
-    if (!session || session.account_type !== "admin" || isSessionExpired(session)) {
+    if (!window.isPortalAccount(session) || isSessionExpired(session)) {
       localStorage.removeItem(SESSION_KEY);
       window.location.href = "../index.html";
       return;
@@ -118,7 +127,7 @@
         .eq("account_id", session.account_id)
         .single();
 
-      if (error || !data || data.status !== "active" || data.account_type !== "admin") {
+      if (error || !data || data.status !== "active" || !PORTAL_ACCOUNT_TYPES.includes(data.account_type)) {
         console.warn("Security Alert: Invalid or suspended session detected.");
         localStorage.removeItem(SESSION_KEY);
         window.location.href = isLoginPage ? "index.html" : "../index.html";

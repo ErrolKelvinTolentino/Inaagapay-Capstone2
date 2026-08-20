@@ -1121,66 +1121,100 @@ class SupabaseService {
         if (kDebugMode) debugPrint('Midwives query note: $e');
       }
 
-      // 2. Check facility_assignments for active BHC assignment
+      // 2. The midwife's own posting is the authoritative one.
       try {
-        final faRow = await client
-            .from('facility_assignments')
-            .select('facility_id, patient_number')
+        final midwifeRow = await client
+            .from('midwives')
+            .select('assigned_bhc_id')
             .eq('account_id', accountId)
-            .eq('is_active', true)
             .maybeSingle();
-
-        if (faRow != null) {
-          assignedBhcId = faRow['facility_id'] as int?;
-          patientNumber = faRow['patient_number'] as int?;
-        }
+        assignedBhcId = (midwifeRow?['assigned_bhc_id'] as num?)?.toInt();
       } catch (e) {
-        if (kDebugMode) debugPrint('Facility assignment query note: $e');
+        if (kDebugMode) debugPrint('Midwife posting query note: $e');
       }
 
-      // 3. If no BHC assigned yet, infer from email and auto-assign
+      // 3. Otherwise fall back to facility_assignments.
+      //
+      // Deliberately NOT maybeSingle(): that throws a 406 as soon as an account
+      // has more than one active row, and the old catch-and-guess below then
+      // inserted yet another one — so every login added a row and the next login
+      // was guaranteed to fail again. Take the most recent instead.
       if (assignedBhcId == null) {
-        final acct = await client
-            .from('accounts')
-            .select('email_address')
-            .eq('account_id', accountId)
-            .maybeSingle();
+        try {
+          final faRows = await client
+              .from('facility_assignments')
+              .select('facility_id, patient_number, assigned_at')
+              .eq('account_id', accountId)
+              .eq('is_active', true)
+              .order('assigned_at', ascending: false)
+              .limit(1);
 
-        final email = (acct?['email_address'] ?? '').toString().toLowerCase();
-        int defaultBhcId = 1;
-        if (email.contains('tarcan')) {
-          defaultBhcId = 2;
-        } else if (email.contains('pinagbarilan')) {
-          defaultBhcId = 3;
-        } else if (email.contains('makinabang')) {
-          defaultBhcId = 4;
-        } else if (email.contains('stabarbara')) {
-          defaultBhcId = 5;
+          final rows = faRows as List<dynamic>;
+          if (rows.isNotEmpty) {
+            final fa = Map<String, dynamic>.from(rows.first as Map);
+            assignedBhcId = (fa['facility_id'] as num?)?.toInt();
+            patientNumber = (fa['patient_number'] as num?)?.toInt();
+          }
+        } catch (e) {
+          if (kDebugMode) debugPrint('Facility assignment query note: $e');
+        }
+      }
+
+      // 4. Still nothing. Post the midwife to the first barangay health centre
+      //    so the app stays usable, and record it once.
+      //
+      //    The previous version guessed the centre from a substring of the
+      //    e-mail address ('tarcan', 'makinabang', ...). That silently attached
+      //    doses to the wrong centre's stock whenever the address did not follow
+      //    the convention, which is most of them.
+      if (assignedBhcId == null) {
+        try {
+          final firstBhc = await client
+              .from('health_facilities')
+              .select('facility_id')
+              .eq('facility_type', 'BHC')
+              .order('facility_id', ascending: true)
+              .limit(1);
+
+          final bhcRows = firstBhc as List<dynamic>;
+          if (bhcRows.isNotEmpty) {
+            assignedBhcId =
+                ((bhcRows.first as Map)['facility_id'] as num?)?.toInt();
+          }
+        } catch (e) {
+          if (kDebugMode) debugPrint('Default BHC lookup note: $e');
         }
 
-        assignedBhcId = defaultBhcId;
+        if (assignedBhcId != null) {
+          // Write it to the midwife row, which is where the rest of the app
+          // reads from, rather than stacking another facility_assignments row.
+          try {
+            await client
+                .from('midwives')
+                .update({'assigned_bhc_id': assignedBhcId})
+                .eq('account_id', accountId);
+          } catch (e) {
+            if (kDebugMode) debugPrint('Default BHC write note: $e');
+          }
+        }
+      }
 
+      // 5. Fetch facility name. assignedBhcId can now legitimately still be null
+      //    — a database with no barangay health centres at all — so guard it
+      //    rather than sending null into the filter.
+      String bhcName = 'Barangay Health Center';
+      if (assignedBhcId != null) {
         try {
-          await client.from('facility_assignments').insert({
-            'account_id': accountId,
-            'facility_id': defaultBhcId,
-            'is_active': true,
-          });
+          final facility = await client
+              .from('health_facilities')
+              .select('name')
+              .eq('facility_id', assignedBhcId)
+              .maybeSingle();
+          if (facility != null && facility['name'] != null) {
+            bhcName = facility['name'].toString();
+          }
         } catch (_) {}
       }
-
-      // 4. Fetch facility name
-      String bhcName = 'Barangay Health Center';
-      try {
-        final facility = await client
-            .from('health_facilities')
-            .select('name')
-            .eq('facility_id', assignedBhcId)
-            .maybeSingle();
-        if (facility != null && facility['name'] != null) {
-          bhcName = facility['name'].toString();
-        }
-      } catch (_) {}
 
       final result = {
         'success': true,

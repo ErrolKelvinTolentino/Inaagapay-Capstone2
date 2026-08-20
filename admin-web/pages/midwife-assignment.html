@@ -266,6 +266,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="common-security.js"></script>
+    <script src="portal-scope.js"></script>
     <script src="live-refresh.js"></script>
     <script>
       (function () {
@@ -281,7 +282,7 @@
             return null;
           }
         })();
-        if (!session || session.account_type !== "admin") {
+        if (!window.isPortalAccount(session)) {
           window.location.href = "../index.html";
           return;
         }
@@ -297,7 +298,7 @@
           ).toUpperCase() || "A";
         document.getElementById("logout-btn").addEventListener("click", () => {
           if (confirm("Logout?")) {
-            localStorage.removeItem(SESSION_KEY);
+            localStorage.removeItem(SESSION_KEY); PortalScope.clear();
             window.location.href = "../index.html";
           }
         });
@@ -342,26 +343,9 @@
         async function loadData() {
           const tbody = document.getElementById("midwife-tbody");
           try {
-            // Load BHC with fallback
-            let bhcData = [];
-            try {
-              const { data, error } = await db.from("bhc").select("bhc_id, bhc_name").order("bhc_name");
-              if (!error && data && data.length > 0) bhcData = data;
-              else {
-                const { data: facs } = await db.from("health_facilities").select("facility_id, name").order("name");
-                bhcData = (facs || []).map(f => ({ bhc_id: f.facility_id, bhc_name: f.name }));
-              }
-            } catch (e) { console.warn("BHC load fallback:", e); }
-
-            if (bhcData.length === 0) {
-              bhcData = [
-                { bhc_id: 1, bhc_name: 'Tiaong BHC' },
-                { bhc_id: 2, bhc_name: 'Tarcan BHC' },
-                { bhc_id: 3, bhc_name: 'Pinagbarilan BHC' },
-                { bhc_id: 4, bhc_name: 'Makinabang BHC' },
-                { bhc_id: 5, bhc_name: 'Sta. Barbara BHC' }
-              ];
-            }
+            // Barangay health centres this office is responsible for: every one
+            // in the municipality for the MHO, only its own for an RHU.
+            const bhcData = await PortalScope.loadBhcList(db);
             bhcs = bhcData;
 
             // Load Accounts & Midwives
@@ -377,7 +361,11 @@
               ...a,
               midwife_id: midMap[a.account_id]?.midwife_id ?? null,
               assigned_bhc_id: midMap[a.account_id]?.assigned_bhc_id ?? null,
-            }));
+            }))
+              // An RHU manages the midwives posted to its own barangay health
+              // centres. Midwives with no posting yet stay visible to everyone,
+              // because someone has to be able to place them.
+              .filter((m) => !m.assigned_bhc_id || PortalScope.coversBhc(m.assigned_bhc_id));
 
             // BHC filter dropdown
             const sel = document.getElementById("filter-bhc");
@@ -672,7 +660,14 @@
           }
         });
 
-        loadData();
+        // Resolve which office is signed in before loading, so the BHC list and
+        // the midwife roster are already narrowed to it.
+        (async () => {
+          await PortalScope.refresh(db);
+          PortalScope.applyChrome();
+          await loadData();
+        })();
+
         window.AdminLiveRefresh?.start({
           db,
           tables: ["accounts", "midwives", "facility_assignments", "bhc", "health_facilities"],

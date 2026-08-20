@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rural Health Units — InaAgapay MHO</title>
+    <link rel="icon" type="image/png" href="../images/logo_icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="../styles/main.css" />
+  </head>
+  <body>
+    <div class="app-layout">
+      <!-- ── Header ── -->
+      <header class="app-header">
+        <div class="header-brand">
+          <button class="header-sidebar-toggle" id="sidebar-toggle">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <img src="../images/logo_icon.png" alt="InaAgapay" class="header-logo" />
+          <img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" />
+        </div>
+        <div class="header-right">
+          <span class="header-badge">MHO Portal</span>
+          <div class="header-user">
+            <div class="header-avatar" id="header-avatar">M</div>
+            <span class="header-user-name" id="header-user-name">Municipal Officer</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- ── Sidebar ── -->
+      <aside class="app-sidebar">
+        <span class="sidebar-section-label">Main Menu</span>
+        <ul class="sidebar-nav">
+          <li><a href="dashboard.html"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
+          <li><a href="accounts.html"><i class="fa-solid fa-users"></i> Account Management</a></li>
+          <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
+          <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
+          <li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">Patient Management</span>
+        <ul class="sidebar-nav">
+          <li><a href="patient-records.html"><i class="fa-solid fa-folder-open"></i> Patient Records</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">System</span>
+        <ul class="sidebar-nav">
+          <li><a href="audit-trail.html"><i class="fa-solid fa-clipboard-list"></i> Audit Trail</a></li>
+          <li><a href="backup.html"><i class="fa-solid fa-database"></i> Backup &amp; Restore</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-footer-nav">
+          <button class="sidebar-logout" id="logout-btn">
+            <i class="fa-solid fa-right-from-bracket"></i> Logout
+          </button>
+        </div>
+      </aside>
+
+      <!-- ── Main ── -->
+      <main class="app-main">
+        <div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+          <div>
+            <h1 class="page-title" style="margin:0;">Rural Health Units</h1>
+            <p style="margin:6px 0 0; color:var(--text-secondary); font-size:13px;">
+              The four Rural Health Units of Baliwag and the barangay health centres reporting to each.
+              Stock flows from the Municipal Warehouse to an RHU, and from an RHU to its BHCs.
+            </p>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="refresh-btn">
+            <i class="fa-solid fa-arrows-rotate"></i> Refresh
+          </button>
+        </div>
+
+        <!-- Access notice, shown when a non-municipal account lands here -->
+        <div id="access-notice" class="rhu-dpa-notice" style="display:none; margin-bottom:18px;">
+          <i class="fa-solid fa-lock"></i>
+          <span>
+            This page belongs to the Municipal Health Office. Your account administers a single
+            Rural Health Unit, so there is nothing to manage here.
+          </span>
+        </div>
+
+        <div id="page-body">
+          <!-- Summary tiles -->
+          <div class="stats-grid" style="margin-bottom:24px;">
+            <div class="stat-card">
+              <div class="stat-icon pink"><i class="fa-solid fa-hospital"></i></div>
+              <div class="stat-info">
+                <div class="stat-value" id="stat-rhus">—</div>
+                <div class="stat-label">Rural Health Units</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon blue"><i class="fa-solid fa-house-medical"></i></div>
+              <div class="stat-info">
+                <div class="stat-value" id="stat-bhcs">—</div>
+                <div class="stat-label">Barangay Health Centers</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon purple"><i class="fa-solid fa-triangle-exclamation"></i></div>
+              <div class="stat-info">
+                <div class="stat-value" id="stat-unassigned">—</div>
+                <div class="stat-label">BHCs Without an RHU</div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon green"><i class="fa-solid fa-user-shield"></i></div>
+              <div class="stat-info">
+                <div class="stat-value" id="stat-admins">—</div>
+                <div class="stat-label">RHU Administrators</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RHU cards -->
+          <div id="rhu-cards" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:18px; margin-bottom:26px;">
+            <div style="color:var(--text-secondary); font-size:13px;">
+              <i class="fa-solid fa-spinner fa-spin"></i> Loading facilities…
+            </div>
+          </div>
+
+          <!-- BHC assignment table -->
+          <div class="card">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+              <div>
+                <h3 style="margin:0; font-size:15px; font-weight:700; color:var(--brand-text);">
+                  <i class="fa-solid fa-diagram-project" style="color:var(--brand-primary); margin-right:7px;"></i>
+                  Barangay Health Center Assignments
+                </h3>
+                <p style="margin:4px 0 0; color:var(--text-secondary); font-size:12.5px;">
+                  Move a barangay health centre to a different Rural Health Unit. The change takes
+                  effect immediately for that RHU's stock allocation and patient scope.
+                </p>
+              </div>
+              <input
+                class="form-control"
+                type="search"
+                id="bhc-search"
+                placeholder="Search barangay health centres…"
+                style="width:auto; min-width:240px;"
+              />
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Barangay Health Center</th>
+                    <th>Barangay</th>
+                    <th>Reports To</th>
+                    <th style="text-align:right;">Midwives</th>
+                    <th style="text-align:right;">Mothers</th>
+                    <th>Reassign</th>
+                  </tr>
+                </thead>
+                <tbody id="bhc-tbody">
+                  <tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-secondary);">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <footer class="app-footer">
+          <span>MHO Portal &mdash; Protected under Data Privacy Act of 2012 (RA 10173)</span>
+        </footer>
+      </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="common-security.js"></script>
+    <script src="portal-scope.js"></script>
+    <script src="live-refresh.js"></script>
+    <script>
+      (function () {
+        const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
+        const SUPABASE_ANON =
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
+        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        window.db = db;
+
+        const SESSION_KEY = "inaagapay_admin_session";
+        const session = (() => {
+          try { return JSON.parse(localStorage.getItem(SESSION_KEY)); }
+          catch { return null; }
+        })();
+        if (!window.isPortalAccount(session)) { window.location.href = "../index.html"; return; }
+
+        if (window.verifyAdminSessionWithDB) { window.verifyAdminSessionWithDB(db); }
+
+        document.getElementById("header-user-name").textContent =
+          [session.first_name, session.last_name].filter(Boolean).join(" ") || "Municipal Officer";
+        document.getElementById("header-avatar").textContent =
+          ((session.first_name?.[0] ?? "") + (session.last_name?.[0] ?? "")).toUpperCase() || "M";
+
+        document.getElementById("logout-btn").addEventListener("click", () => {
+          if (confirm("Logout?")) {
+            localStorage.removeItem(SESSION_KEY);
+            PortalScope.clear();
+            window.location.href = "../index.html";
+          }
+        });
+
+        document.getElementById("sidebar-toggle")?.addEventListener("click", () => {
+          document.querySelector(".app-sidebar")?.classList.toggle("open");
+        });
+
+        const esc = window.escHtml;
+
+        let facilities = [];      // every facility in the municipality
+        let midwifeCounts = {};   // facility_id -> active midwives
+        let motherCounts = {};    // facility_id -> registered mothers
+        let adminCounts = {};     // facility_id -> portal accounts
+        let bhcSearch = "";
+
+        function rhus() {
+          return facilities.filter(f => f.facility_type === "RHU");
+        }
+        function bhcs() {
+          return facilities.filter(f => f.facility_type === "BHC");
+        }
+        function childrenOf(facilityId) {
+          return facilities.filter(f => String(f.parent_facility_id) === String(facilityId));
+        }
+
+        function showToast(message, type = "info") {
+          let container = document.getElementById("toast-container");
+          if (!container) {
+            container = document.createElement("div");
+            container.id = "toast-container";
+            document.body.appendChild(container);
+          }
+          const icons = {
+            success: "fa-circle-check",
+            error: "fa-circle-xmark",
+            warning: "fa-triangle-exclamation",
+            info: "fa-circle-info",
+          };
+          const toast = document.createElement("div");
+          toast.className = `toast ${type}`;
+          toast.innerHTML =
+            `<i class="fa-solid ${icons[type] || icons.info}"></i>` +
+            `<span class="toast-text">${esc(message)}</span>`;
+          container.appendChild(toast);
+          setTimeout(() => toast.remove(), 4200);
+        }
+
+        async function loadData() {
+          try {
+            // v_facility_tree carries the parent name alongside each row; fall
+            // back to the base table on a database without the MHO migration.
+            let rows = [];
+            const viewRes = await db
+              .from("v_facility_tree")
+              .select("*")
+              .order("facility_type")
+              .order("facility_code", { nullsFirst: false })
+              .order("name");
+
+            if (viewRes.error) {
+              // Before the migration there is no parent_facility_id column, so
+              // naming it in the select would fail the whole query. Take the row
+              // as it is and let the missing field read as undefined.
+              const baseRes = await db.from("health_facilities").select("*").order("name");
+              if (baseRes.error) throw baseRes.error;
+              rows = baseRes.data || [];
+            } else {
+              rows = viewRes.data || [];
+            }
+            facilities = rows;
+
+            const [midwifeRes, motherRes, adminRes] = await Promise.all([
+              db.from("midwives").select("midwife_id, assigned_bhc_id"),
+              db.from("mothers").select("mother_id, assigned_bhc_id"),
+              db.from("facility_assignments")
+                .select("facility_id, account_id, is_active, accounts!inner(account_type, status)")
+                .eq("is_active", true),
+            ]);
+
+            midwifeCounts = {};
+            (midwifeRes.data || []).forEach(m => {
+              if (m.assigned_bhc_id) midwifeCounts[m.assigned_bhc_id] = (midwifeCounts[m.assigned_bhc_id] || 0) + 1;
+            });
+
+            motherCounts = {};
+            (motherRes.data || []).forEach(m => {
+              if (m.assigned_bhc_id) motherCounts[m.assigned_bhc_id] = (motherCounts[m.assigned_bhc_id] || 0) + 1;
+            });
+
+            adminCounts = {};
+            (adminRes.data || []).forEach(a => {
+              const acc = a.accounts;
+              if (!acc || acc.status !== "active") return;
+              if (acc.account_type !== "admin" && acc.account_type !== "mho") return;
+              adminCounts[a.facility_id] = (adminCounts[a.facility_id] || 0) + 1;
+            });
+
+            render();
+          } catch (err) {
+            console.error("Failed to load facilities:", err);
+            document.getElementById("rhu-cards").innerHTML =
+              '<div style="color:var(--error); font-size:13px;">' +
+              '<i class="fa-solid fa-triangle-exclamation"></i> Could not load facilities. ' +
+              'Run database/migrations/20260821_mho_tier.sql in Supabase, then refresh.</div>';
+          }
+        }
+
+        function render() {
+          const rhuList = rhus();
+          const bhcList = bhcs();
+          const unassigned = bhcList.filter(b => !b.parent_facility_id).length;
+
+          document.getElementById("stat-rhus").textContent = rhuList.length;
+          document.getElementById("stat-bhcs").textContent = bhcList.length;
+          document.getElementById("stat-unassigned").textContent = unassigned;
+          document.getElementById("stat-admins").textContent =
+            rhuList.reduce((sum, r) => sum + (adminCounts[r.facility_id] || 0), 0);
+
+          renderRhuCards(rhuList);
+          renderBhcTable(bhcList, rhuList);
+        }
+
+        function renderRhuCards(rhuList) {
+          const host = document.getElementById("rhu-cards");
+          if (rhuList.length === 0) {
+            host.innerHTML =
+              '<div style="color:var(--text-secondary); font-size:13px;">' +
+              'No Rural Health Units are registered yet. Run database/migrations/20260821_mho_tier.sql to seed RHU I–IV.</div>';
+            return;
+          }
+
+          host.innerHTML = rhuList.map(rhu => {
+            const children = childrenOf(rhu.facility_id);
+            const mothers = children.reduce((s, c) => s + (motherCounts[c.facility_id] || 0), 0);
+            const midwives = children.reduce((s, c) => s + (midwifeCounts[c.facility_id] || 0), 0);
+            const admins = adminCounts[rhu.facility_id] || 0;
+
+            const childChips = children.length
+              ? children.map(c => `<span class="badge badge-active" style="margin:2px 4px 2px 0;">${esc(c.name)}</span>`).join("")
+              : '<span style="color:var(--text-secondary); font-size:12px;">No barangay health centres assigned yet.</span>';
+
+            const adminWarning = admins === 0
+              ? '<div style="margin-top:10px; font-size:11.5px; color:var(--warning);">' +
+                '<i class="fa-solid fa-triangle-exclamation"></i> No administrator account is assigned to this RHU yet.</div>'
+              : "";
+
+            return `
+              <div class="card" style="padding:18px;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+                  <div>
+                    <div style="font-weight:700; font-size:15px; color:var(--brand-text);">
+                      <i class="fa-solid fa-hospital" style="color:var(--brand-primary); margin-right:6px;"></i>${esc(rhu.name)}
+                    </div>
+                    <div style="font-size:12px; color:var(--text-secondary); margin-top:3px;">
+                      ${esc(rhu.address_detail || rhu.barangay || "Baliwag, Bulacan")}
+                    </div>
+                  </div>
+                  <span class="badge badge-admin">${esc(rhu.facility_code || "RHU")}</span>
+                </div>
+
+                <div style="display:flex; gap:18px; margin:14px 0 12px;">
+                  <div><div style="font-size:19px; font-weight:700;">${children.length}</div>
+                       <div style="font-size:11px; color:var(--text-secondary);">BHCs</div></div>
+                  <div><div style="font-size:19px; font-weight:700;">${midwives}</div>
+                       <div style="font-size:11px; color:var(--text-secondary);">Midwives</div></div>
+                  <div><div style="font-size:19px; font-weight:700;">${mothers}</div>
+                       <div style="font-size:11px; color:var(--text-secondary);">Mothers</div></div>
+                  <div><div style="font-size:19px; font-weight:700;">${admins}</div>
+                       <div style="font-size:11px; color:var(--text-secondary);">Admins</div></div>
+                </div>
+
+                <div style="border-top:1px solid var(--border-primary); padding-top:10px;">${childChips}</div>
+                ${adminWarning}
+
+                <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
+                  <a class="btn btn-sm btn-primary" href="inventory.html">
+                    <i class="fa-solid fa-truck-ramp-box"></i> Allocate Stock
+                  </a>
+                  <a class="btn btn-sm btn-secondary" href="account-create.html">
+                    <i class="fa-solid fa-user-plus"></i> Add Administrator
+                  </a>
+                </div>
+              </div>`;
+          }).join("");
+        }
+
+        function renderBhcTable(bhcList, rhuList) {
+          const tbody = document.getElementById("bhc-tbody");
+          const term = bhcSearch.trim().toLowerCase();
+          const rows = bhcList.filter(b =>
+            !term ||
+            String(b.name || "").toLowerCase().includes(term) ||
+            String(b.barangay || "").toLowerCase().includes(term)
+          );
+
+          if (rows.length === 0) {
+            tbody.innerHTML =
+              '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-secondary);">' +
+              (bhcList.length === 0 ? "No barangay health centres are registered." : "No match for that search.") +
+              "</td></tr>";
+            return;
+          }
+
+          tbody.innerHTML = rows.map(b => {
+            const options = rhuList.map(r =>
+              `<option value="${r.facility_id}"${String(r.facility_id) === String(b.parent_facility_id) ? " selected" : ""}>${esc(r.name)}</option>`
+            ).join("");
+
+            const parentLabel = b.parent_facility_id
+              ? esc(b.parent_name || rhuList.find(r => String(r.facility_id) === String(b.parent_facility_id))?.name || `RHU #${b.parent_facility_id}`)
+              : '<span class="badge badge-suspended">Unassigned</span>';
+
+            return `
+              <tr>
+                <td><strong>${esc(b.name)}</strong></td>
+                <td>${esc(b.barangay || "—")}</td>
+                <td>${parentLabel}</td>
+                <td style="text-align:right;">${midwifeCounts[b.facility_id] || 0}</td>
+                <td style="text-align:right;">${motherCounts[b.facility_id] || 0}</td>
+                <td>
+                  <select class="form-select" style="min-width:190px;"
+                          onchange="reassignBhc(${b.facility_id}, this.value, this)">
+                    <option value="">— Select RHU —</option>
+                    ${options}
+                  </select>
+                </td>
+              </tr>`;
+          }).join("");
+        }
+
+        window.reassignBhc = async function (facilityId, parentId, selectEl) {
+          if (!parentId) return;
+          const bhc = facilities.find(f => String(f.facility_id) === String(facilityId));
+          const rhu = facilities.find(f => String(f.facility_id) === String(parentId));
+          if (!bhc || !rhu) return;
+
+          if (String(bhc.parent_facility_id) === String(parentId)) return;
+
+          if (!confirm(`Move ${bhc.name} to ${rhu.name}?\n\nIts stock requests and patient records will be handled by ${rhu.name} from now on.`)) {
+            selectEl.value = bhc.parent_facility_id || "";
+            return;
+          }
+
+          selectEl.disabled = true;
+          try {
+            const { data, error } = await db.rpc("set_facility_parent", {
+              p_facility_id: facilityId,
+              p_parent_id: parseInt(parentId),
+              p_actor_id: session.account_id,
+            });
+            if (error) throw error;
+            if (!data || data.success !== true) throw new Error(data?.error || "Reassignment refused");
+
+            showToast(`${bhc.name} now reports to ${rhu.name}.`, "success");
+            // The change alters what this portal itself may see, so re-read the
+            // scope as well as the table.
+            PortalScope.clear();
+            await PortalScope.refresh(db);
+            await loadData();
+          } catch (err) {
+            console.error(err);
+            showToast(err.message || "Could not reassign this facility.", "error");
+            selectEl.value = bhc.parent_facility_id || "";
+          } finally {
+            selectEl.disabled = false;
+          }
+        };
+
+        document.getElementById("bhc-search").addEventListener("input", (e) => {
+          bhcSearch = e.target.value;
+          renderBhcTable(bhcs(), rhus());
+        });
+
+        document.getElementById("refresh-btn").addEventListener("click", loadData);
+
+        (async () => {
+          await PortalScope.refresh(db);
+          PortalScope.applyChrome();
+
+          // An RHU administrator has no municipality-wide facilities to manage,
+          // so say so plainly rather than showing an empty page.
+          if (!PortalScope.isMho) {
+            document.getElementById("access-notice").style.display = "";
+            document.getElementById("page-body").style.display = "none";
+            return;
+          }
+
+          await loadData();
+
+          window.AdminLiveRefresh?.start({
+            db,
+            tables: ["health_facilities", "facility_assignments", "midwives", "mothers", "accounts"],
+            refresh: loadData,
+          });
+        })();
+      })();
+    </script>
+  </body>
+</html>

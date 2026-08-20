@@ -134,7 +134,8 @@
                     <div class="filter-group" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                         <select class="form-select" id="filter-type" style="width: auto; min-width: 140px;">
                             <option value="">All Types</option>
-                            <option value="admin">Admin</option>
+                            <option value="mho">Municipal Officer</option>
+                            <option value="admin">RHU Admin</option>
                             <option value="midwife">Midwife</option>
                             <option value="mother">Mother</option>
                         </select>
@@ -202,7 +203,8 @@
                     <div class="form-group">
                         <label class="form-label">Account Type</label>
                         <select class="form-select" id="edit-type">
-                            <option value="admin">Admin</option>
+                            <option value="mho">Municipal Officer</option>
+                            <option value="admin">RHU Admin</option>
                             <option value="midwife">Midwife</option>
                             <option value="mother">Mother</option>
                         </select>
@@ -271,6 +273,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bcryptjs/2.4.3/bcrypt.min.js"></script>
     <script src="common-security.js"></script>
+    <script src="portal-scope.js"></script>
     <script src="live-refresh.js"></script>
     <script>
         (function() {
@@ -279,13 +282,13 @@
             const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
             const SESSION_KEY = "inaagapay_admin_session";
             const session = (() => { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } })();
-            if (!session || session.account_type !== "admin") { window.location.href = "../index.html"; return; }
+            if (!window.isPortalAccount(session)) { window.location.href = "../index.html"; return; }
 
             if (window.verifyAdminSessionWithDB) { window.verifyAdminSessionWithDB(db); }
 
             document.getElementById("header-user-name").textContent = [session.first_name, session.last_name].filter(Boolean).join(" ") || "Admin";
             document.getElementById("header-avatar").textContent = ((session.first_name?.[0] ?? "") + (session.last_name?.[0] ?? "")).toUpperCase() || "A";
-            document.getElementById("logout-btn").addEventListener("click", () => { if (confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); window.location.href = "../index.html"; } });
+            document.getElementById("logout-btn").addEventListener("click", () => { if (confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); PortalScope.clear(); window.location.href = "../index.html"; } });
             document.getElementById("sidebar-toggle").addEventListener("click", () => document.querySelector(".app-sidebar").classList.toggle("open"));
 
             function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }

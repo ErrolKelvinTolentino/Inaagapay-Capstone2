@@ -418,6 +418,7 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="common-security.js"></script>
+    <script src="portal-scope.js"></script>
     <script src="live-refresh.js"></script>
     <script>
       (function () {
@@ -426,7 +427,7 @@
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
         const SESSION_KEY = "inaagapay_admin_session";
         const session = (() => { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } })();
-        if (!session || session.account_type !== "admin") { window.location.href = "../index.html"; return; }
+        if (!window.isPortalAccount(session)) { window.location.href = "../index.html"; return; }
 
         // Perform Security DB Session Verification
         if (window.verifyAdminSessionWithDB) { window.verifyAdminSessionWithDB(db); }
@@ -459,7 +460,7 @@
         // Header Init
         document.getElementById("header-user-name").textContent = [session.first_name, session.last_name].filter(Boolean).join(" ") || session.email_address;
         document.getElementById("header-avatar").textContent = ((session.first_name?.[0] ?? "") + (session.last_name?.[0] ?? "")).toUpperCase() || "A";
-        document.getElementById("logout-btn").addEventListener("click", () => { if (confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); window.location.href = "../index.html"; } });
+        document.getElementById("logout-btn").addEventListener("click", () => { if (confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); PortalScope.clear(); window.location.href = "../index.html"; } });
         document.getElementById("sidebar-toggle").addEventListener("click", () => document.querySelector(".app-sidebar").classList.toggle("open"));
 
         // Hero Greeting Banner
@@ -467,16 +468,35 @@
         const hr = now.getHours();
         const greet = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
         document.getElementById("banner-title").textContent = `${greet}, ${session.first_name || "Admin"} 👋`;
-        document.getElementById("banner-date").textContent = now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+        // Called again after the subtitle is rewritten for the signed-in office,
+        // because that replaces the span this writes into.
+        function renderBannerDate() {
+          const el = document.getElementById("banner-date");
+          if (el) {
+            el.textContent = now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+          }
+        }
+        renderBannerDate();
 
         // Load Statistics KPI Cards
         async function loadStats() {
           try {
             let mothersCount = 0, midwivesCount = 0, childrenCount = 0, pregnanciesCount = 0, bhcCount = 0;
 
+            // These three are counted per barangay health centre, so an RHU sees
+            // its own caseload and the Municipal Health Office sees the whole
+            // municipality. `scopedBhcIds` is empty on a database without the MHO
+            // migration, and the queries then stay unfiltered as before.
+            const scopedBhcIds = PortalScope.bhcFacilities.map(f => f.facility_id);
+            const scopeTo = (query, column = "assigned_bhc_id") =>
+              scopedBhcIds.length > 0 ? query.in(column, scopedBhcIds) : query;
+
             // 1. Mothers
             try {
-              const { count, error } = await db.from("mothers").select("mother_id", { count: "exact", head: true });
+              const { count, error } = await scopeTo(
+                db.from("mothers").select("mother_id", { count: "exact", head: true })
+              );
               if (!error && count !== null) mothersCount = count;
               else {
                 const { count: accCount } = await db.from("accounts").select("account_id", { count: "exact", head: true }).eq("account_type", "mother");
@@ -486,7 +506,9 @@
 
             // 2. Midwives
             try {
-              const { count, error } = await db.from("midwives").select("midwife_id", { count: "exact", head: true });
+              const { count, error } = await scopeTo(
+                db.from("midwives").select("midwife_id", { count: "exact", head: true })
+              );
               if (!error && count !== null) midwivesCount = count;
               else {
                 const { count: accCount } = await db.from("accounts").select("account_id", { count: "exact", head: true }).eq("account_type", "midwife");
@@ -496,28 +518,37 @@
 
             // 3. Children
             try {
-              const { count } = await db.from("children").select("child_id", { count: "exact", head: true });
+              const { count } = await scopeTo(
+                db.from("children").select("child_id", { count: "exact", head: true })
+              );
               childrenCount = count || 0;
             } catch (e) { console.warn("Children stat warning:", e); }
 
-            // 4. Pregnancies
+            // 4. Pregnancies. These hang off a mother rather than a facility, so
+            //    they are scoped through the mothers this office covers.
             try {
-              const { count, error } = await db.from("pregnancies").select("pregnancy_id", { count: "exact", head: true }).eq("status", "ongoing");
-              if (!error && count !== null) pregnanciesCount = count;
-              else {
-                const { count: allP } = await db.from("pregnancies").select("pregnancy_id", { count: "exact", head: true });
-                pregnanciesCount = allP || 0;
+              let motherIds = null;
+              if (scopedBhcIds.length > 0) {
+                const { data: scopedMothers } = await db
+                  .from("mothers")
+                  .select("mother_id")
+                  .in("assigned_bhc_id", scopedBhcIds);
+                motherIds = (scopedMothers || []).map(m => m.mother_id);
+              }
+
+              if (motherIds && motherIds.length === 0) {
+                pregnanciesCount = 0;
+              } else {
+                let q = db.from("pregnancies").select("pregnancy_id", { count: "exact", head: true }).eq("status", "ongoing");
+                if (motherIds) q = q.in("mother_id", motherIds);
+                const { count, error } = await q;
+                if (!error && count !== null) pregnanciesCount = count;
               }
             } catch (e) { console.warn("Pregnancies stat warning:", e); }
 
-            // 5. BHC Facilities
+            // 5. BHC Facilities — only those this office is responsible for.
             try {
-              const { count, error } = await db.from("bhc").select("bhc_id", { count: "exact", head: true });
-              if (!error && count !== null) bhcCount = count;
-              else {
-                const { count: fCount } = await db.from("health_facilities").select("facility_id", { count: "exact", head: true });
-                bhcCount = fCount || 0;
-              }
+              bhcCount = (await PortalScope.loadBhcList(db)).length;
             } catch (e) { console.warn("BHC stat warning:", e); }
 
             document.getElementById("stat-mothers").textContent = mothersCount.toLocaleString();
@@ -601,15 +632,7 @@
 
         async function loadBhcChart() {
           try {
-            let bhcList = [];
-            try {
-              const { data: bData } = await db.from("bhc").select("bhc_id, bhc_name");
-              if (bData && bData.length) bhcList = bData;
-              else {
-                const { data: fData } = await db.from("health_facilities").select("facility_id, name");
-                bhcList = (fData || []).map(f => ({ bhc_id: f.facility_id, bhc_name: f.name }));
-              }
-            } catch (e) { console.warn("BHC fetch warning:", e); }
+            const bhcList = await PortalScope.loadBhcList(db);
 
             const { data: mothersData } = await db.from("mothers").select("mother_id, assigned_bhc_id");
             const countMap = {};
@@ -964,13 +987,29 @@
           }
         });
 
-        // Initialize All Dashboard Operations
-        loadStats();
-        loadRiskChart();
-        loadBhcChart();
-        loadMonthlyChart();
-        loadInventoryChart();
-        loadAuditTrail();
+        // Initialize All Dashboard Operations. The office scope is resolved
+        // first, because the facility counts and the per-BHC chart are drawn
+        // from it.
+        (async () => {
+          await PortalScope.refresh(db);
+          PortalScope.applyChrome();
+
+          const banner = document.querySelector(".dashboard-hero .hero-subtitle");
+          if (banner) {
+            banner.innerHTML = PortalScope.isMho
+              ? 'Municipal overview — operational status across all Rural Health Units for <span id="banner-date"></span>.'
+              : `Operational overview across the barangay health centers of ${escHtml(PortalScope.facilityName || "this RHU")} for <span id="banner-date"></span>.`;
+            renderBannerDate?.();
+          }
+
+          loadStats();
+          loadRiskChart();
+          loadBhcChart();
+          loadMonthlyChart();
+          loadInventoryChart();
+          loadAuditTrail();
+        })();
+
         window.AdminLiveRefresh?.start({
           db,
           tables: [

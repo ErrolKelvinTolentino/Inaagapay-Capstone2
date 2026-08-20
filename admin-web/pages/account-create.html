@@ -170,7 +170,21 @@
                       />
                       <span class="type-radio-box">
                         <i class="fa-solid fa-shield-halved"></i>
-                        <span>Admin</span>
+                        <span id="type-admin-text">Admin</span>
+                      </span>
+                    </label>
+                    <!-- Only the Municipal Health Office may create another
+                         municipal officer; portal-scope.js hides this for RHUs. -->
+                    <label class="type-radio" id="type-mho-label" data-mho-only>
+                      <input
+                        type="radio"
+                        name="account_type"
+                        value="mho"
+                        id="type-mho"
+                      />
+                      <span class="type-radio-box">
+                        <i class="fa-solid fa-city"></i>
+                        <span>Municipal Officer</span>
                       </span>
                     </label>
                   </div>
@@ -266,14 +280,14 @@
 
                 <!-- BHC Designation Checkbox Selector — shown for midwife only, REQUIRED -->
                 <div class="form-group" id="bhc-group">
-                  <label class="form-label"
+                  <label class="form-label" id="bhc-group-label"
                     >Designated Barangay Health Center (BHC) <span class="req">*</span></label
                   >
                   <input type="hidden" id="bhc_id" required />
                   <div id="bhc-checkbox-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-top: 8px;">
-                    <div style="color: var(--text-secondary); font-size: 13px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading BHC list...</div>
+                    <div style="color: var(--text-secondary); font-size: 13px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading facilities…</div>
                   </div>
-                  <p class="form-hint" style="margin-top: 10px;">
+                  <p class="form-hint" style="margin-top: 10px;" id="bhc-group-hint">
                     <i class="fa-solid fa-circle-info"></i> Click a checkbox tile above to select the designated Barangay Health Center for this midwife.
                   </p>
                 </div>
@@ -500,6 +514,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
     <script src="common-security.js"></script>
+    <script src="portal-scope.js"></script>
     <script src="live-refresh.js"></script>
     <script>
       (function () {
@@ -515,7 +530,7 @@
             return null;
           }
         })();
-        if (!session || session.account_type !== "admin") {
+        if (!window.isPortalAccount(session)) {
           window.location.href = "../index.html";
           return;
         }
@@ -531,7 +546,7 @@
           ).toUpperCase() || "A";
         document.getElementById("logout-btn").addEventListener("click", () => {
           if (confirm("Logout?")) {
-            localStorage.removeItem(SESSION_KEY);
+            localStorage.removeItem(SESSION_KEY); PortalScope.clear();
             window.location.href = "../index.html";
           }
         });
@@ -582,37 +597,48 @@
         });
 
         /* ── Load BHC Checkboxes with DB Resilience ── */
+        // The tiles list the facilities this office may assign someone to: an RHU
+        // assigns midwives to its own barangay health centres, the Municipal
+        // Health Office assigns administrators to its Rural Health Units.
         async function loadBhc() {
-          let bhcList = [];
-          try {
-            const { data, error } = await db.from("bhc").select("bhc_id, bhc_name").order("bhc_name");
-            if (!error && data && data.length > 0) {
-              bhcList = data;
-            } else {
-              const { data: facs } = await db.from("health_facilities").select("facility_id, name").order("name");
-              bhcList = (facs || []).map(f => ({ bhc_id: f.facility_id, bhc_name: f.name }));
-            }
-          } catch (e) {
-            console.warn("BHC load error, fallback:", e);
-          }
+          let bhcList = PortalScope.childFacilities.map(f => ({
+            bhc_id: f.facility_id,
+            bhc_name: f.name,
+            subtitle: f.address_detail || f.barangay || PortalScope.childTypeLabel,
+          }));
 
           if (bhcList.length === 0) {
-            bhcList = [
-              { bhc_id: 1, bhc_name: 'Tiaong BHC' },
-              { bhc_id: 2, bhc_name: 'Tarcan BHC' },
-              { bhc_id: 3, bhc_name: 'Pinagbarilan BHC' },
-              { bhc_id: 4, bhc_name: 'Makinabang BHC' },
-              { bhc_id: 5, bhc_name: 'Sta. Barbara BHC' }
-            ];
+            // Database without 20260821_mho_tier.sql: read the BHC list directly.
+            try {
+              const { data: facs } = await db
+                .from("health_facilities")
+                .select("facility_id, name, barangay")
+                .eq("facility_type", "BHC")
+                .order("name");
+              bhcList = (facs || []).map(f => ({
+                bhc_id: f.facility_id,
+                bhc_name: f.name,
+                subtitle: f.barangay || "Barangay Health Center",
+              }));
+            } catch (e) {
+              console.warn("Facility load error:", e);
+            }
           }
 
           const container = document.getElementById("bhc-checkbox-container");
+          if (bhcList.length === 0) {
+            container.innerHTML =
+              '<div style="color: var(--text-secondary); font-size: 13px;">' +
+              '<i class="fa-solid fa-triangle-exclamation"></i> No facilities are registered under this office yet.</div>';
+            return;
+          }
+
           container.innerHTML = bhcList.map(b => `
             <label class="bhc-tile-card" style="display: flex; align-items: center; gap: 10px; background: var(--card-bg); border: 1.5px solid var(--border-primary); padding: 12px 14px; border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease;">
               <input type="checkbox" name="bhc_checkbox" value="${b.bhc_id}" style="width: 18px; height: 18px; accent-color: var(--brand-primary); cursor: pointer;" onchange="selectBhcTile(${b.bhc_id}, this)" />
               <div>
-                <div style="font-weight: 600; font-size: 13.5px; color: var(--text-primary);"><i class="fa-solid fa-hospital" style="color: var(--brand-primary); margin-right: 6px;"></i>${b.bhc_name}</div>
-                <div style="font-size: 11px; color: var(--text-secondary);">Barangay Health Center</div>
+                <div style="font-weight: 600; font-size: 13.5px; color: var(--text-primary);"><i class="fa-solid fa-hospital" style="color: var(--brand-primary); margin-right: 6px;"></i>${escHtml(b.bhc_name)}</div>
+                <div style="font-size: 11px; color: var(--text-secondary);">${escHtml(b.subtitle)}</div>
               </div>
             </label>
           `).join('');
@@ -631,21 +657,69 @@
           hiddenInput.value = checkboxEl.checked ? bhcId : "";
         };
 
-        loadBhc();
+        /* ── Which account types this office may create ── */
+        //
+        // A Rural Health Unit staffs its own barangay health centres: midwives,
+        // plus fellow administrators for its own RHU. The Municipal Health
+        // Office instead appoints one administrator per RHU, and may add another
+        // municipal officer. Midwives are never created from municipal level,
+        // because a midwife belongs to a BHC and the MHO does not run one.
+        (async () => {
+          await PortalScope.refresh(db);
+          PortalScope.applyChrome();
+
+          const adminText = document.getElementById("type-admin-text");
+          if (adminText) {
+            adminText.textContent = PortalScope.isMho ? "RHU Administrator" : "RHU Admin";
+          }
+
+          const midwifeLabel = document.getElementById("type-midwife-label");
+          if (midwifeLabel && PortalScope.isMho) {
+            midwifeLabel.style.display = "none";
+            document.getElementById("type-admin").checked = true;
+          }
+
+          await loadBhc();
+          syncTypeUi();
+        })();
 
         /* ── Account type toggle ── */
         const bhcGroup = document.getElementById("bhc-group");
-        document.querySelectorAll('input[name="account_type"]').forEach((r) => {
-          r.addEventListener("change", () => {
-            if (r.value === "midwife") {
-              bhcGroup.style.display = "";
-              document.getElementById("bhc_id").required = true;
+
+        // A midwife is posted to a BHC; an RHU administrator is posted to an RHU.
+        // Both use the same tile picker — only the wording and the target list
+        // differ, and PortalScope already decides the list.
+        function typeNeedsFacility(type) {
+          if (type === "midwife") return true;
+          if (type === "admin") return PortalScope.isMho;
+          return false; // a municipal officer is assigned to the MHO itself
+        }
+
+        function syncTypeUi() {
+          const checked = document.querySelector('input[name="account_type"]:checked');
+          const type = checked ? checked.value : "midwife";
+          const needsFacility = typeNeedsFacility(type);
+
+          bhcGroup.style.display = needsFacility ? "" : "none";
+          document.getElementById("bhc_id").required = needsFacility;
+
+          const label = document.getElementById("bhc-group-label");
+          const hint = document.getElementById("bhc-group-hint");
+          if (needsFacility && label && hint) {
+            if (type === "midwife") {
+              label.innerHTML = 'Designated Barangay Health Center (BHC) <span class="req">*</span>';
+              hint.innerHTML = '<i class="fa-solid fa-circle-info"></i> Select the Barangay Health Center this midwife will serve. A midwife belongs to exactly one BHC.';
             } else {
-              bhcGroup.style.display = "none";
-              document.getElementById("bhc_id").required = false;
+              label.innerHTML = 'Assigned Rural Health Unit <span class="req">*</span>';
+              hint.innerHTML = '<i class="fa-solid fa-circle-info"></i> Select the Rural Health Unit this administrator will run. They will see only that RHU\'s stock, staff and patients.';
             }
-            updatePreviewBadge(r.value);
-          });
+          }
+
+          updatePreviewBadge(type);
+        }
+
+        document.querySelectorAll('input[name="account_type"]').forEach((r) => {
+          r.addEventListener("change", syncTypeUi);
         });
 
         function updatePreviewBadge(type) {
@@ -1007,9 +1081,11 @@
             if (!isPhoneValid) {
               return showAlert("Please enter a valid Philippine phone number (starts with 09 and is 11 digits).");
             }
-            if (type === "midwife" && !bhcId) {
+            if (typeNeedsFacility(type) && !bhcId) {
               return showAlert(
-                "Please select a Barangay Health Center for the midwife. Midwives can only be assigned to ONE BHC.",
+                type === "midwife"
+                  ? "Please select a Barangay Health Center for the midwife. Midwives can only be assigned to ONE BHC."
+                  : "Please select the Rural Health Unit this administrator will run.",
               );
             }
 
@@ -1094,6 +1170,32 @@
                     is_active: true
                   });
                 } catch (fErr) { console.warn("facility_assignments insert note:", fErr); }
+              }
+
+              /* Portal accounts are scoped by the office they are assigned to.
+                 An RHU administrator created by the MHO gets the chosen RHU; one
+                 created by an RHU inherits that RHU; a municipal officer gets the
+                 Municipal Health Office. Without this the new account would sign
+                 in with no scope at all. */
+              if (type === "admin" || type === "mho") {
+                const targetFacility =
+                  type === "mho" ? PortalScope.facilityId
+                    : (PortalScope.isMho ? parseInt(bhcId) : PortalScope.facilityId);
+
+                if (targetFacility) {
+                  try {
+                    const { data: assignRes, error: assignErr } = await db.rpc(
+                      "assign_portal_account_facility",
+                      { p_account_id: newAcct.account_id, p_facility_id: targetFacility }
+                    );
+                    if (assignErr) throw assignErr;
+                    if (assignRes && assignRes.success !== true) {
+                      console.warn("Facility assignment refused:", assignRes.error);
+                    }
+                  } catch (aErr) {
+                    console.warn("Portal facility assignment note:", aErr);
+                  }
+                }
               }
 
               /* Audit log */

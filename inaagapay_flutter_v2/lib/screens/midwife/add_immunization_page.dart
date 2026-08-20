@@ -1598,7 +1598,14 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
             _lastDeductionResult = Map<String, dynamic>.from(rpcRes);
           }
         } catch (rpcErr) {
-          debugPrint('RPC stock deduction warning (non-fatal): $rpcErr');
+          // A throw here used to vanish into the log, so the midwife was told the
+          // dose was saved while stock silently never moved. Record it as a
+          // failed deduction instead, and the confirmation dialog will say so.
+          debugPrint('RPC stock deduction failed: $rpcErr');
+          _lastDeductionResult = {
+            'success': false,
+            'error': rpcErr.toString().replaceAll('Exception: ', ''),
+          };
         }
       }
 
@@ -1717,6 +1724,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           if (success && mounted) {
             String title = 'Immunization Added';
             String content = 'The immunization record has been successfully saved.';
+            var dialogType = DialogType.success;
 
             final res = _lastDeductionResult;
             if (_isOutside) {
@@ -1738,15 +1746,41 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
                 content = 'Immunization saved successfully.\n\n'
                     '✨ Opened a new multi-dose vial (${res['doses_per_unit'] ?? _dosesPerUnit} doses) from Batch #$batchNum.\n'
                     '👉 $dosesLeft dose${dosesLeft == 1 ? '' : 's'} remaining in the opened vial for subsequent patients.';
-              } else {
+              } else if (mode == 'outside') {
+                // The record has no facility, so there was no shelf to draw from.
+                // Saying "deducted" here would be a plain lie.
+                dialogType = DialogType.warning;
+                title = 'Immunization Saved (No Stock Deducted)';
+                content = 'The immunization record was saved, but no BHC was attached to it, '
+                    'so nothing was deducted from stock.\n\n'
+                    'Please check that your account is assigned to a Barangay Health Center.';
+              } else if (mode == 'already_deducted') {
+                title = 'Immunization Saved';
+                content = 'Immunization saved successfully.\n\n'
+                    '📦 Stock for this record had already been deducted, so it was not deducted again.';
+              } else if (mode == 'single_dose') {
                 title = 'Stock Deducted';
                 content = 'Immunization saved successfully.\n\n'
                     '📦 Deducted 1 unit from Batch #$batchNum.';
+              } else {
+                title = 'Immunization Saved';
+                content = 'Immunization saved successfully.\n\n'
+                    '📦 ${res['message'] ?? 'Stock updated.'}';
               }
             } else if (res != null && res['success'] == false) {
+              dialogType = DialogType.warning;
               title = 'Immunization Saved (Stock Warning)';
               content = 'The immunization record was saved, but BHC stock was not deducted:\n\n'
-                  '⚠️ ${res['error'] ?? res['message'] ?? 'Stock deduction failed.'}';
+                  '⚠️ ${res['error'] ?? res['message'] ?? 'Stock deduction failed.'}\n\n'
+                  'Please adjust the batch manually in the RHU inventory, or ask the RHU '
+                  'administrator to reconcile it.';
+            } else if (res == null) {
+              // Only reachable if the RPC returned something we could not read.
+              dialogType = DialogType.warning;
+              title = 'Immunization Saved (Stock Unconfirmed)';
+              content = 'The immunization record was saved, but the system could not '
+                  'confirm that BHC stock was deducted. Please verify the batch in '
+                  'the inventory.';
             }
 
             // Refresh stock in background
@@ -1758,7 +1792,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
               context: context,
               barrierDismissible: false,
               builder: (_) => DialogBox(
-                type: DialogType.success,
+                type: dialogType,
                 title: title,
                 content: content,
                 buttonText: 'OK',

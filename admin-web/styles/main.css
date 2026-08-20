@@ -932,6 +932,12 @@ table.data-table tbody tr:hover td {
   background: var(--error);
   color: var(--text-on-color);
 }
+/* Municipal Health Office — the tier above the RHUs. Deepest brand pink so the
+   hierarchy reads at a glance: MHO, then admin (RHU), then midwife, then mother. */
+.badge-mho {
+  background: var(--brand-text, #c73578);
+  color: var(--text-on-color);
+}
 .badge-admin {
   background: var(--brand-primary);
   color: var(--text-on-color);

@@ -471,7 +471,7 @@
         if (existing) {
           try {
             const s = JSON.parse(existing);
-            if (s && s.account_type === "admin") {
+            if (s && (s.account_type === "admin" || s.account_type === "mho")) {
               if (isSessionExpired(s)) {
                 localStorage.removeItem(SESSION_KEY);
               } else if (s.is_temporary_password === true) {
@@ -561,7 +561,10 @@
               return;
             }
 
-            if (user.account_type !== "admin") {
+            // Both portal tiers sign in here: the Municipal Health Office and
+            // each Rural Health Unit. Which one you get is decided by scope
+            // after login, not by a separate login page.
+            if (user.account_type !== "admin" && user.account_type !== "mho") {
               showError("Access Denied: Midwife and Mother accounts must use the INAAGAPAY Mobile App.");
               return;
             }
@@ -611,6 +614,26 @@
               .then(({ error: e }) => {
                 if (e) console.warn("Audit log:", e.message);
               });
+
+            // Resolve which office this account runs before leaving the login
+            // page, so the first screen already knows its facility, its depot
+            // and the facilities under it. A database without the MHO migration
+            // simply leaves the cache empty and every page falls back to the
+            // previous single-RHU behaviour.
+            localStorage.removeItem("inaagapay_portal_scope");
+            try {
+              const { data: ctx } = await db.rpc("admin_portal_context", {
+                p_account_id: user.account_id,
+              });
+              if (ctx && ctx.success === true) {
+                localStorage.setItem(
+                  "inaagapay_portal_scope",
+                  JSON.stringify(Object.assign({ ready: true }, ctx))
+                );
+              }
+            } catch (ctxErr) {
+              console.warn("Portal scope unavailable at login:", ctxErr?.message || ctxErr);
+            }
 
             // Redirect to dashboard or change password page
             if (user.is_temporary_password === true) {

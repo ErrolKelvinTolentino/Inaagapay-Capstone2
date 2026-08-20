@@ -113,21 +113,33 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
 
       // 2. Mother profile details
       try {
+        // `mothers` has no full_name and there is no `users` table — the name
+        // lives on the linked account. The previous select named both and threw
+        // every time, which silently cost us the mother's own BHC as a fallback
+        // for _bhcId.
         final motherRes = await client
             .from('mothers')
-            .select('assigned_bhc_id, full_name, users(full_name, contact_number)')
+            .select('assigned_bhc_id, account:account_id(first_name, middle_name, last_name)')
             .eq('mother_id', widget.motherId)
             .maybeSingle();
 
         if (motherRes != null) {
           _bhcId ??= (motherRes['assigned_bhc_id'] as num?)?.toInt();
-          final u = motherRes['users'] as Map<String, dynamic>?;
-          final fn = motherRes['full_name']?.toString() ?? u?['full_name']?.toString();
-          if (fn != null && fn.isNotEmpty && widget.motherName == null) {
+
+          final acc = motherRes['account'] as Map<String, dynamic>?;
+          final fn = [
+            acc?['first_name'],
+            acc?['middle_name'],
+            acc?['last_name'],
+          ].whereType<String>().where((p) => p.trim().isNotEmpty).join(' ');
+
+          if (fn.isNotEmpty && widget.motherName == null) {
             _motherFullName = fn;
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('Maternal Td: mother profile read failed: $e');
+      }
 
       // 3. Canonical dose state
       _status = await MaternalTdService.fetchStatus(widget.motherId);
@@ -366,7 +378,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       try {
         final motherRes = await client
             .from('mothers')
-            .select('account:account_id(phone_number, user_id)')
+            .select('account:account_id(phone_number)')
             .eq('mother_id', widget.motherId)
             .maybeSingle();
 
@@ -596,7 +608,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                                           style: TextStyle(
                                             fontSize: 10.5,
                                             fontWeight: FontWeight.bold,
-                                            color: Color(0xFF9D174D),
+                                            color: AppColors.brandText,
                                           ),
                                         ),
                                       ),
@@ -950,13 +962,22 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     final isPab = _status.isProtectedAtBirth;
     final isFim = _status.isFim;
 
-    // Pink/Rose Theme Gradients
-    final startColor = isFim
-        ? const Color(0xFFBE185D) // Deep Rose
-        : (isPab ? const Color(0xFFE11D48) : const Color(0xFFE6398D)); // Crimson Rose / Brand Pink
-    final endColor = isFim
-        ? const Color(0xFF9D174D) // Rich Burgundy Pink
-        : (isPab ? const Color(0xFFBE185D) : const Color(0xFFFF68A5)); // Light Brand Pink
+    // One hue, three depths. The previous version switched to crimson (0xFFE11D48)
+    // the moment the mother reached PAB and to burgundy at FIM, so the screen
+    // turned red exactly when the news was good — off-brand and alarming.
+    // Progress now reads as the brand pink deepening.
+    late final Color startColor;
+    late final Color endColor;
+    if (isFim) {
+      startColor = const Color(0xFF9E2A5F); // deepest — series complete
+      endColor = AppColors.brandText;
+    } else if (isPab) {
+      startColor = AppColors.brandText;
+      endColor = AppColors.brandAccent;
+    } else {
+      startColor = AppColors.brandAccent;
+      endColor = AppColors.brandPrimary;
+    }
 
     String statusTitle;
     String statusSubtitle;
@@ -1163,7 +1184,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
         if (isCompleted) {
           cardBg = const Color(0xFFFDF2F8);
           borderColor = const Color(0xFFFBCFE8);
-          textColor = const Color(0xFF9D174D);
+          textColor = AppColors.brandText;
           statusLabel = rec.date != null
               ? DateFormat('MMM d, yy').format(rec.date!)
               : 'Done';
@@ -1271,13 +1292,13 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
           const SizedBox(height: 10),
           const Text(
             'Fully Immunized Mother',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF9D174D)),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.brandText),
           ),
           const SizedBox(height: 6),
           const Text(
             'All 5 Td doses are recorded. She has lifetime protection against maternal and neonatal tetanus — no further Td vaccination is needed.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12.5, color: Color(0xFFBE185D), height: 1.4),
+            style: TextStyle(fontSize: 12.5, color: AppColors.brandText, height: 1.4),
           ),
         ],
       ),
@@ -1369,7 +1390,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
               const Expanded(
                 child: Text(
                   'No Td dose needed today',
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: Color(0xFF9D174D)),
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: AppColors.brandText),
                 ),
               ),
             ],
@@ -1377,7 +1398,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
           const SizedBox(height: 6),
           Text(
             'She is on schedule. $next is not due yet — DOH requires ${def.minIntervalLabel.toLowerCase()}.',
-            style: const TextStyle(fontSize: 12, color: Color(0xFFBE185D), height: 1.4),
+            style: const TextStyle(fontSize: 12, color: AppColors.brandText, height: 1.4),
           ),
           const SizedBox(height: 14),
           Row(
@@ -1408,7 +1429,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                 Expanded(
                   child: Text(
                     'Current protection runs until ${_longDate.format(protectedUntil)}.',
-                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF9D174D)),
+                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.brandText),
                   ),
                 ),
               ],
@@ -1458,7 +1479,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
             alignment: Alignment.centerLeft,
             child: Text(
               value,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF9D174D)),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.brandText),
             ),
           ),
         ],
@@ -1539,7 +1560,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: outOfStock ? const Color(0xFF991B1B) : const Color(0xFF9D174D),
+                          color: outOfStock ? const Color(0xFF991B1B) : AppColors.brandText,
                         ),
                       ),
                     ),
@@ -1700,7 +1721,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
           if (isDone) {
             statusLabel = 'Completed';
             chipBg = const Color(0xFFFCE7F3);
-            chipFg = const Color(0xFF9D174D);
+            chipFg = AppColors.brandText;
           } else if (isNext && _status.canAdministerToday) {
             statusLabel = 'Due now';
             chipBg = const Color(0xFFFFF1F5);
@@ -1754,7 +1775,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                   height: 38,
                   decoration: BoxDecoration(
                     color: isDone
-                        ? const Color(0xFFBE185D)
+                        ? AppColors.brandText
                         : (isNext ? AppColors.brandPrimary.withValues(alpha: 0.12) : Colors.grey.shade100),
                     shape: BoxShape.circle,
                   ),
@@ -1805,7 +1826,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: isDone ? FontWeight.w600 : FontWeight.w500,
-                          color: isDone ? const Color(0xFF9D174D) : Colors.grey.shade600,
+                          color: isDone ? AppColors.brandText : Colors.grey.shade600,
                         ),
                       ),
                       const SizedBox(height: 3),

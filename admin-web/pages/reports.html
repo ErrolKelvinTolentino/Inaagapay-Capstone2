@@ -501,6 +501,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="common-security.js"></script>
+    <script src="portal-scope.js"></script>
     <script src="live-refresh.js"></script>
     <script>
       (function() {
@@ -512,7 +513,7 @@
         const session = (() => {
           try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
         })();
-        if (!session || session.account_type !== "admin") {
+        if (!window.isPortalAccount(session)) {
           window.location.href = "../index.html";
           return;
         }
@@ -529,7 +530,7 @@
         });
         document.getElementById("logout-btn").addEventListener("click", () => {
           if (confirm("Are you sure you want to log out?")) {
-            localStorage.removeItem(SESSION_KEY);
+            localStorage.removeItem(SESSION_KEY); PortalScope.clear();
             window.location.href = "../index.html";
           }
         });
@@ -591,6 +592,11 @@
         // Initialize Reports Module
         async function initReports() {
           try {
+            // The office scope decides which barangay health centres feed these
+            // figures, so resolve it before any of them are computed.
+            await PortalScope.refresh(db);
+            PortalScope.applyChrome();
+
             await loadAllBaseData();
             populateBhcDropdown();
             renderReports();
@@ -601,32 +607,35 @@
         }
 
         async function loadAllBaseData() {
-          // 1. Fetch BHC Facilities
-          try {
-            const { data: bData } = await db.from("bhc").select("bhc_id, bhc_name, barangay");
-            if (bData && bData.length) allBhcs = bData;
-            else {
-              const { data: fData } = await db.from("health_facilities").select("facility_id, name, barangay");
-              allBhcs = (fData || []).map(f => ({ bhc_id: f.facility_id, bhc_name: f.name, barangay: f.barangay || null }));
-            }
-          } catch (e) { console.warn("BHC fetch warning:", e); }
+          // 1. Barangay health centres this office reports on: every one in the
+          //    municipality for the MHO, only its own for an RHU.
+          allBhcs = await PortalScope.loadBhcList(db);
+
+          // Both rosters are keyed on assigned_bhc_id, so the same rule scopes
+          // them. Records with no centre recorded stay in, otherwise a missing
+          // assignment would quietly drop people out of every report.
+          const inScope = (row) => !row.assigned_bhc_id || PortalScope.coversBhc(row.assigned_bhc_id);
 
           // 2. Fetch Mothers
           try {
             const { data: mData } = await db.from("mothers").select("*, accounts(first_name, last_name, phone_number)");
-            allMothers = mData || [];
+            allMothers = (mData || []).filter(inScope);
           } catch (e) {
             const { data: accM } = await db.from("accounts").select("*").eq("account_type", "mother");
-            allMothers = (accM || []).map(a => ({ mother_id: a.account_id, account_id: a.account_id, assigned_bhc_id: a.assigned_bhc_id, accounts: a }));
+            allMothers = (accM || [])
+              .map(a => ({ mother_id: a.account_id, account_id: a.account_id, assigned_bhc_id: a.assigned_bhc_id, accounts: a }))
+              .filter(inScope);
           }
 
           // 3. Fetch Midwives
           try {
             const { data: midData } = await db.from("midwives").select("*, accounts(first_name, last_name)");
-            allMidwives = midData || [];
+            allMidwives = (midData || []).filter(inScope);
           } catch (e) {
             const { data: accMid } = await db.from("accounts").select("*").eq("account_type", "midwife");
-            allMidwives = (accMid || []).map(a => ({ midwife_id: a.account_id, account_id: a.account_id, assigned_bhc_id: a.assigned_bhc_id, accounts: a }));
+            allMidwives = (accMid || [])
+              .map(a => ({ midwife_id: a.account_id, account_id: a.account_id, assigned_bhc_id: a.assigned_bhc_id, accounts: a }))
+              .filter(inScope);
           }
 
           // 4. Fetch Pregnancies
