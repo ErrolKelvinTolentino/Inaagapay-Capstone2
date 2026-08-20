@@ -67,11 +67,11 @@ CREATE TEMP TABLE portal_seed (
 );
 
 INSERT INTO portal_seed (email, first_name, last_name, acct_type, facility_code, temp_password) VALUES
-  ('mho.baliwag@inaagapay.ph',  'Municipal', 'Health Officer',   'mho',   'MHO',  'ChangeMe-MHO-2026!'),
-  ('rhu1.baliwag@inaagapay.ph', 'RHU One',   'Administrator',    'admin', 'RHU1', 'ChangeMe-RHU1-2026!'),
-  ('rhu2.baliwag@inaagapay.ph', 'RHU Two',   'Administrator',    'admin', 'RHU2', 'ChangeMe-RHU2-2026!'),
-  ('rhu3.baliwag@inaagapay.ph', 'RHU Three', 'Administrator',    'admin', 'RHU3', 'ChangeMe-RHU3-2026!'),
-  ('rhu4.baliwag@inaagapay.ph', 'RHU Four',  'Administrator',    'admin', 'RHU4', 'ChangeMe-RHU4-2026!');
+  ('mho.baliwag@inaagapay.ph',  'Municipal', 'Health Officer',   'mho',   'MHO',  'MHO@123'),
+  ('rhu1.baliwag@inaagapay.ph', 'RHU One',   'Administrator',    'admin', 'RHU1', 'RHU1@123'),
+  ('rhu2.baliwag@inaagapay.ph', 'RHU Two',   'Administrator',    'admin', 'RHU2', 'RHU2@123'),
+  ('rhu3.baliwag@inaagapay.ph', 'RHU Three', 'Administrator',    'admin', 'RHU3', 'RHU3@123'),
+  ('rhu4.baliwag@inaagapay.ph', 'RHU Four',  'Administrator',    'admin', 'RHU4', 'RHU4@123');
 
 
 -- ---------------------------------------------------------------------------
