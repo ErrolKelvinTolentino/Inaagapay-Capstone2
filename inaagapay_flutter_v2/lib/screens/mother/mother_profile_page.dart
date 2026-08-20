@@ -1,6 +1,7 @@
 // lib/screens/mother/mother_profile_page.dart
 
 import 'package:flutter/material.dart';
+import '../../widgets/record_image.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
@@ -1677,6 +1678,24 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   /// they are excluded from the list query and read one row at a time here.
   /// Returns null on failure rather than throwing: a record that cannot show
   /// its image should still show its findings.
+  /// The attachments for one record, fetched in the background.
+  ///
+  /// Returned as a Future the record screen awaits itself, so opening a record
+  /// no longer waits on a three-megabyte base64 blob. Failure yields an empty
+  /// list rather than throwing — the record is still worth showing.
+  Future<List<String>> _recordImages({
+    required String table,
+    required String column,
+    required dynamic encounterId,
+  }) async {
+    final field = await _fetchRecordImage(
+      table: table,
+      column: column,
+      encounterId: encounterId,
+    );
+    return RecordImage.splitSources(field);
+  }
+
   Future<String?> _fetchRecordImage({
     required String table,
     required String column,
@@ -1758,6 +1777,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     String? remarksSource,
     List<MapEntry<String, String>> resultRows = const [],
     String? resultsTitle,
+    Future<List<String>>? pendingImages,
   }) {
     Navigator.push(
       context,
@@ -1769,6 +1789,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           patient: _recordPatient(),
           resultRows: resultRows,
           resultsTitle: resultsTitle,
+          pendingImages: pendingImages,
           title: title,
           rows: rows,
           icon: icon,
@@ -2124,25 +2145,14 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         );
 
         try {
-          List<String> imageUrls = [];
 
-          // Fetched now, not with the list. See the note in
-          // mother_profile_service.dart — carrying these bytes into the list
-          // query is what timed the whole section out.
-          ultrasound['ultrasound_image'] ??= await _fetchRecordImage(
+          // Started, not awaited. The record opens on everything else and the
+          // scan arrives into a placeholder — see RecordDetailScreen.pendingImages.
+          final pendingImages = _recordImages(
             table: 'ultrasounds',
             column: 'ultrasound_image',
             encounterId: ultrasound['encounter_id'],
           );
-
-          if (ultrasound['ultrasound_image'] != null) {
-            final imageField = ultrasound['ultrasound_image'].toString();
-            if (imageField.contains(',')) {
-              imageUrls = imageField.split(',').map((url) => url.trim()).toList();
-            } else if (imageField.isNotEmpty) {
-              imageUrls = [imageField];
-            }
-          }
 
           final split = _splitRemarksAndAi(ultrasound['remarks']?.toString());
 
@@ -2188,7 +2198,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             // belongs and is labelled.
             subtitle: _formatDateTime(ultrasound['created_at']),
             icon: Icons.monitor_heart,
-            imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
+            pendingImages: pendingImages,
             approvedByName: midwifeName == '—' ? null : midwifeName,
             isMidwifeApproved: ultrasound['is_midwife_approved'] == true,
             rows: [
@@ -2241,22 +2251,12 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         );
 
         try {
-          List<String> imageUrls = [];
 
-          labTest['lab_test_image'] ??= await _fetchRecordImage(
+          final pendingImages = _recordImages(
             table: 'lab_tests',
             column: 'lab_test_image',
             encounterId: labTest['encounter_id'],
           );
-
-          if (labTest['lab_test_image'] != null) {
-            final imageField = labTest['lab_test_image'].toString();
-            if (imageField.contains(',')) {
-              imageUrls = imageField.split(',').map((url) => url.trim()).toList();
-            } else if (imageField.isNotEmpty) {
-              imageUrls = [imageField];
-            }
-          }
 
           final split = _splitRemarksAndAi(labTest['remarks']?.toString());
 
@@ -2293,7 +2293,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             // was taken. See the ultrasound note above.
             subtitle: _formatDateTime(labTest['created_at']),
             icon: Icons.science,
-            imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
+            pendingImages: pendingImages,
             approvedByName: midwifeName == '—' ? null : midwifeName,
             isMidwifeApproved: labTest['is_midwife_approved'] == true,
             // What the test found, from the columns built to hold it. The

@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import '../../theme/app_colors.dart';
 import '../../services/language_service.dart';
 import '../../widgets/full_screen_image_viewer.dart';
+import '../../widgets/record_image.dart';
 import '../../widgets/secondary_header.dart';
 import '../../widgets/profile_section.dart';
 import '../../widgets/profile_header_card.dart';
@@ -73,6 +74,7 @@ class RecordDetailScreen extends StatefulWidget {
     this.patient,
     this.resultRows = const [],
     this.resultsTitle,
+    this.pendingImages,
   });
 
   /// `prenatal_checkups.remarks_source` — one of `midwife_authored`,
@@ -99,6 +101,19 @@ class RecordDetailScreen extends StatefulWidget {
   final IconData icon;
   final String? subtitle;
   final List<String>? imageUrls;
+
+  /// Attachments still in flight.
+  ///
+  /// Stored images are base64 inside the row and run to roughly three
+  /// megabytes. Awaiting one before opening the record meant the loading
+  /// spinner sat over the mother's list for as long as the transfer took, and
+  /// when the fetch timed out the record opened with no attachment at all and
+  /// no indication that one existed — "sometimes the pictures do not appear".
+  ///
+  /// A record is not its attachment. Everything else is ready immediately, so
+  /// the screen opens on it and the image arrives into a placeholder that says
+  /// it is coming.
+  final Future<List<String>>? pendingImages;
   final String? aiAnalysis;
   final bool useStructuredAiInsights;
   final String? riskLevel;
@@ -121,6 +136,43 @@ class RecordDetailScreen extends StatefulWidget {
 class _RecordDetailScreenState extends State<RecordDetailScreen> {
   final Set<String> _expandedLabInsightAspects = <String>{};
   bool _showAiInFilipino = LanguageService.isFilipino;
+
+  /// Attachments once they have arrived. Seeded with whatever the caller
+  /// already had, then filled in when [RecordDetailScreen.pendingImages]
+  /// resolves.
+  late List<String> _images = List<String>.from(widget.imageUrls ?? const []);
+
+  /// True while an attachment is still on its way, so the gallery can say so
+  /// rather than rendering nothing and looking like a record with no files.
+  bool _loadingImages = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final pending = widget.pendingImages;
+    if (pending != null) {
+      _loadingImages = true;
+      _loadPendingImages(pending);
+    }
+  }
+
+  /// Waits for an attachment without holding the record shut.
+  ///
+  /// A failure here leaves everything else on the screen intact — the gallery
+  /// simply stops saying it is loading and reports nothing arrived.
+  Future<void> _loadPendingImages(Future<List<String>> pending) async {
+    try {
+      final urls = await pending;
+      if (!mounted) return;
+      setState(() {
+        _images = urls;
+        _loadingImages = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingImages = false);
+    }
+  }
 
   // Section accents removed. Three near-identical pinks distinguished
   // "Record" from "Health Worker" from "Notes" — a distinction the headings
@@ -547,8 +599,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
 
       // ── Download images from network ──
       final List<Uint8List> imageDataList = [];
-      if (widget.imageUrls != null && widget.imageUrls!.isNotEmpty) {
-        for (final url in widget.imageUrls!) {
+      if (_images.isNotEmpty) {
+        for (final url in _images) {
           try {
             final response = await http.get(Uri.parse(url));
             if (response.statusCode == 200) {
@@ -1133,8 +1185,11 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                   // human has approved it.
                   _buildPatientHeader(),
                   _buildApprovalAttribution(),
-                  if (widget.imageUrls != null && widget.imageUrls!.isNotEmpty) ...[
-                    _buildImageGallery(widget.imageUrls!),
+                  if (_images.isNotEmpty) ...[
+                    _buildImageGallery(_images),
+                    const SizedBox(height: 14),
+                  ] else if (_loadingImages) ...[
+                    _buildImagePlaceholder(),
                     const SizedBox(height: 14),
                   ],
                   _buildDetailsCard(),
@@ -1162,6 +1217,43 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                   _buildClinicalDisclaimerAndReferences(),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shown while an attachment is still arriving.
+  ///
+  /// The alternative is rendering nothing, which is indistinguishable from a
+  /// record that has no attachment — and on a three-megabyte scan that gap
+  /// lasted long enough for a midwife to conclude the image was lost.
+  Widget _buildImagePlaceholder() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderPrimary),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.brandPrimary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            _t("Loading attachment…", "Kinukuha ang kalakip…"),
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: AppColors.textSecondary,
             ),
           ),
         ],
@@ -1251,17 +1343,10 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(9),
-                          child: Image.network(
-                            imageUrls[index],
+                          child: RecordImage(
+                            source: imageUrls[index],
                             width: 180,
                             height: 180,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: AppColors.bgSecondary,
-                              alignment: Alignment.center,
-                              child: const Icon(Icons.broken_image_outlined,
-                                  color: AppColors.textSecondary, size: 28),
-                            ),
                           ),
                         ),
                         Positioned(

@@ -836,7 +836,20 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
               contentType: att.isPdf ? 'application/pdf' : 'image/$ext',
               upsert: true,
             ),
-          ).timeout(const Duration(milliseconds: 500));
+          // Long enough for the upload to actually happen.
+          //
+          // This was 500ms. A lab slip photographed on a phone is two to three
+          // megabytes, which cannot leave a barangay connection in half a
+          // second, so the upload threw on essentially every save and the code
+          // fell through to base64Encode — embedding the whole image in the
+          // row. That is where the 36MB-per-mother payload came from, and why
+          // the images could not be displayed: they were data URIs being
+          // handed to Image.network.
+          //
+          // Storage is the right place for a 3MB scan. Sixty seconds is
+          // generous rather than optimistic, and the fallback still exists for
+          // the case it is meant for — storage genuinely being unreachable.
+          ).timeout(const Duration(seconds: 60));
 
           uploadedUrl = client.storage.from(bucket).getPublicUrl(fileName);
           _workingBucket = bucket;

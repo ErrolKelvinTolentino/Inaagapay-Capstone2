@@ -1,7 +1,7 @@
 // lib/widgets/full_screen_image_viewer.dart
 
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import 'record_image.dart';
 
 class FullScreenImageViewer extends StatefulWidget {
   final List<String> imageUrls;
@@ -54,57 +54,13 @@ class _FullScreenImageViewerState extends State<FullScreenImageViewer> {
                 child: InteractiveViewer(
                   minScale: 0.5,
                   maxScale: 4.0,
-                  child: Image.network(
-                    widget.imageUrls[index],
+                  // One widget for both shapes an attachment takes — see
+                  // record_image.dart. This viewer previously handled only
+                  // network URLs, so a base64 attachment opened full-screen
+                  // to "Failed to load image".
+                  child: RecordImage(
+                    source: widget.imageUrls[index],
                     fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.broken_image,
-                              size: 64,
-                              color: Colors.grey.shade600,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Failed to load image',
-                              style: TextStyle(
-                                color: Colors.grey.shade400,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircularProgressIndicator(
-                              value: loadingProgress.expectedTotalBytes != null
-                                  ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
-                                  : null,
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                AppColors.brandPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Loading image...',
-                              style: TextStyle(
-                                color: Colors.grey.shade400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
                   ),
                 ),
               );

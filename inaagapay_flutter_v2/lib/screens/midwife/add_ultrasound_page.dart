@@ -749,7 +749,7 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
               filePath,
               bytes,
               fileOptions: FileOptions(contentType: mime, upsert: true),
-            ).timeout(const Duration(milliseconds: 500));
+            ).timeout(const Duration(seconds: 60)); // was 500ms — see add_lab_test_page.dart
             final publicUrl = Supabase.instance.client.storage.from(bucket).getPublicUrl(filePath);
             urls.add(publicUrl);
             _workingBucket = bucket;

@@ -1,6 +1,7 @@
 // lib/screens/mother/records_screen.dart
 
 import 'package:flutter/material.dart';
+import '../../widgets/record_image.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
@@ -356,7 +357,7 @@ class _RecordsScreenState extends State<RecordsScreen>
     if (imageField != null) {
       final imageString = imageField.toString();
       if (imageString.contains(',')) {
-        urls = imageString.split(',').map((url) => url.trim()).toList();
+        urls = RecordImage.splitSources(imageString);
       } else if (imageString.isNotEmpty) {
         urls = [imageString];
       }

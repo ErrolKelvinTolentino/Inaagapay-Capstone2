@@ -1,6 +1,7 @@
 // lib/screens/midwife/midwife_dashboard.dart
 
 import 'package:flutter/material.dart';
+import '../../widgets/record_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
@@ -1090,11 +1091,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         List<String> imageUrls = [];
         if (record['ultrasound_image'] != null) {
           final imageField = record['ultrasound_image'].toString();
-          if (imageField.contains(',')) {
-            imageUrls = imageField.split(',').map((url) => url.trim()).toList();
-          } else if (imageField.isNotEmpty) {
-            imageUrls = [imageField];
-          }
+          // Boundary-aware: a data URI contains a comma of its own.
+          imageUrls = RecordImage.splitSources(imageField);
         }
 
         final split = _splitRemarksAndAi(record['remarks']?.toString());
@@ -1151,11 +1149,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         List<String> imageUrls = [];
         if (record['lab_test_image'] != null) {
           final imageField = record['lab_test_image'].toString();
-          if (imageField.contains(',')) {
-            imageUrls = imageField.split(',').map((url) => url.trim()).toList();
-          } else if (imageField.isNotEmpty) {
-            imageUrls = [imageField];
-          }
+          // Boundary-aware: a data URI contains a comma of its own.
+          imageUrls = RecordImage.splitSources(imageField);
         }
 
         final split = _splitRemarksAndAi(record['remarks']?.toString());
