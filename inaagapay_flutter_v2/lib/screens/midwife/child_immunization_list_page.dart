@@ -404,7 +404,7 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
                 _allVaccines.isEmpty ? 0 : givenCount / _allVaccines.length,
             backgroundColor: AppColors.borderPrimary,
             valueColor:
-                const AlwaysStoppedAnimation<Color>(AppColors.success),
+                const AlwaysStoppedAnimation<Color>(AppColors.brandPrimary),
             minHeight: 6,
           ),
         ),
