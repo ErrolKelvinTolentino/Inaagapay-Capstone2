@@ -6784,10 +6784,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.12),
+              color: AppColors.brandPrimary.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.vaccines_rounded, color: Color(0xFF059669), size: 22),
+            child: const Icon(Icons.vaccines_rounded, color: AppColors.brandPrimary, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -6822,7 +6822,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
+              backgroundColor: AppColors.brandPrimary,
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -7698,7 +7698,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   icon: Icons.vaccines_rounded,
                   title: 'Td Vaccine (Tetanus)',
                   subtitle: 'Administer or backfill maternal Td doses',
-                  baseColor: const Color(0xFF10B981), // emerald
+                  baseColor: AppColors.brandPrimary,
                   onTap: () async {
                     Navigator.pop(ctx);
                     final assignedBhc = profile['assigned_bhc_id'] as int?;

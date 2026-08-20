@@ -6,19 +6,19 @@ import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
 import '../../services/maternal_td_service.dart';
 import '../../services/sms_service.dart';
+import '../../services/supabase_service.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/confirmation_dialog_box.dart';
 import '../../widgets/dialog_box.dart';
 import '../../widgets/secondary_header.dart';
 
-/// Dedicated maternal Td (tetanus-diphtheria) immunisation module.
+/// Dedicated maternal Td (tetanus-diphtheria) immunization module.
 ///
-/// Dose state comes from [MaternalTdService] so this screen and the prenatal
-/// checkup screen always agree on which doses a mother has had.
-///
-/// The administration form is only reachable when the next dose is genuinely
-/// due. Previously the form stayed enabled while the DOH minimum interval was
-/// still running, so saving simply bounced off the RPC with an error.
+/// Features:
+/// - Signature Pink Color Theme
+/// - Administer Tab strictly dedicated to local administration ("Given Here")
+///   with multi-dose open vial & sealed vial inventory deduction logic.
+/// - Lifetime History Tab containing the full series history & Backfill Past Doses tool.
 class MaternalTdScreen extends StatefulWidget {
   final int motherId;
   final String? motherName;
@@ -44,6 +44,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
 
   String _motherFullName = '';
   int? _bhcId;
+  String _bhcName = 'Barangay Health Center';
   int? _midwifeId;
 
   /// Canonical, merged dose state.
@@ -53,12 +54,17 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
   final TextEditingController _dateCtrl = TextEditingController();
   final TextEditingController _remarksCtrl = TextEditingController();
 
-  // BHC Td inventory cache
+  // BHC Td inventory cache & vial logic
   int _tdStockAvailable = 0;
   int _tdSealedVials = 0;
   int _tdOpenVialDoses = 0;
   String? _tdOpenVialBatch;
+  DateTime? _tdOpenVialOpenedAt;
   String? _tdNextBatch;
+  String? _tdNextBatchExpiration;
+  int _dosesPerUnit = 10;
+  int _openVialShelfHours = 672; // 28 days for Td
+  bool _isOpenVialExpired = false;
   bool _tdStockLoading = false;
 
   static final DateFormat _longDate = DateFormat('MMMM d, yyyy');
@@ -90,21 +96,19 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     try {
       final client = Supabase.instance.client;
 
-      // 1. Resolve current midwife & BHC
+      // 1. Resolve current midwife & BHC context
       final accountId = await AuthStorage.getUserId();
       if (accountId != null) {
         try {
-          final midwifeRes = await client
-              .from('midwives')
-              .select('midwife_id, assigned_bhc_id')
-              .eq('account_id', accountId)
-              .maybeSingle();
-
-          if (midwifeRes != null) {
-            _midwifeId = (midwifeRes['midwife_id'] as num?)?.toInt();
-            _bhcId ??= (midwifeRes['assigned_bhc_id'] as num?)?.toInt();
+          final ctx = await SupabaseService.getMidwifeContext(accountId);
+          _midwifeId = (ctx['midwife_id'] as num?)?.toInt();
+          _bhcId ??= (ctx['assigned_bhc_id'] as num?)?.toInt();
+          if (ctx['bhc_name'] != null && ctx['bhc_name'].toString().isNotEmpty) {
+            _bhcName = ctx['bhc_name'].toString();
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('Error getting midwife context: $e');
+        }
       }
 
       // 2. Mother profile details
@@ -131,7 +135,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       // 4. Default the administration date to the first legal day
       _resetAdministrationDate();
 
-      // 5. BHC Td inventory
+      // 5. BHC Td inventory & vial tracking
       await _loadBhcTdStock();
     } catch (e) {
       debugPrint('Error loading maternal Td data: $e');
@@ -177,8 +181,13 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       int sealedCount = 0;
       int openDosesCount = 0;
       String? openBatch;
+      DateTime? openVialOpened;
       String? nextBatch;
+      String? nextBatchExp;
       int totalDoses = 0;
+      int dosesPerUnit = 10;
+      int shelfHours = 672; // 28 days
+      bool openVialExpired = false;
 
       final now = DateTime.now();
 
@@ -202,28 +211,53 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
             generic.contains('diphtheria');
         if (!isTd) continue;
 
-        final dosesPerUnit = (item['doses_per_unit'] as num?)?.toInt() ?? 10;
+        dosesPerUnit = (item['doses_per_unit'] as num?)?.toInt() ?? 10;
+        shelfHours = (item['open_vial_shelf_hours'] as num?)?.toInt() ?? 672;
+
         final qty = (b['quantity_remaining'] as num?)?.toInt() ?? 0;
         final openDoses = (b['doses_remaining_in_open_vial'] as num?)?.toInt() ?? 0;
+        final openedAtStr = b['vial_opened_at']?.toString();
 
-        if (openDoses > 0) {
-          openDosesCount += openDoses;
-          openBatch ??= b['batch_number']?.toString();
+        if (openDoses > 0 && openBatch == null) {
+          if (openedAtStr != null && shelfHours > 0) {
+            final openedAt = DateTime.tryParse(openedAtStr);
+            if (openedAt != null) {
+              final hours = now.difference(openedAt).inHours;
+              if (hours >= shelfHours) {
+                openVialExpired = true;
+              } else {
+                openDosesCount += openDoses;
+                openBatch = b['batch_number']?.toString();
+                openVialOpened = openedAt;
+              }
+            }
+          } else {
+            openDosesCount += openDoses;
+            openBatch = b['batch_number']?.toString();
+          }
         }
 
         if (qty > 0) {
           sealedCount += qty;
-          nextBatch ??= b['batch_number']?.toString();
+          if (nextBatch == null) {
+            nextBatch = b['batch_number']?.toString();
+            nextBatchExp = expStr;
+          }
           totalDoses += qty * dosesPerUnit;
         }
       }
 
       if (mounted) {
         setState(() {
+          _dosesPerUnit = dosesPerUnit;
+          _openVialShelfHours = shelfHours;
           _tdSealedVials = sealedCount;
           _tdOpenVialDoses = openDosesCount;
           _tdOpenVialBatch = openBatch;
+          _tdOpenVialOpenedAt = openVialOpened;
+          _isOpenVialExpired = openVialExpired;
           _tdNextBatch = nextBatch;
+          _tdNextBatchExpiration = nextBatchExp;
           _tdStockAvailable = totalDoses + openDosesCount;
           _tdStockLoading = false;
         });
@@ -237,8 +271,6 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
   // ────────────────────────────────────────────────────────────────── actions
 
   Future<void> _selectDate() async {
-    // The picker can only offer dates the RPC will accept, so an out-of-interval
-    // date can never be chosen in the first place.
     final today = DateTime.now();
     var first = _status.nextEligibleDate ?? DateTime(2000);
     if (first.isAfter(today)) first = today;
@@ -274,21 +306,22 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
   Future<void> _submitAdministerDose() async {
     final doseKey = _status.nextDoseKey;
 
-    // Defensive: the UI does not render the form unless this holds.
     if (doseKey == null || !_status.canAdministerToday) return;
 
     final formattedDate = _longDate.format(_administrationDate);
     final dateStr = DateFormat('yyyy-MM-dd').format(_administrationDate);
 
     String subtitle =
-        'Are you sure you want to record and save $doseKey for $_motherFullName on $formattedDate?';
+        'Are you sure you want to administer and record $doseKey for $_motherFullName on $formattedDate?\n\n'
+        '• Administration Source: Given Here (At $_bhcName)';
 
     if (_tdOpenVialDoses > 0) {
-      subtitle += '\n\n1 dose will be deducted from the active open vial (Batch #${_tdOpenVialBatch ?? "Active"}).';
+      subtitle += '\n• Inventory Deduction: 1 dose will be deducted from active open vial (Batch #${_tdOpenVialBatch ?? "Active"}, $_tdOpenVialDoses doses remaining).';
     } else if (_tdSealedVials > 0) {
-      subtitle += '\n\n1 new sealed vial will be opened from Batch #${_tdNextBatch ?? "Next"}.';
+      final remInNewVial = _dosesPerUnit - 1;
+      subtitle += '\n• Inventory Deduction: 1 new sealed vial will be opened from Batch #${_tdNextBatch ?? "Next"}. 1 dose will be used and $remInNewVial doses will remain open for 28 days.';
     } else {
-      subtitle += '\n\nStock deduction will be attempted from BHC inventory.';
+      subtitle += '\n• Inventory Deduction: Stock deduction will be attempted from BHC inventory.';
     }
 
     final confirmed = await showDialog<bool>(
@@ -297,7 +330,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       builder: (_) => ConfirmationDialogBox(
         title: 'Confirm $doseKey Administration',
         subtitle: subtitle,
-        confirmText: 'Save Dose',
+        confirmText: 'Administer Dose',
         cancelText: 'Cancel',
         accentColor: AppColors.brandPrimary,
         onConfirm: () => Navigator.pop(context, true),
@@ -317,7 +350,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
         'p_vaccination_date': dateStr,
         'p_facility_id': _bhcId,
         'p_administered_by': _midwifeId,
-        'p_source': 'bhc',
+        'p_source': 'bhc', // Automatically Given Here
         'p_facility_name': null,
         'p_remarks': _remarksCtrl.text.trim().isEmpty ? null : _remarksCtrl.text.trim(),
       });
@@ -356,12 +389,12 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       if (mounted) {
         final mode = resMap['mode']?.toString();
         final remDoses = resMap['doses_left_in_vial'] ?? 0;
-        var dialogContent = '$doseKey recorded successfully for $_motherFullName on $formattedDate.';
+        var dialogContent = '$doseKey recorded successfully for $_motherFullName on $formattedDate as Given Here.';
 
         if (mode == 'open_vial_dose') {
-          dialogContent += '\n\n1 dose deducted from the active open vial ($remDoses doses remaining).';
+          dialogContent += '\n\n1 dose deducted from the active open vial ($remDoses doses remaining in vial).';
         } else if (mode == 'new_vial_opened') {
-          dialogContent += '\n\nOpened 1 new vial ($remDoses doses remaining in open vial).';
+          dialogContent += '\n\nOpened 1 new sealed vial ($remDoses doses remaining open).';
         }
 
         await showDialog(
@@ -369,7 +402,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
           barrierDismissible: false,
           builder: (_) => DialogBox(
             type: DialogType.success,
-            title: '$doseKey Saved Successfully',
+            title: '$doseKey Administered Successfully',
             content: dialogContent,
             buttonText: 'OK',
             onPressed: () => Navigator.pop(context),
@@ -464,7 +497,11 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                         const Expanded(
                           child: Text(
                             'Backfill Past Td Doses',
-                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
                         ),
                         IconButton(
@@ -481,18 +518,22 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
+                            color: const Color(0xFFFFF1F5),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFBFDBFE)),
+                            border: Border.all(color: const Color(0xFFFCE7F3)),
                           ),
                           child: const Row(
                             children: [
-                              Icon(Icons.info_outline, color: Color(0xFF1D4ED8), size: 18),
+                              Icon(Icons.info_outline, color: AppColors.brandPrimary, size: 18),
                               SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   'Record doses given anywhere else — a previous pregnancy card, another health center, a private clinic, or school records. DOH interval rules are enforced automatically.',
-                                  style: TextStyle(fontSize: 12, color: Color(0xFF1E40AF), height: 1.35),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.brandText,
+                                    height: 1.35,
+                                  ),
                                 ),
                               ),
                             ],
@@ -516,12 +557,14 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                             margin: const EdgeInsets.only(bottom: 14),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: errorMsg != null ? const Color(0xFFFEF2F2) : Colors.grey.shade50,
+                              color: errorMsg != null
+                                  ? const Color(0xFFFEF2F2)
+                                  : (pickedDate != null ? const Color(0xFFFDF2F8) : Colors.grey.shade50),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: errorMsg != null
                                     ? const Color(0xFFFECACA)
-                                    : (pickedDate != null ? const Color(0xFFBBF7D0) : Colors.grey.shade200),
+                                    : (pickedDate != null ? const Color(0xFFFBCFE8) : Colors.grey.shade200),
                               ),
                             ),
                             child: Column(
@@ -533,20 +576,28 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                                     Expanded(
                                       child: Text(
                                         def.title,
-                                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                        style: const TextStyle(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.textPrimary,
+                                        ),
                                       ),
                                     ),
                                     if (pickedDate != null && errorMsg == null)
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFECFDF5),
+                                          color: const Color(0xFFFCE7F3),
                                           borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(color: const Color(0xFFA7F3D0)),
+                                          border: Border.all(color: const Color(0xFFFBCFE8)),
                                         ),
                                         child: const Text(
                                           'Valid Date',
-                                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF065F46)),
+                                          style: TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF9D174D),
+                                          ),
                                         ),
                                       ),
                                   ],
@@ -566,6 +617,18 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                                             initialDate: initDate,
                                             firstDate: minDate.isBefore(DateTime.now()) ? minDate : DateTime(1990),
                                             lastDate: DateTime.now(),
+                                            builder: (context, child) {
+                                              return Theme(
+                                                data: Theme.of(context).copyWith(
+                                                  colorScheme: const ColorScheme.light(
+                                                    primary: AppColors.brandPrimary,
+                                                    onPrimary: Colors.white,
+                                                    onSurface: AppColors.textPrimary,
+                                                  ),
+                                                ),
+                                                child: child!,
+                                              );
+                                            },
                                           );
                                           if (picked != null) {
                                             setModalState(() => backfillDates[dKey] = picked);
@@ -577,7 +640,9 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                                             color: Colors.white,
                                             borderRadius: BorderRadius.circular(8),
                                             border: Border.all(
-                                              color: errorMsg != null ? const Color(0xFFEF4444) : Colors.grey.shade300,
+                                              color: errorMsg != null
+                                                  ? const Color(0xFFEF4444)
+                                                  : Colors.grey.shade300,
                                             ),
                                           ),
                                           child: Row(
@@ -630,6 +695,10 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(8),
                                         borderSide: BorderSide(color: Colors.grey.shade300),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: const BorderSide(color: AppColors.brandPrimary),
                                       ),
                                     ),
                                     style: const TextStyle(fontSize: 12),
@@ -881,12 +950,13 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     final isPab = _status.isProtectedAtBirth;
     final isFim = _status.isFim;
 
+    // Pink/Rose Theme Gradients
     final startColor = isFim
-        ? const Color(0xFF065F46)
-        : (isPab ? const Color(0xFF047857) : const Color(0xFFBE123C));
+        ? const Color(0xFFBE185D) // Deep Rose
+        : (isPab ? const Color(0xFFE11D48) : const Color(0xFFE6398D)); // Crimson Rose / Brand Pink
     final endColor = isFim
-        ? const Color(0xFF047857)
-        : (isPab ? const Color(0xFF059669) : const Color(0xFFE11D48));
+        ? const Color(0xFF9D174D) // Rich Burgundy Pink
+        : (isPab ? const Color(0xFFBE185D) : const Color(0xFFFF68A5)); // Light Brand Pink
 
     String statusTitle;
     String statusSubtitle;
@@ -939,7 +1009,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
+                  color: Colors.white.withValues(alpha: 0.22),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -966,8 +1036,6 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     );
   }
 
-  /// The "when is the next one" line, always present so the midwife never has
-  /// to infer it from the dose chips.
   Widget _buildHeroNextChip() {
     final next = _status.nextDoseKey;
     final action = _status.nextAction;
@@ -994,7 +1062,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
         break;
       case TdNextAction.missingPrevious:
         icon = Icons.report_problem_rounded;
-        label = '${_status.blockingDoseKey} record missing — backfill needed';
+        label = '${_status.blockingDoseKey} record missing — see Lifetime History';
         break;
     }
 
@@ -1033,26 +1101,48 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
           ),
           const SizedBox(height: 8),
           _buildDoseProgressRow(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // The action area changes shape entirely with eligibility, so an
-          // unusable form is never presented.
+          // Clean "Given Here" Local Health Center attribution banner
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF1F5),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFFCE7F3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.location_on_rounded, size: 16, color: AppColors.brandPrimary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Administering at $_bhcName (Given Here)',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.brandText,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // The administration workflow
           switch (_status.nextAction) {
             TdNextAction.complete => _buildCompleteCard(),
             TdNextAction.missingPrevious => _buildMissingPreviousCard(),
             TdNextAction.waiting => _buildNotDueCard(),
             TdNextAction.eligibleNow => _buildAdministerForm(),
           },
-
-          const SizedBox(height: 16),
-          _buildBackfillPrompt(),
         ],
       ),
     );
   }
 
-  /// Read-only progress strip. Only the currently-due dose is ever actionable,
-  /// so these are indicators rather than controls.
+  /// Read-only progress strip in signature pink theme.
   Widget _buildDoseProgressRow() {
     final nextKey = _status.nextDoseKey;
     final dueNow = _status.canAdministerToday;
@@ -1071,9 +1161,9 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
         IconData statusIcon = Icons.lock_outline_rounded;
 
         if (isCompleted) {
-          cardBg = const Color(0xFFF0FDF4);
-          borderColor = const Color(0xFFBBF7D0);
-          textColor = const Color(0xFF166534);
+          cardBg = const Color(0xFFFDF2F8);
+          borderColor = const Color(0xFFFBCFE8);
+          textColor = const Color(0xFF9D174D);
           statusLabel = rec.date != null
               ? DateFormat('MMM d, yy').format(rec.date!)
               : 'Done';
@@ -1081,7 +1171,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
         } else if (isNext) {
           if (dueNow) {
             cardBg = AppColors.brandPrimary;
-            borderColor = AppColors.brandPrimary;
+            borderColor = AppColors.brandAccent;
             textColor = Colors.white;
             statusLabel = 'Due now';
             statusIcon = Icons.star_rounded;
@@ -1093,9 +1183,9 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
             statusIcon = Icons.report_problem_rounded;
           } else {
             final on = _status.nextEligibleDate;
-            cardBg = const Color(0xFFFFF1F2);
-            borderColor = AppColors.brandPrimary;
-            textColor = AppColors.brandPrimary;
+            cardBg = const Color(0xFFFFF1F5);
+            borderColor = const Color(0xFFFBCFE8);
+            textColor = AppColors.brandText;
             statusLabel = on == null ? 'Pending' : DateFormat('MMM d, yy').format(on);
             statusIcon = Icons.schedule_rounded;
           }
@@ -1171,23 +1261,23 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4),
+        color: const Color(0xFFFDF2F8),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFBBF7D0)),
+        border: Border.all(color: const Color(0xFFFBCFE8)),
       ),
       child: Column(
         children: [
-          Icon(Icons.verified_rounded, size: 52, color: Colors.green.shade600),
+          const Icon(Icons.verified_rounded, size: 52, color: AppColors.brandAccent),
           const SizedBox(height: 10),
           const Text(
             'Fully Immunized Mother',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF166534)),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF9D174D)),
           ),
           const SizedBox(height: 6),
           const Text(
             'All 5 Td doses are recorded. She has lifetime protection against maternal and neonatal tetanus — no further Td vaccination is needed.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12.5, color: Color(0xFF15803D), height: 1.4),
+            style: TextStyle(fontSize: 12.5, color: Color(0xFFBE185D), height: 1.4),
           ),
         ],
       ),
@@ -1225,7 +1315,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
           const SizedBox(height: 8),
           Text(
             '$next cannot be given until $blocking is on file, because the DOH interval is measured from it. '
-            'If she already received $blocking somewhere else, add it below.',
+            'If she already received $blocking somewhere else, record it in the Lifetime History tab.',
             style: const TextStyle(fontSize: 12, color: Color(0xFF78350F), height: 1.4),
           ),
           const SizedBox(height: 14),
@@ -1233,17 +1323,19 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
             width: double.infinity,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFD97706),
+                backgroundColor: AppColors.brandPrimary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               icon: const Icon(Icons.history_edu_rounded, size: 18),
-              label: Text(
-                'Backfill $blocking Now',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              label: const Text(
+                'Go to Lifetime History',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
-              onPressed: _showBackfillHistoryModal,
+              onPressed: () {
+                setState(() => _activeTabIndex = 1);
+              },
             ),
           ),
         ],
@@ -1251,8 +1343,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     );
   }
 
-  /// On schedule, but the DOH interval has not elapsed. This replaces the old
-  /// always-enabled form that could only ever produce an RPC error.
+  /// On schedule, but the DOH interval has not elapsed yet.
   Widget _buildNotDueCard() {
     final next = _status.nextDoseKey ?? '';
     final on = _status.nextEligibleDate;
@@ -1264,21 +1355,21 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4),
+        color: const Color(0xFFFFF1F5),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFBBF7D0)),
+        border: Border.all(color: const Color(0xFFFCE7F3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.event_busy_rounded, size: 20, color: Color(0xFF16A34A)),
+              const Icon(Icons.event_busy_rounded, size: 20, color: AppColors.brandAccent),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
                   'No Td dose needed today',
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: Color(0xFF166534)),
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: Color(0xFF9D174D)),
                 ),
               ),
             ],
@@ -1286,7 +1377,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
           const SizedBox(height: 6),
           Text(
             'She is on schedule. $next is not due yet — DOH requires ${def.minIntervalLabel.toLowerCase()}.',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF15803D), height: 1.4),
+            style: const TextStyle(fontSize: 12, color: Color(0xFFBE185D), height: 1.4),
           ),
           const SizedBox(height: 14),
           Row(
@@ -1312,12 +1403,12 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
             const SizedBox(height: 10),
             Row(
               children: [
-                const Icon(Icons.shield_rounded, size: 14, color: Color(0xFF16A34A)),
+                const Icon(Icons.shield_rounded, size: 14, color: AppColors.brandAccent),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     'Current protection runs until ${_longDate.format(protectedUntil)}.',
-                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF15803D)),
+                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF9D174D)),
                   ),
                 ),
               ],
@@ -1338,19 +1429,24 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFBBF7D0)),
+        border: Border.all(color: const Color(0xFFFBCFE8)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, size: 12, color: const Color(0xFF16A34A)),
+              Icon(icon, size: 12, color: AppColors.brandAccent),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF16A34A), letterSpacing: 0.4),
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.brandAccent,
+                    letterSpacing: 0.4,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -1362,7 +1458,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
             alignment: Alignment.centerLeft,
             child: Text(
               value,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF166534)),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF9D174D)),
             ),
           ),
         ],
@@ -1370,7 +1466,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     );
   }
 
-  /// The real administration form — reachable only when the dose is due.
+  /// The administration form — automatically "Given Here" with real-time stock deduction preview.
   Widget _buildAdministerForm() {
     final doseKey = _status.nextDoseKey!;
     final def = MaternalTdService.defFor(doseKey);
@@ -1379,11 +1475,12 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Dose Due Header
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF1F2),
+            color: const Color(0xFFFFF1F5),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.35)),
           ),
@@ -1412,38 +1509,93 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
         ),
         const SizedBox(height: 14),
 
-        // Stock
+        // Multi-Dose & Open Vial Inventory Status Card
         if (_bhcId != null) ...[
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: outOfStock ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
-              borderRadius: BorderRadius.circular(10),
+              color: outOfStock ? const Color(0xFFFEF2F2) : const Color(0xFFFDF2F8),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: outOfStock ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0),
+                color: outOfStock ? const Color(0xFFFECACA) : const Color(0xFFFBCFE8),
               ),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  outOfStock ? Icons.warning_amber_rounded : Icons.inventory_2_outlined,
-                  size: 16,
-                  color: outOfStock ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    outOfStock
-                        ? 'No Td stock at this health center. Restock before administering, or record it later via Backfill Past Doses.'
-                        : 'BHC Stock: $_tdStockAvailable doses (${_tdOpenVialDoses > 0 ? "$_tdOpenVialDoses in open vial" : "$_tdSealedVials sealed"})',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      height: 1.3,
-                      color: outOfStock ? const Color(0xFF991B1B) : const Color(0xFF166534),
+                Row(
+                  children: [
+                    Icon(
+                      outOfStock ? Icons.warning_amber_rounded : Icons.inventory_2_rounded,
+                      size: 18,
+                      color: outOfStock ? const Color(0xFFDC2626) : AppColors.brandAccent,
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        outOfStock
+                            ? 'No Td stock at this health center'
+                            : 'BHC Stock: $_tdStockAvailable doses available',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: outOfStock ? const Color(0xFF991B1B) : const Color(0xFF9D174D),
+                        ),
+                      ),
+                    ),
+                    if (!outOfStock)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.brandPrimary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          _tdOpenVialDoses > 0 ? 'Open Vial Active' : 'Sealed Vials',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.brandText,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
+                const SizedBox(height: 8),
+                if (outOfStock)
+                  const Text(
+                    'Please restock Td vaccines in inventory before administering.',
+                    style: TextStyle(fontSize: 11.5, color: Color(0xFF991B1B)),
+                  )
+                else ...[
+                  if (_tdOpenVialDoses > 0) ...[
+                    Text(
+                      '• Active Open Vial: Batch #${_tdOpenVialBatch ?? "Active"} has $_tdOpenVialDoses doses remaining.',
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF4A0E2E), height: 1.3),
+                    ),
+                    Text(
+                      '• Deduction: 1 dose will be drawn from the open vial ($_tdOpenVialDoses - 1 = ${_tdOpenVialDoses - 1} left).',
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF701A75), height: 1.3, fontWeight: FontWeight.w600),
+                    ),
+                  ] else if (_tdSealedVials > 0) ...[
+                    Text(
+                      '• Sealed Stock: Batch #${_tdNextBatch ?? "Next"} ($_tdSealedVials sealed vials available).',
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF4A0E2E), height: 1.3),
+                    ),
+                    Text(
+                      '• Deduction: 1 new sealed vial will be opened. 1 dose given, ${_dosesPerUnit - 1} doses will remain open for 28 days.',
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF701A75), height: 1.3, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                  if (_isOpenVialExpired)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Note: Previous open vial expired (> 28 days) and will be auto-discarded.',
+                        style: TextStyle(fontSize: 11, color: Colors.amber.shade900, fontStyle: FontStyle.italic),
+                      ),
+                    ),
+                ],
               ],
             ),
           ),
@@ -1499,92 +1651,13 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                   )
                 : const Icon(Icons.vaccines_rounded, size: 18),
             label: Text(
-              _isSaving ? 'Saving Record...' : 'Record $doseKey Dose',
+              _isSaving ? 'Saving Record...' : 'Record $doseKey Dose (Given Here)',
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
             onPressed: _isSaving ? null : _submitAdministerDose,
           ),
         ),
       ],
-    );
-  }
-
-  /// Persistent, deliberately visible route to historical entry. Doses given at
-  /// another facility are recorded here rather than through a separate
-  /// "outside clinic" mode on the administration form.
-  Widget _buildBackfillPrompt() {
-    final missing = MaternalTdService.doseDefs
-        .where((d) => !_status.has(d.key))
-        .map((d) => d.key)
-        .toList();
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.borderPrimary),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: AppColors.brandPrimary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: const Icon(Icons.history_edu_rounded, size: 18, color: AppColors.brandPrimary),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Doses given somewhere else?',
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            missing.isEmpty
-                ? 'Every dose is on file. You can still open the history editor to correct a recorded date or facility.'
-                : 'Add doses from a previous pregnancy card, another health center, or a private clinic. '
-                    'Still missing: ${missing.join(', ')}.',
-            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.4),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.brandPrimary,
-                backgroundColor: AppColors.brandSecondary,
-                side: const BorderSide(color: AppColors.brandPrimary, width: 1.4),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              icon: const Icon(Icons.add_circle_outline_rounded, size: 17),
-              label: const Text(
-                'Backfill Past Doses',
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold),
-              ),
-              onPressed: _showBackfillHistoryModal,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1606,6 +1679,8 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
           style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 12),
+
+        // Backfill Past Doses prompt card placed at the top of Lifetime History
         _buildBackfillPrompt(),
         const SizedBox(height: 16),
 
@@ -1617,18 +1692,18 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
 
           final formattedDate =
               rec?.date != null ? _longDate.format(rec!.date!) : null;
-          final facName = rec?.facilityName ?? 'Health Center';
+          final facName = rec?.facilityName ?? (rec?.source == 'bhc' ? _bhcName : 'External Health Center');
 
           String statusLabel;
           Color chipBg;
           Color chipFg;
           if (isDone) {
             statusLabel = 'Completed';
-            chipBg = const Color(0xFFDCFCE7);
-            chipFg = const Color(0xFF166534);
+            chipBg = const Color(0xFFFCE7F3);
+            chipFg = const Color(0xFF9D174D);
           } else if (isNext && _status.canAdministerToday) {
             statusLabel = 'Due now';
-            chipBg = const Color(0xFFFFE4E6);
+            chipBg = const Color(0xFFFFF1F5);
             chipFg = AppColors.brandText;
           } else if (isNext && _status.nextAction == TdNextAction.missingPrevious) {
             statusLabel = 'Blocked';
@@ -1636,7 +1711,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
             chipFg = const Color(0xFF92400E);
           } else if (isNext) {
             statusLabel = 'Scheduled';
-            chipBg = const Color(0xFFFFE4E6);
+            chipBg = const Color(0xFFFFF1F5);
             chipFg = AppColors.brandText;
           } else {
             statusLabel = 'Pending';
@@ -1644,7 +1719,6 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
             chipFg = const Color(0xFF64748B);
           }
 
-          // Subtitle: what happened, or when it will
           String subtitle;
           if (isDone) {
             subtitle = formattedDate != null
@@ -1663,11 +1737,11 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isDone ? const Color(0xFFF0FDF4) : Colors.white,
+              color: isDone ? const Color(0xFFFDF2F8) : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isDone
-                    ? const Color(0xFFBBF7D0)
+                    ? const Color(0xFFFBCFE8)
                     : (isNext ? AppColors.brandPrimary.withValues(alpha: 0.4) : Colors.grey.shade200),
                 width: isNext && !isDone ? 1.5 : 1.0,
               ),
@@ -1680,7 +1754,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                   height: 38,
                   decoration: BoxDecoration(
                     color: isDone
-                        ? const Color(0xFF16A34A)
+                        ? const Color(0xFFBE185D)
                         : (isNext ? AppColors.brandPrimary.withValues(alpha: 0.12) : Colors.grey.shade100),
                     shape: BoxShape.circle,
                   ),
@@ -1731,7 +1805,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: isDone ? FontWeight.w600 : FontWeight.w500,
-                          color: isDone ? const Color(0xFF15803D) : Colors.grey.shade600,
+                          color: isDone ? const Color(0xFF9D174D) : Colors.grey.shade600,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -1747,6 +1821,82 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
           );
         }),
       ],
+    );
+  }
+
+  Widget _buildBackfillPrompt() {
+    final missing = MaternalTdService.doseDefs
+        .where((d) => !_status.has(d.key))
+        .map((d) => d.key)
+        .toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFBCFE8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.brandPrimary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(Icons.history_edu_rounded, size: 18, color: AppColors.brandPrimary),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Doses given somewhere else?',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            missing.isEmpty
+                ? 'Every dose is on file. You can still open the history editor to correct a recorded date or facility.'
+                : 'Add doses from a previous pregnancy card, another health center, or a private clinic. '
+                    'Still missing: ${missing.join(', ')}.',
+            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.brandPrimary,
+                backgroundColor: AppColors.brandSecondary,
+                side: const BorderSide(color: AppColors.brandPrimary, width: 1.4),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.add_circle_outline_rounded, size: 17),
+              label: const Text(
+                'Backfill Past Doses',
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold),
+              ),
+              onPressed: _showBackfillHistoryModal,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -35,23 +35,26 @@ void main() {
     }
   });
 
-  testWidgets('backfill is reachable from the administer tab', (tester) async {
+  testWidgets('administer tab is dedicated to administering vaccine locally (Given Here)', (tester) async {
     await _pumpAt(tester, const Size(375, 812));
 
-    // Backfill is a first-class action, not buried in the history tab.
-    expect(find.text('Backfill Past Doses'), findsOneWidget);
-    expect(find.text('Doses given somewhere else?'), findsOneWidget);
+    // Administer tab focuses on local administration
+    expect(find.textContaining('Given Here'), findsWidgets);
+    expect(find.text('Record Td1 Dose (Given Here)'), findsOneWidget);
+
+    // Backfill past doses prompt is not in the Administer tab
+    expect(find.text('Doses given somewhere else?'), findsNothing);
   });
 
-  testWidgets('no outside-clinic option is offered', (tester) async {
+  testWidgets('no outside-clinic option is offered in administration form', (tester) async {
     await _pumpAt(tester, const Size(375, 812));
 
-    // Doses given elsewhere are recorded through backfill instead.
+    // Doses given elsewhere are recorded through Lifetime History backfill instead.
     expect(find.text('Outside Clinic'), findsNothing);
     expect(find.text('Administration Source'), findsNothing);
   });
 
-  testWidgets('history tab lists the full DOH timeline', (tester) async {
+  testWidgets('lifetime history tab lists timeline and includes backfill prompt', (tester) async {
     await _pumpAt(tester, const Size(375, 812));
 
     await tester.tap(find.text('Lifetime History'));
@@ -60,5 +63,9 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('DOH 5-Dose Td Timeline'), findsOneWidget);
     expect(find.textContaining('of 5 doses recorded'), findsOneWidget);
+
+    // Backfill is in the Lifetime History tab
+    expect(find.text('Backfill Past Doses'), findsOneWidget);
+    expect(find.text('Doses given somewhere else?'), findsOneWidget);
   });
 }
