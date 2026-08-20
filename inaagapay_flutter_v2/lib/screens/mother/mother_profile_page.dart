@@ -24,6 +24,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../services/blood_pressure_reference.dart';
+import '../../services/lab_test_reference.dart';
 import '../../services/fetal_heart_rate_reference.dart';
 
 // Blood type is no longer chosen on this screen, so the option list that used
@@ -92,6 +93,12 @@ class MotherProfilePage extends StatefulWidget {
 class _MotherProfilePageState extends State<MotherProfilePage>
     with SingleTickerProviderStateMixin {
   late Future<Map<String, dynamic>> _profileFuture;
+
+  /// The resolved profile, kept so a record opened from anywhere on this page
+  /// can be stamped with whose record it is. The page renders from a
+  /// FutureBuilder, but the record handlers are async callbacks outside that
+  /// tree and had no route to the patient.
+  Map<String, dynamic>? _cachedProfile;
   late TabController _tabController;
 
   // Sort states
@@ -141,7 +148,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         setState(() {});
       }
     });
-    _profileFuture = MotherProfileService.fetchMotherProfile(widget.motherId);
+    _profileFuture = MotherProfileService.fetchMotherProfile(widget.motherId)
+      ..then((p) => _cachedProfile = p);
     _loadProfilePicture();
     _loadPatientNumber();
   }
@@ -705,7 +713,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       _isEditingAddress = false;
       _isEditingConditions = false;
       _isEditingAllergies = false;
-      _profileFuture = MotherProfileService.fetchMotherProfile(widget.motherId);
+      _profileFuture = MotherProfileService.fetchMotherProfile(widget.motherId)
+      ..then((p) => _cachedProfile = p);
 
     });
     await _loadProfilePicture();
@@ -1688,6 +1697,50 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     }
   }
 
+  /// Whose record this is, for the banner and the exported report.
+  ///
+  /// Name plus a second identifier, because names collide in a barangay
+  /// caseload. Blood type rides along so an Rh-negative mother is visible on
+  /// every record rather than only inside the lab result that established it.
+  RecordPatient? _recordPatient() {
+    final profile = _cachedProfile;
+    if (profile == null) return null;
+
+    final name = (profile["full_name"] ?? "").toString().trim();
+    if (name.isEmpty) return null;
+
+    String? age;
+    final birth = DateTime.tryParse(profile["birthdate"]?.toString() ?? "");
+    if (birth != null) {
+      final years = (DateTime.now().difference(birth).inDays / 365.25).floor();
+      if (years > 0 && years < 120) age = "$years yrs";
+    }
+
+    String? obstetric;
+    final g = profile["gravida"]?.toString();
+    final para = profile["para"]?.toString();
+    if (g != null && g.isNotEmpty && g != "null") {
+      obstetric = "G$g";
+      if (para != null && para.isNotEmpty && para != "null") {
+        obstetric = "$obstetric" "P$para";
+      }
+    }
+
+    final blood = profile["blood_type"]?.toString().trim();
+
+    return RecordPatient(
+      name: name,
+      // The BHC patient number, which is the key a midwife matches against the
+      // physical chart. The database row id means nothing to anyone holding
+      // paper, and printing it on an exported report invited it to be read as
+      // a patient identifier.
+      idLabel: _patientNumber,
+      age: age,
+      obstetric: obstetric,
+      bloodType: (blood == null || blood.isEmpty || blood == "null") ? null : blood,
+    );
+  }
+
   void _showRecordDetails({
     required String title,
     required List<MapEntry<String, String>> rows,
@@ -1703,6 +1756,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     String? approvedByName,
     bool? isMidwifeApproved,
     String? remarksSource,
+    List<MapEntry<String, String>> resultRows = const [],
+    String? resultsTitle,
   }) {
     Navigator.push(
       context,
@@ -1711,6 +1766,9 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           approvedByName: approvedByName,
           isMidwifeApproved: isMidwifeApproved,
           remarksSource: remarksSource,
+          patient: _recordPatient(),
+          resultRows: resultRows,
+          resultsTitle: resultsTitle,
           title: title,
           rows: rows,
           icon: icon,
@@ -1957,26 +2015,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
           final heightText =
               height == null ? 'Not recorded' : '${height.toStringAsFixed(1)} cm';
-          String bmiText = '—';
-          String bmiStatus = '—';
-          try {
-            final w =
-                double.tryParse(checkup['checkup_weight']?.toString() ?? '');
-            if (w != null && height != null && height > 0) {
-              final hm = height / 100;
-              final bmi = w / (hm * hm);
-              bmiText = bmi.toStringAsFixed(1);
-              if (bmi < 18.5) {
-                bmiStatus = 'Underweight';
-              } else if (bmi < 25) {
-                bmiStatus = 'Normal';
-              } else if (bmi < 30) {
-                bmiStatus = 'Overweight';
-              } else {
-                bmiStatus = 'Obese';
-              }
-            }
-          } catch (_) {}
+          // Pre-pregnancy BMI is no longer surfaced on a visit record; see the
+          // note where the BMI rows were removed below.
 
           if (mounted && !hasClosedLoading) {
             Navigator.of(context, rootNavigator: true).pop();
@@ -2003,12 +2043,31 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             remarksSource: checkup['remarks_source']?.toString(),
             rows: [
               MapEntry('Conducted by', midwifeName),
-              MapEntry('Fetal Count', fetalCount.toString()),
+              // Fetal count appears only once a scan exists to establish it.
+              //
+              // The value lives on the pregnancy, not on the scan, and is
+              // written at REGISTRATION with a default of 1
+              // (midwife_add_mother_screen.dart). So on its own it reports a
+              // confirmed singleton for a mother who has never been scanned.
+              //
+              // An ultrasound is what turns that default into a finding: the
+              // ultrasound screen is where the count is confirmed or corrected.
+              // Until one is on file the number is an assumption, and a record
+              // should not print an assumption as a measurement.
+              if (((_cachedProfile?["current_pregnancy"]
+                              as Map<String, dynamic>?)?["ultrasounds"]
+                          as List?)
+                      ?.isNotEmpty ==
+                  true)
+                MapEntry("Fetal Count", fetalCount.toString()),
+
               MapEntry('Age of Gestation', aog),
               MapEntry('Weight (kg)', weight),
               MapEntry('Height', heightText),
-              MapEntry('BMI', bmiText),
-              MapEntry('BMI Status', bmiStatus),
+              // Pre-pregnancy BMI is not shown on a visit record. It is a
+              // booking-time figure that does not change between checkups, it
+              // says nothing about how this visit went, and the weight-gain
+              // reading below already carries what it would be used for.
               MapEntry('Blood Pressure', '$bpSys/$bpDia'),
               MapEntry('Fetal Position', _formatValue(checkup['fetal_position'])),
               MapEntry(
@@ -2047,7 +2106,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   }
 
   Widget _buildUltrasoundCard(Map<String, dynamic> ultrasound) {
-    final date = _formatDate(ultrasound['ultrasound_date']);
 
     return UltrasoundRecordCard(
       ultrasound: ultrasound,
@@ -2122,7 +2180,13 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
           _showRecordDetails(
             title: 'Ultrasound',
-            subtitle: date,
+            // When the record was entered, with the time — not when the scan
+            // was performed. A mother can be scanned at a private clinic on
+            // Monday and bring the film to the BHC on Thursday, and a header
+            // showing the scan date makes the record look days old the moment
+            // it is filed. The scan date is a row in Scan Details, where it
+            // belongs and is labelled.
+            subtitle: _formatDateTime(ultrasound['created_at']),
             icon: Icons.monitor_heart,
             imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
             approvedByName: midwifeName == '—' ? null : midwifeName,
@@ -2158,7 +2222,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   }
 
   Widget _buildLabTestCard(Map<String, dynamic> labTest) {
-    final date = _formatDate(labTest['lab_test_date']);
     final type = labTest['lab_test_type'] ?? 'Lab Test';
 
     return LabTestRecordCard(
@@ -2226,11 +2289,19 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
           _showRecordDetails(
             title: type,
-            subtitle: date,
+            // The date the result was entered here, not the date the sample
+            // was taken. See the ultrasound note above.
+            subtitle: _formatDateTime(labTest['created_at']),
             icon: Icons.science,
             imageUrls: imageUrls.isNotEmpty ? imageUrls : null,
             approvedByName: midwifeName == '—' ? null : midwifeName,
             isMidwifeApproved: labTest['is_midwife_approved'] == true,
+            // What the test found, from the columns built to hold it. The
+            // panel is chosen by test type, so an OGTT shows its timed
+            // samples and a blood count shows haemoglobin — without this
+            // screen needing to know either of those things.
+            resultRows: LabTestReference.resultRows(type, labTest),
+            resultsTitle: LabTestReference.panelFor(type)?.title,
             rows: [
               MapEntry('Recorded by', midwifeName),
               MapEntry('Lab Test Type', type),

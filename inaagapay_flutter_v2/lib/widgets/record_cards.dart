@@ -82,7 +82,7 @@ class UltrasoundRecordCard extends StatelessWidget {
           );
 
     return _RecordCardShell(
-      accentColor: AppColors.brandAccent,
+      accentColor: AppColors.brandPrimary,
       icon: Icons.monitor_heart_outlined,
       title: 'Ultrasound',
       subtitle: dateCreated,
@@ -126,7 +126,7 @@ class LabTestRecordCard extends StatelessWidget {
           );
 
     return _RecordCardShell(
-      accentColor: AppColors.warning,
+      accentColor: AppColors.brandPrimary,
       icon: Icons.science_outlined,
       title: type,
       subtitle: dateCreated,
@@ -155,7 +155,7 @@ class MaternalVitalRecordCard extends StatelessWidget {
         vital['created_at'] ?? vital['createdAt'] ?? vital['recorded_at']);
 
     return _RecordCardShell(
-      accentColor: Colors.teal,
+      accentColor: AppColors.brandPrimary,
       icon: Icons.monitor_weight_outlined,
       title: 'Self-logged Vitals',
       subtitle: dateCreated,
@@ -168,6 +168,14 @@ class MaternalVitalRecordCard extends StatelessWidget {
 
 // ── Shared record card shell ──────────────────────────────────────────────
 
+// One accent for every record type.
+//
+// These cards used four: pink for a checkup, a second pink for an ultrasound,
+// AMBER for a lab test and TEAL for self-logged vitals. None of it encoded
+// anything — each card already carries its own icon and its own title, which
+// is what tells the types apart. The amber was actively misleading: amber in
+// this app means "at or above threshold, repeat it", which is what the blood
+// pressure card says with the same colour. A lab test is not a warning.
 class _RecordCardShell extends StatelessWidget {
   final Color accentColor;
   final IconData icon;

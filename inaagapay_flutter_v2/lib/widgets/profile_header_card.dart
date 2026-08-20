@@ -4,6 +4,13 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
+/// One pill under the name in [ProfileHeaderCard].
+class ProfileHeaderChip {
+  const ProfileHeaderChip({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+}
+
 class ProfileHeaderCard extends StatelessWidget {
   final String fullName;
   final String? email;
@@ -15,6 +22,11 @@ class ProfileHeaderCard extends StatelessWidget {
   /// showing a placeholder identifier.
   final String? patientNumber;
 
+  /// Replaces the contact pills when supplied. The record screens reuse this
+  /// header but have nothing to say about phone numbers — they carry when the
+  /// record was taken, who took it, and the facts a clinician reads first.
+  final List<ProfileHeaderChip>? chips;
+
   const ProfileHeaderCard({
     super.key,
     required this.fullName,
@@ -22,6 +34,7 @@ class ProfileHeaderCard extends StatelessWidget {
     this.phone,
     this.profilePictureUrl,
     this.patientNumber,
+    this.chips,
   });
 
   @override
@@ -154,7 +167,18 @@ class ProfileHeaderCard extends StatelessWidget {
                     // Contact row
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
+                      child: chips != null && chips!.isNotEmpty
+                          ? Wrap(
+                              alignment: WrapAlignment.center,
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final chip in chips!)
+                                  _ContactChip(
+                                      icon: chip.icon, text: chip.text),
+                              ],
+                            )
+                          : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           if (phone != null && phone!.isNotEmpty) ...[
