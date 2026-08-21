@@ -143,6 +143,7 @@ class _GrowthSummaryCardState extends State<GrowthSummaryCard> {
             _buildInsight(),
             const SizedBox(height: 4),
             _buildNumbersPanel(),
+            _buildDisclaimerAndReferences(),
             _buildFooter(),
           ],
         ],
@@ -558,54 +559,123 @@ class _GrowthSummaryCardState extends State<GrowthSummaryCard> {
   /// One paragraph rather than three, because the three findings come from two
   /// measurements — separate narratives would repeat themselves and can drift
   /// apart, which is exactly what happened when each screen wrote its own.
+  ///
+  /// Every indicator the card shows a verdict chip for gets a sentence here.
+  /// Body proportion previously had none: a child could be flagged "Above
+  /// standard range" in the row of chips and find nothing in the paragraph
+  /// explaining it. The word "also" was likewise baked into the height
+  /// sentence, so whenever weight was fine the paragraph opened on "Height is
+  /// also…" with nothing for "also" to refer back to.
   String _buildFallbackInsight() {
     final name = widget.childFirstName.trim().isEmpty
         ? _t('Your child', 'Ang iyong anak')
         : widget.childFirstName.trim();
 
-    final weightBand = GrowthCalculator.bandForZScore(
-        _zFor(GrowthMetric.weightForAge));
-    final heightBand = GrowthCalculator.bandForZScore(
-        _zFor(GrowthMetric.heightForAge));
+    final within = <GrowthMetric>[];
+    final findings = <String>[];
 
-    final parts = <String>[];
+    for (final metric in GrowthMetric.values) {
+      final band = GrowthCalculator.bandForZScore(_zFor(metric));
+      if (band.isWithin) {
+        within.add(metric);
+      } else {
+        findings.add(_outsideSentence(metric, band, name));
+      }
+    }
 
-    if (weightBand.isWithin && heightBand.isWithin) {
+    if (findings.isEmpty) {
+      return _t(
+        '$name is growing well. Weight, height and body proportion are all '
+            'within the standard range for this age.',
+        'Maganda ang paglaki ni $name. Nasa tamang saklaw ang timbang, tangkad '
+            'at hubog ng katawan para sa edad niya.',
+      );
+    }
+
+    // What needs attention leads; what is fine follows as reassurance. Both are
+    // said — a mother told only what is wrong cannot tell whether the rest was
+    // checked at all.
+    final parts = <String>[...findings];
+
+    if (within.isNotEmpty) {
+      final english = _joinWords(within.map(_plainLabelEnglish).toList(), 'and');
+      final filipino = _joinWords(within.map(_plainLabelFilipino).toList(), 'at');
       parts.add(_t(
-        '$name is growing well. Weight and height are both right for this age.',
-        'Maganda ang paglaki ni $name. Tama ang timbang at tangkad para sa edad niya.',
-      ));
-    } else {
-      if (!weightBand.isWithin) {
-        parts.add(weightBand == GrowthBand.below
-            ? _t(
-                '$name weighs less than most children this age.',
-                'Mas magaan si $name kaysa sa karamihan ng bata sa edad niya.',
-              )
-            : _t(
-                '$name weighs more than most children this age.',
-                'Mas mabigat si $name kaysa sa karamihan ng bata sa edad niya.',
-              ));
-      }
-      if (!heightBand.isWithin) {
-        parts.add(heightBand == GrowthBand.below
-            ? _t(
-                'Height is also shorter than expected for this age.',
-                'Mas maikli rin ang tangkad kaysa sa inaasahan sa edad niya.',
-              )
-            : _t(
-                'Height is taller than expected for this age.',
-                'Mas matangkad ang tangkad kaysa sa inaasahan sa edad niya.',
-              ));
-      }
-      parts.add(_t(
-        'Keep up regular check-ups so growth can be followed closely.',
-        'Ipagpatuloy ang regular na pagpapatingin upang masubaybayang mabuti ang paglaki.',
+        '${_capitalise(english)} ${within.length == 1 ? 'is' : 'are'} within '
+            'the standard range for this age.',
+        'Nasa tamang saklaw naman ang $filipino para sa edad niya.',
       ));
     }
 
+    parts.add(_t(
+      'Keep up regular check-ups so growth can be followed closely.',
+      'Ipagpatuloy ang regular na pagpapatingin upang masubaybayang mabuti ang paglaki.',
+    ));
+
     return parts.join(' ');
   }
+
+  /// What one indicator sitting outside the standard range means, in words a
+  /// mother can act on. No severity grading and no condition names — "stunted",
+  /// "wasted" and "overweight" are assessments a clinician makes, not labels a
+  /// card applies.
+  String _outsideSentence(GrowthMetric metric, GrowthBand band, String name) {
+    final isBelow = band == GrowthBand.below;
+    return switch (metric) {
+      GrowthMetric.weightForAge => isBelow
+          ? _t(
+              '$name weighs less than most children this age.',
+              'Mas magaan si $name kaysa sa karamihan ng bata sa edad niya.',
+            )
+          : _t(
+              '$name weighs more than most children this age.',
+              'Mas mabigat si $name kaysa sa karamihan ng bata sa edad niya.',
+            ),
+      GrowthMetric.heightForAge => isBelow
+          ? _t(
+              '$name is shorter than most children this age.',
+              'Mas maikli si $name kaysa sa karamihan ng bata sa edad niya.',
+            )
+          : _t(
+              '$name is taller than most children this age.',
+              'Mas matangkad si $name kaysa sa karamihan ng bata sa edad niya.',
+            ),
+      // Deliberately plainer than the other two. Body proportion is BMI-for-age
+      // and its meaning depends on the height it is measured against, so
+      // restating it as a weight sentence beside the weight sentence above
+      // would read as a contradiction to anyone who is not a clinician.
+      GrowthMetric.bmiForAge => isBelow
+          ? _t(
+              'Body proportion is below the usual range for this age.',
+              'Mababa sa karaniwang saklaw ang hubog ng katawan para sa edad niya.',
+            )
+          : _t(
+              'Body proportion is above the usual range for this age.',
+              'Mataas sa karaniwang saklaw ang hubog ng katawan para sa edad niya.',
+            ),
+    };
+  }
+
+  static String _plainLabelEnglish(GrowthMetric metric) => switch (metric) {
+        GrowthMetric.weightForAge => 'weight',
+        GrowthMetric.heightForAge => 'height',
+        GrowthMetric.bmiForAge => 'body proportion',
+      };
+
+  static String _plainLabelFilipino(GrowthMetric metric) => switch (metric) {
+        GrowthMetric.weightForAge => 'timbang',
+        GrowthMetric.heightForAge => 'tangkad',
+        GrowthMetric.bmiForAge => 'hubog ng katawan',
+      };
+
+  static String _joinWords(List<String> items, String conjunction) {
+    if (items.length <= 1) return items.isEmpty ? '' : items.first;
+    return '${items.sublist(0, items.length - 1).join(', ')} '
+        '$conjunction ${items.last}';
+  }
+
+  static String _capitalise(String value) =>
+      value.isEmpty ? value : '${value[0].toUpperCase()}${value.substring(1)}';
 
   // ── Numbers, on demand ────────────────────────────────────────────────────
 
@@ -727,6 +797,115 @@ class _GrowthSummaryCardState extends State<GrowthSummaryCard> {
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
               color: valueColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Disclaimer & references ───────────────────────────────────────────────
+
+  /// The standard this card judges by, and the boundary of what it claims.
+  ///
+  /// Same treatment as the weight-gain and blood pressure cards: a reading
+  /// should always show whose rule it was measured against, and the full
+  /// wording sits behind a tap rather than in the way. Until now the only
+  /// attribution was one line buried inside "See the numbers", which a reader
+  /// had to open the panel to find.
+  Widget _buildDisclaimerAndReferences() {
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        title: Text(
+          _t('Clinical Disclaimer & References',
+              'Clinical Disclaimer at Sanggunian'),
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppColors.brandPrimary,
+          ),
+        ),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(top: 2, bottom: 6),
+        dense: true,
+        children: [
+          Text(
+            _t(
+              'Disclaimer: This card compares a measurement against the WHO '
+                  'Child Growth Standards for the child\'s age and sex and '
+                  'reports which band it falls in. It does not diagnose '
+                  'undernutrition, stunting, wasting or overweight — those are '
+                  'assessments made by a clinician. It is for growth monitoring '
+                  'support only and does not replace professional assessment.',
+              'Paalala: Inihahambing lamang ng card na ito ang sukat sa WHO '
+                  'Child Growth Standards ayon sa edad at kasarian ng bata, at '
+                  'ipinapakita kung saang saklaw ito nahuhulog. Hindi ito '
+                  'nagbibigay ng diagnosis ng malnutrisyon, stunting, wasting o '
+                  'sobrang timbang — ang mga iyon ay pagsusuri ng doktor o '
+                  'midwife. Gabay lamang ito sa pagsubaybay ng paglaki at hindi '
+                  'kapalit ng propesyonal na pagsusuri.',
+            ),
+            style: TextStyle(
+              fontSize: 10,
+              height: 1.4,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _t(
+              'Bands: a measurement is reported as within the standard range '
+                  'when it sits inside ±2 SD of the WHO median for age and sex, '
+                  'and below or above the range outside that. Body proportion '
+                  'is BMI-for-age; for under-fives it is supporting context, '
+                  'while weight-for-age and height-for-age are the indicators '
+                  'routine growth monitoring is built on.',
+              'Saklaw: itinuturing na nasa tamang saklaw ang sukat kapag nasa '
+                  'loob ito ng ±2 SD ng WHO median ayon sa edad at kasarian, at '
+                  'mababa o mataas kung lampas doon. Ang hubog ng katawan ay '
+                  'BMI-for-age; para sa wala pang limang taon, karagdagang '
+                  'konteksto lamang ito, samantalang ang timbang sa edad at '
+                  'tangkad sa edad ang batayan ng regular na pagsubaybay.',
+            ),
+            style: TextStyle(
+              fontSize: 10,
+              height: 1.4,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'References:\n'
+            '• WHO Multicentre Growth Reference Study Group. (2006). WHO Child '
+            'Growth Standards: Length/height-for-age, weight-for-age, '
+            'weight-for-length, weight-for-height and body mass index-for-age: '
+            'Methods and development. Geneva: World Health Organization.\n'
+            '• World Health Organization. (2006). WHO Child Growth Standards: '
+            'Simplified field tables (z-scores), birth to 5 years. '
+            'https://www.who.int/tools/child-growth-standards/standards',
+            style: TextStyle(
+              fontSize: 10,
+              height: 1.4,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _t(
+              'Values in this app are read from the WHO simplified field tables '
+                  'for weight-for-age, length/height-for-age and BMI-for-age, '
+                  'with separate tables for boys and girls.',
+              'Ang mga halaga sa app na ito ay mula sa WHO simplified field '
+                  'tables para sa timbang sa edad, tangkad sa edad at '
+                  'BMI-for-age, na may magkahiwalay na talahanayan para sa mga '
+                  'batang lalaki at babae.',
+            ),
+            style: TextStyle(
+              fontSize: 10,
+              height: 1.4,
+              fontStyle: FontStyle.italic,
+              color: Colors.grey.shade600,
             ),
           ),
         ],

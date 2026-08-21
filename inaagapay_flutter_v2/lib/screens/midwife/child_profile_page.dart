@@ -577,7 +577,13 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          // Bottom padding clears the floating action button.
+          //
+          // At 16 the button sat directly on top of the last card's footer —
+          // "View history" was unreadable and untappable underneath it, and no
+          // amount of scrolling moved it out from under, because the button
+          // does not scroll.
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
           child: Column(
             children: [
               // ── Hero Card ──────────────────────────────────────

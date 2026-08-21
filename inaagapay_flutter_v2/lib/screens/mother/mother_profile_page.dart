@@ -204,7 +204,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
   /// Recorded Td doses newest-first (or oldest-first), with dateless
   /// registration-reported doses always last since they cannot be ordered.
-  List<MaternalTdRecord> _sortedTdDoses() {
+  /// [order] lets the "view all" sheet ask for an order of its own while it
+  /// is open; without it the page's current choice stands.
+  List<MaternalTdRecord> _sortedTdDoses([String? order]) {
+    final sortOrder = order ?? _tdSort;
     final records = MaternalTdService.doseDefs
         .map((d) => _tdStatus.recordFor(d.key))
         .whereType<MaternalTdRecord>()
@@ -216,7 +219,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       if (da == null && db == null) return 0;
       if (da == null) return 1;
       if (db == null) return -1;
-      return _tdSort == 'desc' ? db.compareTo(da) : da.compareTo(db);
+      return sortOrder == 'desc' ? db.compareTo(da) : da.compareTo(db);
     });
 
     return records;
@@ -6870,7 +6873,9 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 totalCount: tdDoses.length,
                 previewWidgets:
                     tdDoses.take(3).map((r) => _buildTdVaccineCard(r)).toList(),
-                allWidgets: tdDoses.map((r) => _buildTdVaccineCard(r)).toList(),
+                allWidgetsBuilder: (sort) => _sortedTdDoses(sort)
+                    .map((r) => _buildTdVaccineCard(r))
+                    .toList(),
                 emptyText: 'No Td vaccine doses recorded yet',
                 modalTitle: 'Td Vaccine History',
                 sortValue: _tdSort,

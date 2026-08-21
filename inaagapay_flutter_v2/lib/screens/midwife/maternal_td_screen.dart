@@ -1090,11 +1090,11 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.22),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  isFim ? 'FIM STATUS' : (isPab ? 'PAB ACTIVE' : 'UNPROTECTED'),
-                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Colors.white),
+                  isFim ? 'FIM' : (isPab ? 'PAB ACTIVE' : 'UNPROTECTED'),
+                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.3),
                 ),
               ),
             ],
@@ -1133,12 +1133,15 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
         label = '$next is due now';
         break;
       case TdNextAction.waiting:
-        final on = _status.nextEligibleDate;
-        final days = _status.daysUntilEligible;
+        // Status only — no date, no countdown.
+        //
+        // The exact date and the days remaining are both spelled out on the
+        // card below, and stating them here as well put the same fact in front
+        // of the midwife four times in one screen (hero chip, dose strip, and
+        // two tiles). The hero answers "what is the situation"; the card
+        // answers "exactly when".
         icon = Icons.schedule_rounded;
-        label = on == null
-            ? '$next not due yet'
-            : 'Next: $next on ${_longDate.format(on)} · in $days ${days == 1 ? 'day' : 'days'}';
+        label = next == null ? 'On schedule' : 'On schedule · $next is next';
         break;
       case TdNextAction.missingPrevious:
         icon = Icons.report_problem_rounded;
@@ -1175,38 +1178,63 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'DOH 5-Dose Progress',
-            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'DOH 5-Dose Progress',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: Color(0xFF5A5A5A),
+                  ),
+                ),
+              ),
+              // The count the strip never actually stated. Reading it off five
+              // chips means counting ticks; a midwife checking whether a
+              // mother is on her way to FIM wants the number.
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '${_status.completedCount} of 5 recorded',
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           _buildDoseProgressRow(),
           const SizedBox(height: 14),
 
-          // Clean "Given Here" Local Health Center attribution banner
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF1F5),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFFCE7F3)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.location_on_rounded, size: 16, color: AppColors.brandPrimary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Administering at $_bhcName (Given Here)',
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.brandText,
-                    ),
+          // Where a dose recorded on this page is credited.
+          //
+          // It read "Administering at <BHC> (Given Here)", which claimed a dose
+          // was being given even on the days none is due, and glossed its own
+          // wording in brackets. It is a note about attribution, so it is
+          // written and weighted as one.
+          Row(
+            children: [
+              const Icon(Icons.location_on_rounded, size: 14, color: Color(0xFF94A3B8)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Doses recorded here are credited to $_bhcName',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.textSecondary,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
 
@@ -1234,19 +1262,32 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
         final isCompleted = rec != null;
         final isNext = dKey == nextKey;
 
+        // A dose still ahead in the series is not "Locked" — nothing is being
+        // withheld and there is no permission to obtain. It simply follows the
+        // one before it, which is what the label now says.
+        final doseNumber = int.tryParse(dKey.replaceAll(RegExp(r'[^0-9]'), ''));
         Color cardBg = const Color(0xFFF8FAFC);
         Color borderColor = const Color(0xFFE2E8F0);
         Color textColor = const Color(0xFF94A3B8);
-        String statusLabel = 'Locked';
-        IconData statusIcon = Icons.lock_outline_rounded;
+        String statusLabel = doseNumber != null && doseNumber > 1
+            ? 'After Td${doseNumber - 1}'
+            : 'Not given';
+        IconData statusIcon = Icons.more_horiz_rounded;
 
         if (isCompleted) {
-          cardBg = const Color(0xFFFDF2F8);
-          borderColor = const Color(0xFFFBCFE8);
-          textColor = AppColors.brandText;
+          // Green for a dose on file, not pink.
+          //
+          // Completed, next-due and merely upcoming were all rendered in the
+          // brand pink, so the strip carried no rank and the one chip that
+          // matters — the next dose — had nothing to stand out against. Giving
+          // "given" the green every immunisation card uses leaves pink to mean
+          // one thing here: this is the dose to act on.
+          cardBg = const Color(0xFFECFDF5);
+          borderColor = const Color(0xFFA7F3D0);
+          textColor = const Color(0xFF047857);
           statusLabel = rec.date != null
               ? DateFormat('MMM d, yy').format(rec.date!)
-              : 'Done';
+              : 'Given';
           statusIcon = Icons.check_circle_rounded;
         } else if (isNext) {
           if (dueNow) {
@@ -1431,33 +1472,55 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     final def = MaternalTdService.defFor(next);
     final protectedUntil = _status.protectionUntil;
 
+    // Nothing is wrong here, so this no longer looks like something is.
+    //
+    // It was a pink panel headed by a crossed-out calendar, which is the
+    // vocabulary of a cancelled appointment — on a screen where the pink was
+    // already carrying the header, the dose strip and the tiles. A mother on
+    // schedule is good news and now reads as a plain white card with a green
+    // tick, leaving the tinted, urgent treatments for the states that earn
+    // them: a missing prior dose, or a dose due today.
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF1F5),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFCE7F3)),
+        border: Border.all(color: AppColors.borderPrimary),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.event_busy_rounded, size: 20, color: AppColors.brandAccent),
-              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFECFDF5),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check_rounded, size: 15, color: Color(0xFF047857)),
+              ),
+              const SizedBox(width: 9),
               const Expanded(
                 child: Text(
                   'No Td dose needed today',
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: AppColors.brandText),
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             'She is on schedule. $next is not due yet — DOH requires ${def.minIntervalLabel.toLowerCase()}.',
-            style: const TextStyle(fontSize: 12, color: AppColors.brandText, height: 1.4),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.45),
           ),
           const SizedBox(height: 14),
           Row(
@@ -1480,15 +1543,17 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
             ],
           ),
           if (protectedUntil != null) ...[
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: AppColors.borderPrimary),
             const SizedBox(height: 10),
             Row(
               children: [
-                const Icon(Icons.shield_rounded, size: 14, color: AppColors.brandAccent),
+                const Icon(Icons.shield_rounded, size: 14, color: AppColors.brandPrimary),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     'Current protection runs until ${_longDate.format(protectedUntil)}.',
-                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.brandText),
+                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                   ),
                 ),
               ],
@@ -1504,19 +1569,22 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     required String value,
     required IconData icon,
   }) {
+    // An inset panel on a white card, rather than a white panel outlined in
+    // pink. The label is the quiet part and the value is the loud one; both
+    // were previously pink, which made the label shout as loudly as the date.
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFBCFE8)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, size: 12, color: AppColors.brandAccent),
+              Icon(icon, size: 12, color: const Color(0xFF94A3B8)),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
@@ -1524,7 +1592,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                   style: const TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.brandAccent,
+                    color: Color(0xFF64748B),
                     letterSpacing: 0.4,
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -1532,13 +1600,13 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 5),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
               value,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.brandText),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
             ),
           ),
         ],
