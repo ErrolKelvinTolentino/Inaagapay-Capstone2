@@ -221,23 +221,50 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
                         child: _buildRoadmap(),
                       ),
 
-                    if (_allVaccines.isNotEmpty)
-                      const SizedBox(height: 8),
-
-                    if (_allVaccines.isNotEmpty)
-                      const Divider(indent: 20, endIndent: 20),
-
-                    const SizedBox(height: 8),
+                    // The divider that used to sit here drew as a hard black
+                    // rule across the page — the only line of its kind in the
+                    // app, and heavier than anything either section contains.
+                    // The two sections are told apart by their headings, the
+                    // same way every other stacked section in the app is.
+                    if (_allVaccines.isNotEmpty) const SizedBox(height: 24),
 
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Text(
-                        'Vaccination History',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
+                      child: Row(
+                        children: [
+                          // Same heading shape as the roadmap directly above:
+                          // brand icon, bold title, count on the right.
+                          const Icon(Icons.history_rounded,
+                              color: AppColors.brandPrimary, size: 20),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Vaccination History',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          if (records.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '${records.length} dose${records.length == 1 ? '' : 's'} given',
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF475569),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -297,22 +324,52 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
                               final batch = record['batch'] as Map<String, dynamic>?;
                               final vaccineName = vaccine?['vaccine_name']?.toString() ?? 'Unknown Vaccine';
                               final doseNumber = vaccine?['dose_number']?.toString() ?? '';
-                              final notes = vaccine?['notes']?.toString() ?? '';
                               final date = record['vaccination_date']?.toString() ?? '';
                               final remarks = record['remarks']?.toString() ?? '';
                               final batchNumber = batch?['batch_number']?.toString();
                               final source = record['source']?.toString();
                               final facilityName = record['facility_name']?.toString();
 
-                              return ImmunizationRecordCard(
-                                vaccineName: vaccineName,
-                                doseNumber: doseNumber,
-                                notes: notes,
-                                date: formatDate(date),
-                                remarks: remarks,
-                                batchNumber: batchNumber,
-                                source: source,
-                                facilityName: facilityName,
+                              // A year heading only where the list actually
+                              // crosses years. On a two-dose history it would
+                              // be a header per card.
+                              final year = _yearOf(date);
+                              final showYear = _spansMultipleYears &&
+                                  (index == 0 ||
+                                      _yearOf(records[index - 1]['vaccination_date']
+                                              ?.toString() ??
+                                          '') !=
+                                          year);
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (showYear && year != null) ...[
+                                    Padding(
+                                      padding: EdgeInsets.only(
+                                          left: 2, bottom: 8, top: index == 0 ? 0 : 6),
+                                      child: Text(
+                                        '$year',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.6,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  ImmunizationRecordCard(
+                                    vaccineName: vaccineName,
+                                    doseNumber: doseNumber,
+                                    date: formatDate(date),
+                                    ageAtDose: _ageAtDoseLabel(date),
+                                    remarks: remarks,
+                                    batchNumber: batchNumber,
+                                    source: source,
+                                    facilityName: facilityName,
+                                  ),
+                                ],
                               );
                             },
                           ),
@@ -321,6 +378,54 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
         ),
       ),
     );
+  }
+
+  // ── History helpers ──
+
+  int? _yearOf(String isoDate) => DateTime.tryParse(isoDate)?.year;
+
+  bool get _spansMultipleYears =>
+      records
+          .map((r) => _yearOf(r['vaccination_date']?.toString() ?? ''))
+          .whereType<int>()
+          .toSet()
+          .length >
+      1;
+
+  /// How old the child was on the day the dose was given.
+  ///
+  /// This is the fact a vaccination history exists to record and the one thing
+  /// the list did not say. Every row instead carried a green "Given" pill —
+  /// true of every record in this table by definition, so eighteen doses came
+  /// with eighteen identical badges saying nothing — while whether a dose
+  /// landed near its scheduled age, which is what a midwife actually reads a
+  /// history for, had to be worked out from the birthday in one's head.
+  ///
+  /// Expressed the way the DOH card expresses it: days at first, then weeks
+  /// through the 6/10/14-week series, then months, then years.
+  String? _ageAtDoseLabel(String isoDate) {
+    final birth = birthdate;
+    final given = DateTime.tryParse(isoDate);
+    if (birth == null || given == null) return null;
+
+    final days = DateUtils.dateOnly(given).difference(DateUtils.dateOnly(birth)).inDays;
+    // A dose dated before the birthday is a data-entry problem, not an age.
+    if (days < 0) return null;
+    if (days == 0) return 'At birth';
+    if (days < 14) return '$days day${days == 1 ? '' : 's'}';
+    if (days < 90) {
+      final weeks = days ~/ 7;
+      return '$weeks week${weeks == 1 ? '' : 's'}';
+    }
+
+    var months = (given.year - birth.year) * 12 + (given.month - birth.month);
+    if (given.day < birth.day) months -= 1;
+    if (months < 12) return '$months months';
+
+    final years = months ~/ 12;
+    final remainder = months % 12;
+    if (remainder == 0) return '$years year${years == 1 ? '' : 's'}';
+    return '${years}y ${remainder}m';
   }
 
   // ── Roadmap helpers ──
@@ -625,8 +730,11 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
 class ImmunizationRecordCard extends StatelessWidget {
   final String vaccineName;
   final String doseNumber;
-  final String notes;
   final String date;
+
+  /// How old the child was on the day of the dose, when the birthday is known.
+  final String? ageAtDose;
+
   final String remarks;
   final String? batchNumber;
   final String? source;
@@ -636,9 +744,9 @@ class ImmunizationRecordCard extends StatelessWidget {
     super.key,
     required this.vaccineName,
     required this.doseNumber,
-    required this.notes,
     required this.date,
     required this.remarks,
+    this.ageAtDose,
     this.batchNumber,
     this.source,
     this.facilityName,
@@ -648,16 +756,20 @@ class ImmunizationRecordCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isOutside = source == 'outside';
 
+    // A hairline card rather than a floating one. Eighteen doses at
+    // blurRadius 12 and a 6px drop is eighteen objects hovering off the page;
+    // the rest of the app draws this kind of list as bordered white.
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderPrimary),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -665,6 +777,7 @@ class ImmunizationRecordCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
@@ -686,8 +799,8 @@ class ImmunizationRecordCard extends StatelessWidget {
                     Text(
                       vaccineName,
                       style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary,
                       ),
                     ),
@@ -699,38 +812,32 @@ class ImmunizationRecordCard extends StatelessWidget {
                           color: AppColors.textSecondary,
                         ),
                       ),
-                    if (notes.isNotEmpty)
-                      Text(
-                        notes,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
+                    // The vaccine's own schedule note used to sit here —
+                    // "Give within 24 hours of birth" printed under a dose
+                    // already given years ago, reading as an instruction still
+                    // outstanding. It belongs to the roadmap above, which is
+                    // where it already appears.
                   ],
                 ),
               ),
+              // The state of the record, on the right where the eye lands.
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                 decoration: BoxDecoration(
                   color: AppColors.success.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(999),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.check_circle,
-                      size: 14,
-                      color: AppColors.success,
-                    ),
-                    const SizedBox(width: 4),
-                    const Text(
+                    Icon(Icons.check_circle, size: 13, color: AppColors.success),
+                    SizedBox(width: 4),
+                    Text(
                       'Given',
                       style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.success,
                       ),
                     ),
@@ -744,17 +851,36 @@ class ImmunizationRecordCard extends StatelessWidget {
             children: [
               const Icon(
                 Icons.calendar_today,
-                size: 14,
+                size: 13,
                 color: AppColors.textSecondary,
               ),
               const SizedBox(width: 6),
               Text(
                 date,
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 12.5,
                   color: AppColors.textSecondary,
                 ),
               ),
+              // How old the child was that day, beside the day itself — the two
+              // belong together, and the age is the half that says whether the
+              // dose landed near its scheduled point. It is only omitted when
+              // no birthday is on file to measure from.
+              if (ageAtDose != null) ...[
+                const SizedBox(width: 7),
+                const Text('·',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.textSecondary)),
+                const SizedBox(width: 7),
+                Text(
+                  'at $ageAtDose',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
               const Spacer(),
               if (batchNumber != null && batchNumber!.isNotEmpty)
                 Container(

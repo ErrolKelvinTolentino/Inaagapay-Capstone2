@@ -251,7 +251,7 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
           'time': 'All Day',
           'mother_name': motherName.isNotEmpty ? motherName : 'Unknown Mother',
           'type': 'Prenatal Checkup',
-          'status': 'upcoming',
+          'status': _scheduleStanding(date),
           // No note. This row is an *upcoming* visit, but midwife_notes belongs
           // to the past checkup that scheduled it — so the card was showing a
           // summary of what already happened underneath a future date, which
@@ -271,7 +271,10 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
         final motherName = '$firstName $lastName'.trim();
 
         final status = schedule['status']?.toString() ?? 'scheduled';
-        final displayStatus = status == 'scheduled' ? 'upcoming' : status;
+        // A row the midwife already closed keeps its own status; only a still
+        // -open booking is described by where its date sits.
+        final displayStatus =
+            status == 'scheduled' ? _scheduleStanding(date) : status;
 
         schedules.add({
           'time': 'All Day',
@@ -333,9 +336,14 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
               // the midwife nothing she could plan around.
               'mother_name': vaccineName.isEmpty
                   ? 'Vaccine Drive'
-                  : '$vaccineName Vaccine Drive',
+                  : '${_withoutTrailingVaccine(vaccineName)} Vaccine Drive',
               'type': forChildren ? 'Children Immunization' : 'Immunization Day',
-              'status': 'immunization',
+              // Where the drive sits relative to today, like every other row on
+              // this screen. It used to read IMMUNIZATION, which the type line
+              // directly underneath already says — so the one badge on the card
+              // spent itself repeating a label instead of telling the midwife
+              // whether the drive has happened.
+              'status': _scheduleStanding(date),
               'notes': row['notes']?.toString(),
               'icon': Icons.vaccines,
             });
@@ -361,16 +369,56 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
     }
   }
 
+  /// Whether the tarpaulin poster shortcut appears on this screen.
+  ///
+  /// Off for now at the midwife's request. Nothing behind it was deleted: the
+  /// poster page, its route and its data all still exist, so restoring the
+  /// shortcut is this one flag.
+  static const bool _showTarpaulinPosterCard = false;
+
+  /// Drops a trailing "Vaccine" from a vaccine's name.
+  ///
+  /// Most rows in the vaccines table already carry it — "BCG Vaccine",
+  /// "Hepatitis B Vaccine" — and appending " Vaccine Drive" to those produced
+  /// "BCG Vaccine Vaccine Drive" on the card.
+  static String _withoutTrailingVaccine(String name) {
+    final trimmed = name.trim();
+    return trimmed
+        .replaceFirst(RegExp(r'\s+vaccine$', caseSensitive: false), '')
+        .trim();
+  }
+
+  /// Where a booked visit sits relative to today.
+  ///
+  /// The status was the literal string 'upcoming' for every prenatal row, and
+  /// for the rest it was mapped straight across from 'scheduled' — nothing on
+  /// this screen ever compared the date to today. A visit three days gone still
+  /// read UPCOMING, which is the one thing it is not.
+  ///
+  /// "Past" and not "missed": this query only knows a visit was booked for that
+  /// day. Whether the mother attended is a separate record, so the badge states
+  /// the date has gone and stops there.
+  static String _scheduleStanding(DateTime date) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final target = DateUtils.dateOnly(date);
+    if (target.isBefore(today)) return 'past';
+    if (target.isAtSameMomentAs(today)) return 'today';
+    return 'upcoming';
+  }
+
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'completed':
         return AppColors.success;
+      case 'today':
       case 'upcoming':
         return AppColors.brandPrimary;
       case 'cancelled':
         return AppColors.error;
       case 'missed':
         return AppColors.warning;
+      case 'past':
+        return AppColors.textSecondary;
       default:
         return AppColors.textSecondary;
     }
@@ -466,11 +514,20 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            // Bottom padding clears the floating action button, which does not
+            // scroll — without it the button sits on the last card's status
+            // badge and no amount of scrolling moves it out from under.
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 /// 📢 BARANGAY VACCINE SCHEDULE LINK CARD
+                ///
+                /// Hidden for now, not removed. The poster page and its
+                /// `/immunization-poster` route are untouched and still work —
+                /// flip [_showTarpaulinPosterCard] back to true to put the
+                /// entry point back on this screen.
+                if (_showTarpaulinPosterCard)
                 GestureDetector(
                   onTap: () => Navigator.pushNamed(context, '/immunization-poster'),
                   child: Container(
@@ -882,7 +939,16 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
       // a button. The screen itself still exists at
       // MidwifeSmsRemindersScreen — see TODO.md, where enabling the pg_cron
       // jobs is what makes this automatic.
-      floatingActionButton: FloatingActionButton.extended(
+      //
+      // Circular rather than extended. The pill was wide enough to sit on top
+      // of the appointment cards behind it — in a list of two it covered the
+      // second one's status badge outright. A round button matches every other
+      // FAB in the app and leaves the list readable underneath.
+      //
+      // The label it lost lives in the tooltip and in the drive page's own
+      // heading; the syringe is kept rather than a bare plus so the button
+      // still says which kind of thing it adds.
+      floatingActionButton: FloatingActionButton(
         heroTag: 'vaccinationDrive',
         onPressed: () async {
           await Navigator.push(
@@ -894,14 +960,9 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
           if (mounted) _loadAllEventDates();
         },
         backgroundColor: AppColors.brandPrimary,
-        icon: const Icon(Icons.vaccines_rounded, color: Colors.white),
-        label: const Text(
-          'Vaccination Drive',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        shape: const CircleBorder(),
+        tooltip: 'Schedule a vaccination drive',
+        child: const Icon(Icons.vaccines_rounded, color: Colors.white, size: 26),
       ),
     );
   }

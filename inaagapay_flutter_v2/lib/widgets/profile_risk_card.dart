@@ -2,10 +2,12 @@
 // Risk assessment card, extracted from _buildSimpleRiskCard.
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_colors.dart';
 import '../services/risk_engine.dart';
 import '../services/auth_storage.dart';
+import '../services/gestational_diabetes_screening.dart';
 
 class ConsiderableFactor {
   final DateTime date;
@@ -17,6 +19,124 @@ class ConsiderableFactor {
     required this.type,
     required this.summary,
   });
+}
+
+/// Collapses risk-factor rows that describe one finding.
+///
+/// Public so the rules can be tested directly: they are string heuristics over
+/// free text that three different screens write, which is exactly the kind of
+/// logic that breaks quietly.
+class RiskFactorRows {
+  const RiskFactorRows._();
+
+  /// Keeps one row per finding, choosing the wording that says the most.
+  ///
+  /// Three writers produce maternal-age rows and none of them agree: the
+  /// add-mother form writes "Maternal age below 19 years", the prenatal
+  /// check-up writes "Maternal age factor (17 years)", and a repeat assessment
+  /// writes that second one again. All three arrived here verbatim, so one
+  /// finding filled three of five bullets and counted as three in the banner —
+  /// a 17-year-old read as more at risk than she is, on the strength of a
+  /// duplicate.
+  ///
+  /// Collapsing happens at read time rather than in the writers because the
+  /// specific wording is worth keeping on a mother's own record: "(17 years)"
+  /// tells the midwife something "Young maternal age" does not. Only the
+  /// repetition goes — and doing it here also fixes rows already saved.
+  static void collapseInPlace(List<String> factors) {
+    final byFinding = <String, String>{};
+    for (final entry in factors) {
+      final text = entry.trim();
+      if (text.isEmpty) continue;
+      final key = _factorKey(text);
+      final existing = byFinding[key];
+      if (existing == null || _saysMore(text, existing)) {
+        byFinding[key] = text;
+      }
+    }
+    final collapsed = byFinding.values.map(_displayFactor).toList();
+    factors
+      ..clear()
+      ..addAll(collapsed);
+  }
+
+  static final RegExp _influenceSuffix = RegExp(
+      r'\s*\((low|moderate|high|minimal|severe)\)\s*$',
+      caseSensitive: false);
+
+  static final RegExp _bracketedValue = RegExp(r'\s*\([^)]*\d[^)]*\)');
+
+  static String _factorKey(String text) {
+    final lower = text.toLowerCase().replaceAll(_influenceSuffix, '').trim();
+
+    if (lower.contains('maternal age') ||
+        lower.contains('adolescent') ||
+        lower.contains('teen')) {
+      final value = _firstNumber(lower);
+      final saysAdvanced = lower.contains('advanced') ||
+          lower.contains('elderly') ||
+          lower.contains('≥') ||
+          lower.contains('>=');
+      if (saysAdvanced || (value != null && value >= 35)) {
+        return 'maternal-age-advanced';
+      }
+      return 'maternal-age-young';
+    }
+
+    // Elsewhere a bracketed number is a threshold or a reading — "(>=140/90)",
+    // "(BMI < 18.5)". The finding is the same finding without it.
+    return lower.replaceAll(_bracketedValue, '').trim();
+  }
+
+  static double? _firstNumber(String text) {
+    final match = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(text);
+    return match == null ? null : double.tryParse(match.group(1)!);
+  }
+
+  /// Whether the number in a row is a cut-point rather than the mother's own
+  /// measurement. "Below 19 years" carries a 19 that is not her age.
+  static bool _statesThreshold(String text) {
+    final lower = text.toLowerCase();
+    return lower.contains('below') ||
+        lower.contains('under') ||
+        lower.contains('over') ||
+        lower.contains('above') ||
+        lower.contains('≥') ||
+        lower.contains('>=');
+  }
+
+  /// A row carrying the mother's own value beats one carrying only the rule she
+  /// fell outside of — "17 years" is what a midwife acts on.
+  static int _informativeness(String text) {
+    var score = 0;
+    if (RegExp(r'\d').hasMatch(text)) score += 2;
+    if (!_statesThreshold(text)) score += 1;
+    return score;
+  }
+
+  static bool _saysMore(String candidate, String current) {
+    final byScore = _informativeness(candidate) - _informativeness(current);
+    if (byScore != 0) return byScore > 0;
+    return candidate.length > current.length;
+  }
+
+  /// "Maternal age factor (17 years) (low)" is a database label read aloud. On
+  /// screen it is one fact: her age, and which way it counts.
+  static String _displayFactor(String text) {
+    final influence = _influenceSuffix.firstMatch(text)?.group(0)?.trim() ?? '';
+    final body = text.replaceAll(_influenceSuffix, '').trim();
+
+    if (body.toLowerCase().contains('maternal age') && !_statesThreshold(body)) {
+      final value = _firstNumber(body);
+      if (value != null) {
+        final age = value == value.roundToDouble()
+            ? value.toInt().toString()
+            : value.toString();
+        return 'Maternal age $age${influence.isEmpty ? '' : ' $influence'}';
+      }
+    }
+    return text;
+  }
 }
 
 class ProfileRiskCard extends StatefulWidget {
@@ -204,6 +324,8 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
       }
     }
 
+    RiskFactorRows.collapseInPlace(currentRiskFactors);
+
     // ── Compile Considerable Factors (Requires Closer Monitoring) ─────────────
     final List<ConsiderableFactor> considerableFactors = [];
 
@@ -224,7 +346,9 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
             fList.add(influence.isNotEmpty ? '$factor ($influence)' : factor);
           }
         }
-        final summary = fList.isNotEmpty ? fList.join(', ') : 'Elevated risk parameters detected';
+        final summary = fList.isNotEmpty
+            ? fList.join(', ')
+            : 'Recorded as needing closer monitoring at this check-up.';
 
         considerableFactors.add(ConsiderableFactor(
           date: date,
@@ -243,7 +367,8 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
         final date = DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
 
         final rawRemarks = us['remarks']?.toString() ?? '';
-        final summary = _getShortSummary(rawRemarks, 'Ultrasound metrics require closer monitoring');
+        final summary =
+            _getShortSummary(rawRemarks, 'Recorded as needing closer monitoring.');
 
         considerableFactors.add(ConsiderableFactor(
           date: date,
@@ -400,7 +525,41 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
     );
   }
 
+  static num? _num(dynamic value) {
+    if (value is num) return value;
+    return num.tryParse(value?.toString() ?? '');
+  }
+
+  /// Reads an OGTT straight from the recorded glucose values.
+  ///
+  /// The keyword scan below cannot see a sugar test at all. It looks for words
+  /// like MONITOR or REVIEW in `remarks` and in the approved AI text, and the
+  /// query that loads this pregnancy selects neither `remarks` nor
+  /// `lab_test_id` — so the remarks are always empty, and the id used to fetch
+  /// the AI response is always null, which leaves the id list empty and skips
+  /// the AI query entirely. A completed OGTT with two samples at threshold
+  /// matched nothing and never reached the sheet.
+  ///
+  /// The glucose columns *are* selected, so the test is read the way the rest
+  /// of the app reads it: through the cited screening module, on the numbers
+  /// themselves rather than on prose about them.
+  GdmAssessment? _glucoseAssessment(Map<String, dynamic> lab) {
+    final values = GlucoseValues(
+      fasting: _num(lab['fasting_glucose_mg_dl']),
+      oneHour: _num(lab['glucose_1hr_mg_dl']),
+      twoHour: _num(lab['glucose_2hr_mg_dl']),
+      threeHour: _num(lab['glucose_3hr_mg_dl']),
+    );
+    if (values.isEmpty) return null;
+    return GestationalDiabetesScreening.assess(values: values);
+  }
+
   bool _labTestRequiresMonitoring(Map<String, dynamic> lab, String? aiResponse) {
+    final glucose = _glucoseAssessment(lab);
+    if (glucose != null && glucose.result == GdmResult.meetsThreshold) {
+      return true;
+    }
+
     final remarks = lab['remarks']?.toString().toUpperCase() ?? '';
     if (remarks.contains('MONITOR') || remarks.contains('REQUIRES_CLOSER_MONITORING') || remarks.contains('MONITORING_RECOMMENDED') || remarks.contains('CLINICAL_FOLLOW_UP_RECOMMENDED') || remarks.contains('REVIEW')) {
       return true;
@@ -415,8 +574,24 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
   }
 
   String _getLabTestConcernSummary(Map<String, dynamic> lab, String? aiResponse) {
+    // The screening module's own wording, so a sugar test reads the same here
+    // as it does on the dashboard. It names which samples reached threshold and
+    // stops there — the module is built never to name a condition.
+    final glucose = _glucoseAssessment(lab);
+    if (glucose != null && glucose.result == GdmResult.meetsThreshold) {
+      final samples = glucose.samplesAtOrAboveThreshold;
+      if (samples.isNotEmpty) {
+        return 'Samples at or above the screening threshold: '
+            '${samples.join(", ")}. ${GdmAction.referForAssessment.label}.';
+      }
+      return glucose.finding;
+    }
+
     final text = aiResponse ?? lab['remarks']?.toString() ?? '';
-    if (text.isEmpty) return 'Abnormal levels detected.';
+    // "Abnormal" is a clinical judgement, and this widget is not entitled to
+    // make one — it reports that a result was flagged and points at the record
+    // holding the actual values.
+    if (text.isEmpty) return 'Marked for review — open the record for the values.';
 
     final concerns = <String>[];
     final lines = text.split('\n');
@@ -435,10 +610,11 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
     }
 
     if (concerns.isNotEmpty) {
-      return 'Abnormal levels for: ${concerns.join(", ")}';
+      return 'Marked for review: ${concerns.join(", ")}';
     }
 
-    return _getShortSummary(lab['remarks'], 'Requires monitoring based on results.');
+    return _getShortSummary(
+        lab['remarks'], 'Marked for review based on the recorded values.');
   }
 
   String _getShortSummary(String? text, String fallback) {
@@ -552,6 +728,19 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
                                       _buildDetailRow(finding, isHigh ? riskColor : AppColors.warning))
                                   .toList(),
                         ),
+                        const SizedBox(height: 16),
+                        // What the ultrasound and lab records actually say.
+                        //
+                        // This list was already being built from all three
+                        // record types, sorted by date, and handed to this
+                        // sheet — which then rendered only the registration
+                        // factors and dropped it. Dart does not warn on an
+                        // unused parameter, so the sheet had been quietly
+                        // showing half its evidence.
+                        _buildRecordFindingsSection(
+                          considerableFactors: considerableFactors,
+                          isMotherView: isMotherView,
+                        ),
                       ],
                     ),
             );
@@ -559,6 +748,144 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
         );
       },
     );
+  }
+
+  // ── Findings carried from the records ─────────────────────────────────────
+
+  /// The ultrasound, laboratory and check-up entries marked for closer
+  /// monitoring.
+  ///
+  /// Written to report *what a record says and who recorded it*, never what it
+  /// means. Each row names the record type, the date it was taken and the
+  /// wording already stored against it — a pointer back to a document, not a
+  /// finding of its own. That boundary is why there is no severity ranking here
+  /// and no red: a ranked, alarm-coloured list of extracts reads as a diagnosis
+  /// the app assembled, which is exactly what this must not look like.
+  Widget _buildRecordFindingsSection({
+    required List<ConsiderableFactor> considerableFactors,
+    required bool isMotherView,
+  }) {
+    if (considerableFactors.isEmpty) {
+      return _buildRiskSection(
+        title: isMotherView ? 'From Your Records' : 'From the Records',
+        icon: Icons.folder_open_rounded,
+        iconColor: AppColors.textSecondary,
+        children: [
+          _buildDetailRow(
+            isMotherView
+                ? 'Nothing in your ultrasound or laboratory records has been marked for a closer look.'
+                : 'No ultrasound, laboratory or check-up entry is marked for closer monitoring.',
+            AppColors.success,
+          ),
+        ],
+      );
+    }
+
+    return _buildRiskSection(
+      title: isMotherView ? 'From Your Records' : 'From the Records',
+      icon: Icons.folder_open_rounded,
+      iconColor: AppColors.brandPrimary,
+      children: [
+        Text(
+          isMotherView
+              ? 'Entries your midwife marked for a closer look:'
+              : 'Entries marked for closer monitoring, newest first:',
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.35,
+            color: Colors.grey.shade600,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...considerableFactors.map(_buildFindingCard),
+        const SizedBox(height: 2),
+        Text(
+          isMotherView
+              ? 'These are notes from records already saved by your midwife — not new results. Ask her to walk you through any of them.'
+              : 'Taken from records already saved for this pregnancy. Open the record itself for the full result.',
+          style: TextStyle(
+            fontSize: 10.5,
+            height: 1.4,
+            fontStyle: FontStyle.italic,
+            color: Colors.grey.shade600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFindingCard(ConsiderableFactor factor) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderPrimary),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // The record type as a pill, so a row can be placed at a glance
+              // without reading it: an ultrasound and a sugar test are
+              // different kinds of evidence and should not look alike.
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(_iconForRecordType(factor.type),
+                        size: 11, color: const Color(0xFF475569)),
+                    const SizedBox(width: 5),
+                    Text(
+                      factor.type,
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              Text(
+                DateFormat('MMM d, yyyy').format(factor.date),
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            factor.summary,
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.4,
+              color: Colors.grey.shade800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _iconForRecordType(String type) {
+    final t = type.toLowerCase();
+    if (t.contains('ultrasound')) return Icons.monitor_heart_outlined;
+    if (t.contains('checkup') || t.contains('check-up')) {
+      return Icons.medical_information_outlined;
+    }
+    return Icons.science_outlined;
   }
 
   Widget _buildStatusBanner({
