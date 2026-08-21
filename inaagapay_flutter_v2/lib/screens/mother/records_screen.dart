@@ -147,18 +147,18 @@ class _RecordsScreenState extends State<RecordsScreen>
               midwife_id,
               account:accounts (first_name, last_name)
             ),
+            weight_gain:weight_gain_evaluations (
+              evaluation_id,
+              mode,
+              status,
+              confidence,
+              message,
+              flags,
+              actual_gain,
+              weekly_gain
+            ),
             checkup:prenatal_checkups (
-              *,
-              weight_gain:weight_gain_evaluations (
-                evaluation_id,
-                mode,
-                status,
-                confidence,
-                message,
-                flags,
-                actual_gain,
-                weekly_gain
-              )
+              *
             )
           ''')
           .inFilter('pregnancy_id', pregnancyIds)
@@ -174,6 +174,10 @@ class _RecordsScreenState extends State<RecordsScreen>
           checkupMap['checkup_datetime'] = enc['encounter_datetime'];
           checkupMap['midwife'] = enc['recorded_by'];
           checkupMap['is_midwife_approved'] = enc['is_midwife_approved'];
+          // The evaluation is fetched against the encounter, not the checkup,
+          // and is carried onto the checkup here — the same handover
+          // MotherProfileService makes, so both screens read the same shape.
+          checkupMap['weight_gain'] = enc['weight_gain'];
           checkupsResponse.add(checkupMap);
         }
       }
