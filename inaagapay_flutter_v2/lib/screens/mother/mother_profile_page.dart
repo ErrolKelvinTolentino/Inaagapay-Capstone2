@@ -27,6 +27,7 @@ import '../../widgets/app_dropdown_field.dart';
 import '../../services/blood_pressure_reference.dart';
 import '../../services/lab_test_reference.dart';
 import '../../services/fetal_heart_rate_reference.dart';
+import '../../services/maternal_td_service.dart';
 
 // Blood type is no longer chosen on this screen, so the option list that used
 // to back a dropdown here is gone. It listed 'Unknown' as a ninth choice, which
@@ -107,6 +108,13 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   String _ultrasoundSort = 'desc';
   String _labSort = 'desc';
   String _vitalSort = 'desc';
+  String _tdSort = 'desc';
+
+  /// Maternal Td doses, read through [MaternalTdService] so this page agrees
+  /// with the Td screen and the prenatal checkup screen. It is not part of the
+  /// profile payload: Td is lifetime, not per-pregnancy, and lives in its own
+  /// table plus the legacy checkup column.
+  MaternalTdStatus _tdStatus = MaternalTdStatus.empty;
   final String _childQuery = '';
   final String _childSort = 'recent';
   final Set<String> _expandedLabInsightAspects = <String>{};
@@ -153,6 +161,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       ..then((p) => _cachedProfile = p);
     _loadProfilePicture();
     _loadPatientNumber();
+    _loadTdStatus();
   }
 
   @override
@@ -180,6 +189,37 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     if (mounted) {
       setState(() => _patientNumber = number);
     }
+  }
+
+  Future<void> _loadTdStatus() async {
+    try {
+      final status = await MaternalTdService.fetchStatus(widget.motherId);
+      if (mounted) {
+        setState(() => _tdStatus = status);
+      }
+    } catch (e) {
+      debugPrint('MotherProfilePage: Td status load failed: $e');
+    }
+  }
+
+  /// Recorded Td doses newest-first (or oldest-first), with dateless
+  /// registration-reported doses always last since they cannot be ordered.
+  List<MaternalTdRecord> _sortedTdDoses() {
+    final records = MaternalTdService.doseDefs
+        .map((d) => _tdStatus.recordFor(d.key))
+        .whereType<MaternalTdRecord>()
+        .toList();
+
+    records.sort((a, b) {
+      final da = a.date;
+      final db = b.date;
+      if (da == null && db == null) return 0;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return _tdSort == 'desc' ? db.compareTo(da) : da.compareTo(db);
+    });
+
+    return records;
   }
 
   /// Weight gain dashboard card.
@@ -719,6 +759,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
 
     });
     await _loadProfilePicture();
+    await _loadTdStatus();
   }
 
   Future<void> _logout() async {
@@ -2326,6 +2367,38 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           }
         }
       },
+    );
+  }
+
+  Widget _buildTdVaccineCard(MaternalTdRecord record) {
+    final def = MaternalTdService.defFor(record.doseKey);
+    final facility = record.facilityName ??
+        (record.source == 'bhc' ? 'Health Center' : 'External Health Center');
+    final dateText =
+        record.date != null ? _formatDate(record.date) : 'Date not recorded';
+
+    return TdVaccineRecordCard(
+      title: def.title,
+      subtitle: dateText,
+      facility: facility,
+      onTap: () => _showRecordDetails(
+        title: def.title,
+        subtitle: dateText,
+        icon: Icons.vaccines_rounded,
+        rows: [
+          MapEntry('Dose', record.doseKey),
+          MapEntry('Date Given', dateText),
+          MapEntry('Facility', facility),
+          MapEntry('Source',
+              record.source == 'bhc' ? 'Health Center' : 'External / Reported'),
+          MapEntry('Protection', def.protection),
+          MapEntry('Recommended Timing', def.timing),
+          MapEntry('Minimum Interval', def.minIntervalLabel),
+          MapEntry('Protected Until', _formatDate(record.protectionUntil)),
+          MapEntry('Next Dose Due', _formatDate(record.nextDueDate)),
+          MapEntry('Remarks', _formatValue(record.remarks)),
+        ],
+      ),
     );
   }
 
@@ -6697,6 +6770,26 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 modalTitle: 'Lab Test Results',
                 sortValue: _labSort,
                 onSortChanged: (v) => setState(() => _labSort = v ?? 'desc'),
+              );
+            }(),
+            const SizedBox(height: 14),
+
+            // ── Td Vaccines ──
+            // Lifetime series, not per-pregnancy, so it reads from
+            // _tdStatus rather than from the pregnancy payload.
+            () {
+              final tdDoses = _sortedTdDoses();
+              return _buildPreviewRecordSection(
+                title: 'TD VACCINES',
+                icon: Icons.vaccines_outlined,
+                totalCount: tdDoses.length,
+                previewWidgets:
+                    tdDoses.take(3).map((r) => _buildTdVaccineCard(r)).toList(),
+                allWidgets: tdDoses.map((r) => _buildTdVaccineCard(r)).toList(),
+                emptyText: 'No Td vaccine doses recorded yet',
+                modalTitle: 'Td Vaccine History',
+                sortValue: _tdSort,
+                onSortChanged: (v) => setState(() => _tdSort = v ?? 'desc'),
               );
             }(),
             const SizedBox(height: 14),

@@ -166,6 +166,36 @@ class MaternalVitalRecordCard extends StatelessWidget {
 }
 
 
+// ── Maternal Td Vaccine Card ──────────────────────────────────────────────
+
+class TdVaccineRecordCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String? facility;
+  final VoidCallback onTap;
+
+  const TdVaccineRecordCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.facility,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _RecordCardShell(
+      accentColor: AppColors.brandPrimary,
+      icon: Icons.vaccines_outlined,
+      title: title,
+      subtitle: subtitle,
+      secondarySubtitle: facility,
+      badges: const [],
+      onTap: onTap,
+    );
+  }
+}
+
 // ── Shared record card shell ──────────────────────────────────────────────
 
 // One accent for every record type.

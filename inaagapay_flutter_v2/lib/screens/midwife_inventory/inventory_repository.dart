@@ -97,14 +97,25 @@ class InventoryRepository {
     if (facilityId == null) return null;
 
     String facilityName = 'Barangay Health Center #$facilityId';
+    String? supplierName;
     try {
+      // parent_facility_id arrived with the MHO hierarchy; selecting it inside
+      // the same round trip keeps the older fallback below intact for a
+      // database that has not run that migration.
       final facility = await _client
           .from('health_facilities')
-          .select('name')
+          .select('name, parent:parent_facility_id (name, facility_type)')
           .eq('facility_id', facilityId)
           .maybeSingle();
       final name = facility?['name']?.toString().trim();
       if (name != null && name.isNotEmpty) facilityName = name;
+
+      final parent = facility?['parent'];
+      final parentMap = parent is List
+          ? (parent.isEmpty ? null : parent.first as Map?)
+          : parent as Map?;
+      final parentName = parentMap?['name']?.toString().trim();
+      if (parentName != null && parentName.isNotEmpty) supplierName = parentName;
     } catch (_) {
       try {
         final bhc = await _client
@@ -128,6 +139,7 @@ class InventoryRepository {
       facilityName: facilityName,
       displayName: fullName.isEmpty ? 'Midwife' : fullName,
       isDemo: isDemo,
+      supplierName: supplierName,
     );
   }
 

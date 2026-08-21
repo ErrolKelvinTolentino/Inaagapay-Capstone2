@@ -62,6 +62,7 @@ class MidwifeInventoryContext {
     required this.facilityName,
     required this.displayName,
     required this.isDemo,
+    this.supplierName,
   });
 
   final int accountId;
@@ -70,6 +71,18 @@ class MidwifeInventoryContext {
   final String facilityName;
   final String displayName;
   final bool isDemo;
+
+  /// The RHU this health center reports to, resolved through
+  /// health_facilities.parent_facility_id.
+  ///
+  /// The screens used to say "RHU Main", which is not the name of anything —
+  /// Pinagbarilan BHC reports to Baliwag RHU III. Null on a database that
+  /// predates the MHO hierarchy, where the generic wording is the best
+  /// available.
+  final String? supplierName;
+
+  /// Who a stock request is addressed to, for use in copy.
+  String get supplierLabel => supplierName ?? 'your RHU';
 }
 
 class InventoryCatalogRecord {

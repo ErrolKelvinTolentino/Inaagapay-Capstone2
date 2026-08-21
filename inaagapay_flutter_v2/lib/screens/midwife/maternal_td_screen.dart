@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
 import '../../services/maternal_td_service.dart';
+import '../../services/stock_deduction_outcome.dart';
+import '../../widgets/stock_indicators.dart';
 import '../../services/sms_service.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/app_input_field.dart';
@@ -61,7 +63,6 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
   String? _tdOpenVialBatch;
   DateTime? _tdOpenVialOpenedAt;
   String? _tdNextBatch;
-  String? _tdNextBatchExpiration;
   int _dosesPerUnit = 10;
   int _openVialShelfHours = 672; // 28 days for Td
   bool _isOpenVialExpired = false;
@@ -195,7 +196,6 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       String? openBatch;
       DateTime? openVialOpened;
       String? nextBatch;
-      String? nextBatchExp;
       int totalDoses = 0;
       int dosesPerUnit = 10;
       int shelfHours = 672; // 28 days
@@ -251,10 +251,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
 
         if (qty > 0) {
           sealedCount += qty;
-          if (nextBatch == null) {
-            nextBatch = b['batch_number']?.toString();
-            nextBatchExp = expStr;
-          }
+          nextBatch ??= b['batch_number']?.toString();
           totalDoses += qty * dosesPerUnit;
         }
       }
@@ -269,7 +266,6 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
           _tdOpenVialOpenedAt = openVialOpened;
           _isOpenVialExpired = openVialExpired;
           _tdNextBatch = nextBatch;
-          _tdNextBatchExpiration = nextBatchExp;
           _tdStockAvailable = totalDoses + openDosesCount;
           _tdStockLoading = false;
         });
@@ -323,17 +319,16 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     final formattedDate = _longDate.format(_administrationDate);
     final dateStr = DateFormat('yyyy-MM-dd').format(_administrationDate);
 
+    // The stock card above the button already says which vial this draws from,
+    // so repeating it here only lengthens the thing standing between the
+    // midwife and the patient. What the confirmation adds is the one fact the
+    // card cannot: the dose is about to be committed and cannot be edited.
     String subtitle =
-        'Are you sure you want to administer and record $doseKey for $_motherFullName on $formattedDate?\n\n'
-        '• Administration Source: Given Here (At $_bhcName)';
+        'Record $doseKey for $_motherFullName on $formattedDate, given here at $_bhcName?';
 
-    if (_tdOpenVialDoses > 0) {
-      subtitle += '\n• Inventory Deduction: 1 dose will be deducted from active open vial (Batch #${_tdOpenVialBatch ?? "Active"}, $_tdOpenVialDoses doses remaining).';
-    } else if (_tdSealedVials > 0) {
-      final remInNewVial = _dosesPerUnit - 1;
-      subtitle += '\n• Inventory Deduction: 1 new sealed vial will be opened from Batch #${_tdNextBatch ?? "Next"}. 1 dose will be used and $remInNewVial doses will remain open for 28 days.';
-    } else {
-      subtitle += '\n• Inventory Deduction: Stock deduction will be attempted from BHC inventory.';
+    if (_tdStockAvailable <= 0) {
+      subtitle += '\n\nThere is no Td stock at this health center, so the record '
+          'will save but nothing will be deducted.';
     }
 
     final confirmed = await showDialog<bool>(
@@ -399,24 +394,23 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       }
 
       if (mounted) {
-        final mode = resMap['mode']?.toString();
-        final remDoses = resMap['doses_left_in_vial'] ?? 0;
-        var dialogContent = '$doseKey recorded successfully for $_motherFullName on $formattedDate as Given Here.';
-
-        if (mode == 'open_vial_dose') {
-          dialogContent += '\n\n1 dose deducted from the active open vial ($remDoses doses remaining in vial).';
-        } else if (mode == 'new_vial_opened') {
-          dialogContent += '\n\nOpened 1 new sealed vial ($remDoses doses remaining open).';
-        }
+        // The RPC answers success:true even when it found no batch to draw from
+        // — mode 'no_deduction'. Only the two deduction modes were read here, so
+        // that case showed a plain green success while the shelf quietly
+        // disagreed with the record.
+        final outcome =
+            StockDeductionOutcome.fromMaternalTd(resMap, doseKey: doseKey);
 
         await showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (_) => DialogBox(
-            type: DialogType.success,
-            title: '$doseKey Administered Successfully',
-            content: dialogContent,
-            buttonText: 'OK',
+          builder: (_) => StockOutcomeDialog(
+            title: outcome.isProblem
+                ? '$doseKey Saved — Check Stock'
+                : '$doseKey Administered',
+            message:
+                '$doseKey recorded for $_motherFullName on $formattedDate as Given Here.',
+            outcome: outcome,
             onPressed: () => Navigator.pop(context),
           ),
         );
@@ -864,6 +858,71 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  /// One card: what is on the shelf, and what this dose will do to it.
+  Widget _buildTdStockCard() {
+    if (_tdStockLoading) {
+      return const StockStatusLoading(label: 'Checking Td stock…');
+    }
+
+    if (_tdStockAvailable <= 0) {
+      return const StockStatusCard(
+        margin: EdgeInsets.zero,
+        tone: StockTone.blocked,
+        message: 'No Td stock at this health center. Restock before administering.',
+      );
+    }
+
+    final sealedLabel = _tdSealedVials > 0 ? '+$_tdSealedVials sealed' : null;
+    final shelfDays = (_openVialShelfHours / 24).round();
+
+    // An expired open vial is written off by the RPC before the dose is drawn,
+    // so the midwife should know a fresh seal is about to break.
+    if (_isOpenVialExpired) {
+      return StockStatusCard(
+        margin: EdgeInsets.zero,
+        tone: StockTone.caution,
+        trailing: sealedLabel,
+        message: 'The open vial passed its $shelfDays-day limit and will be '
+            'discarded. A fresh vial'
+            '${_tdNextBatch != null ? ' from Batch #$_tdNextBatch' : ''} will be opened.',
+      );
+    }
+
+    if (_tdOpenVialDoses > 0) {
+      final left = _tdOpenVialDoses - 1;
+      final openedAt = _tdOpenVialOpenedAt;
+      final hoursOpen =
+          openedAt == null ? null : DateTime.now().difference(openedAt).inHours;
+      // Within three days of the limit, the doses left in it are the ones most
+      // likely to be thrown away, so say so rather than just counting them.
+      final nearingLimit = hoursOpen != null &&
+          _openVialShelfHours > 0 &&
+          hoursOpen >= _openVialShelfHours - 72;
+      final batchSuffix =
+          _tdOpenVialBatch != null ? ' (Batch #$_tdOpenVialBatch)' : '';
+
+      return StockStatusCard(
+        margin: EdgeInsets.zero,
+        tone: nearingLimit ? StockTone.caution : StockTone.ready,
+        icon: Icons.colorize_rounded,
+        trailing: sealedLabel,
+        message: nearingLimit
+            ? 'The open vial$batchSuffix is near its $shelfDays-day limit — this '
+                'dose draws from it, leaving $left. Use them soon.'
+            : '$_tdStockAvailable Td doses here. This dose comes from the open '
+                'vial$batchSuffix — $left will be left in it.',
+      );
+    }
+
+    return StockStatusCard(
+      margin: EdgeInsets.zero,
+      trailing: sealedLabel,
+      message: '$_tdStockAvailable Td doses here. A sealed vial'
+          '${_tdNextBatch != null ? ' from Batch #$_tdNextBatch' : ''} will be '
+          'opened — ${_dosesPerUnit - 1} doses stay open for $shelfDays days.',
     );
   }
 
@@ -1491,7 +1550,6 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
   Widget _buildAdministerForm() {
     final doseKey = _status.nextDoseKey!;
     final def = MaternalTdService.defFor(doseKey);
-    final outOfStock = _bhcId != null && !_tdStockLoading && _tdStockAvailable <= 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1530,96 +1588,14 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
         ),
         const SizedBox(height: 14),
 
-        // Multi-Dose & Open Vial Inventory Status Card
+        // What this dose will draw from.
+        //
+        // This used to say the same thing three times — a header count, a bullet
+        // naming the open vial, and a third bullet spelling out "8 - 1 = 7" —
+        // and then said it a fourth time in the confirmation dialog. One line
+        // for what is on the shelf, one for what this dose does to it.
         if (_bhcId != null) ...[
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: outOfStock ? const Color(0xFFFEF2F2) : const Color(0xFFFDF2F8),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: outOfStock ? const Color(0xFFFECACA) : const Color(0xFFFBCFE8),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      outOfStock ? Icons.warning_amber_rounded : Icons.inventory_2_rounded,
-                      size: 18,
-                      color: outOfStock ? const Color(0xFFDC2626) : AppColors.brandAccent,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        outOfStock
-                            ? 'No Td stock at this health center'
-                            : 'BHC Stock: $_tdStockAvailable doses available',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: outOfStock ? const Color(0xFF991B1B) : AppColors.brandText,
-                        ),
-                      ),
-                    ),
-                    if (!outOfStock)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.brandPrimary.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          _tdOpenVialDoses > 0 ? 'Open Vial Active' : 'Sealed Vials',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.brandText,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (outOfStock)
-                  const Text(
-                    'Please restock Td vaccines in inventory before administering.',
-                    style: TextStyle(fontSize: 11.5, color: Color(0xFF991B1B)),
-                  )
-                else ...[
-                  if (_tdOpenVialDoses > 0) ...[
-                    Text(
-                      '• Active Open Vial: Batch #${_tdOpenVialBatch ?? "Active"} has $_tdOpenVialDoses doses remaining.',
-                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF4A0E2E), height: 1.3),
-                    ),
-                    Text(
-                      '• Deduction: 1 dose will be drawn from the open vial ($_tdOpenVialDoses - 1 = ${_tdOpenVialDoses - 1} left).',
-                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF701A75), height: 1.3, fontWeight: FontWeight.w600),
-                    ),
-                  ] else if (_tdSealedVials > 0) ...[
-                    Text(
-                      '• Sealed Stock: Batch #${_tdNextBatch ?? "Next"} ($_tdSealedVials sealed vials available).',
-                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF4A0E2E), height: 1.3),
-                    ),
-                    Text(
-                      '• Deduction: 1 new sealed vial will be opened. 1 dose given, ${_dosesPerUnit - 1} doses will remain open for 28 days.',
-                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF701A75), height: 1.3, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                  if (_isOpenVialExpired)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Note: Previous open vial expired (> 28 days) and will be auto-discarded.',
-                        style: TextStyle(fontSize: 11, color: Colors.amber.shade900, fontStyle: FontStyle.italic),
-                      ),
-                    ),
-                ],
-              ],
-            ),
-          ),
+          _buildTdStockCard(),
           const SizedBox(height: 14),
         ],
 

@@ -18,6 +18,178 @@
     <link rel="stylesheet" href="../styles/main.css" />
     <style>
       /* Modern Medical Inventory System Design Tokens & Utilities */
+
+
+      /* ── Dispense plan panel ─────────────────────────────────────────────
+         Says what the movement will do to the vials before it does it. Shown
+         only when that is not already obvious from the quantity field. */
+      .dispense-plan {
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 14px;
+        font-size: 12px;
+        line-height: 1.45;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        color: #334155;
+      }
+      .dispense-plan.is-warning {
+        border-color: #fde68a;
+        background: #fffbeb;
+        color: #92400e;
+      }
+      .dispense-plan.is-blocked {
+        border-color: #fecaca;
+        background: #fef2f2;
+        color: #991b1b;
+      }
+      .dispense-plan-title {
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+      }
+      .dispense-plan-steps {
+        margin: 4px 0 0;
+        padding-left: 16px;
+      }
+      .dispense-plan-steps li { margin-bottom: 1px; }
+      .dispense-plan-foot {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px dashed rgba(0, 0, 0, 0.12);
+        font-size: 11px;
+        opacity: 0.9;
+      }
+      /* ── Facility Scope Strip ────────────────────────────────────────────
+         The page is filtered by one facility at a time. That choice used to
+         live only in a dropdown, which said nothing about where the stock
+         actually is — you had to select a facility to find out it was empty.
+         The cards carry the numbers, so the picker doubles as the overview. */
+      .facility-scope {
+        background: #ffffff;
+        border: 1px solid var(--border-primary);
+        border-radius: 12px;
+        padding: 10px 12px 12px;
+        margin-bottom: 16px;
+      }
+      .facility-scope-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .facility-scope-label {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .facility-scope-label i { color: var(--brand-primary); }
+      .facility-scope-head .form-select {
+        width: auto;
+        min-width: 240px;
+        padding: 4px 10px;
+        font-size: 12.5px;
+        font-weight: 600;
+        border-radius: 6px;
+        border-color: var(--border-primary);
+        cursor: pointer;
+      }
+      .facility-scope-current {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--brand-text);
+        background: var(--brand-secondary, #fff1f5);
+        border: 1px solid rgba(255, 104, 165, 0.35);
+        border-radius: 20px;
+        padding: 3px 6px 3px 12px;
+      }
+      .facility-scope-clear {
+        background: #ffffff;
+        border: 1px solid var(--border-primary);
+        border-radius: 16px;
+        padding: 2px 9px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .facility-scope-clear:hover {
+        color: var(--brand-primary);
+        border-color: var(--brand-primary);
+      }
+      .facility-scope-cards {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+      .facility-chip {
+        flex: 0 0 auto;
+        min-width: 168px;
+        text-align: left;
+        background: #ffffff;
+        border: 1px solid var(--border-primary);
+        border-radius: 10px;
+        padding: 9px 12px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        font-family: inherit;
+      }
+      .facility-chip:hover {
+        border-color: var(--brand-primary);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      }
+      .facility-chip.is-active {
+        border-color: var(--brand-primary);
+        background: var(--brand-secondary, #fff1f5);
+        box-shadow: inset 0 0 0 1px var(--brand-primary);
+      }
+      .facility-chip-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--text-primary);
+        white-space: nowrap;
+      }
+      .facility-chip-title i { color: var(--brand-primary); font-size: 11px; }
+      .facility-chip-sub {
+        display: block;
+        font-size: 10.5px;
+        color: var(--text-secondary);
+        margin-top: 1px;
+      }
+      .facility-chip-stats {
+        display: flex;
+        gap: 8px;
+        margin-top: 7px;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+      .facility-chip-stats .is-warn { color: #d97706; }
+      .facility-chip-stats .is-danger { color: #dc2626; }
+
+      @media (max-width: 640px) {
+        .facility-chip { min-width: 148px; }
+        .facility-scope-head .form-select { min-width: 0; width: 100%; }
+      }
       .inventory-kpi-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -644,14 +816,7 @@
                 <i class="fa-solid fa-signal" style="font-size: 10px;"></i> Connecting Live Sync...
               </span>
             </div>
-            <p class="page-subtitle" style="margin-top: 4px; margin-bottom: 12px;">Track vaccines, contraceptives, supplements, and medical supplies across all barangay health centers</p>
-            <div style="display: flex; align-items: center; gap: 10px; background: #ffffff; padding: 6px 14px; border-radius: 10px; border: 1px solid var(--border-primary); display: inline-flex;">
-              <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);"><i class="fa-solid fa-hospital" style="color: var(--brand-primary)"></i> View Stocks At:</span>
-              <select class="form-select" id="global-bhc-filter" style="width: auto; min-width: 260px; padding: 5px 12px; font-size: 13.5px; border-radius: 6px; font-weight: 600; border-color: var(--brand-primary); cursor: pointer;">
-                <option value="all">All Facilities (Combined View)</option>
-                <option value="central">Central Warehouse / Main Office</option>
-              </select>
-            </div>
+            <p class="page-subtitle" id="page-subtitle-inventory" style="margin-top: 4px; margin-bottom: 12px;">Track vaccines, contraceptives, supplements, and medical supplies across all barangay health centers</p>
           </div>
           <div class="page-actions" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
             <button class="btn btn-secondary btn-sm" id="open-alerts-hub-btn" onclick="openAlertsModal()"><i class="fa-solid fa-bell" style="color:var(--brand-primary);"></i> Alert Hub <span id="alerts-hub-count" class="badge" style="background:var(--brand-primary); color:white; margin-left:4px; display:none;">0</span></button>
@@ -660,6 +825,23 @@
             <button class="btn btn-outline-pink btn-sm" id="open-dispense-modal-btn" onclick="openModal('modal-dispense')"><i class="fa-solid fa-hand-holding-medical"></i> Dispense / Adjust Stock</button>
             <button class="btn btn-primary btn-sm" id="open-issue-modal-btn" onclick="openGeneralIssueModal()" style="background:#8b5cf6; border-color:#8b5cf6;"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock to BHC</button>
           </div>
+        </div>
+
+        <!-- Facility Scope Strip
+             One card per place stock can sit, the combined view included. The
+             page has always been filtered by #global-bhc-filter; the cards drive
+             that same select, so every render site downstream is untouched and
+             the select stays as the keyboard-accessible equivalent. -->
+        <div class="facility-scope" id="facility-scope">
+          <div class="facility-scope-head">
+            <span class="facility-scope-label"><i class="fa-solid fa-hospital"></i> View Stocks At:</span>
+            <select class="form-select" id="global-bhc-filter">
+              <option value="all">All Facilities (Combined View)</option>
+              <option value="central">Central Warehouse / Main Office</option>
+            </select>
+            <span class="facility-scope-current" id="facility-scope-current" style="display:none;"></span>
+          </div>
+          <div class="facility-scope-cards" id="facility-scope-cards"></div>
         </div>
 
         <!-- Active Alerts Banner -->
@@ -1253,7 +1435,7 @@
       <footer class="app-footer">
         <span>&copy; 2026 InaAgapay &mdash; Maternal &amp; Child Health Information System</span>
         <span style="color: var(--border-primary)">|</span>
-        <span>RHU Portal &mdash; Protected under Data Privacy Act of 2012 (RA 10173)</span>
+        <span><span data-portal-label>RHU Portal</span> &mdash; Protected under Data Privacy Act of 2012 (RA 10173)</span>
       </footer>
     </div>
 
@@ -1479,7 +1661,7 @@
         <div class="modal-body" style="padding: 18px 24px;">
           <div style="margin-bottom: 14px; padding: 10px 14px; border-radius: 8px; background: rgba(255, 104, 165, 0.08); border: 1px solid rgba(255, 104, 165, 0.25); font-size: 12px; color: #831843; line-height: 1.4;">
             <i class="fa-solid fa-circle-info" style="color: var(--brand-primary); margin-right: 6px;"></i>
-            <strong>Central Intake:</strong> External supplies from DOH / manufacturers are received directly into the <strong>Central RHU Warehouse</strong>. To replenish Barangay Health Centers, use <strong>Issue Stock to BHC</strong>.
+            <span data-scope-copy><strong>Central Intake:</strong> External supplies from DOH / manufacturers are received directly into the <strong>Central RHU Warehouse</strong>. To replenish Barangay Health Centers, use <strong>Issue Stock to BHC</strong>.</span>
           </div>
           <form id="form-batch" onsubmit="return false;">
             <div class="form-group" style="margin-bottom: 14px;">
@@ -1555,10 +1737,18 @@
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label" for="dispense-qty" style="font-weight: 600; font-size: 12.5px;">Quantity <span class="req" style="color:#dc2626;">*</span></label>
+                <label class="form-label" for="dispense-qty" style="font-weight: 600; font-size: 12.5px;">
+                  <span id="dispense-qty-label">Quantity</span> <span class="req" style="color:#dc2626;">*</span>
+                </label>
                 <input class="form-control" type="number" id="dispense-qty" min="1" placeholder="e.g. 10" required style="border-radius: 8px;" />
               </div>
             </div>
+
+            <!-- What this movement will actually do.
+                 Hidden entirely for a plain single-dose deduction, where the
+                 quantity field already says everything there is to say. -->
+            <div id="dispense-plan" class="dispense-plan" style="display:none;"></div>
+
             <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" for="dispense-reference" style="font-weight: 600; font-size: 12.5px;">Reference / Notes</label>
               <input class="form-control" type="text" id="dispense-reference" placeholder="e.g. Daily immunization clinic distribution" style="border-radius: 8px;" />
@@ -1708,7 +1898,7 @@
           <div style="background: white; padding: 16px; border: 2px dashed #cbd5e1; border-radius: 12px; display: inline-block;">
             <div id="transfer-qrcode-canvas" style="display:flex; justify-content:center; align-items:center; width:160px; height:160px; background:#fafafa; border-radius:8px;"></div>
           </div>
-          <p style="font-size: 11.5px; color: var(--text-secondary); margin-top: 12px;">The receiving BHC midwife can scan this QR code using the mobile app to verify and receive the batch immediately.</p>
+          <p id="transfer-qr-hint" style="font-size: 11.5px; color: var(--text-secondary); margin-top: 12px;">The receiving BHC midwife can scan this QR code using the mobile app to verify and receive the batch immediately.</p>
         </div>
         <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--border-primary); background: #fafafa; display: flex; justify-content: flex-end; gap: 8px;">
           <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-transfer-qr')">Close</button>
@@ -1807,7 +1997,7 @@
         <div class="modal-header" style="padding: 18px 24px 14px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
           <div>
             <h2 class="modal-title" id="item-details-title" style="font-size: 16px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-boxes-stacked" style="color:var(--brand-primary);"></i> Item Breakdown &amp; Stock Summary</h2>
-            <div id="item-details-subtitle" style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Detailed view across Central and BHC facilities</div>
+            <div id="item-details-subtitle" data-scope-copy style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Detailed view across Central and BHC facilities</div>
           </div>
           <button class="modal-close" onclick="closeModal('modal-item-details')"><i class="fa-solid fa-xmark"></i></button>
         </div>
@@ -1836,6 +2026,7 @@
             <button class="btn btn-sm btn-secondary active" id="alert-tab-all" onclick="filterAlerts('all')" style="height: 30px; font-size: 12px; border-radius: 6px;">All Alerts</button>
             <button class="btn btn-sm btn-secondary" id="alert-tab-low" onclick="filterAlerts('low')" style="height: 30px; font-size: 12px; border-radius: 6px;"><i class="fa-solid fa-triangle-exclamation" style="color:#d97706;"></i> Low Stock</button>
             <button class="btn btn-sm btn-secondary" id="alert-tab-expiry" onclick="filterAlerts('expiry')" style="height: 30px; font-size: 12px; border-radius: 6px;"><i class="fa-solid fa-clock-rotate-left" style="color:#dc2626;"></i> Expiry</button>
+            <button class="btn btn-sm btn-secondary" id="alert-tab-vials" onclick="filterAlerts('vials')" style="height: 30px; font-size: 12px; border-radius: 6px;"><i class="fa-solid fa-syringe" style="color:#b45309;"></i> Open Vials</button>
             <button class="btn btn-sm btn-secondary" id="alert-tab-requests" onclick="filterAlerts('requests')" style="height: 30px; font-size: 12px; border-radius: 6px;"><i class="fa-solid fa-clipboard-list" style="color:#2563eb;"></i> Pending Requests</button>
           </div>
           <div id="alerts-hub-content">
@@ -2150,9 +2341,9 @@
           }
           
           if (hint) {
-            hint.textContent = (estimate && estimate.available)
+            hint.textContent = municipalWording((estimate && estimate.available)
               ? `Suggested arrival from ${estimate.samples} completed deliveries (${estimate.days} days avg).`
-              : `Standard BHC transit estimate (${defaultDays} days).`;
+              : `Standard BHC transit estimate (${defaultDays} days).`);
           }
           updateIssueSafetyCheck();
         }
@@ -2340,9 +2531,15 @@
               saveBtn.dataset.safetyBlocked = "false";
             }
 
+
+            // One place instead of nine: every branch above names the receiving
+            // tier, and under the municipal office that tier is an RHU. The card
+            // holds fixed copy and numbers only, never a facility's own name.
+            title.textContent = municipalWording(title.textContent);
+            message.textContent = municipalWording(message.textContent);
             if (metricsEl) {
               metricsEl.style.display = "grid";
-              metricsEl.innerHTML = `
+              metricsEl.innerHTML = municipalWording(`
                 <div class="inventory-safety-metric">
                   <span>Transit Time</span>
                   <strong>${durationLabel(deliveryDays)}</strong>
@@ -2363,7 +2560,7 @@
                   <span>Expected Usable Total</span>
                   <strong>${expectedStockAfterReceipt} ${item?.unit_of_measure || ''}</strong>
                 </div>
-              `;
+              `);
             }
           } catch (err) {
             console.error("updateIssueSafetyCheck error:", err);
@@ -2431,6 +2628,35 @@
         };
 
         // Calculate Stock Metrics per Item & Facility Filter
+        // ── Dose helpers ────────────────────────────────────────────────────
+        //
+        // A "unit" is a package: one vial, one bottle, one box. A "dose" is what
+        // one patient receives. For a 10-dose Td vial the two differ by ten, and
+        // conflating them is what let the portal destroy nine doses per dispense.
+        //
+        // Sealed units and the doses already drawn out of an open vial are held
+        // in separate columns, so usable doses is the sum of both.
+
+        function itemDosesPerUnit(item) {
+          return Math.max(1, parseInt(item?.doses_per_unit, 10) || 1);
+        }
+
+        function isMultiDoseItem(item) {
+          return itemDosesPerUnit(item) > 1;
+        }
+
+        /** Doses sitting in vials that are already open at this batch. */
+        function batchOpenDoses(batch) {
+            return Math.max(0, parseInt(batch?.doses_remaining_in_open_vial, 10) || 0);
+        }
+
+        /** "8 vials (78 doses)" for multi-dose items, "8 units" for the rest. */
+        function formatStockWithDoses(units, doses, item) {
+          const unitLabel = esc(item?.unit_of_measure || 'units');
+          if (!isMultiDoseItem(item)) return `${units} ${unitLabel}`;
+          return `${units} ${unitLabel} (${doses} dose${doses === 1 ? '' : 's'})`;
+        }
+
         function getItemStockMetrics(itemId, facilityFilter) {
           const itemBatches = batches.filter(b => {
             if (b.item_id !== itemId) return false;
@@ -2442,9 +2668,19 @@
             return true;
           });
 
+          const item = items.find(i => String(i.item_id) === String(itemId));
+          const dosesPerUnit = itemDosesPerUnit(item);
+
           const added = itemBatches.reduce((sum, b) => sum + (b.quantity_received || 0), 0);
-          const available = itemBatches.filter(b => b.status === 'active' && !isBatchExpired(b))
-            .reduce((sum, b) => sum + (b.quantity_remaining || 0), 0);
+
+          const usableBatches = itemBatches.filter(b => b.status === 'active' && !isBatchExpired(b));
+          const available = usableBatches.reduce((sum, b) => sum + (b.quantity_remaining || 0), 0);
+
+          // Doses already drawn out of a vial. They are no longer part of
+          // quantity_remaining - the unit was decremented when the seal broke -
+          // so an item can read 0 units and still have patients' worth of stock.
+          const openDoses = usableBatches.reduce((sum, b) => sum + batchOpenDoses(b), 0);
+          const availableDoses = available * dosesPerUnit + openDoses;
 
           const batchIds = new Set(itemBatches.map(b => b.batch_id));
           const issued = inventoryTransfers.filter(t => batchIds.has(t.source_batch_id) && t.status === "received")
@@ -2464,7 +2700,10 @@
             added,
             issued,
             allocated: allocatedRequests + allocatedTransfers,
-            available
+            available,
+            openDoses,
+            availableDoses,
+            dosesPerUnit
           };
         }
 
@@ -2483,7 +2722,7 @@
           const baseMin = item.minimum_stock_threshold || 50;
           const locations = [{ id: "central", name: PortalScope.depotName }];
           if (Array.isArray(bhcs)) {
-            bhcs.forEach(b => locations.push({ id: String(b.bhc_id), name: b.bhc_name || `BHC #${b.bhc_id}` }));
+            bhcs.forEach(b => locations.push({ id: String(b.bhc_id), name: b.bhc_name || unknownFacilityLabel(b.bhc_id) }));
           }
 
           let lowCount = 0;
@@ -2491,7 +2730,9 @@
 
           locations.forEach(loc => {
             const m = getItemStockMetrics(item.item_id, loc.id);
-            if (m.available === 0) {
+            // Out means no dose can be given, not no sealed unit is left: a
+            // location holding only an open vial can still vaccinate.
+            if (m.availableDoses === 0) {
               outCount++;
               lowCount++;
             } else if (m.available <= baseMin) {
@@ -2591,7 +2832,7 @@
 
             if (reqRes.error || transRes.error) {
               console.warn("Distribution tables missing or restricted:", reqRes.error || transRes.error);
-              workflowLoadError = "BHC distribution tables or RPCs missing. Run database/seed_inventory_data.sql in Supabase SQL Editor.";
+              workflowLoadError = "Distribution tables or RPCs missing. Run database/seed_inventory_data.sql in Supabase SQL Editor.";
             }
 
             items = itemRes.data || [];
@@ -2657,6 +2898,7 @@
               }
             }
 
+            renderFacilityScopeStrip();
             renderKPIs();
             renderCatalog();
             renderBatches();
@@ -2668,6 +2910,7 @@
             renderOpenVialsTracker();
             populateDropdowns();
             setupCatalogSearchDropdown();
+            openPendingIssueModal();
 
             if (syncInd) syncInd.innerHTML = '<i class="fa-solid fa-circle-check" style="font-size: 10px; color:#059669;"></i> Live Sync Active';
           } catch (err) {
@@ -2730,7 +2973,11 @@
             reqBadge.style.display = pendingCount > 0 ? "inline-flex" : "none";
           }
 
-          const alertCount = lowCount + expiringCount + pendingCount;
+          // Doses stranded in a vial past its shelf life are waste the moment
+          // they are noticed, so they belong in the same count as the stock
+          // problems an officer is expected to act on today.
+          const staleVialCount = expiredOpenVials(bhcFilter).length;
+          const alertCount = lowCount + expiringCount + pendingCount + staleVialCount;
           const alertBadge = document.getElementById("alerts-hub-count");
           if (alertBadge) {
             alertBadge.textContent = alertCount;
@@ -2744,6 +2991,7 @@
               if (lowCount > 0) details.push(`${lowCount} item(s) low/out of stock`);
               if (expiringCount > 0) details.push(`${expiringCount} batch(es) expiring soon or expired`);
               if (pendingCount > 0) details.push(`${pendingCount} pending midwife request(s) awaiting approval`);
+              if (staleVialCount > 0) details.push(`${staleVialCount} open vial(s) past shelf life`);
               document.getElementById("alerts-banner-desc").textContent = details.join(" • ");
               banner.style.display = "block";
             } else {
@@ -2795,7 +3043,7 @@
             const effMin = getItemEffectiveThreshold(item, bhcFilter);
             const fHealth = isCombined ? getItemFacilityHealth(item) : null;
 
-            const isOut = metrics.available === 0;
+            const isOut = metrics.availableDoses === 0;
             const isLow = !isOut && (metrics.available <= effMin || (isCombined && fHealth && fHealth.hasLowFacilities));
             const isNormal = !isOut && !isLow;
 
@@ -2825,7 +3073,7 @@
             let statusBadge = `<span class="badge-health-success"><i class="fa-solid fa-circle-check"></i> In Stock</span>`;
             if (item.is_archived) {
               statusBadge = `<span class="badge-health-warning" style="background:#f1f5f9;color:#64748b;border-color:#cbd5e1;"><i class="fa-solid fa-box-archive"></i> Archived</span>`;
-            } else if (metrics.available === 0) {
+            } else if (metrics.availableDoses === 0) {
               statusBadge = `<span class="badge-health-danger"><i class="fa-solid fa-ban"></i> Out of Stock</span>`;
             } else if (isCombined && fHealth && fHealth.hasLowFacilities) {
               if (fHealth.outCount > 0) {
@@ -2865,7 +3113,10 @@
                 <td style="text-align:right;font-weight:600;color:#059669;">+${metrics.added}</td>
                 <td style="text-align:right;font-weight:600;color:var(--brand-primary);">${metrics.issued}</td>
                 <td style="text-align:right;font-weight:600;color:#d97706;">${metrics.allocated > 0 ? `${metrics.allocated}` : '0'}</td>
-                <td style="text-align:right;font-weight:700;font-size:13.5px;color:${isStockWarn ? '#dc2626' : 'var(--text-primary)'};">${metrics.available}</td>
+                <td style="text-align:right;font-weight:700;font-size:13.5px;color:${isStockWarn ? '#dc2626' : 'var(--text-primary)'};">
+                  ${metrics.available}
+                  ${isMultiDoseItem(item) ? `<div style="font-size:10px;font-weight:600;color:var(--text-secondary);">${metrics.availableDoses} doses${metrics.openDoses > 0 ? ` · ${metrics.openDoses} open` : ''}</div>` : ''}
+                </td>
                 <td style="text-align:center;">${statusBadge}</td>
                 <td style="text-align:center;">
                   <div style="display:flex;justify-content:center;gap:3px;flex-wrap:nowrap;">
@@ -2975,7 +3226,7 @@
             let locFilter = "central";
             if (b.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-              locName = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
+              locName = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
               locFilter = String(b.facility_id);
             }
 
@@ -3176,7 +3427,7 @@
             return `
               <tr style="${request.is_archived ? 'opacity:0.75;background:#fafafa;' : ''}">
                 <td><strong>#${request.request_id}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${submitted}</div></td>
-                <td><strong>${esc(bhc?.bhc_name || `BHC #${request.facility_id}`)}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${esc(requester)}</div></td>
+                <td><strong>${esc(bhc?.bhc_name || unknownFacilityLabel(request.facility_id))}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${esc(requester)}</div></td>
                 <td class="col-item-details">
                   <div style="display:flex;align-items:center;gap:4px;">
                     <strong style="color:var(--text-primary);cursor:pointer;" onclick="openItemDetails(${request.item_id})">${esc(item ? item.name : `Item #${request.item_id}`)}</strong>
@@ -3367,8 +3618,8 @@
             } else if (txSortField === "type") {
               res = String(a.transaction_type || "").localeCompare(String(b.transaction_type || ""));
             } else if (txSortField === "location") {
-              const locA = a.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(a.facility_id))?.bhc_name || `BHC #${a.facility_id}`) : PortalScope.depotName;
-              const locB = b.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(b.facility_id))?.bhc_name || `BHC #${b.facility_id}`) : PortalScope.depotName;
+              const locA = a.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(a.facility_id))?.bhc_name || unknownFacilityLabel(a.facility_id)) : PortalScope.depotName;
+              const locB = b.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(b.facility_id))?.bhc_name || unknownFacilityLabel(b.facility_id)) : PortalScope.depotName;
               res = locA.localeCompare(locB);
             } else if (txSortField === "item") {
               const itemA = (batches.find(x => x.batch_id === a.batch_id) ? items.find(i => i.item_id === batches.find(x => x.batch_id === a.batch_id)?.item_id)?.name : "") || "";
@@ -3419,7 +3670,7 @@
             let locName = PortalScope.depotName;
             if (t.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(t.facility_id));
-              locName = bh ? bh.bhc_name : `BHC #${t.facility_id}`;
+              locName = bh ? bh.bhc_name : unknownFacilityLabel(t.facility_id);
             }
 
             return `
@@ -3478,7 +3729,7 @@
             let locName = PortalScope.depotName;
             if (t.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(t.facility_id));
-              locName = bh ? bh.bhc_name : `BHC #${t.facility_id}`;
+              locName = bh ? bh.bhc_name : unknownFacilityLabel(t.facility_id);
             }
             const dateStr = t.logged_at ? new Date(t.logged_at).toLocaleString("en-PH") : "";
             const refNote = `${t.reference_type || ""} ${t.activity_reason ? '(' + t.activity_reason + ')' : ''} ${t.activity_notes || ""}`.trim();
@@ -3528,7 +3779,7 @@
             let locName = PortalScope.depotName;
             if (b.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-              locName = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
+              locName = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
             }
 
             let statusBadge = `<span class="badge-health-danger"><i class="fa-solid fa-ban"></i> Expired</span>`;
@@ -3586,7 +3837,7 @@
             let locName = PortalScope.depotName;
             if (b.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-              locName = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
+              locName = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
             }
             return [
               b.batch_number,
@@ -3794,14 +4045,14 @@
           const facilityId = disposal.facility_id ?? batch?.facility_id;
           if (facilityId) {
             const bh = bhcs.find(x => String(x.bhc_id) === String(facilityId));
-            loc = bh ? bh.bhc_name : `BHC #${facilityId}`;
+            loc = bh ? bh.bhc_name : unknownFacilityLabel(facilityId);
           }
 
           document.getElementById("disposal-cert-body").innerHTML = `
             <div style="text-align:center;margin-bottom:20px;border-bottom:2px solid var(--brand-primary);padding-bottom:14px;">
               <img src="../images/logo_icon.png" style="height:44px;margin:0 auto 6px;" alt="Logo"><br>
               <strong style="font-size:16px;color:var(--brand-text);text-transform:uppercase;">Republic of the Philippines</strong><br>
-              <span style="font-size:12.5px;color:var(--text-secondary);">Rural Health Unit (RHU) &bull; City Health Office</span><br>
+              <span style="font-size:12.5px;color:var(--text-secondary);">${esc(PortalScope.facilityName || (PortalScope.isMho ? "Municipal Health Office" : "Rural Health Unit"))} &bull; Baliwag, Bulacan</span><br>
               <h3 style="font-size:16px;color:var(--brand-primary);margin-top:10px;">CERTIFICATE OF PHARMACEUTICAL DISPOSAL</h3>
               <div style="font-size:11px;color:var(--text-secondary);">Compliance with DOH Healthcare Waste Guidelines &amp; Data Privacy Act (RA 10173)</div>
             </div>
@@ -4238,7 +4489,7 @@
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; line-height: 1.5;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
                 <span style="font-weight: 700; color: var(--brand-primary); font-size: 13.5px;">Stock Request #${requestId}</span>
-                <span class="type-pill" style="font-size: 10px; font-weight: 600; background: #e2e8f0; color: #334155; padding: 2px 8px; border-radius: 4px;">${esc(bhc?.bhc_name || `BHC #${request.facility_id}`)}</span>
+                <span class="type-pill" style="font-size: 10px; font-weight: 600; background: #e2e8f0; color: #334155; padding: 2px 8px; border-radius: 4px;">${esc(bhc?.bhc_name || unknownFacilityLabel(request.facility_id))}</span>
               </div>
               <div style="font-size: 12.5px; color: #1e293b; margin-bottom: 4px;">
                 Item: <strong style="color: var(--brand-text);">${esc(item?.name || 'Item')}</strong>
@@ -4441,11 +4692,11 @@
           }
         };
 
-        // Helper to ensure BHC dropdowns have options loaded
+        // Helper to ensure the downstream-facility dropdowns have options loaded
         function ensureBhcDropdownPopulated() {
           const issueDropdown = document.getElementById("issue-target-bhc");
           if (issueDropdown && (issueDropdown.options.length <= 1 || issueDropdown.querySelectorAll("option").length <= 1)) {
-            issueDropdown.innerHTML = '<option value="">— Select Target BHC —</option>';
+            issueDropdown.innerHTML = `<option value="">— Select Target ${childTerm()} —</option>`;
             (bhcs || []).forEach(b => {
               const opt = document.createElement("option");
               opt.value = b.bhc_id;
@@ -4460,7 +4711,7 @@
             (bhcs || []).forEach(b => {
               const opt = document.createElement("option");
               opt.value = b.bhc_id;
-              opt.textContent = `BHC: ${b.bhc_name}`;
+              opt.textContent = `${childTerm()}: ${b.bhc_name}`;
               sourceFacilitySel.appendChild(opt);
             });
           }
@@ -4555,7 +4806,7 @@
             if (qtyInput) qtyInput.value = fulfilQty;
 
             const bhcObj = (bhcs || []).find(b => String(b.bhc_id) === String(request.facility_id));
-            const bhcName = bhcObj ? bhcObj.bhc_name : `BHC #${request.facility_id}`;
+            const bhcName = bhcObj ? bhcObj.bhc_name : unknownFacilityLabel(request.facility_id);
 
             const context = document.getElementById("issue-request-context");
             if (context) {
@@ -4618,7 +4869,7 @@
                 let loc = PortalScope.depotName;
                 if (b.facility_id) {
                   const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-                  loc = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
+                  loc = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
                 }
                 const expired = isBatchExpired(b);
                 const badge = expired || b.status === 'expired'
@@ -4655,6 +4906,7 @@
               <div style="background:var(--bg-secondary); padding:12px; border-radius:8px; text-align:center;">
                 <div style="font-size:11px; color:var(--text-secondary); font-weight:600;">AVAILABLE STOCK</div>
                 <div style="font-size:18px; font-weight:700; color:var(--brand-primary); margin-top:2px;">${itemMetrics.available}</div>
+                ${isMultiDoseItem(item) ? `<div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-top:2px;">${itemMetrics.availableDoses} doses${itemMetrics.openDoses > 0 ? ` · ${itemMetrics.openDoses} already open` : ''}</div>` : ''}
               </div>
             </div>
 
@@ -4902,7 +5154,7 @@
         };
 
         window.filterAlerts = function(type) {
-          ["all", "low", "expiry", "requests"].forEach(t => {
+          ["all", "low", "expiry", "vials", "requests"].forEach(t => {
             const btn = document.getElementById(`alert-tab-${t}`);
             if (btn) btn.classList.toggle("active", t === type);
           });
@@ -4930,7 +5182,7 @@
             return {
               kind: "low",
               title: `Low Stock: ${esc(item.name)}`,
-              desc: `Available stock is ${metrics.available} ${esc(item.unit_of_measure)} (${note}).`,
+              desc: `Available stock is ${formatStockWithDoses(metrics.available, metrics.availableDoses, item)} (${note}).`,
               action: `<button class="btn btn-sm btn-primary" onclick="closeModal('modal-alerts-hub'); quickReceive(${item.item_id});"><i class="fa-solid fa-plus"></i> Receive Batch</button>`
             };
           });
@@ -4945,13 +5197,13 @@
             let loc = PortalScope.depotName;
             if (b.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-              loc = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
+              loc = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
             }
             return {
               kind: "expiry",
               title: `${expired ? 'Expired Batch' : 'Expiring Soon Batch'}: Batch ${esc(b.batch_number)}`,
               desc: `Item: ${esc(item?.name || 'Item')} • Location: ${esc(loc)} • Expiration Date: ${b.expiration_date} • Remaining: ${b.quantity_remaining} units.`,
-              action: `<button class="btn btn-sm btn-outline-pink" onclick="closeModal('modal-alerts-hub'); quickDispense(${b.batch_id});"><i class="fa-solid fa-trash"></i> Dispose / Adjust</button>`
+              action: `<button class="btn btn-sm btn-outline-pink" onclick="closeModal('modal-alerts-hub'); quickDispense(${b.batch_id}, 'expiry_disposal');"><i class="fa-solid fa-trash"></i> Dispose / Adjust</button>`
             };
           });
 
@@ -4960,17 +5212,39 @@
             const bhc = bhcs.find(b => String(b.bhc_id) === String(r.facility_id));
             return {
               kind: "requests",
-              title: `Pending Request #${r.request_id} from ${esc(bhc?.bhc_name || `BHC #${r.facility_id}`)}`,
+              title: `Pending Request #${r.request_id} from ${esc(bhc?.bhc_name || unknownFacilityLabel(r.facility_id))}`,
               desc: `Requested: ${r.requested_quantity} units of ${esc(item?.name || 'item')}. Reason: "${esc(r.reason)}".`,
               action: `<button class="btn btn-sm btn-primary" onclick="closeModal('modal-alerts-hub'); openApproveModal(${r.request_id});"><i class="fa-solid fa-check"></i> Review &amp; Approve</button>`
+            };
+          });
+
+          // Open vials past their shelf life.
+          //
+          // A reconstituted BCG vial is waste six hours after the seal breaks,
+          // and every dose still in it is a DOH-reportable loss. Until now the
+          // only place that said so was a table inside the Analytics hub, which
+          // is not where anyone looks when they open the Alert Centre.
+          const vialAlerts = expiredOpenVials(bhcFilter).map(({ batch, item, hours, limit }) => {
+            let loc = PortalScope.depotName;
+            if (batch.facility_id) {
+              const bh = bhcs.find(x => String(x.bhc_id) === String(batch.facility_id));
+              loc = bh ? bh.bhc_name : unknownFacilityLabel(batch.facility_id);
+            }
+            const doses = batchOpenDoses(batch);
+            return {
+              kind: "vials",
+              title: `Open Vial Expired: ${esc(item?.name || 'Vaccine')} (Batch ${esc(batch.batch_number)})`,
+              desc: `${doses} dose(s) still drawn • Location: ${esc(loc)} • Open ${Math.floor(hours)}h, past the ${describeShelfLimit(limit)} limit. These doses can no longer be given.`,
+              action: `<button class="btn btn-sm btn-outline-pink" onclick="closeModal('modal-alerts-hub'); discardOpenVial(${batch.batch_id});"><i class="fa-solid fa-trash-can"></i> Discard ${doses} Dose(s)</button>`
             };
           });
 
           let alertList = [];
           if (type === "low") alertList = lowAlerts;
           else if (type === "expiry") alertList = expiryAlerts;
+          else if (type === "vials") alertList = vialAlerts;
           else if (type === "requests") alertList = requestAlerts;
-          else alertList = [...requestAlerts, ...lowAlerts, ...expiryAlerts];
+          else alertList = [...requestAlerts, ...vialAlerts, ...lowAlerts, ...expiryAlerts];
 
           const container = document.getElementById("alerts-hub-content");
           if (alertList.length === 0) {
@@ -5016,7 +5290,7 @@
             let locName = PortalScope.depotName;
             if (b.facility_id) {
               const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-              locName = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
+              locName = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
             }
             return [b.batch_number, item ? item.name : "Unknown", item ? item.generic_name || "" : "", locName, b.received_date || "", b.expiration_date || "", b.quantity_received, b.quantity_remaining, b.manufacturer || "", isBatchExpired(b) ? "Expired" : b.status];
           });
@@ -5299,7 +5573,7 @@
 
           const sourceLocName = sourceFacilityVal === "central" 
             ? PortalScope.depotName 
-            : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || "Source BHC");
+            : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || `Source ${childTerm()}`);
 
           issueBatchSel.innerHTML = `<option value="">— Select Available Source Batch —</option>` + availableBatches.map(b => {
             const item = items.find(i => String(i.item_id) === String(b.item_id));
@@ -5340,7 +5614,7 @@
         async function autoFillForecastForDestination() {
           const targetBhcVal = document.getElementById("issue-target-bhc")?.value;
           if (!targetBhcVal) {
-            showToast("Please select a Destination BHC first to calculate demand.", "warning");
+            showToast(`Please select a Destination ${childTerm()} first to calculate demand.`, "warning");
             return;
           }
 
@@ -5386,7 +5660,7 @@
                   const issueBatchSel = document.getElementById("issue-source-batch");
                   const sourceLocName = sourceFacilityVal === "central" 
                     ? PortalScope.depotName 
-                    : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || "Source BHC");
+                    : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || `Source ${childTerm()}`);
 
                   if (issueBatchSel) {
                     issueBatchSel.value = chosenBatch.batch_id;
@@ -5445,7 +5719,7 @@
             const topItem = items.find(i => String(i.item_id) === String(topBatch.item_id));
             const sourceLocName = sourceFacilityVal === "central" 
               ? PortalScope.depotName 
-              : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || "Source BHC");
+              : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || `Source ${childTerm()}`);
 
             const issueBatchSel = document.getElementById("issue-source-batch");
             if (issueBatchSel) {
@@ -5604,9 +5878,9 @@
           const qrCanvas = document.getElementById("transfer-qrcode-canvas");
 
           const sourceName = transfer.source_facility_id 
-            ? (bhcs.find(b => String(b.bhc_id) === String(transfer.source_facility_id))?.bhc_name || `BHC #${transfer.source_facility_id}`) 
+            ? (bhcs.find(b => String(b.bhc_id) === String(transfer.source_facility_id))?.bhc_name || unknownFacilityLabel(transfer.source_facility_id)) 
             : PortalScope.depotName;
-          const destName = bhcs.find(b => String(b.bhc_id) === String(transfer.destination_facility_id))?.bhc_name || `BHC #${transfer.destination_facility_id}`;
+          const destName = bhcs.find(b => String(b.bhc_id) === String(transfer.destination_facility_id))?.bhc_name || unknownFacilityLabel(transfer.destination_facility_id);
 
           if (detailsEl) {
             detailsEl.innerHTML = `
@@ -5657,30 +5931,50 @@
             openCountStatEl.textContent = `${openBatches.length} vial${openBatches.length === 1 ? '' : 's'}`;
           }
 
+          // Doses, not units.
+          //
+          // These two figures used to read inventory_transactions.quantity, which
+          // means units on a receipt or a batch disposal and doses on an open-vial
+          // discard — and 0 on the commonest row of all, a dose drawn from a vial
+          // that was already open. Administered doses therefore undercounted every
+          // multi-dose immunisation, and the DOH wastage rate divided discarded
+          // doses by handled units.
+          //
+          // dose_quantity is always doses. Rows written before
+          // 20260822_dose_accounting.sql have it backfilled; if the migration has
+          // not been run the column is absent and the panel says so rather than
+          // showing a number that means nothing.
+          // An un-migrated database simply has no such column, so PostgREST omits
+          // it. An empty ledger is not the same thing - it has nothing to report,
+          // which is a legitimate zero rather than a missing capability.
+          const hasDoseLedger = (transactions || []).length === 0 ||
+            (transactions || []).some(t => t.dose_quantity !== undefined);
+
           let totalAdministered = 0;
           let totalWasted = 0;
           (transactions || []).forEach(t => {
-            const qty = Math.abs(t.quantity || 0);
+            const doses = Math.abs(t.dose_quantity || 0);
             if (t.transaction_type === 'dispense') {
-              totalAdministered += qty;
-            } else if (t.transaction_type === 'discard' || t.transaction_type === 'expiry_disposal') {
-              totalWasted += qty;
+              totalAdministered += doses;
+            } else if (t.transaction_type === 'discard' || t.transaction_type === 'expiry_disposal' || t.transaction_type === 'unusable') {
+              totalWasted += doses;
             }
           });
 
           if (adminDosesStatEl) {
-            adminDosesStatEl.textContent = `${totalAdministered.toLocaleString()} doses`;
+            adminDosesStatEl.textContent = hasDoseLedger
+              ? `${totalAdministered.toLocaleString()} doses`
+              : "Not tracked";
+            adminDosesStatEl.title = hasDoseLedger
+              ? ""
+              : "Run database/migrations/20260822_dose_accounting.sql to record doses separately from units.";
           }
 
           if (wastageStatEl) {
             const totalDosesHandled = totalAdministered + totalWasted;
             const wastageRate = totalDosesHandled > 0 ? ((totalWasted / totalDosesHandled) * 100).toFixed(1) : "0.0";
-            wastageStatEl.textContent = `${wastageRate}%`;
-            if (parseFloat(wastageRate) > 15.0) {
-              wastageStatEl.style.color = "#dc2626";
-            } else {
-              wastageStatEl.style.color = "#b45309";
-            }
+            wastageStatEl.textContent = hasDoseLedger ? `${wastageRate}%` : "—";
+            wastageStatEl.style.color = (hasDoseLedger && parseFloat(wastageRate) > 15.0) ? "#dc2626" : "#b45309";
           }
 
           if (!tbody) return;
@@ -5692,8 +5986,10 @@
 
           tbody.innerHTML = openBatches.map(b => {
             const item = items.find(i => String(i.item_id) === String(b.item_id));
-            const locText = b.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(b.facility_id))?.bhc_name || `BHC #${b.facility_id}`) : PortalScope.depotName;
-            const shelfLimitHours = item?.open_vial_shelf_hours || (item?.name?.toLowerCase().includes('bcg') ? 6 : 672);
+            const locText = b.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(b.facility_id))?.bhc_name || unknownFacilityLabel(b.facility_id)) : PortalScope.depotName;
+            // Same rule the Alert Centre applies, so the badge here and the
+            // alert count there can never disagree about one vial.
+            const shelfLimitHours = openVialShelfHours(item);
 
             let openedTimeStr = "Recently";
             let isExpired = false;
@@ -5711,9 +6007,7 @@
                 openedTimeStr = `${Math.floor(hoursOpen / 24)}d ${Math.round(hoursOpen % 24)}h ago`;
               }
 
-              if (shelfLimitHours > 0 && hoursOpen > shelfLimitHours) {
-                isExpired = true;
-              }
+              isExpired = isOpenVialExpired(b, item);
             }
 
             const shelfLimitStr = shelfLimitHours === 6 ? "6 Hours (Reconstituted)" : (shelfLimitHours === 672 ? "28 Days (Cold Chain)" : `${shelfLimitHours}h`);
@@ -5821,7 +6115,7 @@
               let locText = PortalScope.depotName;
               if (b.facility_id) {
                 const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-                locText = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
+                locText = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
               }
               const openDoses = b.doses_remaining_in_open_vial || 0;
               const extraOpen = openDoses > 0 ? ` + ${openDoses} open doses` : '';
@@ -5836,7 +6130,7 @@
               let locText = PortalScope.depotName;
               if (b.facility_id) {
                 const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-                locText = bh ? bh.bhc_name : `BHC #${b.facility_id}`;
+                locText = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
               }
               const openDoses = b.doses_remaining_in_open_vial || 0;
               const openDoseChip = openDoses > 0
@@ -5934,13 +6228,264 @@
           openModal("modal-batch");
         };
 
-        window.quickDispense = function(batchId) {
+        // ── Dispense plan ────────────────────────────────────────────────────
+        //
+        // Multi-dose stock does not leave in whole units. Drawing 12 doses from a
+        // 10-dose vial that already has 8 open uses those 8, breaks one seal and
+        // leaves 6 open — one unit gone, twelve doses gone, and a vial now on the
+        // clock. None of that was visible before pressing the button.
+        //
+        // The panel below states it in advance, and stays hidden for the cases
+        // where the quantity field already says everything: single-dose items,
+        // and adjustments or disposals, which move physical units by definition.
+
+        function selectedDispenseBatch() {
+          const id = document.getElementById("dispense-batch-id")?.value;
+          if (!id) return null;
+          return (batches || []).find(b => String(b.batch_id) === String(id)) || null;
+        }
+
+        /**
+         * How a dose request resolves against one batch. Mirrors
+         * dispense_stock_doses() so the preview and the write agree.
+         */
+        function planDoseDispense(batch, item, doses) {
+          const dpu = itemDosesPerUnit(item);
+          const open = batchOpenDoses(batch);
+          const sealed = batch.quantity_remaining || 0;
+
+          const fromOpen = Math.min(open, doses);
+          const need = doses - fromOpen;
+          const vialsOpened = Math.ceil(need / dpu);
+
+          return {
+            dpu, open, sealed, fromOpen, vialsOpened,
+            capacity: open + sealed * dpu,
+            fits: vialsOpened <= sealed,
+            leftOpen: (open - fromOpen) + vialsOpened * dpu - need,
+            unitsAfter: sealed - vialsOpened,
+          };
+        }
+
+        /** Hours an open vial has been open, or null when nothing is open. */
+        function openVialAgeHours(batch) {
+          if (!batch || !batch.vial_opened_at || batchOpenDoses(batch) <= 0) return null;
+          const opened = new Date(batch.vial_opened_at);
+          if (!Number.isFinite(opened.getTime())) return null;
+          return (Date.now() - opened.getTime()) / 3600000;
+        }
+
+        function openVialShelfHours(item) {
+          const raw = parseInt(item && item.open_vial_shelf_hours, 10);
+          // An explicit 0 means the presentation has no open-vial limit, so it is
+          // honoured. Only an unconfigured column falls back to the DOH defaults:
+          // 6 hours once reconstituted, 28 days under cold chain.
+          if (Number.isFinite(raw)) return raw;
+          return /bcg|measles|mmr|rubella/i.test((item && item.name) || "") ? 6 : 672;
+        }
+
+        function isOpenVialExpired(batch, item) {
+          const age = openVialAgeHours(batch);
+          const limit = openVialShelfHours(item);
+          return age !== null && limit > 0 && age > limit;
+        }
+
+        function describeShelfLimit(hours) {
+          if (!hours || hours <= 0) return "no open-vial limit";
+          if (hours % 24 === 0) return hours / 24 + " day" + (hours === 24 ? "" : "s");
+          return hours + " hour" + (hours === 1 ? "" : "s");
+        }
+
+        /**
+         * Open vials past their shelf life, within the current facility scope.
+         *
+         * Shared by the Alert Centre, the alert badge and the open-vial monitor
+         * so a count in one place cannot drift from the list in another.
+         */
+        function expiredOpenVials(facilityFilter) {
+          const scope = facilityFilter === undefined
+            ? (document.getElementById("global-bhc-filter")?.value || "all")
+            : facilityFilter;
+
+          return (batches || []).filter(b => {
+            if (batchOpenDoses(b) <= 0) return false;
+            if (scope === "central") {
+              return b.facility_id === null || b.facility_id === 0 ||
+                     b.facility_id === undefined || String(b.facility_id) === "null";
+            }
+            if (scope !== "all" && scope !== "" && scope !== null) {
+              return String(b.facility_id) === String(scope);
+            }
+            return true;
+          }).map(batch => {
+            const item = items.find(i => String(i.item_id) === String(batch.item_id));
+            return {
+              batch,
+              item,
+              hours: openVialAgeHours(batch) || 0,
+              limit: openVialShelfHours(item),
+            };
+          }).filter(({ batch, item }) => isOpenVialExpired(batch, item));
+        }
+
+        function updateDispensePlan() {
+          const host = document.getElementById("dispense-plan");
+          const label = document.getElementById("dispense-qty-label");
+          const qtyInput = document.getElementById("dispense-qty");
+          const saveBtn = document.getElementById("save-dispense-btn");
+          if (!host || !label || !qtyInput) return;
+
+          const batch = selectedDispenseBatch();
+          const item = batch ? items.find(i => String(i.item_id) === String(batch.item_id)) : null;
+          const type = (document.getElementById("dispense-type") || {}).value || "dispense";
+          const doseMode = !!item && isMultiDoseItem(item) && type === "dispense";
+          const uom = esc((item && item.unit_of_measure) || "unit");
+
+          label.textContent = doseMode
+            ? "Doses to dispense"
+            : (item ? "Quantity (" + ((item.unit_of_measure) || "units") + ")" : "Quantity");
+          qtyInput.placeholder = doseMode ? "e.g. 12 doses" : "e.g. 10";
+
+          if (saveBtn) {
+            saveBtn.disabled = false;
+            delete saveBtn.dataset.doseBlocked;
+          }
+
+          if (!batch || !item) {
+            host.style.display = "none";
+            host.innerHTML = "";
+            return;
+          }
+
+          // Adjustments and disposals move whole packages by definition, so the
+          // only thing worth saying is what a package holds.
+          if (!doseMode) {
+            if (!isMultiDoseItem(item)) {
+              host.style.display = "none";
+              host.innerHTML = "";
+              return;
+            }
+            const openNow = batchOpenDoses(batch);
+            host.className = "dispense-plan";
+            host.style.display = "block";
+            host.innerHTML =
+              '<div class="dispense-plan-title"><i class="fa-solid fa-box"></i> Counted in whole ' + uom + 's</div>' +
+              '<div>' + (type === "adjustment" ? "Audit adjustments" : "Disposals") +
+              ' move sealed packages, not doses. Each one holds ' + itemDosesPerUnit(item) + ' doses.' +
+              (openNow > 0
+                ? " To write off the " + openNow + " dose(s) in this batch's open vial, use Discard on the open-vial monitor instead."
+                : "") +
+              '</div>';
+            return;
+          }
+
+          const doses = parseInt(qtyInput.value, 10);
+          const shelfHours = openVialShelfHours(item);
+          const stale = isOpenVialExpired(batch, item);
+          const plan = planDoseDispense(batch, item, Number.isFinite(doses) && doses > 0 ? doses : 0);
+
+          host.style.display = "block";
+
+          if (!Number.isFinite(doses) || doses <= 0) {
+            host.className = "dispense-plan";
+            host.innerHTML =
+              '<div class="dispense-plan-title"><i class="fa-solid fa-syringe"></i> ' +
+              esc(item.name) + ' · ' + plan.dpu + ' doses per ' + uom + '</div>' +
+              '<div>This batch can give <strong>' + plan.capacity + ' dose(s)</strong>' +
+              (plan.open > 0
+                ? ' — ' + plan.open + ' already open plus ' + plan.sealed + ' sealed.'
+                : ' from ' + plan.sealed + ' sealed ' + uom + '(s).') +
+              '</div>';
+            return;
+          }
+
+          // A stale open vial is written off before the draw, so the real plan
+          // starts from zero open doses.
+          const effective = stale
+            ? planDoseDispense(Object.assign({}, batch, { doses_remaining_in_open_vial: 0 }), item, doses)
+            : plan;
+
+          if (!effective.fits) {
+            host.className = "dispense-plan is-blocked";
+            host.innerHTML =
+              '<div class="dispense-plan-title"><i class="fa-solid fa-ban"></i> Only ' +
+              effective.capacity + ' dose(s) available in this batch</div>' +
+              '<div>' +
+              (stale
+                ? 'The open vial is past its ' + describeShelfLimit(shelfHours) + ' limit, so its ' +
+                  plan.open + ' dose(s) will be written off first. '
+                : effective.open + ' open plus ') +
+              effective.sealed + ' sealed ' + uom + '(s) of ' + effective.dpu + '. ' +
+              'Reduce the count, or pick another batch.</div>';
+            if (saveBtn) {
+              saveBtn.disabled = true;
+              saveBtn.dataset.doseBlocked = "true";
+            }
+            return;
+          }
+
+          const steps = [];
+          if (stale) {
+            steps.push('Discard ' + plan.open + ' dose(s) from the open vial — past its ' +
+                       describeShelfLimit(shelfHours) + ' limit');
+          } else if (effective.fromOpen > 0) {
+            steps.push('Draw ' + effective.fromOpen + ' dose(s) from the vial already open');
+          }
+          if (effective.vialsOpened > 0) {
+            steps.push('Break the seal on ' + effective.vialsOpened + ' ' + uom + '(s)');
+          }
+          if (effective.leftOpen > 0) {
+            steps.push('Leave ' + effective.leftOpen + ' dose(s) open, usable for ' +
+                       describeShelfLimit(shelfHours));
+          }
+
+          host.className = stale ? "dispense-plan is-warning" : "dispense-plan";
+          host.innerHTML =
+            '<div class="dispense-plan-title"><i class="fa-solid fa-syringe"></i> ' +
+            doses + ' dose(s) from Batch ' + esc(batch.batch_number) + '</div>' +
+            '<ul class="dispense-plan-steps">' +
+            steps.map(function (s) { return '<li>' + s + '</li>'; }).join('') +
+            '</ul>' +
+            '<div class="dispense-plan-foot">Sealed stock ' + effective.sealed + ' → ' +
+            effective.unitsAfter + ' ' + uom + '(s) · ' +
+            (effective.capacity - doses) + ' dose(s) left in this batch</div>';
+        }
+        window.updateDispensePlan = updateDispensePlan;
+
+        ["dispense-batch-id", "dispense-type", "dispense-qty"].forEach(function (id) {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener("change", updateDispensePlan);
+          el.addEventListener("input", updateDispensePlan);
+        });
+
+        /**
+         * After a movement, point the page at the facility the batch lives in so
+         * the officer sees the number they just changed rather than a combined
+         * total it disappeared into. Leaves the combined view alone.
+         */
+        function focusFilterOnBatchFacility(batch) {
+          const filterDropdown = document.getElementById("global-bhc-filter");
+          if (!filterDropdown) return;
+          const isDepot = batch.facility_id === null || batch.facility_id === 0 || batch.facility_id === undefined;
+          const target = isDepot ? "central" : String(batch.facility_id);
+          if (filterDropdown.value !== "all" && filterDropdown.value !== target) {
+            filterDropdown.value = target;
+          }
+        }
+
+        window.quickDispense = function(batchId, presetType) {
           const el = document.getElementById("dispense-batch-id");
           if (el) {
             el.value = batchId;
             el.dispatchEvent(new Event('change', { bubbles: true }));
           }
+          // Arriving from an expiry alert means the intent is a write-off, not a
+          // patient visit - and dispensing an expired batch is refused anyway.
+          const typeSel = document.getElementById("dispense-type");
+          if (typeSel && presetType) typeSel.value = presetType;
           openModal("modal-dispense");
+          updateDispensePlan();
         };
 
         // Form Submit: Add Item
@@ -6087,6 +6632,16 @@
         });
 
         // Form Submit: Dispense / Adjust Stock
+        //
+        // Two paths, chosen by what the number in the box means.
+        //
+        //   Dispense  -> doses. dispense_stock_doses() draws them from the open
+        //                vial first and breaks only as many seals as it must,
+        //                inside one database statement. For a single-dose item a
+        //                dose is a unit, so the same call still applies.
+        //   Adjustment
+        //   Disposal   -> whole packages, written here with the compare-and-set
+        //                the form has always used.
         document.getElementById("save-dispense-btn").addEventListener("click", async () => {
           const batchId = parseInt(document.getElementById("dispense-batch-id").value);
           const type = document.getElementById("dispense-type").value;
@@ -6105,18 +6660,91 @@
 
           const batch = batches.find(b => b.batch_id === batchId);
           if (!batch) { showToast("Selected batch not found.", "error"); return; }
+          const batchItem = items.find(i => String(i.item_id) === String(batch.item_id));
 
           if (type === 'dispense' && isBatchExpired(batch)) {
             showToast("Expired batches cannot be dispensed to patients.", "warning");
             return;
           }
 
-          if ((type === 'dispense' || type === 'expiry_disposal') && qtyInput > batch.quantity_remaining) {
+          const btn = document.getElementById("save-dispense-btn");
+
+          // ── Dose path ──────────────────────────────────────────────────────
+          if (type === 'dispense') {
+            const plan = planDoseDispense(batch, batchItem, qtyInput);
+            if (!plan.fits) {
+              showToast(`Batch ${batch.batch_number} can supply at most ${plan.capacity} dose(s).`, "warning");
+              return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<div class="btn-loader"></div> Processing...';
+            try {
+              const { data, error } = await db.rpc("dispense_stock_doses", {
+                p_batch_id: batchId,
+                p_doses: qtyInput,
+                p_actor: parseInt(actorId) || actorId,
+                p_reference: ref || null,
+              });
+
+              // A database without 20260822_dose_accounting.sql has no such
+              // function. Say so plainly rather than falling back to the whole-
+              // unit write this replaced, which is what destroyed the doses.
+              if (error) {
+                const missing = ["PGRST202", "42883"].includes(error.code) ||
+                  /could not find the function|does not exist/i.test(error.message || "");
+                throw new Error(missing
+                  ? "Dose-aware dispensing is not installed on this database. Run database/migrations/20260822_dose_accounting.sql in the Supabase SQL editor."
+                  : error.message);
+              }
+              if (!data || data.success !== true) {
+                throw new Error((data && data.error) || "The dispense was rejected.");
+              }
+
+              await logInventoryAudit(
+                "dispense_inventory",
+                `dispensed ${data.doses_dispensed} dose(s) from batch ${batch.batch_number}`,
+                { quantity_remaining: batch.quantity_remaining, doses_open: batchOpenDoses(batch) },
+                {
+                  quantity_remaining: data.units_remaining,
+                  doses_open: data.doses_left_open,
+                  vials_opened: data.vials_opened,
+                  reference: ref || null,
+                }
+              );
+
+              const parts = [`Dispensed ${data.doses_dispensed} dose(s).`];
+              if (data.vials_opened > 0) {
+                parts.push(`${data.vials_opened} ${batchItem?.unit_of_measure || 'unit'}(s) opened.`);
+              }
+              if (data.doses_left_open > 0) {
+                parts.push(`${data.doses_left_open} dose(s) left open.`);
+              }
+              if (data.expired_doses_discarded > 0) {
+                parts.push(`${data.expired_doses_discarded} expired open dose(s) written off.`);
+              }
+              showToast(parts.join(" "), "success");
+
+              closeModal("modal-dispense");
+              focusFilterOnBatchFacility(batch);
+              document.getElementById("form-dispense").reset();
+              updateDispensePlan();
+              loadInventoryData();
+            } catch (err) {
+              showToast("Error dispensing stock: " + err.message, "error");
+            } finally {
+              btn.disabled = false;
+              btn.innerHTML = '<i class="fa-solid fa-check"></i> Process Stock Movement';
+            }
+            return;
+          }
+
+          // ── Whole-package path: adjustments and disposals ──────────────────
+          if (type === 'expiry_disposal' && qtyInput > batch.quantity_remaining) {
             showToast(`Cannot deduct ${qtyInput}. Remaining batch stock is only ${batch.quantity_remaining}.`, "warning");
             return;
           }
 
-          const btn = document.getElementById("save-dispense-btn");
           btn.disabled = true;
           btn.innerHTML = '<div class="btn-loader"></div> Processing...';
 
@@ -6130,7 +6758,8 @@
               .single();
             if (readErr) throw new Error(`Could not read current batch stock: ${readErr.message}`);
 
-            const deduction = (type === 'dispense' || type === 'expiry_disposal') ? -Math.abs(qtyInput) : qtyInput;
+            // Dispense never reaches here any more; it goes through the RPC.
+            const deduction = (type === 'expiry_disposal') ? -Math.abs(qtyInput) : qtyInput;
             const current = freshBatch.quantity_remaining || 0;
 
             if (deduction < 0 && Math.abs(deduction) > current) {
@@ -6166,14 +6795,9 @@
 
             showToast(`Stock movement recorded successfully (${deduction}).`, "success");
             closeModal("modal-dispense");
-
-            const filterDropdown = document.getElementById("global-bhc-filter");
-            const batchFacilityVal = (batch.facility_id === null || batch.facility_id === 0 || batch.facility_id === undefined) ? "central" : String(batch.facility_id);
-            if (filterDropdown && filterDropdown.value !== "all" && filterDropdown.value !== batchFacilityVal) {
-              filterDropdown.value = batchFacilityVal;
-            }
-
+            focusFilterOnBatchFacility(batch);
             document.getElementById("form-dispense").reset();
+            updateDispensePlan();
             loadInventoryData();
           } catch (err) {
             showToast("Error processing stock movement: " + err.message, "error");
@@ -6189,16 +6813,22 @@
         // does. Swapping the wording once, over the page's fixed labels, beats
         // threading a term through sixty render sites — the data cells below
         // them already carry real facility names from PortalScope.
+        //
+        // Order matters: the compound phrases run first, so "BHC midwives" does
+        // not first become "RHU midwives" and then "RHU RHU officers".
         const MUNICIPAL_TERMS = [
+          [/RHU \/ BHC/g,              "MHO / RHU"],
+          [/BHC midwives/g,            "RHU officers"],
+          [/BHC midwife/g,             "RHU officer"],
           [/Barangay Health Centers/g, "Rural Health Units"],
           [/Barangay Health Center/g,  "Rural Health Unit"],
-          [/\bBHCs\b/g,                "RHUs"],
-          [/\bBHC\b/g,                 "RHU"],
           [/Central RHU Warehouse/g,   "Municipal Warehouse"],
           [/Central Warehouse/g,       "Municipal Warehouse"],
-          [/RHU \/ BHC/g,              "MHO / RHU"],
+          [/\bBHCs\b/g,                "RHUs"],
+          [/\bBHC\b/g,                 "RHU"],
           [/\bMidwife\b/g,             "RHU Officer"],
           [/\bmidwives\b/g,            "RHU officers"],
+          [/\bmidwife\b/g,             "RHU officer"],
           [/Barangay Stock/g,          "RHU Stock"],
           [/Barangay \//g,             "RHU /"],
         ];
@@ -6208,12 +6838,41 @@
           return MUNICIPAL_TERMS.reduce((acc, [re, to]) => acc.replace(re, to), text);
         }
 
+        /** "RHU" for the municipal office, "BHC" for a Rural Health Unit. */
+        function childTerm() {
+          return PortalScope.childType || "BHC";
+        }
+
+        /**
+         * Label for a facility id whose name this page could not resolve.
+         *
+         * This used to read `BHC #12`, which was a guess that happened to be
+         * right while every downstream facility was a barangay health centre.
+         * Under the municipal office the same id is usually an RHU, so the
+         * neutral wording is the only one that is never wrong.
+         */
+        function unknownFacilityLabel(facilityId) {
+          return `Facility #${facilityId}`;
+        }
+
         // Only fixed chrome — headings, labels, buttons, column headers. Table
         // bodies are re-rendered from live data and are never touched here.
-        const SCOPE_LABEL_SELECTOR =
-          ".app-main h1, .app-main h2, .app-main h3, .app-main h4, .app-main th, " +
-          ".app-main label, .app-main option, .app-main .tab-btn, .app-main button, " +
-          ".app-main p, .app-main strong, .app-main span.header-badge";
+        //
+        // The modals sit outside <main>, which is why the Issue Stock dialog kept
+        // saying "Destination BHC" on a page whose own title already read
+        // "Municipal & RHU Inventory Management". They carry the same fixed
+        // labels as the screen behind them, so they get the same treatment.
+        const SCOPE_LABEL_ROOTS = [".app-main", ".modal-overlay"];
+        const SCOPE_LABEL_PARTS = [
+          "h1", "h2", "h3", "h4", "h5", "th", "label", "option", "small",
+          ".inventory-tab-btn", ".segment-btn", "button", "p", "strong", "span.header-badge",
+          // Prose that lives in a plain container; tag it rather than sweeping
+          // every div, which would also reach re-rendered table bodies.
+          "[data-scope-copy]",
+        ];
+        const SCOPE_LABEL_SELECTOR = SCOPE_LABEL_ROOTS
+          .flatMap(root => SCOPE_LABEL_PARTS.map(part => `${root} ${part}`))
+          .join(", ");
 
         function applyScopeLabels() {
           const depot = PortalScope.depotName;
@@ -6225,10 +6884,26 @@
               : `${PortalScope.facilityName || "RHU"} & BHC Inventory Management`;
           }
 
+          const subtitle = document.getElementById("page-subtitle-inventory");
+          if (subtitle) {
+            subtitle.textContent =
+              `Track vaccines, contraceptives, supplements, and medical supplies across all ${PortalScope.childTypeLabelPlural.toLowerCase()}`;
+          }
+
           const alertsTitle = document.getElementById("alerts-banner-title");
           if (alertsTitle) {
             alertsTitle.textContent =
               `${PortalScope.isMho ? "Municipal" : "RHU"} Inventory Alerts Requiring Attention`;
+          }
+
+          // The QR slip is scanned by a BHC midwife in the mobile app, but an RHU
+          // officer receives a municipal dispatch in this portal instead, so the
+          // sentence cannot simply have its nouns swapped.
+          const qrHint = document.getElementById("transfer-qr-hint");
+          if (qrHint) {
+            qrHint.textContent = PortalScope.isMho
+              ? "The receiving RHU officer can scan this QR code in the RHU portal to verify and receive the batch immediately."
+              : "The receiving BHC midwife can scan this QR code using the mobile app to verify and receive the batch immediately.";
           }
 
           if (PortalScope.isMho) {
@@ -6241,6 +6916,14 @@
                 }
               });
             });
+
+            // Placeholders are attributes rather than text nodes, so the pass
+            // above cannot reach them.
+            document.querySelectorAll("input[placeholder], textarea[placeholder]").forEach(el => {
+              const current = el.getAttribute("placeholder");
+              const swapped = municipalWording(current);
+              if (swapped !== current) el.setAttribute("placeholder", swapped);
+            });
           }
 
           // Every "this portal's own depot" choice carries the same sentinel, so
@@ -6248,6 +6931,13 @@
           document.querySelectorAll('option[value="central"]').forEach(opt => {
             opt.textContent = depot;
           });
+
+          // Dropdowns the loaders rebuild after boot, plus anything a modal
+          // re-renders, are relabelled here rather than at each write site.
+          const issuePlaceholder = document.querySelector('#issue-target-bhc option[value=""]');
+          if (issuePlaceholder) {
+            issuePlaceholder.textContent = `— Select Target ${childTerm()} —`;
+          }
         }
 
         // Downstream facility loader.
@@ -6330,16 +7020,176 @@
                 analyticsDropdown.appendChild(opt);
               });
             }
-          } catch (e) { console.error("Failed to load BHCs:", e); }
+          } catch (e) { console.error("Failed to load downstream facilities:", e); }
+
+          applyFacilityQueryParam();
         }
 
-        // Global BHC Filter Listener
+        // ── Facility Scope Strip ────────────────────────────────────────────
+        //
+        // The cards are a second face on #global-bhc-filter, never a second
+        // source of truth: clicking one writes the select and fires its change
+        // event, so the twelve render sites that already read that select keep
+        // working untouched.
+
+        function facilityScopeOptions() {
+          const options = [
+            { key: "all",     name: "All Facilities", sub: "Combined view",   icon: "fa-layer-group" },
+            { key: "central", name: PortalScope.depotName, sub: "Your depot", icon: "fa-warehouse" },
+          ];
+          (bhcs || []).forEach(b => options.push({
+            key: String(b.bhc_id),
+            name: b.bhc_name,
+            sub: b.facility_code || PortalScope.childTypeLabel,
+            icon: "fa-hospital",
+          }));
+          return options;
+        }
+
+        // Counted exactly the way renderKPIs counts them, so a card and the KPI
+        // row can never disagree once that facility is selected.
+        function facilityScopeStats(facilityKey) {
+          let stocked = 0;
+          let low = 0;
+
+          (items || []).forEach(item => {
+            const metrics = getItemStockMetrics(item.item_id, facilityKey);
+            const effMin = getItemEffectiveThreshold(item, facilityKey);
+            if (metrics.available > 0) stocked++;
+            if (facilityKey === "all") {
+              if (metrics.available <= effMin || getItemFacilityHealth(item).hasLowFacilities) low++;
+            } else if (metrics.available <= effMin) {
+              low++;
+            }
+          });
+
+          const soon = new Date();
+          soon.setDate(soon.getDate() + 30);
+          const expiring = (batches || []).filter(b => {
+            if (b.status !== "active") return false;
+            if (!(new Date(b.expiration_date) <= soon)) return false;
+            if (facilityKey === "central") {
+              return b.facility_id === null || b.facility_id === 0 ||
+                     b.facility_id === undefined || String(b.facility_id) === "null";
+            }
+            if (facilityKey !== "all") return String(b.facility_id) === String(facilityKey);
+            return true;
+          }).length;
+
+          return { stocked, low, expiring };
+        }
+
+        function renderFacilityScopeStrip() {
+          const host = document.getElementById("facility-scope-cards");
+          const select = document.getElementById("global-bhc-filter");
+          if (!host || !select) return;
+
+          const active = select.value || "all";
+
+          host.innerHTML = facilityScopeOptions().map(opt => {
+            const s = facilityScopeStats(opt.key);
+            return `
+              <button type="button" class="facility-chip${String(opt.key) === String(active) ? " is-active" : ""}"
+                      data-facility="${esc(String(opt.key))}"
+                      aria-pressed="${String(opt.key) === String(active)}">
+                <span class="facility-chip-title"><i class="fa-solid ${esc(opt.icon)}"></i> ${esc(opt.name)}</span>
+                <span class="facility-chip-sub">${esc(opt.sub)}</span>
+                <span class="facility-chip-stats">
+                  <span>${s.stocked} stocked</span>
+                  <span class="${s.low > 0 ? "is-warn" : ""}">${s.low} low</span>
+                  <span class="${s.expiring > 0 ? "is-danger" : ""}">${s.expiring} expiring</span>
+                </span>
+              </button>`;
+          }).join("");
+
+          host.querySelectorAll(".facility-chip").forEach(btn => {
+            btn.addEventListener("click", () => setFacilityScope(btn.dataset.facility));
+          });
+
+          renderFacilityScopeBanner();
+        }
+
+        function renderFacilityScopeBanner() {
+          const el = document.getElementById("facility-scope-current");
+          const select = document.getElementById("global-bhc-filter");
+          if (!el || !select) return;
+
+          const key = select.value || "all";
+          if (key === "all") {
+            el.style.display = "none";
+            el.innerHTML = "";
+            return;
+          }
+
+          const opt = facilityScopeOptions().find(o => String(o.key) === String(key));
+          el.style.display = "inline-flex";
+          el.innerHTML =
+            `<span><i class="fa-solid fa-filter"></i> Viewing <strong>${esc(opt ? opt.name : key)}</strong></span>` +
+            `<button type="button" class="facility-scope-clear" id="facility-scope-clear">` +
+            `<i class="fa-solid fa-xmark"></i> Back to combined view</button>`;
+
+          const clearBtn = document.getElementById("facility-scope-clear");
+          if (clearBtn) clearBtn.addEventListener("click", () => setFacilityScope("all"));
+        }
+
+        function setFacilityScope(facilityKey) {
+          const select = document.getElementById("global-bhc-filter");
+          if (!select) return;
+          if (select.value === facilityKey) return;
+          select.value = facilityKey;
+          select.dispatchEvent(new Event("change"));
+        }
+
+        /**
+         * Honour ?facility=<id> (and ?action=issue).
+         *
+         * "Allocate Stock" on the Rural Health Units page used to link to a bare
+         * inventory.html, which meant the municipal officer arrived at the
+         * combined view and had to re-find the RHU they had just clicked.
+         *
+         * Runs once: a live refresh re-enters loadBhcs, and re-applying the
+         * parameter then would yank the officer back to the linked facility
+         * every few seconds.
+         */
+        let facilityParamApplied = false;
+        let pendingIssueTarget = null;
+
+        function applyFacilityQueryParam() {
+          if (facilityParamApplied) return;
+          facilityParamApplied = true;
+
+          const params = new URLSearchParams(window.location.search);
+          const wanted = params.get("facility");
+          const select = document.getElementById("global-bhc-filter");
+          if (!wanted || !select) return;
+
+          const match = Array.from(select.options).find(o => String(o.value) === String(wanted));
+          if (!match) return;
+          select.value = match.value;
+
+          // Held until the batches are in hand: the issue modal builds its
+          // source-batch list from them, and loadBhcs runs before that fetch.
+          if (params.get("action") === "issue" && wanted !== "all" && wanted !== "central") {
+            pendingIssueTarget = wanted;
+          }
+        }
+
+        function openPendingIssueModal() {
+          if (!pendingIssueTarget) return;
+          const target = pendingIssueTarget;
+          pendingIssueTarget = null;
+          window.openGeneralIssueModal(target);
+        }
+
+        // Global facility filter. Both the dropdown and the scope cards write to
+        // it, so this one listener repaints the page for either.
         document.getElementById("global-bhc-filter").addEventListener("change", () => {
           renderKPIs();
           renderCatalog();
           renderBarangayStockMatrix();
           renderBatches();
           renderTransactions();
+          renderFacilityScopeStrip();
         });
 
         // Issue Stock Form Real-time Change Listeners
@@ -6363,7 +7213,7 @@
           alertEl.style.display = "none";
 
           if (!sourceBatchVal || !targetBhcVal || !qtyInput || isNaN(qtyInput) || qtyInput <= 0) {
-            const msg = "Please select a central batch, target BHC, and enter a valid quantity.";
+            const msg = municipalWording("Please select a central batch, target BHC, and enter a valid quantity.");
             alertEl.textContent = msg;
             alertEl.style.display = "block";
             showToast(msg, "warning");
@@ -6395,7 +7245,7 @@
           btn.innerHTML = '<div class="btn-loader"></div> Issuing...';
 
           try {
-            const targetBhcName = bhcs.find(b => String(b.bhc_id) === String(targetBhcId))?.bhc_name || `BHC #${targetBhcId}`;
+            const targetBhcName = bhcs.find(b => String(b.bhc_id) === String(targetBhcId))?.bhc_name || unknownFacilityLabel(targetBhcId);
             const parsedActorId = parseInt(actorId) || actorId;
             const expectedDateVal = document.getElementById("issue-expected-date")?.value;
             let combinedRemarks = ref;
@@ -6428,7 +7278,7 @@
             if (issueError) throw issueError;
             transferResult = issueData;
 
-            showToast(`Issued ${qtyInput} stock to ${targetBhcName}; awaiting BHC receipt.`, "success");
+            showToast(`Issued ${qtyInput} stock to ${targetBhcName}; awaiting ${childTerm()} receipt.`, "success");
             closeModal("modal-issue");
             await loadInventoryData();
 

@@ -245,6 +245,12 @@
         el.textContent = portalLabel;
       });
 
+      // Footers and body copy that name the tier in prose, rather than the
+      // header chip that .header-badge already covers.
+      document.querySelectorAll("[data-portal-label]").forEach((el) => {
+        el.textContent = portalLabel;
+      });
+
       document.querySelectorAll("[data-portal-facility]").forEach((el) => {
         el.textContent = scope.facility_name || portalLabel;
       });

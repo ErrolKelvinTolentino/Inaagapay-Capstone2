@@ -10,6 +10,8 @@ import '../../widgets/app_input_field.dart';
 import '../../widgets/branded_date_picker.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/dialog_box.dart';
+import '../../widgets/stock_indicators.dart';
+import '../../services/stock_deduction_outcome.dart';
 import '../../widgets/confirmation_dialog_box.dart';
 import '../../services/groq_service.dart';
 import '../../services/immunization_schedule.dart';
@@ -65,7 +67,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
   int _dosesPerUnit = 1;
   int _openVialShelfHours = 6;
   int _sealedVialsCount = 0;
-  int _sealedDosesCount = 0;
   Map<String, dynamic>? _activeOpenVialBatch;
   Map<String, dynamic>? _nextSealedBatch;
   bool _isOpenVialExpired = false;
@@ -599,7 +600,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           setState(() {
             _bhcStockCount = 0;
             _sealedVialsCount = 0;
-            _sealedDosesCount = 0;
             _activeOpenVialBatch = null;
             _nextSealedBatch = null;
             _isOpenVialExpired = false;
@@ -620,7 +620,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           setState(() {
             _bhcStockCount = 0;
             _sealedVialsCount = 0;
-            _sealedDosesCount = 0;
             _activeOpenVialBatch = null;
             _nextSealedBatch = null;
             _isOpenVialExpired = false;
@@ -660,7 +659,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           setState(() {
             _bhcStockCount = 0;
             _sealedVialsCount = 0;
-            _sealedDosesCount = 0;
             _activeOpenVialBatch = null;
             _nextSealedBatch = null;
             _isOpenVialExpired = false;
@@ -750,7 +748,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           _dosesPerUnit = dosesPerUnit;
           _openVialShelfHours = shelfHours;
           _sealedVialsCount = sealedVials;
-          _sealedDosesCount = sealedDoses;
           _activeOpenVialBatch = activeOpenVial;
           _nextSealedBatch = nextSealed;
           _isOpenVialExpired = openVialExpired;
@@ -763,7 +760,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
         setState(() {
           _bhcStockCount = 0;
           _sealedVialsCount = 0;
-          _sealedDosesCount = 0;
           _activeOpenVialBatch = null;
           _nextSealedBatch = null;
           _isOpenVialExpired = false;
@@ -1722,66 +1718,15 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           }
 
           if (success && mounted) {
-            String title = 'Immunization Added';
-            String content = 'The immunization record has been successfully saved.';
-            var dialogType = DialogType.success;
-
-            final res = _lastDeductionResult;
-            if (_isOutside) {
-              title = 'Immunization Recorded';
-              content = 'External immunization recorded successfully.\n\n(No BHC stock was deducted.)';
-            } else if (res != null && res['success'] == true) {
-              final mode = res['mode']?.toString();
-              final batchNum = res['batch_number']?.toString() ?? 'Active Batch';
-              final rawDosesLeft = res['doses_left_in_vial'];
-              int dosesLeft = (rawDosesLeft is num) ? rawDosesLeft.toInt() : 0;
-
-              if (mode == 'open_vial_dose') {
-                title = 'Dose Deducted from Open Vial';
-                content = 'Immunization saved successfully.\n\n'
-                    '💉 Deducted 1 dose from Open Vial (Batch #$batchNum).\n'
-                    '👉 $dosesLeft dose${dosesLeft == 1 ? '' : 's'} can still be used in this opened vial.';
-              } else if (mode == 'new_vial_opened') {
-                title = 'New Multi-Dose Vial Opened';
-                content = 'Immunization saved successfully.\n\n'
-                    '✨ Opened a new multi-dose vial (${res['doses_per_unit'] ?? _dosesPerUnit} doses) from Batch #$batchNum.\n'
-                    '👉 $dosesLeft dose${dosesLeft == 1 ? '' : 's'} remaining in the opened vial for subsequent patients.';
-              } else if (mode == 'outside') {
-                // The record has no facility, so there was no shelf to draw from.
-                // Saying "deducted" here would be a plain lie.
-                dialogType = DialogType.warning;
-                title = 'Immunization Saved (No Stock Deducted)';
-                content = 'The immunization record was saved, but no BHC was attached to it, '
-                    'so nothing was deducted from stock.\n\n'
-                    'Please check that your account is assigned to a Barangay Health Center.';
-              } else if (mode == 'already_deducted') {
-                title = 'Immunization Saved';
-                content = 'Immunization saved successfully.\n\n'
-                    '📦 Stock for this record had already been deducted, so it was not deducted again.';
-              } else if (mode == 'single_dose') {
-                title = 'Stock Deducted';
-                content = 'Immunization saved successfully.\n\n'
-                    '📦 Deducted 1 unit from Batch #$batchNum.';
-              } else {
-                title = 'Immunization Saved';
-                content = 'Immunization saved successfully.\n\n'
-                    '📦 ${res['message'] ?? 'Stock updated.'}';
-              }
-            } else if (res != null && res['success'] == false) {
-              dialogType = DialogType.warning;
-              title = 'Immunization Saved (Stock Warning)';
-              content = 'The immunization record was saved, but BHC stock was not deducted:\n\n'
-                  '⚠️ ${res['error'] ?? res['message'] ?? 'Stock deduction failed.'}\n\n'
-                  'Please adjust the batch manually in the RHU inventory, or ask the RHU '
-                  'administrator to reconcile it.';
-            } else if (res == null) {
-              // Only reachable if the RPC returned something we could not read.
-              dialogType = DialogType.warning;
-              title = 'Immunization Saved (Stock Unconfirmed)';
-              content = 'The immunization record was saved, but the system could not '
-                  'confirm that BHC stock was deducted. Please verify the batch in '
-                  'the inventory.';
-            }
+            // Every stock reply — deducted, already deducted, nothing found,
+            // outright failure — is read in one place now, and the maternal Td
+            // and prenatal screens read theirs the same way. They used to say
+            // the same thing three different ways, and one of them stayed green
+            // when nothing had left the shelf.
+            final outcome = StockDeductionOutcome.fromImmunization(
+              _lastDeductionResult,
+              givenElsewhere: _isOutside,
+            );
 
             // Refresh stock in background
             if (_selectedVaccineId != null) {
@@ -1791,11 +1736,12 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
             showDialog(
               context: context,
               barrierDismissible: false,
-              builder: (_) => DialogBox(
-                type: dialogType,
-                title: title,
-                content: content,
-                buttonText: 'OK',
+              builder: (_) => StockOutcomeDialog(
+                title: outcome.isProblem
+                    ? 'Immunization Saved — Check Stock'
+                    : 'Immunization Added',
+                message: 'The immunization record was saved successfully.',
+                outcome: outcome,
                 onPressed: () {
                   Navigator.pop(context);
                   Navigator.pop(context, true);
@@ -1844,175 +1790,91 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     }
   }
 
+  /// What this dose will draw from at the midwife's own health center.
+  ///
+  /// Four states, one card. It used to be four hand-rolled containers in four
+  /// palettes — emerald, amber, blue, red — none of which appear anywhere else
+  /// in this app, and which read as four unrelated kinds of message rather than
+  /// one line that changes its mind.
   Widget _buildBhcStockCard() {
     if (_isOutside || _selectedVaccineId == null) return const SizedBox.shrink();
 
     if (_bhcStockLoading) {
-      return Container(
-        margin: const EdgeInsets.only(top: 8, bottom: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.bgSecondary,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.borderPrimary),
-        ),
-        child: const Row(
-          children: [
-            SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brandPrimary),
-            ),
-            SizedBox(width: 8),
-            Text(
-              'Checking BHC stock...',
-              style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
-            ),
-          ],
-        ),
-      );
+      return const StockStatusLoading(label: 'Checking health center stock…');
     }
 
     if (_bhcStockCount == null) return const SizedBox.shrink();
 
-    // Out of stock
     if (_bhcStockCount! <= 0) {
-      return Container(
-        margin: const EdgeInsets.only(top: 8, bottom: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFEF2F2),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFFECACA)),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 16),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Out of stock at BHC. Toggle "Given Elsewhere" if given at an external clinic.',
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF991B1B)),
-              ),
-            ),
-          ],
-        ),
+      return const StockStatusCard(
+        tone: StockTone.blocked,
+        message: 'Out of stock here. Switch to "Given Elsewhere" if this dose '
+            'was received at another clinic.',
       );
     }
 
     final isMultiDose = _dosesPerUnit > 1;
+    final sealedLabel =
+        _sealedVialsCount > 0 ? '+$_sealedVialsCount sealed' : null;
 
-    // Case 1: Multi-dose item with an Active Open Vial
+    // An open vial is drawn down before any seal is broken, so when there is
+    // one it is the only fact that matters.
     if (isMultiDose && _activeOpenVialBatch != null && !_isOpenVialExpired) {
-      final openDoses = (_activeOpenVialBatch!['doses_remaining_in_open_vial'] as num?)?.toInt() ?? 0;
-      final batchNumber = _activeOpenVialBatch!['batch_number']?.toString() ?? 'Active';
+      final openDoses =
+          (_activeOpenVialBatch!['doses_remaining_in_open_vial'] as num?)?.toInt() ?? 0;
+      final batchNumber = _activeOpenVialBatch!['batch_number']?.toString();
+      final batchSuffix = batchNumber != null ? ' (Batch #$batchNumber)' : '';
 
-      return Container(
-        margin: const EdgeInsets.only(top: 8, bottom: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0FDF4),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFBBF7D0)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.colorize_rounded, color: Color(0xFF16A34A), size: 16),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Open Vial: $openDoses of $_dosesPerUnit doses left (Batch #$batchNumber)',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF166534)),
-              ),
-            ),
-            if (_sealedVialsCount > 0)
-              Text(
-                '+$_sealedVialsCount sealed',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFF15803D)),
-              ),
-          ],
-        ),
+      // A reconstituted BCG vial lasts six hours. Knowing the vial is nearly out
+      // of time is the difference between using the rest of it this session and
+      // throwing it away, so it is worth the line — but only near the end.
+      final openedAt =
+          DateTime.tryParse(_activeOpenVialBatch!['vial_opened_at']?.toString() ?? '');
+      final hoursOpen =
+          openedAt == null ? null : DateTime.now().difference(openedAt).inHours;
+      final nearingLimit = hoursOpen != null &&
+          _openVialShelfHours > 0 &&
+          hoursOpen >= _openVialShelfHours * 0.75;
+
+      return StockStatusCard(
+        tone: nearingLimit ? StockTone.caution : StockTone.ready,
+        icon: Icons.colorize_rounded,
+        trailing: sealedLabel,
+        message: nearingLimit
+            ? 'The open vial$batchSuffix was opened ${_formatVialOpened(openedAt)} '
+                'and expires after $_openVialShelfHours h. This dose leaves '
+                '${openDoses - 1} in it — use them soon.'
+            : 'This dose comes from the open vial$batchSuffix — '
+                '${openDoses - 1} of $_dosesPerUnit will be left in it.',
       );
     }
 
-    // Case 2: Open vial expired its shelf-life
+    // The expired vial is written off by the RPC before the dose is drawn.
     if (isMultiDose && _isOpenVialExpired) {
-      final nextBatchNum = _nextSealedBatch?['batch_number']?.toString() ?? 'Next';
-      return Container(
-        margin: const EdgeInsets.only(top: 8, bottom: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFFBEB),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFFDE68A)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 16),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Previous open vial expired. A fresh vial will be opened from Batch #$nextBatchNum.',
-                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF92400E)),
-              ),
-            ),
-          ],
-        ),
+      final nextBatchNum = _nextSealedBatch?['batch_number']?.toString();
+      return StockStatusCard(
+        tone: StockTone.caution,
+        trailing: sealedLabel,
+        message: 'The previous open vial expired and will be discarded. A fresh '
+            'vial${nextBatchNum != null ? ' from Batch #$nextBatchNum' : ''} '
+            'will be opened for this dose.',
       );
     }
 
-    // Case 3: Multi-dose item with sealed stock ready (no active open vial)
     if (isMultiDose) {
-      final nextBatchNum = _nextSealedBatch?['batch_number']?.toString() ?? 'Next';
-      return Container(
-        margin: const EdgeInsets.only(top: 8, bottom: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFEFF6FF),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFBFDBFE)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.inventory_2_outlined, color: Color(0xFF2563EB), size: 16),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '$_sealedVialsCount sealed vial${_sealedVialsCount == 1 ? '' : 's'} available (Batch #$nextBatchNum)',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
-              ),
-            ),
-            Text(
-              '$_bhcStockCount doses',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1D4ED8)),
-            ),
-          ],
-        ),
+      final nextBatchNum = _nextSealedBatch?['batch_number']?.toString();
+      return StockStatusCard(
+        trailing: '$_bhcStockCount doses',
+        message: 'A sealed vial'
+            '${nextBatchNum != null ? ' from Batch #$nextBatchNum' : ''} will be '
+            'opened — ${_dosesPerUnit - 1} doses stay open afterwards.',
       );
     }
 
-    // Case 4: Single-dose item
-    final singleBatchNum = _nextSealedBatch?['batch_number']?.toString() ?? 'Active';
-    return Container(
-      margin: const EdgeInsets.only(top: 8, bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFBBF7D0)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF16A34A), size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'In Stock: $_bhcStockCount unit${_bhcStockCount == 1 ? '' : 's'} available (Batch #$singleBatchNum)',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF166534)),
-            ),
-          ),
-        ],
-      ),
+    final singleBatchNum = _nextSealedBatch?['batch_number']?.toString();
+    return StockStatusCard(
+      message: '$_bhcStockCount unit${_bhcStockCount == 1 ? '' : 's'} in stock'
+          '${singleBatchNum != null ? ' (Batch #$singleBatchNum)' : ''}.',
     );
   }
 

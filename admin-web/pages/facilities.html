@@ -382,8 +382,11 @@
                 ${adminWarning}
 
                 <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
-                  <a class="btn btn-sm btn-primary" href="inventory.html">
+                  <a class="btn btn-sm btn-primary" href="inventory.html?facility=${rhu.facility_id}&amp;action=issue">
                     <i class="fa-solid fa-truck-ramp-box"></i> Allocate Stock
+                  </a>
+                  <a class="btn btn-sm btn-secondary" href="inventory.html?facility=${rhu.facility_id}">
+                    <i class="fa-solid fa-boxes-stacked"></i> View Stock
                   </a>
                   <a class="btn btn-sm btn-secondary" href="account-create.html">
                     <i class="fa-solid fa-user-plus"></i> Add Administrator

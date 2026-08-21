@@ -8,6 +8,7 @@ import '../../services/auth_storage.dart';
 import '../../services/push_notification_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_dropdown_field.dart';
+import '../../widgets/stock_indicators.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/confirmation_dialog_box.dart';
@@ -1003,7 +1004,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               ),
         const SizedBox(height: 6),
         SecondaryButton(
-          label: 'Request stocks from RHU Main',
+          label: 'Request stocks from ${_liveContext?.supplierLabel ?? 'your RHU'}',
           leadingIcon: Icons.add_circle_outline_rounded,
           onPressed:
               _workflowAvailable ? _showRequestSheet : _showWorkflowUnavailable,
@@ -2124,7 +2125,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         _buildStockOutActivityCard(),
         const SizedBox(height: 18),
         MainButton(
-          label: 'Request stocks from RHU Main',
+          label: 'Request stocks from ${_liveContext?.supplierLabel ?? 'your RHU'}',
           leftIcon: Icons.add_shopping_cart_outlined,
           onPressed: _workflowAvailable ? _showRequestSheet : null,
         ),
@@ -3735,6 +3736,198 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     return 'Expires ${_shortDate(expiration)}, ${expiration.year}';
   }
 
+  // ── Stock request helpers ──────────────────────────────────────────────
+  //
+  // The picker used to be the raw catalogue in catalogue order: forty names,
+  // no numbers, nothing to say which one you came here about. A midwife opens
+  // this sheet *because* something has run low, so the sheet now leads with
+  // what has run low and pre-fills the rest from it.
+
+  /// Items at or below their reorder level, worst first.
+  List<InventoryItem> _itemsNeedingRestock() {
+    final needing = _inventory
+        .where((item) => item.quantity <= item.minimumStock)
+        .toList()
+      ..sort((a, b) {
+        // Nothing on the shelf outranks merely low.
+        final aOut = a.quantity <= 0 ? 0 : 1;
+        final bOut = b.quantity <= 0 ? 0 : 1;
+        if (aOut != bOut) return aOut - bOut;
+        return _restockShortfall(b).compareTo(_restockShortfall(a));
+      });
+    return needing;
+  }
+
+  /// How far below the reorder level this item sits.
+  int _restockShortfall(InventoryItem item) =>
+      (item.minimumStock - item.quantity).clamp(0, 1 << 30);
+
+  /// The catalogue, ordered so the items worth requesting come first.
+  List<InventoryItem> _requestPickerOptions() {
+    final options = List<InventoryItem>.from(_inventory);
+    options.sort((a, b) {
+      int rank(InventoryItem i) {
+        if (i.quantity <= 0) return 0;
+        if (i.quantity <= i.minimumStock) return 1;
+        return 2;
+      }
+
+      final byRank = rank(a).compareTo(rank(b));
+      if (byRank != 0) return byRank;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return options;
+  }
+
+  /// A quantity that brings the item back to its reorder level, rounded up to
+  /// something a person would actually ask for. Never zero.
+  int _suggestedRequestQuantity(InventoryItem item) {
+    final shortfall = _restockShortfall(item);
+    final base = shortfall > 0 ? shortfall : item.minimumStock;
+    if (base <= 0) return 10;
+    if (base <= 10) return base;
+    // Round up to the nearest ten so the request reads as a decision, not a
+    // subtraction.
+    return ((base + 9) ~/ 10) * 10;
+  }
+
+  /// An open request for the same item, if the midwife already raised one.
+  StockRequest? _openRequestFor(InventoryItem item) {
+    final name = item.name.trim().toLowerCase();
+    for (final request in _requests) {
+      if (request.isEmpty) continue;
+      final status = request.status.toLowerCase();
+      if (status != 'pending' && status != 'approved' && status != 'issued') {
+        continue;
+      }
+      if (request.itemName.trim().toLowerCase() == name) return request;
+    }
+    return null;
+  }
+
+  /// Standard reasons, so the RHU reviewing a queue of these can sort them.
+  static const List<String> _requestReasonPresets = [
+    'Running low on stock',
+    'Completely out of stock',
+    'Upcoming immunization drive',
+    'Replacing an expired batch',
+  ];
+
+  /// One line describing where the item stands, for the card under the picker.
+  StockStatusCard _requestStockContextCard(InventoryItem item) {
+    if (item.quantity <= 0) {
+      return StockStatusCard(
+        margin: const EdgeInsets.only(top: 10),
+        tone: StockTone.blocked,
+        message: 'None left at ${_liveContext?.facilityName ?? 'this health center'}. '
+            'Reorder level is ${item.minimumStock} ${item.unit}.',
+      );
+    }
+    if (item.quantity <= item.minimumStock) {
+      return StockStatusCard(
+        margin: const EdgeInsets.only(top: 10),
+        tone: StockTone.caution,
+        message: '${item.quantity} ${item.unit} on hand — '
+            '${_restockShortfall(item)} below the reorder level of '
+            '${item.minimumStock}.',
+      );
+    }
+    return StockStatusCard(
+      margin: const EdgeInsets.only(top: 10),
+      message: '${item.quantity} ${item.unit} on hand, above the reorder level '
+          'of ${item.minimumStock}.',
+    );
+  }
+
+  /// A tappable "this one is low" chip.
+  Widget _restockSuggestionChip({
+    required InventoryItem item,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final isOut = item.quantity <= 0;
+    final label = isOut ? 'none left' : '${item.quantity} ${item.unit} left';
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.brandPrimary : AppColors.brandSecondary,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.brandPrimary
+                  : (isOut
+                      ? AppColors.error.withValues(alpha: 0.45)
+                      : const Color(0xFFFBCFE8)),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                item.name,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? Colors.white : AppColors.brandText,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected
+                      ? Colors.white.withValues(alpha: 0.9)
+                      : (isOut
+                          ? const Color(0xFF9B3B3B)
+                          : AppColors.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A small "set this value" pill, used for quantities and reasons.
+  Widget _requestPresetChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.brandPrimary : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? AppColors.brandPrimary : AppColors.borderPrimary,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.white : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showRequestSheet([InventoryItem? suggestedItem]) async {
     InventoryItem? selectedItem = suggestedItem;
     String? itemError;
@@ -3759,6 +3952,11 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               builder: (sheetContext, setModalState) {
                 final bottomInset =
                     MediaQuery.viewInsetsOf(sheetContext).bottom;
+                final supplierLabel = _liveContext?.supplierLabel ?? 'your RHU';
+                final lowStockItems = _itemsNeedingRestock();
+                final openRequest = selectedItem == null
+                    ? null
+                    : _openRequestFor(selectedItem!);
 
                 Future<void> submitRequest() async {
                   if (isSubmitting || !_workflowAvailable) return;
@@ -3777,7 +3975,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                         : 'Enter a quantity greater than zero.';
                     reasonError = isReasonValid
                         ? null
-                        : 'Tell RHU Main why this is needed.';
+                        : 'Pick a reason above, or write your own.';
                   });
 
                   if (!isItemValid || !isQuantityValid || !isReasonValid) {
@@ -3839,11 +4037,11 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                           const SizedBox(height: 18),
                           Row(
                             children: [
-                              const Expanded(
+                              Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
+                                    const Text(
                                       'REQUEST STOCK',
                                       style: TextStyle(
                                         color: AppColors.brandText,
@@ -3852,10 +4050,10 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                                         letterSpacing: 0.4,
                                       ),
                                     ),
-                                    SizedBox(height: 4),
+                                    const SizedBox(height: 4),
                                     Text(
-                                      'Send a replenishment request to RHU Main.',
-                                      style: TextStyle(
+                                      'Goes to $supplierLabel for review.',
+                                      style: const TextStyle(
                                         color: AppColors.textSecondary,
                                         fontSize: 12,
                                       ),
@@ -3875,13 +4073,50 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                               ),
                             ],
                           ),
-                          const SizedBox(height: 22),
+                          const SizedBox(height: 20),
+
+                          // What is actually low, first. Tapping one fills the
+                          // picker, the quantity and the reason in a single go —
+                          // which is the whole request for the common case.
+                          if (lowStockItems.isNotEmpty) ...[
+                            const _FormLabel('Needs restocking'),
+                            const SizedBox(height: 7),
+                            SizedBox(
+                              height: 50,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: lowStockItems.length,
+                                itemBuilder: (_, index) {
+                                  final item = lowStockItems[index];
+                                  return _restockSuggestionChip(
+                                    item: item,
+                                    isSelected: selectedItem?.itemId == item.itemId,
+                                    onTap: () => setModalState(() {
+                                      selectedItem = item;
+                                      itemError = null;
+                                      quantityError = null;
+                                      reasonError = null;
+                                      quantityController.text =
+                                          _suggestedRequestQuantity(item).toString();
+                                      reasonController.text = item.quantity <= 0
+                                          ? 'Completely out of stock'
+                                          : 'Running low on stock';
+                                    }),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                          ],
+
                           const _FormLabel('Medicine or vaccine'),
                           const SizedBox(height: 7),
                           AppDropdownField<InventoryItem>(
                             hintText: 'Select from BHC catalog',
                             leadingIcon: Icons.medication_outlined,
-                            options: _inventory,
+                            // Ordered by urgency, not by catalogue id, so what
+                            // needs requesting is at the top of the list.
+                            options: _requestPickerOptions(),
                             value: selectedItem,
                             displayStringForOption: (item) => item.name,
                             errorText: itemError,
@@ -3889,9 +4124,29 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                               setModalState(() {
                                 selectedItem = item;
                                 itemError = null;
+                                if (quantityController.text.trim().isEmpty) {
+                                  quantityController.text =
+                                      _suggestedRequestQuantity(item).toString();
+                                }
                               });
                             },
                           ),
+
+                          if (selectedItem != null) ...[
+                            _requestStockContextCard(selectedItem!),
+                            if (openRequest != null)
+                              StockStatusCard(
+                                margin: const EdgeInsets.only(top: 8),
+                                tone: StockTone.caution,
+                                icon: Icons.history_rounded,
+                                message:
+                                    'You already have a ${openRequest.status.toLowerCase()} '
+                                    'request for this item (${openRequest.quantity} '
+                                    '${openRequest.unit}). Send another only if you '
+                                    'need more on top of it.',
+                              ),
+                          ],
+
                           const SizedBox(height: 16),
                           const _FormLabel('Requested quantity'),
                           const SizedBox(height: 7),
@@ -3905,24 +4160,68 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                             keyboardType: TextInputType.number,
                             errorText: quantityError,
                             onChanged: (_) {
-                              if (quantityError != null) {
-                                setModalState(() => quantityError = null);
-                              }
+                              setModalState(() {
+                                if (quantityError != null) quantityError = null;
+                              });
                             },
                           ),
+                          if (selectedItem != null) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 7,
+                              runSpacing: 7,
+                              children: [
+                                for (final preset in <int>{
+                                  _suggestedRequestQuantity(selectedItem!),
+                                  _suggestedRequestQuantity(selectedItem!) * 2,
+                                })
+                                  _requestPresetChip(
+                                    label: '$preset ${selectedItem!.unit}',
+                                    isSelected:
+                                        quantityController.text.trim() ==
+                                            preset.toString(),
+                                    onTap: () => setModalState(() {
+                                      quantityController.text = preset.toString();
+                                      quantityError = null;
+                                    }),
+                                  ),
+                              ],
+                            ),
+                          ],
+
                           const SizedBox(height: 16),
                           const _FormLabel('Reason for request'),
                           const SizedBox(height: 7),
+                          // Preset first, free text second. A queue of requests
+                          // the RHU can group is worth more than forty
+                          // differently-worded sentences saying "we ran out".
+                          Wrap(
+                            spacing: 7,
+                            runSpacing: 7,
+                            children: [
+                              for (final preset in _requestReasonPresets)
+                                _requestPresetChip(
+                                  label: preset,
+                                  isSelected:
+                                      reasonController.text.trim() == preset,
+                                  onTap: () => setModalState(() {
+                                    reasonController.text = preset;
+                                    reasonError = null;
+                                  }),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 9),
                           AppInputField(
                             controller: reasonController,
-                            hintText: 'Why is this stock needed?',
+                            hintText: 'Or describe it in your own words',
                             isRequired: true,
                             leadingIcon: Icons.notes_rounded,
                             errorText: reasonError,
                             onChanged: (_) {
-                              if (reasonError != null) {
-                                setModalState(() => reasonError = null);
-                              }
+                              setModalState(() {
+                                if (reasonError != null) reasonError = null;
+                              });
                             },
                           ),
                           const SizedBox(height: 16),
@@ -3941,19 +4240,21 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                               color: AppColors.bgSecondary,
                               borderRadius: BorderRadius.circular(14),
                             ),
-                            child: const Row(
+                            child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(
+                                const Icon(
                                   Icons.info_outline_rounded,
                                   size: 18,
                                   color: AppColors.brandText,
                                 ),
-                                SizedBox(width: 8),
+                                const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    'RHU Main will review this as Pending. Your BHC stock changes only after RHU issues the stock and you confirm receipt.',
-                                    style: TextStyle(
+                                    'Your stock does not change yet. It changes when '
+                                    '$supplierLabel issues the batch and you confirm '
+                                    'receipt here.',
+                                    style: const TextStyle(
                                       color: AppColors.textSecondary,
                                       fontSize: 11,
                                       height: 1.35,
@@ -3967,7 +4268,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                           MainButton(
                             label: isSubmitting
                                 ? 'Submitting request...'
-                                : 'Submit request to RHU Main',
+                                : 'Submit to ${_liveContext?.supplierLabel ?? 'your RHU'}',
                             leftIcon: Icons.send_rounded,
                             onPressed: isSubmitting ? null : submitRequest,
                           ),
@@ -3989,7 +4290,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     if (!mounted) return;
     AppSnackbar.success(
       context,
-      '${selectedItem!.name} request sent to RHU Main.',
+      '${selectedItem!.name} request sent to ${_liveContext?.supplierLabel ?? 'your RHU'}.',
     );
   }
 
@@ -4006,7 +4307,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         return ConfirmationDialogBox(
           title: 'Receive stocks?',
           subtitle:
-              'Confirm that ${shipment.issuedQuantity} ${shipment.unit} of ${shipment.itemName} from RHU Main were received.',
+              'Confirm that ${shipment.issuedQuantity} ${shipment.unit} of ${shipment.itemName} from ${_liveContext?.supplierLabel ?? 'your RHU'} were received.',
           confirmText: 'Receive',
           cancelText: 'Not yet',
           onCancel: () => Navigator.of(dialogContext).pop(),

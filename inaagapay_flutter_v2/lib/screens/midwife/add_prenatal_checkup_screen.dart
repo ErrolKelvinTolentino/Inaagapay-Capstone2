@@ -22,6 +22,8 @@ import '../../services/prenatal_schedule_engine.dart';
 import '../../services/blood_pressure_reference.dart';
 import '../../services/fetal_heart_rate_reference.dart';
 import '../../services/maternal_td_service.dart';
+import '../../services/stock_deduction_outcome.dart';
+import '../../widgets/stock_indicators.dart';
 import 'maternal_td_screen.dart';
 
 class AddPrenatalCheckupScreen extends StatefulWidget {
@@ -182,9 +184,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   int _tdSealedVials = 0;
   String? _tdNextBatch;
   int _ferrousStockAvailable = 0;
-  String? _ferrousBatchNumber;
   int _calciumStockAvailable = 0;
-  String? _calciumBatchNumber;
   bool _tdGivenOnSite = true;
   _RiskSnapshot? _riskSnapshot;
   String? _lastRiskSignature;
@@ -453,9 +453,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
       int tdSealed = 0;
       String? tdNextBatch;
       int ferrousTabs = 0;
-      String? ferrousBatch;
       int calciumTabs = 0;
-      String? calciumBatch;
       final now = DateTime.now();
 
       for (final b in (batches as List)) {
@@ -501,14 +499,8 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           }
         } else if (name.contains('ferrous') || generic.contains('ferrous') || name.contains('iron')) {
           ferrousTabs += qty;
-          if (ferrousBatch == null && qty > 0) {
-            ferrousBatch = batchNum;
-          }
         } else if (name.contains('calcium') || generic.contains('calcium')) {
           calciumTabs += qty;
-          if (calciumBatch == null && qty > 0) {
-            calciumBatch = batchNum;
-          }
         }
       }
 
@@ -521,9 +513,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           _tdSealedVials = tdSealed;
           _tdNextBatch = tdNextBatch;
           _ferrousStockAvailable = ferrousTabs;
-          _ferrousBatchNumber = ferrousBatch;
           _calciumStockAvailable = calciumTabs;
-          _calciumBatchNumber = calciumBatch;
         });
       }
     } catch (e) {
@@ -2193,6 +2183,19 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     setState(() => _nextSchedule = picked);
   }
 
+  /// True when this visit hands something over that stock must answer for:
+  /// tablets, a Td dose given here, or both. When nothing is dispensed there is
+  /// no deduction to attempt and no stock outcome worth reporting.
+  bool _hasDispensableItems() {
+    final ferrous = int.tryParse(_ferrousQtyCtrl.text.trim()) ?? 0;
+    final calcium = int.tryParse(_calciumQtyCtrl.text.trim()) ?? 0;
+    final tdHere = _tdGivenOnSite &&
+        _tdDose != null &&
+        _tdDose!.trim().isNotEmpty &&
+        _tdDose!.trim() != '-';
+    return ferrous > 0 || calcium > 0 || tdHere;
+  }
+
   Future<void> _insertSupplementRecords(int encounterId) async {
     final client = Supabase.instance.client;
     final checkupDate = _normalizedDate(_checkupDateTime);
@@ -2651,9 +2654,23 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
       await _insertSupplementRecords(encounterId);
 
-      // Atomic inventory deduction for supplements and maternal Td vaccine
-      String? inventorySyncSummary;
-      if (_midwifeBhcId != null) {
+      // Atomic inventory deduction for supplements and maternal Td vaccine.
+      //
+      // A throw here used to end in debugPrint, and a `mode: no_deduction` reply
+      // was never read at all, so the midwife saw "Prenatal checkup saved" while
+      // the tablets they had just handed over stayed on the books. Whatever the
+      // database answers is now carried to the confirmation dialog verbatim.
+      final dispensedSomething = _hasDispensableItems();
+      StockDeductionOutcome? stockOutcome;
+
+      if (!dispensedSomething) {
+        stockOutcome = null; // Nothing was handed over; there is nothing to say.
+      } else if (_midwifeBhcId == null) {
+        stockOutcome = StockDeductionOutcome.fromPrenatalEncounter(
+          null,
+          facilityKnown: false,
+        );
+      } else {
         try {
           final shouldDeductTd = _tdGivenOnSite &&
               _tdDose != null &&
@@ -2670,32 +2687,13 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             },
           );
 
-          if (invResult is Map) {
-            final deductions = (invResult['deductions'] as List?) ?? [];
-            if (deductions.isNotEmpty) {
-              final parts = <String>[];
-              for (final d in deductions) {
-                if (d is Map) {
-                  final type = d['item_type']?.toString();
-                  if (type == 'supplement') {
-                    parts.add('${d['quantity']} tabs ${d['medication']}');
-                  } else if (type == 'vaccine') {
-                    final mode = d['mode']?.toString();
-                    if (mode == 'open_vial_dose') {
-                      parts.add('${d['dose']} from open vial (${d['doses_remaining_in_vial']} left)');
-                    } else {
-                      parts.add('${d['dose']} (opened sealed vial, ${d['doses_remaining_in_vial']} left in vial)');
-                    }
-                  }
-                }
-              }
-              if (parts.isNotEmpty) {
-                inventorySyncSummary = parts.join(', ');
-              }
-            }
-          }
+          stockOutcome = StockDeductionOutcome.fromPrenatalEncounter(invResult);
         } catch (invErr) {
-          debugPrint('Prenatal inventory deduction warning: $invErr');
+          debugPrint('Prenatal inventory deduction failed: $invErr');
+          stockOutcome = StockDeductionOutcome.fromPrenatalEncounter({
+            'success': false,
+            'error': invErr.toString().replaceAll('Exception: ', ''),
+          });
         }
       }
 
@@ -2762,10 +2760,34 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       }
 
       if (!mounted) return;
-      final successMsg = inventorySyncSummary != null
-          ? 'Prenatal checkup saved & Inventory synced ($inventorySyncSummary).'
-          : 'Prenatal checkup saved.';
-      _showMessage(successMsg, type: AppSnackType.success);
+
+      // Nothing dispensed: the old snackbar is still the right weight for it.
+      // Anything else gets a dialog, because a stock shortfall the midwife has
+      // to act on must not scroll away on its own.
+      if (stockOutcome == null) {
+        _showMessage('Prenatal checkup saved.', type: AppSnackType.success);
+        Navigator.pop(context, true);
+        return;
+      }
+
+      // Bound to a final local: the closure below cannot see the promotion on
+      // a variable the branches above assign to.
+      final outcome = stockOutcome;
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => StockOutcomeDialog(
+          title: outcome.isProblem
+              ? 'Checkup Saved — Check Stock'
+              : 'Prenatal Checkup Saved',
+          message: 'The checkup record was saved successfully.',
+          outcome: outcome,
+          onPressed: () => Navigator.pop(context),
+        ),
+      );
+
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -3828,23 +3850,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                         ),
                         const SizedBox(width: 6),
                         if (_midwifeBhcId != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: _ferrousStockAvailable > 0 ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _ferrousStockAvailable > 0 ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
-                              ),
-                            ),
-                            child: Text(
-                              _ferrousStockAvailable > 0 ? '$_ferrousStockAvailable in stock' : 'Out of stock',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.bold,
-                                color: _ferrousStockAvailable > 0 ? const Color(0xFF065F46) : const Color(0xFF991B1B),
-                              ),
-                            ),
+                          StockLevelChip.count(
+                            available: _ferrousStockAvailable,
+                            unit: 'tablets',
+                            lowThreshold: 30,
                           ),
                       ],
                     ),
@@ -3883,13 +3892,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                           ),
                       ],
                     ),
-                    if (ferrousExceeds) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        '⚠️ Entered quantity exceeds BHC stock ($_ferrousStockAvailable available).',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.error),
+                    if (ferrousExceeds)
+                      StockStatusCard(
+                        margin: const EdgeInsets.only(top: 8),
+                        tone: StockTone.caution,
+                        message: 'Only $_ferrousStockAvailable tablet(s) are in stock here. '
+                            'The record will show what you hand over; the shortfall '
+                            'needs reconciling with your RHU.',
                       ),
-                    ],
                   ],
                 ),
               ),
@@ -3932,23 +3942,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                         ),
                         const SizedBox(width: 6),
                         if (_midwifeBhcId != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: _calciumStockAvailable > 0 ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _calciumStockAvailable > 0 ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA),
-                              ),
-                            ),
-                            child: Text(
-                              _calciumStockAvailable > 0 ? '$_calciumStockAvailable in stock' : 'Out of stock',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.bold,
-                                color: _calciumStockAvailable > 0 ? const Color(0xFF065F46) : const Color(0xFF991B1B),
-                              ),
-                            ),
+                          StockLevelChip.count(
+                            available: _calciumStockAvailable,
+                            unit: 'tablets',
+                            lowThreshold: 30,
                           ),
                       ],
                     ),
@@ -3987,13 +3984,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                           ),
                       ],
                     ),
-                    if (calciumExceeds) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        '⚠️ Entered quantity exceeds BHC stock ($_calciumStockAvailable available).',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.error),
+                    if (calciumExceeds)
+                      StockStatusCard(
+                        margin: const EdgeInsets.only(top: 8),
+                        tone: StockTone.caution,
+                        message: 'Only $_calciumStockAvailable tablet(s) are in stock here. '
+                            'The record will show what you hand over; the shortfall '
+                            'needs reconciling with your RHU.',
                       ),
-                    ],
                   ],
                 ),
               ),
@@ -4112,6 +4110,9 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                     ),
                   ),
                 ],
+
+                _buildTdStockCard(),
+
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -4147,6 +4148,72 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           ),
         ),
       ],
+    );
+  }
+
+  /// Td stock at this health center, shown only when it bears on this visit.
+  ///
+  /// `_loadFacilityInventory` has always worked this out — open vial, its age,
+  /// sealed vials, the next batch — and then nothing rendered any of it. A
+  /// midwife could pick Td2 on a shelf that held none and find out only after
+  /// saving. It stays hidden when no dose is due and none is selected, so the
+  /// card does not add a line to every routine visit.
+  Widget _buildTdStockCard() {
+    final doseSelected = _tdDose != null &&
+        _tdDose!.trim().isNotEmpty &&
+        _tdDose!.trim() != '-';
+    if (!doseSelected && !_tdStatus.canAdministerToday) {
+      return const SizedBox.shrink();
+    }
+
+    const margin = EdgeInsets.only(top: 8);
+
+    if (_midwifeBhcId == null) {
+      return const StockStatusCard(
+        margin: margin,
+        tone: StockTone.blocked,
+        message: 'Your account is not assigned to a health center, so a Td dose '
+            'given here cannot be deducted from stock.',
+      );
+    }
+
+    if (_tdStockAvailable <= 0) {
+      return const StockStatusCard(
+        margin: margin,
+        tone: StockTone.blocked,
+        message: 'No Td doses in stock at this health center.',
+      );
+    }
+
+    final sealedLabel = _tdSealedVials > 0 ? '+$_tdSealedVials sealed' : null;
+
+    // An open vial is drawn from first, so it is the fact that matters.
+    if (_tdOpenVialDoses > 0) {
+      final opened = _tdOpenVialOpenedAt;
+      final hoursOpen = opened == null
+          ? null
+          : DateTime.now().difference(opened).inHours;
+      final nearingLimit = hoursOpen != null && hoursOpen >= 600; // of 672h
+
+      return StockStatusCard(
+        margin: margin,
+        tone: nearingLimit ? StockTone.caution : StockTone.ready,
+        icon: Icons.colorize_rounded,
+        trailing: sealedLabel,
+        message: nearingLimit
+            ? 'Open Td vial has $_tdOpenVialDoses dose(s) left and is near its '
+                '28-day limit — use it first.'
+            : 'Open Td vial: $_tdOpenVialDoses dose(s) left'
+                '${_tdOpenVialBatch != null ? ' (Batch #$_tdOpenVialBatch)' : ''}.',
+      );
+    }
+
+    return StockStatusCard(
+      margin: margin,
+      trailing: sealedLabel,
+      message: '$_tdStockAvailable Td dose(s) available. A sealed vial'
+          '${_tdNextBatch != null ? ' from Batch #$_tdNextBatch' : ''} will be '
+          'opened for this dose.',
     );
   }
 
