@@ -15,6 +15,7 @@ import '../../services/groq_service.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/pregnancy_risk_override.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/headline.dart';
@@ -66,6 +67,13 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
 
   DateTime? _date;
   int? _pregnancyId;
+
+  /// The pregnancy's risk level, revisable from here.
+  ///
+  /// An anaemic blood count or a glucose result the midwife wants followed up
+  /// is as much a reason to raise the level as anything found at a visit.
+  String _pregnancyRiskLevel = 'low';
+  String _initialRiskLevel = 'low';
   String? _profession;
   String _selectedLabType = 'Complete Blood Count (CBC)';
 
@@ -327,13 +335,19 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
       } else {
         final response = await Supabase.instance.client
             .from('pregnancies')
-            .select('pregnancy_id, status')
+            .select('pregnancy_id, status, pregnancy_risk_level')
             .eq('mother_id', widget.motherId)
             .eq('status', 'ongoing')
             .maybeSingle();
 
         if (response != null) {
           _pregnancyId = response['pregnancy_id'] as int?;
+          final level =
+              response['pregnancy_risk_level']?.toString().toLowerCase();
+          if (level == 'low' || level == 'high') {
+            _pregnancyRiskLevel = level!;
+            _initialRiskLevel = level;
+          }
         }
       }
 
@@ -980,6 +994,20 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
         labTestData['hepatitis_b_status'] = _hepatitisBStatus!.trim();
       }
 
+      // Written only when she actually changed it, so a lab entry never
+      // re-asserts "low" over a level raised elsewhere.
+      if (_pregnancyRiskLevel != _initialRiskLevel && _pregnancyId != null) {
+        try {
+          await Supabase.instance.client
+              .from('pregnancies')
+              .update({'pregnancy_risk_level': _pregnancyRiskLevel})
+              .eq('pregnancy_id', _pregnancyId!);
+          _initialRiskLevel = _pregnancyRiskLevel;
+        } catch (e) {
+          if (kDebugMode) debugPrint('[AddLabTest] Risk level update note: $e');
+        }
+      }
+
       await Supabase.instance.client.from('lab_tests').insert(labTestData);
 
       // 3. Blood type, only when the midwife's selection differs from what is
@@ -1570,6 +1598,21 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                               const SizedBox(height: 20),
                               _buildHepatitisFields(),
                             ],
+                            const SizedBox(height: 20),
+                            // Same control as the prenatal checkup and the
+                            // ultrasound screen — see
+                            // widgets/pregnancy_risk_override.dart.
+                            _labResultHeading('Pregnancy Risk Assessment'),
+                            const SizedBox(height: 8),
+                            PregnancyRiskOverride(
+                              value: _pregnancyRiskLevel,
+                              onChanged: (level) =>
+                                  setState(() => _pregnancyRiskLevel = level),
+                              helperText:
+                                  'Applies to the whole pregnancy. Left '
+                                  'unchanged, the level set at the last '
+                                  'checkup stands.',
+                            ),
                           ],
                         ),
                       ),

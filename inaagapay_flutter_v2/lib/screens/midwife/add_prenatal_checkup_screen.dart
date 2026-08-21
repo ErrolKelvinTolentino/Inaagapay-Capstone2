@@ -16,6 +16,7 @@ import '../../widgets/confirmation_dialog_box.dart';
 import '../../widgets/secondary_header.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/app_dropdown_field.dart';
+import '../../widgets/pregnancy_risk_override.dart';
 import '../../services/sms_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/prenatal_schedule_engine.dart';
@@ -1651,46 +1652,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     );
   }
 
-  Widget _riskSegmentOption(String levelKey, String label, Color color) {
-    final isSelected = _pregnancyRiskLevel == levelKey;
-    return GestureDetector(
-      onTap: () => setState(() {
-        _pregnancyRiskLevel = levelKey;
-        _nextSchedule = _calculateRecommendedNextSchedule();
-      }),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.12) : Colors.grey.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? color.withValues(alpha: 0.4) : Colors.grey.withValues(alpha: 0.2),
-            width: isSelected ? 1.5 : 1.0,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              size: 13,
-              color: isSelected ? color : AppColors.textSecondary,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? color : AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // _riskSegmentOption removed — the control now lives in
+  // widgets/pregnancy_risk_override.dart, shared with the ultrasound and lab
+  // screens so the three cannot drift apart.
+
 
   /// Centralized baseline weight resolution for weight gain analysis.
   /// All weight gain evaluate() calls in this screen MUST use this method
@@ -4580,25 +4545,18 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         _buildClickableSummarySection(
           'PREGNANCY RISK ASSESSMENT',
           [
-            Row(
-              children: [
-                const SizedBox(
-                  width: 125,
-                  child: Text(
-                    'Risk Override',
-                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                  ),
-                ),
-                Expanded(
-                  child: Row(
-                    children: [
-                      _riskSegmentOption('low', 'Low Risk', AppColors.success),
-                      const SizedBox(width: 8),
-                      _riskSegmentOption('high', 'High Risk', AppColors.error),
-                    ],
-                  ),
-                ),
-              ],
+            // Shared with the ultrasound and lab screens — see
+            // widgets/pregnancy_risk_override.dart. Risk belongs to the
+            // pregnancy, so the control that sets it is the same wherever a
+            // midwife reaches for it.
+            PregnancyRiskOverride(
+              value: _pregnancyRiskLevel,
+              onChanged: (level) => setState(() {
+                _pregnancyRiskLevel = level;
+                // Only this screen reschedules: the next visit interval
+                // depends on risk, and the other two do not set a visit.
+                _nextSchedule = _calculateRecommendedNextSchedule();
+              }),
             ),
             const SizedBox(height: 10),
             Row(
