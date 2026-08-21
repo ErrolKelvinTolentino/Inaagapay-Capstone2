@@ -138,6 +138,39 @@ class AuthStorage {
     return val.split('|||');
   }
 
+  /// Alert categories the user has switched off in Settings.
+  ///
+  /// Stored as the muted set rather than the enabled set, so a category added
+  /// to the app later arrives switched on for everyone instead of hidden from
+  /// everyone who saved a preference before it existed.
+  static Future<void> saveMutedAlertCategories(List<String> categories) async {
+    await _storage.write(
+        key: 'muted_alert_categories', value: categories.join('|||'));
+  }
+
+  static Future<List<String>> getMutedAlertCategories() async {
+    final val = await _storage.read(key: 'muted_alert_categories');
+    if (val == null || val.isEmpty) return [];
+    return val.split('|||');
+  }
+
+  /// Ids of notification-centre alerts the user has already read.
+  ///
+  /// Kept here, in the store that already keeps this device's other local
+  /// lists, rather than in a separate preferences plugin. The alerts derived
+  /// from inventory and pregnancy state have no database row to mark, so this
+  /// is the only record that they were seen.
+  static Future<void> saveReadAlertIds(int accountId, List<String> ids) async {
+    await _storage.write(
+        key: 'read_alert_ids_$accountId', value: ids.join('|||'));
+  }
+
+  static Future<List<String>> getReadAlertIds(int accountId) async {
+    final val = await _storage.read(key: 'read_alert_ids_$accountId');
+    if (val == null || val.isEmpty) return [];
+    return val.split('|||');
+  }
+
   static Future<void> saveHiddenMedicalConditions(List<String> list) async {
     await _storage.write(key: 'hidden_medical_conditions', value: list.join('|||'));
   }

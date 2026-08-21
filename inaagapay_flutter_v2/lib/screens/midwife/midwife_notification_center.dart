@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_storage.dart';
 import '../../services/notification_service.dart';
 import '../../theme/app_colors.dart';
@@ -100,7 +99,6 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
   /// Old entries are dropped so the stored list cannot grow without bound.
   static const int _maxRememberedReadIds = 300;
 
-  String get _readIdsKey => 'midwife_read_alerts_${_accountId ?? 0}';
 
   @override
   void initState() {
@@ -108,31 +106,44 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
     _loadAllAlerts();
   }
 
+  /// Set when the device refuses to store read marks.
+  ///
+  /// This has to be visible. The first version of this code caught the failure
+  /// and wrote it to the debug console, so a midwife marking alerts read saw
+  /// them come back unread on every visit with nothing on screen explaining
+  /// why — a store that silently drops writes is indistinguishable from one
+  /// that was never written to.
+  bool _readMarksNotSaved = false;
+
   Future<void> _loadReadIds() async {
+    final accountId = _accountId;
+    if (accountId == null) return;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final stored = prefs.getStringList(_readIdsKey);
-      if (stored != null && mounted) {
-        _readIds
-          ..clear()
-          ..addAll(stored);
-      }
+      final stored = await AuthStorage.getReadAlertIds(accountId);
+      // Union rather than replace. A refresh must never discard a mark made
+      // in this session, whatever the stored copy happens to say.
+      if (mounted) _readIds.addAll(stored);
     } catch (e) {
-      // A missing preference store is not worth failing the page over; the
-      // alerts simply all read as unread.
       debugPrint('Error loading read alert ids: $e');
+      if (mounted) setState(() => _readMarksNotSaved = true);
     }
   }
 
   Future<void> _persistReadIds() async {
+    final accountId = _accountId;
+    if (accountId == null) return;
+
     while (_readIds.length > _maxRememberedReadIds) {
       _readIds.remove(_readIds.first);
     }
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(_readIdsKey, _readIds.toList());
+      await AuthStorage.saveReadAlertIds(accountId, _readIds.toList());
+      if (_readMarksNotSaved && mounted) {
+        setState(() => _readMarksNotSaved = false);
+      }
     } catch (e) {
       debugPrint('Error saving read alert ids: $e');
+      if (mounted) setState(() => _readMarksNotSaved = true);
     }
   }
 
@@ -478,6 +489,17 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
       // to the same set from here on.
       _readIds.addAll(alerts.where((a) => a.isRead).map((a) => a.id));
 
+      // Categories switched off in Settings never reach the list, so the
+      // counts and the "unread" total describe what is actually shown.
+      try {
+        final muted = await AuthStorage.getMutedAlertCategories();
+        if (muted.isNotEmpty) {
+          alerts.removeWhere((a) => muted.contains(a.category.name));
+        }
+      } catch (e) {
+        debugPrint('Error reading muted alert categories: $e');
+      }
+
       // Sort alerts: critical first, then newest
       alerts.sort((a, b) {
         final sevA = _severityOrder(a.severity);
@@ -561,6 +583,38 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
           Expanded(
             child: Column(
               children: [
+                // A store that drops writes looks exactly like a store that was
+                // never written to, so the failure is stated rather than left
+                // for the midwife to infer from marks that keep coming back.
+                if (_readMarksNotSaved)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFFDE68A)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded,
+                            size: 16, color: Color(0xFFD97706)),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Read marks cannot be saved on this device — stock '
+                            'and expiry alerts will come back unread.',
+                            style: TextStyle(
+                                fontSize: 11.5,
+                                height: 1.35,
+                                color: Color(0xFF92400E)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
                   child: Row(

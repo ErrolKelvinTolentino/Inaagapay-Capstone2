@@ -93,6 +93,190 @@ class SupabaseService {
     }
   }
 
+  /// Changes a password after proving the current one.
+  ///
+  /// [updatePassword] overwrites the hash outright, which is right for the
+  /// forgot-password flow — the OTP is what proved identity there. A signed-in
+  /// user changing their own password has proved nothing yet, so the current
+  /// password is checked here before anything is written.
+  ///
+  /// The replaced hash is kept in `password_history`, which has existed since
+  /// the first schema and has never been written to. Without it there is no
+  /// record that a password ever changed, and no way to stop the same one
+  /// being set again.
+  static Future<Map<String, dynamic>> changePassword({
+    required int accountId,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      final account = await client
+          .from('accounts')
+          .select('password_hash')
+          .eq('account_id', accountId)
+          .maybeSingle();
+
+      if (account == null) {
+        return {'success': false, 'message': 'Account not found.'};
+      }
+
+      final currentHash = account['password_hash']?.toString() ?? '';
+      if (!_verifyPassword(currentPassword, currentHash)) {
+        return {
+          'success': false,
+          'message': 'The current password is incorrect.',
+        };
+      }
+
+      if (_verifyPassword(newPassword, currentHash)) {
+        return {
+          'success': false,
+          'message': 'The new password is the same as the current one.',
+        };
+      }
+
+      final newHash = _hashPassword(newPassword);
+
+      await client.from('accounts').update({
+        'password_hash': newHash,
+        'is_temporary_password': false,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('account_id', accountId);
+
+      // Best effort: a password that changed but went unrecorded is better
+      // than a change refused because the audit row would not insert.
+      try {
+        await client.from('password_history').insert({
+          'account_id': accountId,
+          'password': currentHash,
+          'replaced_at': DateTime.now().toIso8601String(),
+          'is_active': false,
+        });
+      } catch (e) {
+        if (kDebugMode) debugPrint('Password history insert failed: $e');
+      }
+
+      return {'success': true, 'message': 'Password changed.'};
+    } catch (e) {
+      if (kDebugMode) debugPrint('Change password error: $e');
+      return {
+        'success': false,
+        'message': 'Could not change the password. Please try again.',
+      };
+    }
+  }
+
+  /// The account's own details, for the profile page.
+  ///
+  /// Keyed on `account_id` rather than a role table, so it serves a midwife,
+  /// an admin and a mother alike.
+  static Future<Map<String, dynamic>?> getAccountOverview(int accountId) async {
+    try {
+      return await client
+          .from('accounts')
+          .select('account_id, first_name, middle_name, last_name, '
+              'extension_name, email_address, phone_number, account_type, '
+              'status, is_verified, is_temporary_password, created_by, '
+              'created_at, updated_at, last_login_at')
+          .eq('account_id', accountId)
+          .maybeSingle();
+    } catch (e) {
+      if (kDebugMode) debugPrint('Get account overview error: $e');
+      return null;
+    }
+  }
+
+  /// The account's profile photo, if one has been uploaded.
+  ///
+  /// The existing pair keyed on `mother_id`, which no midwife has. The photo
+  /// itself was always stored against the account — `files.uploaded_by` — so
+  /// these read and write the same rows and the same bucket path, reachable by
+  /// anyone with an account id.
+  static Future<String?> getAccountProfilePictureUrl(int accountId) async {
+    try {
+      final fileRow = await client
+          .from('files')
+          .select('file_path, bucket_name')
+          .eq('reference_type', 'profile_photo')
+          .eq('uploaded_by', accountId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (fileRow == null) return null;
+      final bucket = fileRow['bucket_name']?.toString() ?? 'files';
+      final path = fileRow['file_path']?.toString();
+      if (path == null || path.isEmpty) return null;
+      return client.storage.from(bucket).getPublicUrl(path);
+    } catch (e) {
+      if (kDebugMode) debugPrint('Get account profile picture error: $e');
+      return null;
+    }
+  }
+
+  static Future<String?> uploadAccountProfilePicture(
+      int accountId, Uint8List imageBytes) async {
+    try {
+      final fileName = 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final filePath = 'profile-pictures/$accountId/$fileName';
+
+      await client.storage.from('files').uploadBinary(
+            filePath,
+            imageBytes,
+            fileOptions:
+                const FileOptions(contentType: 'image/jpeg', upsert: true),
+          );
+
+      final publicUrl = client.storage.from('files').getPublicUrl(filePath);
+
+      // Drop the previous photo so the bucket does not accumulate one file per
+      // change, and so the newest row is unambiguous.
+      try {
+        final existing = await client
+            .from('files')
+            .select('file_id, file_path')
+            .eq('reference_type', 'profile_photo')
+            .eq('uploaded_by', accountId);
+
+        for (final file in existing) {
+          final oldPath = file['file_path']?.toString();
+          if (oldPath != null && oldPath != filePath) {
+            try {
+              await client.storage.from('files').remove([oldPath]);
+            } catch (e) {
+              // The row still goes, so a file left behind in the bucket is
+              // orphaned rather than shown.
+              if (kDebugMode) debugPrint('Old photo remove failed: $e');
+            }
+          }
+          await client.from('files').delete().eq('file_id', file['file_id']);
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('Old profile photo cleanup failed: $e');
+      }
+
+      await client.from('files').insert({
+        'bucket_name': 'files',
+        'file_path': filePath,
+        'file_name': fileName,
+        'file_category': 'profile_photo',
+        'mime_type': 'image/jpeg',
+        'file_size': imageBytes.length,
+        'uploaded_by': accountId,
+        'reference_type': 'profile_photo',
+        'reference_id': accountId,
+        'processing_type': 'profile_photo',
+        'ai_processed': false,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      return publicUrl;
+    } catch (e) {
+      if (kDebugMode) debugPrint('Upload account profile picture error: $e');
+      return null;
+    }
+  }
+
   // Clear temporary password flag
   static Future<bool> clearTemporaryPasswordFlag(int accountId) async {
     try {

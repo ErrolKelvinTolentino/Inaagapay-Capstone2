@@ -34,6 +34,8 @@ import 'screens/midwife/midwife_schedules_screen.dart';
 import 'screens/midwife/midwife_add_mother_screen.dart';
 import 'screens/midwife_inventory/midwife_inventory_page.dart';
 import 'screens/settings_screen.dart';
+import 'screens/midwife/midwife_profile_page.dart';
+import 'screens/midwife/midwife_help_page.dart';
 import 'screens/shared/immunization_poster_screen.dart';
 
 void main() async {
@@ -276,6 +278,8 @@ class _InaagapayAppState extends State<InaagapayApp> {
             // path and is never what a real mother is shown.
             '/baby-book': (context) => const BabyBookEntry(),
             '/settings': (context) => const SettingsScreen(),
+            '/profile': (context) => const MidwifeProfilePage(),
+            '/help': (context) => const MidwifeHelpPage(),
             '/midwife-mothers': (context) => const MidwifeMothersScreen(),
             '/midwife-children': (context) => const MidwifeChildrenScreen(),
             '/midwife-schedules': (context) => const MidwifeSchedulesScreen(),
