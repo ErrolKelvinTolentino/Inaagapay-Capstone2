@@ -12,6 +12,7 @@ import '../../services/groq_service.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/pregnancy_risk_override.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/headline.dart';
@@ -66,6 +67,15 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
   DateTime? _pregnancyLmp;
   DateTime? _pregnancyEdd;
   int? _pregnancyId;
+
+  /// The pregnancy's risk level, as the midwife may revise it here.
+  ///
+  /// A scan is a reason to change it: an ultrasound that reads small for
+  /// dates, or a finding she wants followed up, should not require reopening a
+  /// prenatal checkup to record. Seeded from the pregnancy so the control
+  /// shows the current level rather than defaulting to low.
+  String _pregnancyRiskLevel = 'low';
+  String _initialRiskLevel = 'low';
   String? _profession;
   int _fetalCount = 1;
 
@@ -142,7 +152,7 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
       if (widget.pregnancyId != null) {
         final res = await Supabase.instance.client
             .from('pregnancies')
-            .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status')
+            .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status, pregnancy_risk_level')
             .eq('pregnancy_id', widget.pregnancyId!)
             .maybeSingle();
         if (res != null) {
@@ -154,7 +164,7 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
       if (response == null) {
         final List<dynamic> pregList = await Supabase.instance.client
             .from('pregnancies')
-            .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status')
+            .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status, pregnancy_risk_level')
             .eq('mother_id', widget.motherId)
             .order('pregnancy_id', ascending: false);
 
@@ -183,7 +193,7 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
 
         final List<dynamic> pregList2 = await Supabase.instance.client
             .from('pregnancies')
-            .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status')
+            .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status, pregnancy_risk_level')
             .eq('mother_id', targetMotherId)
             .order('pregnancy_id', ascending: false);
 
@@ -201,7 +211,7 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
                 'fetal_count': 1,
                 'created_at': now.toIso8601String(),
               })
-              .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status')
+              .select('pregnancy_id, last_menstrual_period, expected_date_of_delivery, fetal_count, status, pregnancy_risk_level')
               .single();
           response = Map<String, dynamic>.from(created);
         }
@@ -222,6 +232,12 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
 
       _originalEdd = _pregnancyEdd;
       _fetalCount = int.tryParse(response['fetal_count']?.toString() ?? '') ?? 1;
+
+      final level = response['pregnancy_risk_level']?.toString().toLowerCase();
+      if (level == 'low' || level == 'high') {
+        _pregnancyRiskLevel = level!;
+        _initialRiskLevel = level;
+      }
 
       if (kDebugMode) debugPrint('[AddUltrasound] Pregnancy loaded: id=$_pregnancyId');
     } catch (e) {
@@ -893,6 +909,26 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
         if (kDebugMode) debugPrint('[AddUltrasound] Clinical encounter insert note: $e');
       }
 
+      // The midwife's risk call, written only when she actually changed it.
+      //
+      // Writing unconditionally would have this screen re-assert "low" on
+      // every scan and quietly undo a level raised at a checkup an hour
+      // earlier. A record screen may revise the pregnancy; it must not
+      // overwrite it by default.
+      if (_pregnancyRiskLevel != _initialRiskLevel && _pregnancyId != null) {
+        try {
+          await Supabase.instance.client
+              .from('pregnancies')
+              .update({'pregnancy_risk_level': _pregnancyRiskLevel})
+              .eq('pregnancy_id', _pregnancyId!);
+          _initialRiskLevel = _pregnancyRiskLevel;
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('[AddUltrasound] Risk level update note: $e');
+          }
+        }
+      }
+
       final inserted = await Supabase.instance.client
           .from('ultrasounds')
           .insert({
@@ -1168,6 +1204,21 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    // Same control, same wording as the prenatal checkup — a
+                    // scan is as good a reason to revise the level as anything
+                    // found at a visit, and she should not have to reopen a
+                    // checkup to record it.
+                    _sectionCard(
+                      title: 'Pregnancy Risk Assessment',
+                      child: PregnancyRiskOverride(
+                        value: _pregnancyRiskLevel,
+                        onChanged: (level) =>
+                            setState(() => _pregnancyRiskLevel = level),
+                        helperText:
+                            'Applies to the whole pregnancy. Left unchanged, '
+                            'the level set at the last checkup stands.',
+                      ),
+                    ),
                   ],
                 ),
               ),

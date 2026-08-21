@@ -2472,15 +2472,43 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     return DateTime.tryParse(value.toString());
   }
 
+  /// Sorts records by their clinical date, breaking ties on when they were
+  /// entered.
+  ///
+  /// The tiebreak is what makes this work at all. Ultrasounds and lab tests
+  /// carry a date without a time — four scans conducted on the same day all
+  /// compare equal, `sort` is stable, and the list comes back in whatever
+  /// order the database returned it. Choosing "Newest" appeared to do nothing,
+  /// because for same-day records it genuinely did nothing.
+  ///
+  /// Clinical date stays primary so an old scan brought in late files by when
+  /// it was performed rather than jumping to the top. `created_at` carries a
+  /// timestamp, so it separates records the first field cannot.
   List<Map<String, dynamic>> _sortByDate(
-      List list, String field, String order) {
+    List list,
+    String field,
+    String order, {
+    String tieBreakField = 'created_at',
+  }) {
     final sorted = List<Map<String, dynamic>>.from(list);
+    final newestFirst = order == 'desc';
+
     sorted.sort((a, b) {
       final dateA = _parseDateForSort(a[field]);
       final dateB = _parseDateForSort(b[field]);
-      if (dateA == null || dateB == null) return 0;
-      return order == 'desc' ? dateB.compareTo(dateA) : dateA.compareTo(dateB);
+
+      if (dateA != null && dateB != null) {
+        final primary =
+            newestFirst ? dateB.compareTo(dateA) : dateA.compareTo(dateB);
+        if (primary != 0) return primary;
+      }
+
+      final tieA = _parseDateForSort(a[tieBreakField]);
+      final tieB = _parseDateForSort(b[tieBreakField]);
+      if (tieA == null || tieB == null) return 0;
+      return newestFirst ? tieB.compareTo(tieA) : tieA.compareTo(tieB);
     });
+
     return sorted;
   }
 
@@ -5900,25 +5928,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   ),
                 ),
               ],
-              if (assessment.action != BpAction.none) ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: tone.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    assessment.action.label,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      color: tone,
-                    ),
-                  ),
-                ),
-              ],
+              // The action pill that sat here is gone. The card header already
+              // carries it, and the same two words in two places on one card
+              // read as two findings rather than one — the reader checks
+              // whether they differ before realising they cannot.
             ],
           ),
         ),
@@ -5926,6 +5939,67 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         Text(
           kBloodPressureSourceShort,
           style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+        ),
+        // Same treatment as the weight-gain card directly above: the citation
+        // is available without being in the way. The one-line source stays
+        // visible — a reading should always show whose rule it was judged by —
+        // and the full wording sits behind a tap.
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            title: const Text(
+              'Clinical Disclaimer & References',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.brandPrimary,
+              ),
+            ),
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(top: 2, bottom: 4),
+            dense: true,
+            children: [
+              Text(
+                'Disclaimer: This analysis applies published blood pressure '
+                'thresholds for pregnancy and reports where a reading sits '
+                'against them. It does not diagnose gestational hypertension, '
+                'pre-eclampsia or chronic hypertension — those are diagnoses '
+                'made by a physician. It is for monitoring support only and '
+                'does not substitute for clinical assessment.',
+                style: TextStyle(
+                  fontSize: 10,
+                  height: 1.4,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'References:\n'
+                '• American College of Obstetricians and Gynecologists (ACOG). '
+                '(2020). Gestational Hypertension and Preeclampsia: ACOG '
+                'Practice Bulletin No. 222. Obstetrics & Gynecology, 135(6), '
+                'e237–e260.\n'
+                '• Department of Health (Philippines). Administrative Order '
+                'No. 2016-0035: Guidelines on the Provision of Quality '
+                'Antenatal Care.',
+                style: TextStyle(
+                  fontSize: 10,
+                  height: 1.4,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                kBloodPressureSourceNote,
+                style: TextStyle(
+                  fontSize: 10,
+                  height: 1.4,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -6711,6 +6785,11 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             // Sits beside weight gain because both are read the same way: as
             // a line across the pregnancy, not as the latest number.
             _buildBloodPressureTrendCard(checkups, lmp),
+            // Matches the gap every other section on this page uses. The
+            // blood pressure card ends in small grey text and the Td card
+            // begins with a heading, so without it the two read as one block.
+            const SizedBox(height: 16),
+
             // ── Maternal Td Immunization ──────────────────────────────
             _buildMaternalTdQuickCard(profile),
 
@@ -6726,7 +6805,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                       int.tryParse(
                               pregnancy['fetal_count']?.toString() ?? '') ??
                           1)).toList(),
-              allWidgets: sortedCheckups.map((c) =>
+              allWidgetsBuilder: (sort) => _sortByDate(checkups, 'checkup_datetime', sort).map((c) =>
                   _buildCheckupCard(
                       c,
                       pregnancy['pregnancy_id'] ?? -1,
@@ -6748,7 +6827,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 icon: Icons.photo_outlined,
                 totalCount: ultrasounds.length,
                 previewWidgets: sortedUltrasounds.take(3).map((u) => _buildUltrasoundCard(u)).toList(),
-                allWidgets: sortedUltrasounds.map((u) => _buildUltrasoundCard(u)).toList(),
+                allWidgetsBuilder: (sort) =>
+                    _sortByDate(ultrasounds, 'ultrasound_date', sort)
+                        .map((u) => _buildUltrasoundCard(u))
+                        .toList(),
                 emptyText: 'No ultrasounds recorded yet',
                 modalTitle: 'Ultrasound Records',
                 sortValue: _ultrasoundSort,
@@ -6765,7 +6847,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 icon: Icons.science_outlined,
                 totalCount: labTests.length,
                 previewWidgets: sortedLabTests.take(3).map((l) => _buildLabTestCard(l)).toList(),
-                allWidgets: sortedLabTests.map((l) => _buildLabTestCard(l)).toList(),
+                allWidgetsBuilder: (sort) =>
+                    _sortByDate(labTests, 'lab_test_date', sort)
+                        .map((l) => _buildLabTestCard(l))
+                        .toList(),
                 emptyText: 'No lab tests recorded yet',
                 modalTitle: 'Lab Test Results',
                 sortValue: _labSort,
@@ -6802,7 +6887,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 icon: Icons.monitor_weight_outlined,
                 totalCount: vitals.length,
                 previewWidgets: sortedVitals.take(3).map((v) => _buildMaternalVitalCard(v)).toList(),
-                allWidgets: sortedVitals.map((v) => _buildMaternalVitalCard(v)).toList(),
+                allWidgetsBuilder: (sort) =>
+                    _sortByDate(vitals, 'recorded_at', sort)
+                        .map((v) => _buildMaternalVitalCard(v))
+                        .toList(),
                 emptyText: 'No vitals logged yet',
                 modalTitle: 'Self-logged Vitals History',
                 sortValue: _vitalSort,
@@ -6918,8 +7006,12 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               backgroundColor: AppColors.brandPrimary,
               foregroundColor: Colors.white,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+              // Fully rounded, matching the pill shapes this page uses for
+              // every other action — "View All", the status chips, the risk
+              // segments. An 8px radius made this the one square control on a
+              // page of pills.
+              shape: const StadiumBorder(),
             ),
             onPressed: () async {
               final assignedBhc = profile['assigned_bhc_id'] as int?;
@@ -6966,13 +7058,13 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     required IconData icon,
     required int totalCount,
     required List<Widget> previewWidgets,
-    required List<Widget> allWidgets,
+    required List<Widget> Function(String sort) allWidgetsBuilder,
     required String emptyText,
     required String modalTitle,
     required String sortValue,
     required ValueChanged<String?> onSortChanged,
   }) {
-    final hasRecords = allWidgets.isNotEmpty;
+    final hasRecords = totalCount > 0;
 
     return ProfileCardSection(
       title: '$title ($totalCount)',
@@ -6983,8 +7075,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 context: context,
                 title: modalTitle,
                 icon: icon,
-                recordWidgets: allWidgets,
-                currentSort: sortValue,
+                recordsBuilder: allWidgetsBuilder,
+                initialSort: sortValue,
                 onSortChanged: onSortChanged,
               ),
               borderRadius: BorderRadius.circular(20),
@@ -7054,10 +7146,20 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     required BuildContext context,
     required String title,
     required IconData icon,
-    required List<Widget> recordWidgets,
-    required String currentSort,
+    /// Builds the rows for a given sort order.
+    ///
+    /// A builder rather than a finished list, because the sheet has to be able
+    /// to re-sort itself. It previously received both the rows and the current
+    /// order by value, captured when it opened — so choosing "Oldest" updated
+    /// the page behind the sheet while the sheet redrew the same stale list
+    /// and the same stale selection. The option looked unselectable because
+    /// nothing it controlled could change.
+    required List<Widget> Function(String sort) recordsBuilder,
+    required String initialSort,
     required ValueChanged<String?> onSortChanged,
   }) {
+    var sheetSort = initialSort;
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -7066,6 +7168,9 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         final bottomPadding = MediaQuery.of(sheetContext).viewInsets.bottom;
         return StatefulBuilder(
           builder: (context, setModalState) {
+            // The sheet owns this choice while it is open; the page is told
+            // about it too, so the collapsed preview agrees on reopen.
+            final recordWidgets = recordsBuilder(sheetSort);
             return DraggableScrollableSheet(
               initialChildSize: 0.78,
               minChildSize: 0.4,
@@ -7136,9 +7241,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                                 color: AppColors.textSecondary,
                               ),
                             ),
-                            _buildSortRow(currentSort, (v) {
+                            _buildSortRow(sheetSort, (v) {
+                              if (v == null) return;
+                              setModalState(() => sheetSort = v);
                               onSortChanged(v);
-                              setModalState(() {});
                             }),
                           ],
                         ),
@@ -7369,7 +7475,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                           c,
                           pregnancyId,
                           int.tryParse(p['fetal_count']?.toString() ?? '') ?? 1)).toList(),
-                  allWidgets: sortedHistCheckups.map((c) =>
+                  allWidgetsBuilder: (sort) => _sortByDate(checkups, 'checkup_datetime', sort).map((c) =>
                       _buildCheckupCard(
                           c,
                           pregnancyId,
@@ -7386,7 +7492,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   icon: Icons.photo_outlined,
                   totalCount: ultrasounds.length,
                   previewWidgets: sortedHistUltrasounds.take(3).map((u) => _buildUltrasoundCard(u)).toList(),
-                  allWidgets: sortedHistUltrasounds.map((u) => _buildUltrasoundCard(u)).toList(),
+                  allWidgetsBuilder: (sort) =>
+                      _sortByDate(ultrasounds, 'ultrasound_date', sort)
+                          .map((u) => _buildUltrasoundCard(u))
+                          .toList(),
                   emptyText: 'No ultrasound records for this pregnancy',
                   modalTitle: 'Ultrasounds ($titleStr)',
                   sortValue: 'desc',
@@ -7399,7 +7508,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   icon: Icons.science_outlined,
                   totalCount: labTests.length,
                   previewWidgets: sortedHistLabTests.take(3).map((l) => _buildLabTestCard(l)).toList(),
-                  allWidgets: sortedHistLabTests.map((l) => _buildLabTestCard(l)).toList(),
+                  allWidgetsBuilder: (sort) =>
+                      _sortByDate(labTests, 'lab_test_date', sort)
+                          .map((l) => _buildLabTestCard(l))
+                          .toList(),
                   emptyText: 'No lab test records for this pregnancy',
                   modalTitle: 'Lab Tests ($titleStr)',
                   sortValue: 'desc',
@@ -7412,7 +7524,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   icon: Icons.monitor_weight_outlined,
                   totalCount: vitals.length,
                   previewWidgets: sortedHistVitals.take(3).map((v) => _buildMaternalVitalCard(v)).toList(),
-                  allWidgets: sortedHistVitals.map((v) => _buildMaternalVitalCard(v)).toList(),
+                  allWidgetsBuilder: (sort) =>
+                      _sortByDate(vitals, 'recorded_at', sort)
+                          .map((v) => _buildMaternalVitalCard(v))
+                          .toList(),
                   emptyText: 'No vitals logged for this pregnancy',
                   modalTitle: 'Vitals ($titleStr)',
                   sortValue: 'desc',
