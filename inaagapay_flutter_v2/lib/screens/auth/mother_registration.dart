@@ -5,7 +5,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/clickable_text.dart';
-import '../../widgets/page_title.dart';
+import '../../widgets/headline.dart';
 import '../../widgets/password_constraints.dart';
 import '../../widgets/password_strength_indicator.dart';
 import '../../widgets/dialog_box.dart';
@@ -265,12 +265,15 @@ class _MotherRegistrationScreenState extends State<MotherRegistrationScreen>
                     ),
                     const SizedBox(height: 24),
 
-                    const PageTitle(
-                      title: 'Create Account',
-                      leadingIcon: Icons.account_circle,
-                      trailingIcon: Icons.keyboard_arrow_down,
-                      color: AppColors.brandText,
-                    ),
+                    // Plain pink text, the same treatment every other titled
+                    // screen in the app uses.
+                    //
+                    // It was a boxed icon, an uppercased title and a trailing
+                    // chevron — and the chevron opened nothing. A downward
+                    // arrow beside a heading is the universal sign that
+                    // something expands, so it read as a control on a page
+                    // where the next thing to do is type an email.
+                    const Headline(text: 'Create Account'),
                     const SizedBox(height: 24),
 
                     // Contact Field (Email or Phone - single field)
