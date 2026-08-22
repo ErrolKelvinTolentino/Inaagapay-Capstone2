@@ -60,6 +60,16 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
   bool _anyRecordAdded = false;
 
   int? _bhcStockCount;
+
+  /// False when this vaccine has no inventory item behind it, so the shelf
+  /// cannot be read at all.
+  ///
+  /// This is not the same as a count of zero, and collapsing the two blocked
+  /// the one vaccine nobody had stocked: Rotavirus had no catalogue item, the
+  /// lookup fell through to `_bhcStockCount = 0`, and the midwife was told
+  /// "there are no remaining vials" for a dose she was holding. The vaccination
+  /// drive service already drew this distinction; this screen now does too.
+  bool _stockTracked = true;
   bool _bhcStockLoading = false;
   int? _midwifeBhcId;
 
@@ -599,6 +609,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
         if (mounted) {
           setState(() {
             _bhcStockCount = 0;
+            _stockTracked = false;
             _sealedVialsCount = 0;
             _activeOpenVialBatch = null;
             _nextSealedBatch = null;
@@ -619,6 +630,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
         if (mounted) {
           setState(() {
             _bhcStockCount = 0;
+            _stockTracked = false;
             _sealedVialsCount = 0;
             _activeOpenVialBatch = null;
             _nextSealedBatch = null;
@@ -658,6 +670,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
         if (mounted) {
           setState(() {
             _bhcStockCount = 0;
+            _stockTracked = false;
             _sealedVialsCount = 0;
             _activeOpenVialBatch = null;
             _nextSealedBatch = null;
@@ -745,6 +758,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
       if (mounted) {
         setState(() {
           _bhcStockCount = totalDoses;
+          _stockTracked = true;
           _dosesPerUnit = dosesPerUnit;
           _openVialShelfHours = shelfHours;
           _sealedVialsCount = sealedVials;
@@ -758,7 +772,11 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
       debugPrint('Error checking BHC stock: $e');
       if (mounted) {
         setState(() {
+          // A failed lookup is not evidence of an empty shelf. Let the save
+          // through; deduct_immunization_stock is the authority on stock and
+          // reports a shortage in the outcome dialog if there is one.
           _bhcStockCount = 0;
+          _stockTracked = false;
           _sealedVialsCount = 0;
           _activeOpenVialBatch = null;
           _nextSealedBatch = null;
@@ -1525,7 +1543,11 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
       if (proceed != true) return false;
     }
 
-    if (!_isOutside && (_bhcStockCount ?? 0) <= 0) {
+    // Only an empty shelf blocks. A vaccine with no catalogue item behind it is
+    // untracked, not out — refusing to record a dose the midwife has already
+    // given would lose the clinical record to protect a stock count that does
+    // not exist.
+    if (!_isOutside && _stockTracked && (_bhcStockCount ?? 0) <= 0) {
       if (mounted) {
         await _showBlockedDialog(
           'Out of Stock',
@@ -1804,6 +1826,14 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     }
 
     if (_bhcStockCount == null) return const SizedBox.shrink();
+
+    if (!_stockTracked) {
+      return const StockStatusCard(
+        tone: StockTone.caution,
+        message: 'Stock is not tracked for this vaccine at your health center, '
+            'so nothing will be deducted. The dose is still recorded.',
+      );
+    }
 
     if (_bhcStockCount! <= 0) {
       return const StockStatusCard(

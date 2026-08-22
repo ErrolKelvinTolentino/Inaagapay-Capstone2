@@ -3,68 +3,61 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/auth_storage.dart';
 import 'inventory_models.dart';
 
-/// Live inventory access for the presentation branch.
+/// Live inventory access for the midwife app.
 ///
-/// It owns a client pointed at the same project as `admin-web`. This keeps the
-/// branch isolated from the normal Flutter app, whose legacy configuration may
-/// still target a different Supabase project.
+/// It uses the app's own Supabase client. It used to construct a second one
+/// from a URL and anon key written into this file, aimed at whichever project
+/// those constants named — so the stock this screen showed and the stock a
+/// clinical screen deducted from were not guaranteed to be the same shelf.
+/// Both now come from .env, resolved once in main.dart.
 class InventoryRepository {
   InventoryRepository({SupabaseClient? client})
-      : _client = client ?? SupabaseClient(_supabaseUrl, _supabaseAnonKey);
-
-  static const String _supabaseUrl = 'https://krooorixhjwygcsdoomg.supabase.co';
-  static const String _supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.'
-      'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.'
-      'iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU';
-
-  static const int _demoAccountId = 9;
-  static const int _demoFacilityId = 3;
+      : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
   bool _workflowRpcUnavailable = false;
 
+  /// The signed-in midwife and the health centre whose shelf she works from.
+  ///
+  /// There used to be a fallback to a fixed demo account here, taken whenever
+  /// the saved session did not resolve. It kept the screen usable, but every
+  /// dispense, write-off and request made from that state was recorded against
+  /// Pinagbarilan BHC and attributed to account #9 — real stock movements
+  /// posted to the wrong health centre under the wrong name. An error the
+  /// midwife can read is the only honest outcome when the session is unknown.
   Future<MidwifeInventoryContext> resolveContext() async {
     final savedAccountId = await AuthStorage.getUserId();
     final savedRole = await AuthStorage.getUserRole();
     final savedToken = await AuthStorage.getToken();
 
-    if (savedAccountId != null &&
-        savedRole?.toLowerCase() == 'midwife' &&
-        savedToken != null &&
-        savedToken.isNotEmpty) {
-      try {
-        final savedContext = await _contextForAccount(
-          accountId: savedAccountId,
-          expectedToken: savedToken,
-          isDemo: false,
-        );
-        if (savedContext != null) return savedContext;
-      } catch (_) {
-        // The direct-launch demo must remain usable if a legacy saved session
-        // belongs to the Flutter project's other Supabase database.
-      }
+    if (savedAccountId == null ||
+        savedRole?.toLowerCase() != 'midwife' ||
+        savedToken == null ||
+        savedToken.isEmpty) {
+      throw const InventoryRepositoryException(
+        'Sign in with your midwife account to open the health center '
+        'inventory.',
+      );
     }
 
-    return await _contextForAccount(
-          accountId: _demoAccountId,
-          isDemo: true,
-          fallbackFacilityId: _demoFacilityId,
-        ) ??
-        const MidwifeInventoryContext(
-          accountId: _demoAccountId,
-          midwifeId: 3,
-          facilityId: _demoFacilityId,
-          facilityName: 'Pinagbarilan BHC',
-          displayName: 'Demo Midwife',
-          isDemo: true,
-        );
+    final context = await _contextForAccount(
+      accountId: savedAccountId,
+      expectedToken: savedToken,
+    );
+
+    if (context == null) {
+      throw const InventoryRepositoryException(
+        'This account is not assigned to a barangay health center yet, so it '
+        'has no stock to show. Ask the RHU to set the assignment.',
+      );
+    }
+
+    return context;
   }
 
   Future<MidwifeInventoryContext?> _contextForAccount({
     required int accountId,
-    required bool isDemo,
     String? expectedToken,
-    int? fallbackFacilityId,
   }) async {
     final account = await _client
         .from('accounts')
@@ -92,8 +85,7 @@ class InventoryRepository {
         .eq('account_id', accountId)
         .maybeSingle();
 
-    final facilityId =
-        _nullableInt(midwife?['assigned_bhc_id']) ?? fallbackFacilityId;
+    final facilityId = _nullableInt(midwife?['assigned_bhc_id']);
     if (facilityId == null) return null;
 
     String facilityName = 'Barangay Health Center #$facilityId';
@@ -138,7 +130,7 @@ class InventoryRepository {
       facilityId: facilityId,
       facilityName: facilityName,
       displayName: fullName.isEmpty ? 'Midwife' : fullName,
-      isDemo: isDemo,
+      isDemo: false,
       supplierName: supplierName,
     );
   }

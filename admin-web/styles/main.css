@@ -854,10 +854,24 @@ img {
   display: none;
 }
 
-.form-control.error {
+.form-control.error,
+.form-select.error,
+.searchable-select-input.error {
   border-color: var(--error);
 }
-.form-control.error + .form-error {
+
+/* A marked field keeps its red edge when focused, so the correction stays
+   visible while it is being made. */
+.form-control.error:focus,
+.form-select.error:focus,
+.searchable-select-input.error:focus {
+  border-color: var(--error);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+.form-control.error + .form-error,
+.form-select.error + .form-error,
+.searchable-select-input.error + .form-error {
   display: block;
 }
 

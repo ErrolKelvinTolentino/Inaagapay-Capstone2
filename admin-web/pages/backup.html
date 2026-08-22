@@ -686,6 +686,11 @@
         const TABLES = [
           "accounts",
           "bhc",
+          // The facility tree every scoping rule reads. Restoring stock without
+          // it leaves batches, requests and transfers pointing at facilities
+          // that no longer exist.
+          "health_facilities",
+          "facility_assignments",
           "midwives",
           "mothers",
           "pregnancies",
@@ -695,7 +700,7 @@
           "child_details",
           "vaccines",
           "immunization_schedule",
-          "immunization_record",
+          "immunization_records",
           "emergency_contacts",
           "medical_conditions",
           "allergies",
@@ -708,7 +713,15 @@
           "journal_entries",
           "inventory_items",
           "inventory_batches",
+          // The distribution workflow. A backup of items, batches and
+          // transactions alone restores stock levels but no record of who asked
+          // for what, what was issued, what was received, or what was disposed
+          // of — which is most of what the inventory module exists to show.
+          "inventory_stock_requests",
+          "inventory_transfers",
           "inventory_transactions",
+          "inventory_disposals",
+          "inventory_unusable_stock_reports",
           "audit_trail",
         ];
 
@@ -748,8 +761,28 @@
           inventory_batches: "batch_id",
           inventory_transactions: "transaction_id",
           audit_trail: "audit_id",
+
+          // Distribution workflow. Keys taken from the CREATE TABLE statements
+          // in 20260803_inventory_distribution_workflow.sql,
+          // 20260806_inventory_audit_fixes.sql and
+          // 20260811_midwife_inventory_stock_activity.sql.
+          inventory_stock_requests: "request_id",
+          inventory_transfers: "transfer_id",
+          inventory_disposals: "disposal_id",
+          inventory_unusable_stock_reports: "report_id",
+
+          facility_assignments: "facility_assignment_id",
+          immunization_records: "immunization_record_id",
+
+          // Backed up but deliberately not restorable. health_facilities carries
+          // a self-referencing parent_facility_id, and the barangay health
+          // centres were created before the RHUs that now parent them — so their
+          // ids sort children ahead of parents and a single bulk upsert trips
+          // the foreign key. Capturing the rows is what matters; rebuilding the
+          // tree is a manual step until the restore sorts by depth.
+          //
           // Unverified — confirm the key before enabling restore for these:
-          // child_details, immunization_record, deliveries, checkup_schedule
+          // child_details, deliveries, checkup_schedule
         };
 
         function restoreRank(table) {

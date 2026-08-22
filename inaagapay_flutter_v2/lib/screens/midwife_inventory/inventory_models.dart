@@ -404,15 +404,24 @@ class InventoryNotificationRecord {
     final normalizedTitle = title.toLowerCase();
     final normalizedMessage = message.toLowerCase();
 
+    // Classification used to be exact equality against four English titles
+    // written in the migrations. Any rewording there — "Incoming stocks from
+    // RHU Main" becoming "Incoming stocks" under the municipal tier, say —
+    // silently dropped the notification out of this feed with no error
+    // anywhere. Matching on distinctive substrings survives that, and the
+    // 'inventory' type stamped by the database is the durable signal that a row
+    // belongs here at all.
     final InventoryNotificationKind? kind;
-    if (normalizedTitle == 'stock request approved') {
+    if (normalizedTitle.contains('request approved') ||
+        (normalizedTitle.contains('request') &&
+            normalizedMessage.contains('was approved'))) {
       kind = InventoryNotificationKind.approved;
-    } else if (normalizedTitle == 'incoming stocks from rhu main') {
-      kind = InventoryNotificationKind.issued;
-    } else if (normalizedTitle == 'stock request update' &&
+    } else if (normalizedTitle.contains('request') &&
         normalizedMessage.contains('not approved')) {
       kind = InventoryNotificationKind.rejected;
-    } else if (normalizedTitle == 'low stock after activity') {
+    } else if (normalizedTitle.contains('incoming stock')) {
+      kind = InventoryNotificationKind.issued;
+    } else if (normalizedTitle.contains('low stock')) {
       kind = InventoryNotificationKind.lowStock;
     } else {
       kind = null;
@@ -442,7 +451,7 @@ class InventoryNotificationRecord {
   String get displayTitle => switch (kind) {
         InventoryNotificationKind.approved => 'Stock request approved',
         InventoryNotificationKind.rejected => 'Stock request rejected',
-        InventoryNotificationKind.issued => 'Stocks issued by RHU Main',
+        InventoryNotificationKind.issued => 'Stocks issued to your health center',
         InventoryNotificationKind.lowStock => 'BHC stock is now low',
       };
 

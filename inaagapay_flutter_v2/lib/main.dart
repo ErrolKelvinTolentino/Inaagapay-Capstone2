@@ -50,10 +50,14 @@ void main() async {
     }
   }
 
-  const fallbackSupabaseUrl = 'https://buvseyqcdacctlupznya.supabase.co';
-  const fallbackSupabaseAnonKey =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1dnNleXFjZGFjY3RsdXB6bnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzE2NTUsImV4cCI6MjA4ODIwNzY1NX0.VPh8ZZFqdeFyb8YuMxllbJJa-nWl4VXNq74o6-Itjjw';
-
+  // .env is the only source of the database connection.
+  //
+  // There used to be a hardcoded fallback pair here pointing at an earlier
+  // Supabase project. .env is gitignored, so on any checkout where it is
+  // missing — or a build where the asset did not ship — the app connected to
+  // that abandoned database instead and carried on as if nothing were wrong:
+  // patient records, immunisations and stock movements written to a project
+  // nobody reads. Failing to start is the safer half of that trade.
   try {
     await dotenv.load(fileName: ".env");
     if (kDebugMode) print('✅ .env file loaded successfully');
@@ -61,16 +65,15 @@ void main() async {
     if (kDebugMode) print('⚠️ Could not load .env: $e');
   }
 
-  final envSupabaseUrl = dotenv.env['SUPABASE_URL']?.trim();
-  final envSupabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY']?.trim();
+  final supabaseUrl = dotenv.env['SUPABASE_URL']?.trim() ?? '';
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY']?.trim() ?? '';
 
-  final supabaseUrl = (envSupabaseUrl != null && envSupabaseUrl.isNotEmpty)
-      ? envSupabaseUrl
-      : fallbackSupabaseUrl;
-  final supabaseAnonKey =
-      (envSupabaseAnonKey != null && envSupabaseAnonKey.isNotEmpty)
-          ? envSupabaseAnonKey
-          : fallbackSupabaseAnonKey;
+  if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+    throw StateError(
+      'SUPABASE_URL and SUPABASE_ANON_KEY are missing. Copy .env.example to '
+      '.env in inaagapay_flutter_v2/ and fill in the project credentials.',
+    );
+  }
 
   try {
     await Supabase.initialize(
@@ -80,6 +83,7 @@ void main() async {
     if (kDebugMode) print('✅ Supabase initialized successfully');
   } catch (e) {
     if (kDebugMode) print('❌ Supabase init error: $e');
+    rethrow;
   }
 
   try {

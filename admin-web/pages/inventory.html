@@ -216,10 +216,45 @@
         color: var(--text-secondary);
       }
 
-      @keyframes scanLaser {
-        0% { top: 15%; opacity: 0.8; }
-        50% { top: 80%; opacity: 1; }
-        100% { top: 15%; opacity: 0.8; }
+      /* Print: the open dialog only.
+         Two buttons on this page call window.print() — the transfer dispatch
+         slip and the disposal certificate — and with no print rules both put the
+         sidebar, the header and every stock table on the page ahead of the
+         document someone actually asked for. The certificate is a record a
+         facility keeps, so it has to print as itself. */
+      @media print {
+        .app-sidebar,
+        .app-header,
+        .app-footer,
+        .app-main,
+        #toast-container { display: none !important; }
+
+        .modal-overlay { display: none !important; }
+
+        .modal-overlay.show {
+          display: block !important;
+          position: static !important;
+          background: #fff !important;
+          padding: 0 !important;
+        }
+        .modal-overlay.show .modal {
+          width: 100% !important;
+          max-width: 100% !important;
+          max-height: none !important;
+          overflow: visible !important;
+          border: none !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
+        }
+        .modal-overlay.show .modal-body {
+          max-height: none !important;
+          overflow: visible !important;
+        }
+        /* Controls are not part of the document. */
+        .modal-overlay.show .modal-close,
+        .modal-overlay.show .modal-footer { display: none !important; }
+
+        @page { margin: 15mm; }
       }
 
       /* Modern Elongated Capsule / Pill Action Buttons for Modal Labels */
@@ -1439,7 +1474,9 @@
       </footer>
     </div>
 
-    <div id="toast-container"></div>
+    <!-- polite, not assertive: stock messages should not cut across whatever a
+         screen reader is already saying. -->
+    <div id="toast-container" role="status" aria-live="polite" aria-atomic="false"></div>
 
     <!-- =====================================================
          MODALS & DRAWERS
@@ -1672,10 +1709,7 @@
             </div>
             <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
               <div class="form-group">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <label class="form-label" for="batch-number" style="font-weight: 600; font-size: 12.5px; margin: 0;">Batch / Lot Number <span class="req" style="color:#dc2626;">*</span></label>
-                  <button type="button" class="action-pill-btn pill-pink" onclick="openBarcodeScanner('receive-batch')"><i class="fa-solid fa-barcode"></i> Scan GS1</button>
-                </div>
+                <label class="form-label" for="batch-number" style="font-weight: 600; font-size: 12.5px; margin: 0 0 4px;">Batch / Lot Number <span class="req" style="color:#dc2626;">*</span></label>
                 <input class="form-control" type="text" id="batch-number" placeholder="e.g. BATCH-2026-09A" required style="border-radius: 8px;" />
               </div>
               <div class="form-group">
@@ -1796,10 +1830,7 @@
             </div>
 
             <div class="form-group" style="margin-bottom: 14px;">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <label class="form-label" for="issue-source-batch" style="font-weight: 600; font-size: 12.5px; margin:0;">Select Source Batch <span class="req" style="color:#dc2626;">*</span></label>
-                <button type="button" class="action-pill-btn pill-pink" onclick="openBarcodeScanner('issue-batch')"><i class="fa-solid fa-barcode"></i> Scan Batch</button>
-              </div>
+              <label class="form-label" for="issue-source-batch" style="font-weight: 600; font-size: 12.5px; margin: 0 0 4px;">Select Source Batch <span class="req" style="color:#dc2626;">*</span></label>
               <select class="form-select" id="issue-source-batch" required style="width:100%; border-radius: 8px;" onchange="updateIssueSafetyCheck();">
                 <option value="">— Select Available Source Batch —</option>
               </select>
@@ -1851,54 +1882,22 @@
     </div>
 
     <!-- Modal: Barcode & QR Code Scanner -->
-    <div class="modal-overlay" id="modal-barcode-scanner">
-      <div class="modal" style="max-width: 480px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.25);">
-        <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; background: #0f172a; color: white;">
-          <h2 class="modal-title" style="font-size: 15px; font-weight: 700; color: white; margin: 0; display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-camera" style="color: var(--brand-primary);"></i> Barcode &amp; QR Scanner
-          </h2>
-          <button class="modal-close" onclick="closeBarcodeScanner()" style="color: white;"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-        <div class="modal-body" style="padding: 20px; background: #0f172a; color: white; text-align: center;">
-          <div id="scanner-viewfinder" style="position: relative; width: 100%; height: 240px; background: #000; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 2px solid rgba(255,255,255,0.15);">
-            <video id="scanner-video" playsinline autoplay muted style="width: 100%; height: 100%; object-fit: cover;"></video>
-            <div id="scanner-laser" style="position: absolute; left: 10%; right: 10%; height: 2px; background: #ff2d87; box-shadow: 0 0 12px #ff2d87; animation: scanLaser 2s infinite ease-in-out;"></div>
-            <div id="scanner-overlay-box" style="position: absolute; width: 220px; height: 150px; border: 2px dashed rgba(255, 104, 165, 0.8); border-radius: 8px; pointer-events: none;"></div>
-          </div>
-          <p id="scanner-status" style="font-size: 12px; color: #94a3b8; margin: 12px 0 14px;">Position barcode / GS1 DataMatrix within frame to autofill.</p>
-          
-          <!-- Test / Simulation Barcode Buttons for immediate testing without physical camera -->
-          <div style="background: #1e293b; border-radius: 8px; padding: 10px; text-align: left; border: 1px solid #334155;">
-            <span style="font-size: 11px; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 6px;">Simulate Barcode / GS1 Scan:</span>
-            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-              <button type="button" class="action-pill-btn pill-dark" onclick="simulateBarcodeScan('GS1_BCG')"><i class="fa-solid fa-flask"></i> GS1 BCG (BCG2026A)</button>
-              <button type="button" class="action-pill-btn pill-dark" onclick="simulateBarcodeScan('GS1_TD')"><i class="fa-solid fa-syringe"></i> GS1 Td (TD-99201)</button>
-              <button type="button" class="action-pill-btn pill-dark" onclick="simulateBarcodeScan('LOT_RAW')"><i class="fa-solid fa-barcode"></i> Lot: PENTA-88301</button>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid #334155; background: #1e293b; display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 11px; color: #94a3b8;">Supports GS1-128, DataMatrix &amp; QR</span>
-          <button class="btn btn-secondary btn-sm" onclick="closeBarcodeScanner()">Close</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal: Transfer Dispatch Slip & QR Code -->
+    <!-- Modal: Transfer Dispatch Slip
+         This used to carry a QR code whose caption told the officer it could be
+         scanned in the portal or the mobile app. Neither has a scanner, so the
+         code and the claim are gone; the printable slip they were wrapped around
+         is a real paper trail and stays. -->
     <div class="modal-overlay" id="modal-transfer-qr">
       <div class="modal" style="max-width: 440px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
         <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
           <h2 class="modal-title" style="font-size: 15px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-qrcode" style="color: var(--brand-primary);"></i> Transfer Dispatch QR Slip
+            <i class="fa-solid fa-file-lines" style="color: var(--brand-primary);"></i> Transfer Dispatch Slip
           </h2>
           <button class="modal-close" onclick="closeModal('modal-transfer-qr')"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div class="modal-body" style="padding: 20px; text-align: center;">
-          <div id="transfer-qr-details" style="margin-bottom: 16px; text-align: left; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 12.5px;"></div>
-          <div style="background: white; padding: 16px; border: 2px dashed #cbd5e1; border-radius: 12px; display: inline-block;">
-            <div id="transfer-qrcode-canvas" style="display:flex; justify-content:center; align-items:center; width:160px; height:160px; background:#fafafa; border-radius:8px;"></div>
-          </div>
-          <p id="transfer-qr-hint" style="font-size: 11.5px; color: var(--text-secondary); margin-top: 12px;">The receiving BHC midwife can scan this QR code using the mobile app to verify and receive the batch immediately.</p>
+        <div class="modal-body" style="padding: 20px;">
+          <div id="transfer-qr-details" style="text-align: left; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 12.5px;"></div>
+          <p id="transfer-qr-hint" style="font-size: 11.5px; color: var(--text-secondary); margin-top: 12px;">Print this slip to send with the delivery. The receiving facility confirms receipt in its own portal or app, which is what moves the stock onto their shelf.</p>
         </div>
         <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--border-primary); background: #fafafa; display: flex; justify-content: flex-end; gap: 8px;">
           <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-transfer-qr')">Close</button>
@@ -2033,8 +2032,12 @@
             <div class="spinner" style="margin: 40px auto;"></div>
           </div>
         </div>
-        <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #fafafa; display: flex; justify-content: flex-end;">
-          <button class="btn btn-secondary" onclick="closeModal('modal-alerts-hub')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px;">Close Alert Hub</button>
+        <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #fafafa; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <span style="font-size: 11.5px; color: var(--text-secondary);" data-scope-copy>Sends one summary text to the midwives and officers of this office and the health centers under it.</span>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-primary" id="btn-send-inventory-sms-alert" onclick="sendInventoryAlertSms()" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px;"><i class="fa-solid fa-paper-plane"></i> Send SMS Reminders</button>
+            <button class="btn btn-secondary" onclick="closeModal('modal-alerts-hub')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px;">Close Alert Hub</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2042,7 +2045,6 @@
     <!-- External Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
     <script src="live-refresh.js"></script>
@@ -2125,12 +2127,16 @@
 
         // Writes an inventory action to the shared audit trail. The audit page already
         // advertises these action names as filters, but nothing was ever writing them.
-        async function logInventoryAudit(action, description, oldData = null, newData = null) {
+        // `table` names the table the action actually touched. It used to be
+        // hardcoded to inventory_batches for all eight call sites, so approving
+        // a request or cancelling a transfer was filed against the batch table
+        // and the audit trail could not be filtered by what changed.
+        async function logInventoryAudit(action, description, oldData = null, newData = null, table = "inventory_batches") {
           try {
             const { error } = await db.from("audit_trail").insert({
               account_id: actorId,
               action,
-              table_name: "inventory_batches",
+              table_name: table,
               description,
               old_data: oldData,
               new_data: newData
@@ -2140,6 +2146,86 @@
             console.warn("Audit log exception:", e);
           }
         }
+
+        /* ── Field-level validation ──────────────────────────────────────────
+           Every form on this page validated correctly and then reported the
+           result in a corner toast: "Please fill in all required batch details"
+           against seven fields, leaving the officer to work out which one. The
+           checks are unchanged — this only puts the message where the mistake
+           is, marks the field, and puts the cursor in it.
+
+           .form-control.error and .form-error already exist in main.css and
+           were never used here; the sibling selector means the message shows
+           itself once the input is marked. */
+
+        function clearFieldErrors(scopeEl) {
+          const root = typeof scopeEl === "string" ? document.getElementById(scopeEl) : scopeEl;
+          if (!root) return;
+          root.querySelectorAll(".form-control.error, .form-select.error").forEach(el => {
+            el.classList.remove("error");
+            el.removeAttribute("aria-invalid");
+          });
+          root.querySelectorAll(".form-error").forEach(el => {
+            el.textContent = "";
+            el.style.display = "none";
+          });
+        }
+
+        /**
+         * Mark one field as wrong and explain why, immediately beneath it.
+         * Returns false so a validation block can `return fieldError(...)`.
+         */
+        function fieldError(fieldId, message, { focus = true } = {}) {
+          const field = document.getElementById(fieldId);
+          if (!field) {
+            showToast(message, "warning");
+            return false;
+          }
+
+          field.classList.add("error");
+          field.setAttribute("aria-invalid", "true");
+
+          // A searchable select hides its real <select> behind a text input; the
+          // visible control is the one that should carry the mark.
+          const visible = field.parentElement?.querySelector(".searchable-select-input");
+          if (visible) visible.classList.add("error");
+
+          let msgEl = field.nextElementSibling;
+          if (!msgEl || !msgEl.classList.contains("form-error")) {
+            msgEl = document.createElement("span");
+            msgEl.className = "form-error";
+            field.insertAdjacentElement("afterend", msgEl);
+          }
+          msgEl.textContent = message;
+          msgEl.style.display = "block";
+
+          if (focus) {
+            const target = visible || field;
+            target.scrollIntoView({ block: "center", behavior: "smooth" });
+            // Selects inside a modal need the frame to settle before focus takes.
+            setTimeout(() => { try { target.focus({ preventScroll: true }); } catch (e) {} }, 60);
+          }
+          return false;
+        }
+
+        // Clearing on the next edit means the mark tracks the officer's attention
+        // rather than lingering after they have fixed it.
+        document.addEventListener("input", (e) => {
+          const el = e.target;
+          if (!el.classList || !el.classList.contains("error")) return;
+          el.classList.remove("error");
+          el.removeAttribute("aria-invalid");
+          const msgEl = el.nextElementSibling;
+          if (msgEl && msgEl.classList.contains("form-error")) msgEl.style.display = "none";
+        }, true);
+        document.addEventListener("change", (e) => {
+          const el = e.target;
+          if (!el.classList || !el.classList.contains("error")) return;
+          el.classList.remove("error");
+          el.removeAttribute("aria-invalid");
+          const msgEl = el.nextElementSibling;
+          if (msgEl && msgEl.classList.contains("form-error")) msgEl.style.display = "none";
+        }, true);
 
         function showToast(msg, type = "info") {
           const icons = { success: "fa-circle-check", error: "fa-circle-xmark", warning: "fa-triangle-exclamation", info: "fa-circle-info" };
@@ -2153,15 +2239,53 @@
         }
 
         // Window Modal Handlers
+        /* Dialogs were openable but not operable from the keyboard: focus stayed
+           on the page behind, Escape did nothing, and closing left the cursor
+           wherever it had been. Each dialog now takes focus on open, gives it
+           back on close, and answers Escape. */
+        let lastFocusedBeforeModal = null;
+
         window.openModal = function(id) {
           const modal = document.getElementById(id);
-          if (modal) modal.classList.add("show");
+          if (!modal) return;
+
+          lastFocusedBeforeModal = document.activeElement;
+          clearFieldErrors(modal); // never inherit marks from the last time it was used
+          modal.classList.add("show");
+          modal.setAttribute("role", "dialog");
+          modal.setAttribute("aria-modal", "true");
+
+          // The first thing worth typing in, or the dialog itself if it is a
+          // read-only one like the disposal certificate.
+          const first = modal.querySelector(
+            "input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])"
+          );
+          setTimeout(() => {
+            try { (first || modal.querySelector(".modal")).focus({ preventScroll: true }); } catch (e) {}
+          }, 50);
         };
 
         window.closeModal = function(id) {
           const modal = document.getElementById(id);
-          if (modal) modal.classList.remove("show");
+          if (!modal) return;
+          modal.classList.remove("show");
+          modal.removeAttribute("aria-modal");
+          clearFieldErrors(modal);
+
+          if (lastFocusedBeforeModal && document.contains(lastFocusedBeforeModal)) {
+            try { lastFocusedBeforeModal.focus({ preventScroll: true }); } catch (e) {}
+          }
+          lastFocusedBeforeModal = null;
         };
+
+        document.addEventListener("keydown", (e) => {
+          if (e.key !== "Escape") return;
+          const open = document.querySelector(".modal-overlay.show");
+          if (!open) return;
+          // The scanner is gone, so every remaining dialog is safe to dismiss:
+          // none of them commits anything until its own button is pressed.
+          closeModal(open.id);
+        });
 
         // Hub Navigation Switcher
         window.switchTab = function(targetHub) {
@@ -2607,7 +2731,7 @@
         window.archiveStockRequest = async function(requestId) {
           if (!confirm(`Are you sure you want to archive stock request #${requestId}?`)) return;
           try {
-            const { error } = await db.from("stock_requests").update({ is_archived: true }).eq("request_id", requestId);
+            const { error } = await db.from("inventory_stock_requests").update({ is_archived: true }).eq("request_id", requestId);
             if (error) throw error;
             showToast(`Archived stock request #${requestId}`, "success");
             await loadInventoryData();
@@ -2618,7 +2742,7 @@
 
         window.unarchiveStockRequest = async function(requestId) {
           try {
-            const { error } = await db.from("stock_requests").update({ is_archived: false }).eq("request_id", requestId);
+            const { error } = await db.from("inventory_stock_requests").update({ is_archived: false }).eq("request_id", requestId);
             if (error) throw error;
             showToast(`Restored stock request #${requestId}`, "success");
             await loadInventoryData();
@@ -3280,13 +3404,29 @@
             return;
           }
 
-          // Allocation share is derived from each BHC's registered patient load, which
-          // the system actually knows. It previously used a hardcoded population table
-          // keyed by BHC name — renaming a facility silently changed its quota.
+          // Allocation share is derived from each facility's registered patient load,
+          // which the system actually knows. It previously used a hardcoded population
+          // table keyed by BHC name — renaming a facility silently changed its quota.
+          //
+          // Mothers are assigned to barangay health centres, never to an RHU, so a
+          // facility's load is its own registered mothers plus every centre beneath
+          // it. On the RHU portal the columns are BHCs and the first hop matches; on
+          // the municipal portal they are RHUs, whose mothers all sit one level down.
+          // Looking the column id up directly — which is what this did — returned
+          // nothing for every RHU and left the whole matrix reading 0%.
           const loadByBhc = {};
           bhcs.forEach(b => { loadByBhc[b.bhc_id] = 0; });
+
+          const parentOf = {};
+          PortalScope.bhcFacilities.forEach(f => { parentOf[f.facility_id] = f.parent_facility_id; });
+
           (motherCountsByBhc || []).forEach(({ bhc_id, count }) => {
-            if (loadByBhc[bhc_id] !== undefined) loadByBhc[bhc_id] = count;
+            let id = bhc_id;
+            // Walk up until a column owns this centre. Bounded by the tree depth.
+            while (id !== null && id !== undefined) {
+              if (loadByBhc[id] !== undefined) { loadByBhc[id] += count; break; }
+              id = parentOf[id];
+            }
           });
           const totalLoad = Object.values(loadByBhc).reduce((a, b) => a + b, 0);
 
@@ -3883,9 +4023,14 @@
           const officer = document.getElementById("disposal-officer").value.trim();
           const notes = document.getElementById("disposal-notes").value.trim();
 
-          if (!batchId || !officer) {
-            showToast("Please specify the authorized inspector/officer name.", "warning");
+          clearFieldErrors("modal-disposal");
+
+          if (!batchId) {
+            showToast("This batch could not be identified. Close the dialog and try again.", "warning");
             return;
+          }
+          if (!officer) {
+            return fieldError("disposal-officer", "Name the officer who witnessed the disposal — the certificate is issued in their name.");
           }
 
           const batch = batches.find(b => b.batch_id === batchId);
@@ -3917,7 +4062,8 @@
                 "dispose_inventory_batch",
                 `Disposed batch ${batch.batch_number} (${disposal?.quantity_disposed ?? qtyDisposed} units) via ${method}`,
                 { quantity_remaining: qtyDisposed, status: batch.status },
-                { quantity_remaining: 0, status: "discarded", method, officer, notes: notes || null }
+                { quantity_remaining: 0, status: "discarded", method, officer, notes: notes || null },
+                "inventory_disposals"
               );
               showToast(`Disposal recorded successfully for Batch #${batch.batch_number}.`, "success");
               closeModal("modal-disposal");
@@ -3954,7 +4100,7 @@
             // The disposal facts live in the transaction row written above (quantity,
             // timestamp) plus its reference_type (method and officer), and the audit
             // trail below. A reprint reads them back rather than re-deriving them.
-            await logInventoryAudit("dispose_inventory_batch", `Disposed batch ${batch.batch_number} (${qtyDisposed} units) via ${method}`, { quantity_remaining: qtyDisposed, status: batch.status }, { quantity_remaining: 0, status: "discarded", method, officer, notes: notes || null });
+            await logInventoryAudit("dispose_inventory_batch", `Disposed batch ${batch.batch_number} (${qtyDisposed} units) via ${method}`, { quantity_remaining: qtyDisposed, status: batch.status }, { quantity_remaining: 0, status: "discarded", method, officer, notes: notes || null }, "inventory_disposals");
 
             showToast(`Disposal recorded successfully for Batch #${batch.batch_number}.`, "success");
             closeModal("modal-disposal");
@@ -4423,16 +4569,51 @@
           }
 
           try {
-            const { data: staffAccounts } = await db
+            // Recipients are the staff of this office and the facilities beneath
+            // it. Reading every active midwife and admin in the database texted
+            // the whole municipality: an RHU officer paged midwives in the other
+            // three RHUs about stock they cannot see, and the municipal officers
+            // — account_type 'mho' — were never on the list at all.
+            const recipientIds = new Set();
+
+            const bhcIds = PortalScope.bhcFacilities.map(f => f.facility_id);
+            if (bhcIds.length > 0) {
+              const { data: midwifeRows } = await db
+                .from("midwives")
+                .select("account_id, assigned_bhc_id")
+                .in("assigned_bhc_id", bhcIds);
+              (midwifeRows || []).forEach(m => { if (m.account_id) recipientIds.add(m.account_id); });
+            }
+
+            const scopeIds = PortalScope.scopeFacilityIds;
+            if (scopeIds.length > 0) {
+              const { data: officerRows } = await db
+                .from("facility_assignments")
+                .select("account_id, facility_id")
+                .eq("is_active", true)
+                .in("facility_id", scopeIds);
+              (officerRows || []).forEach(a => { if (a.account_id) recipientIds.add(a.account_id); });
+            }
+
+            let staffQuery = db
               .from("accounts")
               .select("account_id, first_name, last_name, phone_number, account_type")
-              .in("account_type", ["midwife", "admin"])
+              .in("account_type", ["midwife", "admin", "mho"])
               .eq("status", "active")
               .not("phone_number", "is", null);
 
+            // A database without the hierarchy migration resolves no facilities
+            // at all. Narrowing to an empty set would send nothing, so leave the
+            // previous behaviour in place there, as the other scoped reads do.
+            if (recipientIds.size > 0) {
+              staffQuery = staffQuery.in("account_id", [...recipientIds]);
+            }
+
+            const { data: staffAccounts } = await staffQuery;
+
             const staffList = staffAccounts || [];
             let sentCount = 0;
-            const summaryMsg = `InaAgapay Inventory Alert: ${lowStockItems.length} item(s) below threshold, ${expBatches.length} batch(es) near/past expiry. Please check the RHU portal.`;
+            const summaryMsg = `InaAgapay Inventory Alert: ${lowStockItems.length} item(s) below threshold, ${expBatches.length} batch(es) near/past expiry. Please check InaAgapay for details.`;
 
             for (const staff of staffList) {
               const phone = staff.phone_number?.trim();
@@ -4509,9 +4690,14 @@
           const approvedQty = parseInt(document.getElementById("approve-qty").value);
           const remarks = document.getElementById("approve-remarks").value.trim();
 
-          if (!requestId || !approvedQty || approvedQty <= 0) {
-            showToast("Please enter a valid approved quantity.", "warning");
+          clearFieldErrors("modal-approve-request");
+
+          if (!requestId) {
+            showToast("This request could not be identified. Close the dialog and try again.", "warning");
             return;
+          }
+          if (!Number.isFinite(approvedQty) || approvedQty <= 0) {
+            return fieldError("approve-qty", "Enter how many units you are approving — a whole number above zero.");
           }
 
           const pendingRequest = stockRequests.find(r => r.request_id === requestId);
@@ -4519,15 +4705,13 @@
             // Approving more than was asked for is meaningless and is rejected by
             // the database, so catch it here with a clearer message.
             if (approvedQty > pendingRequest.requested_quantity) {
-              showToast(`Cannot approve more than the ${pendingRequest.requested_quantity} unit(s) requested.`, "warning");
-              return;
+              return fieldError("approve-qty", `Only ${pendingRequest.requested_quantity} unit(s) were requested. Approve that many or fewer.`);
             }
             // Approving more than the warehouse holds creates a request that can never
             // be issued, which strands the BHC waiting on stock that does not exist.
             const centralAvailable = getItemStockMetrics(pendingRequest.item_id, "central").available;
             if (approvedQty > centralAvailable) {
-              showToast(`Only ${centralAvailable} unit(s) are available in the central warehouse.`, "warning");
-              return;
+              return fieldError("approve-qty", `${PortalScope.depotName} holds only ${centralAvailable} unit(s). Approving more would strand the request with nothing to issue against it.`);
             }
           }
 
@@ -4578,7 +4762,8 @@
                 ? `Approved stock request #${requestId} for ${approvedQty} of ${originalQty} unit(s) requested`
                 : `Approved stock request #${requestId} for ${approvedQty} unit(s)`,
               { requested_quantity: originalQty },
-              { approved_quantity: approvedQty, remarks: remarks || null }
+              { approved_quantity: approvedQty, remarks: remarks || null },
+              "inventory_stock_requests"
             );
 
             showToast(`Stock request #${requestId} approved (${approvedQty} units).`, "success");
@@ -4612,7 +4797,7 @@
               p_admin_remarks: remarks
             });
             if (error) throw error;
-            await logInventoryAudit("reject_stock_request", `Rejected stock request #${requestId}: ${remarks}`, null, { request_id: requestId, remarks });
+            await logInventoryAudit("reject_stock_request", `Rejected stock request #${requestId}: ${remarks}`, null, { request_id: requestId, remarks }, "inventory_stock_requests");
             showToast(`Stock request #${requestId} rejected.`, "success");
             await loadInventoryData();
           } catch (err) {
@@ -4682,7 +4867,7 @@
               .eq("batch_id", transfer.source_batch_id);
             if (rErr) throw new Error(`Transfer cancelled but stock was not restored: ${rErr.message}`);
 
-            await logInventoryAudit("cancel_inventory_transfer", `Cancelled transfer #${transferId}; restored ${transfer.quantity_issued} unit(s)`, { status: "pending_receipt" }, { status: "cancelled", restored_quantity: transfer.quantity_issued });
+            await logInventoryAudit("cancel_inventory_transfer", `Cancelled transfer #${transferId}; restored ${transfer.quantity_issued} unit(s)`, { status: "pending_receipt" }, { status: "cancelled", restored_quantity: transfer.quantity_issued }, "inventory_transfers");
 
             showToast(`Transfer #${transferId} cancelled and stock restored.`, "success");
             await loadInventoryData();
@@ -4825,7 +5010,6 @@
             console.error("Error setting up issue request modal:", err);
           }
         };
-        window.issueForRequest = window.openIssueForRequest;
 
         // Item Details Breakdown Drawer
         window.openItemDetails = function(itemId) {
@@ -4952,16 +5136,6 @@
           document.getElementById("item-details-edit-btn").onclick = () => { closeModal("modal-item-details"); openEditItem(itemId); };
           document.getElementById("item-details-receive-btn").onclick = () => { closeModal("modal-item-details"); quickReceive(itemId); };
           document.getElementById("modal-item-details").classList.add("show");
-        };
-
-        window.setItemDoses = function(val) {
-          const el = document.getElementById("item-doses-per-unit");
-          if (el) el.value = val;
-        };
-
-        window.setEditItemDoses = function(val) {
-          const el = document.getElementById("edit-item-doses-per-unit");
-          if (el) el.value = val;
         };
 
         window.calculateItemDoses = function() {
@@ -5115,10 +5289,14 @@
           const dosesPerUnit = parseInt(document.getElementById("edit-item-doses-per-unit").value) || 1;
           const threshold = parseInt(document.getElementById("edit-item-threshold").value) || 50;
 
-          if (!itemId || !name || !uom) {
-            showToast("Item name and unit of measure are required.", "warning");
+          clearFieldErrors("modal-edit-item");
+
+          if (!itemId) {
+            showToast("This item could not be identified. Close the dialog and try again.", "warning");
             return;
           }
+          if (!name) return fieldError("edit-item-name", "Enter the item's trade name, as it appears on the carton.");
+          if (!uom) return fieldError("edit-item-uom", "Enter what one unit is — vials, tablets, pieces.");
 
           const btn = document.getElementById("save-edit-item-btn");
           btn.disabled = true;
@@ -5762,122 +5940,12 @@
         }
         window.autoFillForecastForDestination = autoFillForecastForDestination;
 
-        // 📷 Feature 5: Barcode & GS1 DataMatrix Scanner Engine
-        let activeScannerMode = null;
-        let scannerStream = null;
-
-        function parseGS1Barcode(rawText) {
-          if (!rawText) return null;
-          const cleaned = rawText.trim();
-          const result = { raw: cleaned, batchNumber: null, expirationDate: null, gtin: null };
-
-          const gtinMatch = cleaned.match(/\(01\)(\d{14})/i) || cleaned.match(/^01(\d{14})/);
-          if (gtinMatch) result.gtin = gtinMatch[1];
-
-          const expiryMatch = cleaned.match(/\(17\)(\d{6})/i) || cleaned.match(/17(\d{6})/);
-          if (expiryMatch) {
-            const rawExp = expiryMatch[1];
-            const yy = parseInt(rawExp.substring(0, 2), 10);
-            const mm = parseInt(rawExp.substring(2, 4), 10);
-            const dd = parseInt(rawExp.substring(4, 6), 10);
-            const pad = n => String(n).padStart(2, '0');
-            result.expirationDate = `${2000 + yy}-${pad(mm)}-${pad(dd)}`;
-          }
-
-          const batchMatch = cleaned.match(/\(10\)([A-Za-z0-9_-]+)/i) || cleaned.match(/10([A-Za-z0-9_-]{3,20})/);
-          if (batchMatch) {
-            result.batchNumber = batchMatch[1];
-          } else {
-            result.batchNumber = cleaned;
-          }
-
-          return result;
-        }
-
-        window.openBarcodeScanner = async function(mode) {
-          activeScannerMode = mode;
-          openModal('modal-barcode-scanner');
-
-          const statusEl = document.getElementById("scanner-status");
-          if (statusEl) statusEl.textContent = "Requesting camera access...";
-
-          const video = document.getElementById("scanner-video");
-          try {
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-              scannerStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "environment" }
-              });
-              if (video) {
-                video.srcObject = scannerStream;
-                video.play();
-                if (statusEl) statusEl.textContent = "Camera active. Position barcode / GS1 DataMatrix within frame.";
-              }
-            } else {
-              if (statusEl) statusEl.textContent = "Camera not supported. Use test simulation buttons below.";
-            }
-          } catch (err) {
-            console.warn("Camera access denied:", err);
-            if (statusEl) statusEl.textContent = "Camera access unavailable. You can use test simulation buttons below.";
-          }
-        };
-
-        window.closeBarcodeScanner = function() {
-          if (scannerStream) {
-            scannerStream.getTracks().forEach(track => track.stop());
-            scannerStream = null;
-          }
-          const video = document.getElementById("scanner-video");
-          if (video) video.srcObject = null;
-          closeModal('modal-barcode-scanner');
-        };
-
-        window.simulateBarcodeScan = function(type) {
-          let mockScan = "";
-          if (type === 'GS1_BCG') {
-            mockScan = "(01)04806512340012(17)280630(10)BCG-2026-LOT98";
-          } else if (type === 'GS1_TD') {
-            mockScan = "(01)04806512340029(17)271231(10)TD-LOT-4481";
-          } else {
-            mockScan = "PENTA-LOT-88301";
-          }
-
-          const parsed = parseGS1Barcode(mockScan);
-          if (!parsed) return;
-
-          if (activeScannerMode === 'receive-batch') {
-            const batchInput = document.getElementById("batch-number");
-            if (batchInput && parsed.batchNumber) batchInput.value = parsed.batchNumber;
-
-            const expInput = document.getElementById("batch-expiration-date");
-            if (expInput && parsed.expirationDate) expInput.value = parsed.expirationDate;
-
-            showToast(`Scanned Lot: ${parsed.batchNumber}${parsed.expirationDate ? ' (Exp: ' + parsed.expirationDate + ')' : ''}`, "success");
-          } else if (activeScannerMode === 'issue-batch') {
-            const matchingBatch = batches.find(b => b.batch_number.toLowerCase().includes((parsed.batchNumber || '').toLowerCase()));
-            if (matchingBatch) {
-              const issueSel = document.getElementById("issue-source-batch");
-              if (issueSel) {
-                issueSel.value = matchingBatch.batch_id;
-                const searchInput = issueSel.parentElement?.querySelector(".searchable-select-input");
-                if (searchInput) searchInput.value = `Batch ${matchingBatch.batch_number}`;
-                updateIssueSafetyCheck();
-              }
-              showToast(`Found matching batch: ${matchingBatch.batch_number}`, "success");
-            } else {
-              showToast(`Scanned Lot "${parsed.batchNumber}", but not found in source stock.`, "info");
-            }
-          }
-
-          closeBarcodeScanner();
-        };
-
-        // Transfer Dispatch QR Generator
-        window.showTransferQRSlip = function(transfer) {
+        // Printable dispatch slip that travels with the delivery.
+        window.showTransferDispatchSlip = function(transfer) {
           if (!transfer) return;
           const detailsEl = document.getElementById("transfer-qr-details");
-          const qrCanvas = document.getElementById("transfer-qrcode-canvas");
 
-          const sourceName = transfer.source_facility_id 
+          const sourceName = transfer.source_facility_id
             ? (bhcs.find(b => String(b.bhc_id) === String(transfer.source_facility_id))?.bhc_name || unknownFacilityLabel(transfer.source_facility_id)) 
             : PortalScope.depotName;
           const destName = bhcs.find(b => String(b.bhc_id) === String(transfer.destination_facility_id))?.bhc_name || unknownFacilityLabel(transfer.destination_facility_id);
@@ -5890,29 +5958,6 @@
               <div style="color:#475569; font-size:12px;"><strong>Quantity:</strong> ${transfer.quantity_issued} units</div>
               <div style="color:#64748b; font-size:11px; margin-top:4px;">Status: <span class="badge badge-warning" style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-weight:700;">PENDING RECEIPT</span></div>
             `;
-          }
-
-          if (qrCanvas) {
-            qrCanvas.innerHTML = "";
-            const qrData = JSON.stringify({
-              transfer_id: transfer.transfer_id,
-              from: sourceName,
-              to: destName,
-              qty: transfer.quantity_issued,
-              date: new Date().toISOString()
-            });
-            if (typeof QRCode !== 'undefined') {
-              new QRCode(qrCanvas, {
-                text: qrData,
-                width: 140,
-                height: 140,
-                colorDark: "#1e293b",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.M
-              });
-            } else {
-              qrCanvas.innerHTML = `<div style="text-align:center; padding:10px; font-size:11px; color:#64748b;"><i class="fa-solid fa-qrcode fa-3x" style="color:var(--brand-primary); margin-bottom:6px;"></i><br/>Transfer #${transfer.transfer_id}</div>`;
-            }
           }
 
           openModal("modal-transfer-qr");
@@ -6497,14 +6542,13 @@
           const dosesPerUnit = parseInt(document.getElementById("item-doses-per-unit").value) || 1;
           const threshold = parseInt(document.getElementById("item-threshold").value) || 50;
 
-          if (!name || !uom) {
-            showToast("Item name and unit of measure are required.", "warning");
-            return;
-          }
+          clearFieldErrors("modal-item");
+
+          if (!name) return fieldError("item-name", "Enter the item's trade name, as it appears on the carton.");
+          if (!uom) return fieldError("item-uom", "Enter what one unit is — vials, tablets, pieces.");
 
           if (items.some(item => item.name.toLowerCase() === name.toLowerCase())) {
-            showToast(`An item with the name "${name}" already exists in the catalog.`, "warning");
-            return;
+            return fieldError("item-name", `"${name}" is already in the catalog. Edit that item instead of adding a second one.`);
           }
 
           const btn = document.getElementById("save-item-btn");
@@ -6557,27 +6601,25 @@
           const facilityVal = document.getElementById("batch-facility-id").value;
           const facilityId = (facilityVal === "central" || !facilityVal) ? null : parseInt(facilityVal);
 
-          if (!itemId || !batchNum || !qty || !recDate || !expDate) {
-            showToast("Please fill in all required batch details.", "warning");
-            return;
-          }
+          clearFieldErrors("modal-batch");
 
+          if (!itemId) return fieldError("batch-item-id", "Choose which item this batch is.");
+          if (!batchNum) return fieldError("batch-number", "Enter the batch or lot number printed on the carton.");
           // parseInt accepts negatives, and `!qty` only catches 0/NaN — a negative
           // quantity would be written straight into stock.
           if (!Number.isFinite(qty) || qty <= 0) {
-            showToast("Quantity received must be a positive whole number.", "warning");
-            return;
+            return fieldError("batch-qty", "Enter how many units arrived — a whole number above zero.");
           }
+          if (!recDate) return fieldError("batch-received-date", "Enter the date this batch arrived.");
+          if (!expDate) return fieldError("batch-expiration-date", "Enter the expiration date printed on the carton.");
 
           if (new Date(expDate) <= new Date(recDate)) {
-            showToast("Expiration date must be after the date received.", "warning");
-            return;
+            return fieldError("batch-expiration-date", "The expiration date must fall after the date received.");
           }
 
           const today = new Date(); today.setHours(0, 0, 0, 0);
           if (new Date(expDate) <= today) {
-            showToast("This batch is already expired and cannot be received into stock.", "warning");
-            return;
+            return fieldError("batch-expiration-date", "This batch has already expired, so it cannot be received into stock.");
           }
 
           // A repeated batch number for the same item makes the two consignments
@@ -6587,8 +6629,7 @@
             String(b.batch_number).trim().toLowerCase() === batchNum.toLowerCase()
           );
           if (duplicate) {
-            showToast(`Batch number "${batchNum}" already exists for this item.`, "warning");
-            return;
+            return fieldError("batch-number", `This item already has a batch numbered "${batchNum}". Use the number printed on this carton so the two can be told apart in a recall.`);
           }
 
           const btn = document.getElementById("save-batch-btn");
@@ -6648,23 +6689,19 @@
           const qtyInput = parseInt(document.getElementById("dispense-qty").value);
           const ref = document.getElementById("dispense-reference").value.trim();
 
-          if (!batchId || !qtyInput) {
-            showToast("Please select a batch and enter a valid quantity.", "warning");
-            return;
-          }
+          clearFieldErrors("modal-dispense");
 
+          if (!batchId) return fieldError("dispense-batch-id", "Choose which batch this movement comes from.");
           if (!Number.isFinite(qtyInput) || qtyInput <= 0) {
-            showToast("Quantity must be a positive whole number.", "warning");
-            return;
+            return fieldError("dispense-qty", "Enter a quantity — a whole number above zero.");
           }
 
           const batch = batches.find(b => b.batch_id === batchId);
-          if (!batch) { showToast("Selected batch not found.", "error"); return; }
+          if (!batch) return fieldError("dispense-batch-id", "That batch is no longer in stock. Pick another.");
           const batchItem = items.find(i => String(i.item_id) === String(batch.item_id));
 
           if (type === 'dispense' && isBatchExpired(batch)) {
-            showToast("Expired batches cannot be dispensed to patients.", "warning");
-            return;
+            return fieldError("dispense-batch-id", "This batch has expired, so it cannot be dispensed. Record it as a disposal instead.");
           }
 
           const btn = document.getElementById("save-dispense-btn");
@@ -6896,14 +6933,14 @@
               `${PortalScope.isMho ? "Municipal" : "RHU"} Inventory Alerts Requiring Attention`;
           }
 
-          // The QR slip is scanned by a BHC midwife in the mobile app, but an RHU
-          // officer receives a municipal dispatch in this portal instead, so the
-          // sentence cannot simply have its nouns swapped.
-          const qrHint = document.getElementById("transfer-qr-hint");
-          if (qrHint) {
-            qrHint.textContent = PortalScope.isMho
-              ? "The receiving RHU officer can scan this QR code in the RHU portal to verify and receive the batch immediately."
-              : "The receiving BHC midwife can scan this QR code using the mobile app to verify and receive the batch immediately.";
+          // Who confirms receipt differs by tier: an RHU officer does it in this
+          // portal, a BHC midwife in the mobile app. The nouns cannot simply be
+          // swapped, so the sentence is written twice.
+          const slipHint = document.getElementById("transfer-qr-hint");
+          if (slipHint) {
+            slipHint.textContent = PortalScope.isMho
+              ? "Print this slip to send with the delivery. The receiving RHU officer confirms receipt in the RHU portal, which is what moves the stock onto their shelf."
+              : "Print this slip to send with the delivery. The receiving BHC midwife confirms receipt in the mobile app, which is what moves the stock onto their shelf.";
           }
 
           if (PortalScope.isMho) {
@@ -7212,12 +7249,19 @@
 
           alertEl.style.display = "none";
 
-          if (!sourceBatchVal || !targetBhcVal || !qtyInput || isNaN(qtyInput) || qtyInput <= 0) {
-            const msg = municipalWording("Please select a central batch, target BHC, and enter a valid quantity.");
-            alertEl.textContent = msg;
-            alertEl.style.display = "block";
-            showToast(msg, "warning");
-            return;
+          // The alert strip stays reserved for the delivery and expiry safety
+          // check, which is about the transfer as a whole. A field that is simply
+          // empty or out of range is reported on the field itself.
+          clearFieldErrors("modal-issue");
+
+          if (!sourceBatchVal) {
+            return fieldError("issue-source-batch", municipalWording("Choose the batch this stock comes out of."));
+          }
+          if (!targetBhcVal) {
+            return fieldError("issue-target-bhc", `Choose the ${PortalScope.childTypeLabel.toLowerCase()} receiving this stock.`);
+          }
+          if (!Number.isFinite(qtyInput) || qtyInput <= 0) {
+            return fieldError("issue-qty", "Enter how many units to issue — a whole number above zero.");
           }
 
           const sourceBatchId = parseInt(sourceBatchVal);
@@ -7225,19 +7269,11 @@
 
           const sourceBatch = batches.find(b => String(b.batch_id) === String(sourceBatchVal));
           if (!sourceBatch) {
-            const msg = "Source batch not found in central inventory.";
-            alertEl.textContent = msg;
-            alertEl.style.display = "block";
-            showToast(msg, "error");
-            return;
+            return fieldError("issue-source-batch", "That batch is no longer in stock. Pick another.");
           }
 
           if (qtyInput > sourceBatch.quantity_remaining) {
-            const msg = `Cannot issue ${qtyInput}. Available central stock is only ${sourceBatch.quantity_remaining}.`;
-            alertEl.textContent = msg;
-            alertEl.style.display = "block";
-            showToast(msg, "warning");
-            return;
+            return fieldError("issue-qty", `This batch holds ${sourceBatch.quantity_remaining} unit(s). Issue that many or fewer, or draw from a second batch.`);
           }
 
           const btn = document.getElementById("save-issue-btn");
@@ -7283,7 +7319,7 @@
             await loadInventoryData();
 
             if (transferResult) {
-              showTransferQRSlip(transferResult);
+              showTransferDispatchSlip(transferResult);
             }
           } catch (err) {
             const msg = "Error issuing stock: " + (err.message || err);
