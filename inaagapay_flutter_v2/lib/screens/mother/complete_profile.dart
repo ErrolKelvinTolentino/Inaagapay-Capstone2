@@ -6,8 +6,10 @@ import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/main_button.dart';
-import '../../widgets/progressive_step_indicator.dart';
-import '../../widgets/page_title.dart';
+import '../../widgets/app_dropdown_field.dart';
+import '../../widgets/branded_date_picker.dart';
+import '../../widgets/dialog_box.dart';
+import '../../widgets/secondary_header.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_storage.dart';
 import '../../services/push_notification_service.dart';
@@ -33,7 +35,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   final _emailAddress = TextEditingController();
 
   String _selectedExtension = '';
-  bool _showExtensionDropdown = false;
   final List<String> _extensionOptions = [
     '',
     'Jr.',
@@ -130,6 +131,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   Future<void> _loadCurrentAccount() async {
     final accountId = await AuthStorage.getUserId();
     if (accountId == null) return;
+    unawaited(_loadPastPregnancies(accountId));
     try {
       final acc = await SupabaseService.client
           .from('accounts')
@@ -276,7 +278,81 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     if (daysSinceLmp > 42 * 7) {
       return 'LMP is more than 42 weeks ago. Please verify the date.';
     }
+    return _validatePregnancyInterval(lmp);
+  }
+
+  /// The minimum gap after a previous pregnancy ended.
+  ///
+  /// Add Mother applies this against the past pregnancies the midwife is
+  /// entering in the same form. A mother completing her own profile enters no
+  /// history, so hers is read from the pregnancies already on her record — the
+  /// rule was simply unenforced here, which meant the same date could be
+  /// accepted from her and refused from her midwife.
+  String? _validatePregnancyInterval(DateTime newLmp) {
+    const minGapDays = 42;
+    for (final ended in _pastPregnancyEndDates) {
+      final gap = newLmp.difference(ended).inDays;
+      if (gap > 0 && gap < minGapDays) {
+        return 'Pregnancy interval too short ($gap days). Minimum interval is '
+            '$minGapDays days after a previous pregnancy. Please see your '
+            'midwife.';
+      }
+    }
     return null;
+  }
+
+  /// When a mother's earlier pregnancies ended, newest first.
+  final List<DateTime> _pastPregnancyEndDates = [];
+
+  Future<void> _loadPastPregnancies(int accountId) async {
+    try {
+      final mother = await SupabaseService.client
+          .from('mothers')
+          .select('mother_id')
+          .eq('account_id', accountId)
+          .maybeSingle();
+      final motherId = mother?['mother_id'];
+      if (motherId == null) return;
+
+      final rows = await SupabaseService.client
+          .from('pregnancies')
+          .select('ended_at')
+          .eq('mother_id', motherId)
+          .eq('status', 'ended');
+
+      if (!mounted) return;
+      setState(() {
+        _pastPregnancyEndDates
+          ..clear()
+          ..addAll(rows
+              .map((r) => DateTime.tryParse(r['ended_at']?.toString() ?? ''))
+              .whereType<DateTime>());
+      });
+    } catch (e) {
+      // A history that cannot be read must not block her from finishing her
+      // profile; the interval check simply has nothing to compare against.
+      debugPrint('Could not load past pregnancies: $e');
+    }
+  }
+
+  /// The notice Add Mother shows for a very recent LMP.
+  ///
+  /// Not a blocker — it is a prompt to confirm the pregnancy before the record
+  /// is built on a date that may move.
+  void _showEarlyPregnancyWarning() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (_) => DialogBox(
+        type: DialogType.warning,
+        title: 'Early Pregnancy Notice',
+        content: 'Your last menstrual period is less than 4 weeks ago. At this '
+            'early stage, a pregnancy test with your midwife is recommended '
+            'before your due date is set from this.',
+        buttonText: 'Understood',
+        onPressed: () => Navigator.pop(context),
+      ),
+    );
   }
 
   String? _validateEdd(DateTime edd) {
@@ -300,7 +376,25 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       _selectedEdd = lmp.add(const Duration(days: 280));
       _eddDate.text = _dateFmt.format(_selectedEdd!);
       _gestationError = _validateLmp(lmp);
+
+      // The derived age of gestation, filled in the way Add Mother fills it, so
+      // switching between the three methods shows one consistent set of dates
+      // rather than blank fields.
+      final days = DateTime.now().difference(lmp).inDays;
+      if (days >= 0) {
+        _aogWeeks.text = (days ~/ 7).toString();
+        _aogDays.text = (days % 7).toString();
+      } else {
+        _aogWeeks.clear();
+        _aogDays.clear();
+      }
+      _weeksError = null;
+      _daysError = null;
     });
+
+    if (DateTime.now().difference(lmp).inDays < 28 && _gestationError == null) {
+      _showEarlyPregnancyWarning();
+    }
   }
 
   void _updateFromEdd(DateTime edd) {
@@ -310,6 +404,17 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       _selectedLmp = edd.subtract(const Duration(days: 280));
       _lmpDate.text = _dateFmt.format(_selectedLmp!);
       _gestationError = _validateEdd(edd) ?? _validateLmp(_selectedLmp!);
+
+      final days = DateTime.now().difference(_selectedLmp!).inDays;
+      if (days >= 0) {
+        _aogWeeks.text = (days ~/ 7).toString();
+        _aogDays.text = (days % 7).toString();
+      } else {
+        _aogWeeks.clear();
+        _aogDays.clear();
+      }
+      _weeksError = null;
+      _daysError = null;
     });
   }
 
@@ -599,56 +704,132 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Laid out exactly like Add Mother, which is the same job on the other
+    // side of the counter: a multi-step form filling in one mother's details.
+    // A midwife walking a mother through this on her phone should recognise
+    // the shape of it.
     return Scaffold(
       backgroundColor: AppColors.bgPrimary,
-      appBar: AppBar(
-        title: const Text('Complete Profile'),
-        backgroundColor: AppColors.bgPrimary,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: _currentStep == 0 ? _emergencyExit : _previousStep,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            SecondaryHeader(
+              title: 'Complete Profile',
+              onBack: _currentStep == 0 ? _emergencyExit : _previousStep,
+            ),
+            LinearProgressIndicator(
+              value: (_currentStep + 1) / _totalSteps,
+              backgroundColor: AppColors.borderPrimary,
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(AppColors.brandPrimary),
+              minHeight: 3,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Column(
+                children: [
+                  // The denominator, which the row of dots never gave. Three
+                  // dots say where you are but not how much is left, and this
+                  // is the screen standing between a mother and the app she
+                  // just signed up for.
+                  Text(
+                    'Step ${_currentStep + 1} of $_totalSteps',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                      color: AppColors.brandPrimary.withValues(alpha: 0.85),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _stepTitles[_currentStep],
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.brandText,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _stepSubtitles[_currentStep],
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: IndexedStack(
+                index: _currentStep,
+                children: [
+                  _personalInfoStep(),
+                  _gestationStep(),
+                  _vitalsStep(),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      body: Column(
-        children: [
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: _stepHeader(),
-          ),
-          const SizedBox(height: 16),
-          ProgressiveStepIndicator(
-            currentStep: _currentStep,
-            totalSteps: 3,
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: IndexedStack(
-              index: _currentStep,
-              children: [
-                _personalInfoStep(),
-                _gestationStep(),
-                _vitalsStep(),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(24),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.07),
+                blurRadius: 14,
+                offset: const Offset(0, -4))
+          ],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                MainButton(
-                  label: _currentStep == 2 ? 'Complete Setup' : 'Next',
-                  showIcons: false,
-                  onPressed: _currentStep == 0
-                      ? (_canProceedFromStep0 ? _handlePrimaryAction : null)
-                      : _currentStep == 1
-                          ? (_canProceedFromStep1 ? _handlePrimaryAction : null)
-                          : _handlePrimaryAction,
+                Row(
+                  children: [
+                    if (_currentStep > 0) ...[
+                      Expanded(
+                        child: MainButton(
+                          label: 'Back',
+                          leftIcon: Icons.arrow_back_ios_new_rounded,
+                          isWhiteVariant: true,
+                          onPressed: _previousStep,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: _currentStep < _totalSteps - 1
+                          ? MainButton(
+                              label: 'Next',
+                              rightIcon: Icons.arrow_forward_ios_rounded,
+                              onPressed: _currentStep == 0
+                                  ? (_canProceedFromStep0
+                                      ? _handlePrimaryAction
+                                      : null)
+                                  : (_canProceedFromStep1
+                                      ? _handlePrimaryAction
+                                      : null),
+                            )
+                          : MainButton(
+                              label: 'Complete Setup',
+                              rightIcon: Icons.check_rounded,
+                              onPressed: _handlePrimaryAction,
+                            ),
+                    ),
+                  ],
                 ),
-                if (_currentStep == 2) ...[
-                  const SizedBox(height: 12),
+                if (_currentStep == _totalSteps - 1) ...[
+                  const SizedBox(height: 4),
                   TextButton(
                     onPressed: () {
                       _heightCtrl.clear();
@@ -656,97 +837,60 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                       _prePregnancyWeightCtrl.clear();
                       _saveProfileAndContinue();
                     },
-                    child: const Text(
-                      'Skip for now',
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: AppColors.brandPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.brandPrimary,
+                      shape: const StadiumBorder(),
+                      textStyle: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w600),
                     ),
+                    child: const Text('Skip for now'),
                   ),
                 ],
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _stepHeader() {
-    switch (_currentStep) {
-      case 0:
-        return const PageTitle(
-          title: 'Personal Details',
-          leadingIcon: Icons.person,
-          trailingIcon: Icons.check,
-        );
-      case 1:
-        return const PageTitle(
-          title: 'Pregnancy Details',
-          leadingIcon: Icons.pregnant_woman,
-          trailingIcon: Icons.check,
-        );
-      default:
-        return const PageTitle(
-          title: 'Vitals & BMI Info',
-          leadingIcon: Icons.monitor_weight_outlined,
-          trailingIcon: Icons.check,
-        );
-    }
-  }
+  static const int _totalSteps = 3;
 
+  static const List<String> _stepTitles = [
+    'Personal Information',
+    'Pregnancy Details',
+    'Vital Statistics',
+  ];
+
+  static const List<String> _stepSubtitles = [
+    'Your name, birthdate and how we can reach you',
+    'How your due date should be worked out',
+    'Height and weight, used to follow your weight gain',
+  ];
+
+  /// The same dropdown the midwife forms use.
+  ///
+  /// This was a hand-rolled one: an inline `Card` that pushed the fields below
+  /// it down the page when opened, built on a `TextEditingController` created
+  /// fresh on every rebuild. `AppDropdownField` overlays instead of displacing,
+  /// and is what "Extension" already looks like on Add Mother.
   Widget _buildExtensionDropdown() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppInputField(
-          controller: TextEditingController(
-              text: _selectedExtension.isEmpty ? 'None' : _selectedExtension),
-          hintText: 'Extension',
-          readOnly: true,
-          trailingIcon: Icons.keyboard_arrow_down_rounded,
-          onTap: () {
-            setState(() {
-              _showExtensionDropdown = !_showExtensionDropdown;
-            });
-          },
-        ),
-        if (_showExtensionDropdown) ...[
-          const SizedBox(height: 4),
-          Card(
-            elevation: 4,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            color: Colors.white,
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: 200),
-              child: ListView.builder(
-                shrinkWrap: true,
-                padding: EdgeInsets.zero,
-                itemCount: _extensionOptions.length,
-                itemBuilder: (context, idx) {
-                  final ext = _extensionOptions[idx];
-                  return ListTile(
-                    title: Text(ext.isEmpty ? 'None' : ext,
-                        style: const TextStyle(fontSize: 14)),
-                    dense: true,
-                    onTap: () {
-                      setState(() {
-                        _selectedExtension = ext;
-                        _showExtensionDropdown = false;
-                      });
-                    },
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      ],
+    return AppDropdownField<String>(
+      hintText: 'Extension',
+      value: _selectedExtension.isEmpty ? _noExtension : _selectedExtension,
+      options: _extensionOptions
+          .map((e) => e.isEmpty ? _noExtension : e)
+          .toList(),
+      displayStringForOption: (option) => option,
+      onSelected: (option) => setState(
+        () => _selectedExtension = option == _noExtension ? '' : option,
+      ),
     );
   }
+
+  /// `AppDropdownField` keys on the option's own text, so the empty choice
+  /// needs a label rather than an empty string to be selectable at all.
+  static const String _noExtension = 'None';
 
   Widget _personalInfoStep() {
     return SingleChildScrollView(
@@ -777,7 +921,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           const SizedBox(height: 12),
           GestureDetector(
             onTap: () async {
-              final pickedDate = await showDatePicker(
+              // Branded, like every date field on the midwife side. The raw
+              // Material picker arrives in the default indigo, which is the
+              // only place in the app a mother sees a colour that is not ours.
+              final pickedDate = await showBrandedDatePicker(
                 context: context,
                 initialDate: _selectedBirthdate ?? DateTime(2000),
                 firstDate: DateTime(1900),
@@ -914,16 +1061,27 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   const SizedBox(height: 8),
                   GestureDetector(
                     onTap: () async {
-                      final picked = await showDatePicker(
+                      // The same bounds Add Mother uses, so the calendar cannot
+                      // offer a date the validator will then reject. It
+                      // previously allowed anything up to today, and picking
+                      // last week produced "LMP must be at least 2 weeks ago"
+                      // — a rule the mother had no way to know before breaking
+                      // it.
+                      final lastLmpDate =
+                          DateTime.now().subtract(const Duration(days: 5 * 7));
+                      final initialLmpDate = (_selectedLmp != null &&
+                              !_selectedLmp!.isAfter(lastLmpDate))
+                          ? _selectedLmp!
+                          : lastLmpDate;
+                      final picked = await showBrandedDatePicker(
                         context: context,
-                        initialDate: _selectedLmp ??
-                            DateTime.now().subtract(const Duration(days: 14)),
+                        initialDate: initialLmpDate,
                         firstDate: DateTime.now()
-                            .subtract(const Duration(days: 43 * 7)),
-                        lastDate: DateTime.now(),
+                            .subtract(const Duration(days: 42 * 7)),
+                        lastDate: lastLmpDate,
                       );
                       if (picked != null) {
-                        setState(() => _updateFromLmp(picked));
+                        _updateFromLmp(picked);
                       }
                     },
                     child: AbsorbPointer(
@@ -945,15 +1103,18 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   const SizedBox(height: 8),
                   GestureDetector(
                     onTap: () async {
-                      final picked = await showDatePicker(
+                      // 43 weeks, matching _validateEdd and Add Mother. The
+                      // calendar allowed a full year, so the last two months of
+                      // it were dates the form would refuse.
+                      final picked = await showBrandedDatePicker(
                         context: context,
-                        initialDate: _selectedEdd ??
-                            DateTime.now().add(const Duration(days: 280)),
+                        initialDate: _selectedEdd ?? DateTime.now(),
                         firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                        lastDate:
+                            DateTime.now().add(const Duration(days: 43 * 7)),
                       );
                       if (picked != null) {
-                        setState(() => _updateFromEdd(picked));
+                        _updateFromEdd(picked);
                       }
                     },
                     child: AbsorbPointer(
