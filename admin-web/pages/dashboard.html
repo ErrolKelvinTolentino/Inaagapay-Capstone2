@@ -419,6 +419,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
+    <script src="inventory-stock.js"></script>
     <script src="live-refresh.js"></script>
     <script>
       (function () {
@@ -725,24 +726,28 @@
 
         async function loadInventoryChart() {
           try {
-            let stockHealthy = 0, stockWarning = 0, stockShortage = 0;
+            // Stock lives in inventory_batches, not on the item row: what counts
+            // is the quantity left in batches that are still active and not past
+            // their expiration date, plus any doses left in an already-open vial.
+            // InventoryStock applies those rules once for every page.
+            let stockHealthy = 0, stockLow = 0, stockOut = 0;
             try {
-              const { data: items } = await db.from("inventory_items").select("current_quantity, minimum_reorder_level");
-              (items || []).forEach(i => {
-                const qty = i.current_quantity || 0;
-                const min = i.minimum_reorder_level || 10;
-                if (qty <= min) stockShortage++;
-                else if (qty <= min * 1.5) stockWarning++;
-                else stockHealthy++;
-              });
-            } catch (e) {}
+              await InventoryStock.load(db);
+              const facilityCount = PortalScope.bhcFacilities.length + 1; // shelves + this portal's depot
+              const tally = InventoryStock.summarize("all", facilityCount);
+              stockHealthy = tally.ok;
+              stockLow = tally.low;
+              stockOut = tally.out;
+            } catch (e) {
+              console.warn("Inventory stock read failed:", e.message || e);
+            }
 
             const canvas = document.getElementById("inventory-chart");
             if (!canvas) return;
             if (chartInventoryInstance) chartInventoryInstance.destroy();
             resetChartCanvas(canvas);
 
-            if (stockHealthy + stockWarning + stockShortage === 0) {
+            if (stockHealthy + stockLow + stockOut === 0) {
               showEmptyChart(canvas, "No inventory items recorded");
               return;
             }
@@ -750,9 +755,9 @@
             chartInventoryInstance = new Chart(canvas, {
               type: "doughnut",
               data: {
-                labels: ["Healthy Stock", "Reorder Warning", "Critical Shortage"],
+                labels: ["Available", "Low Stock", "Out of Stock"],
                 datasets: [{
-                  data: [stockHealthy, stockWarning, stockShortage],
+                  data: [stockHealthy, stockLow, stockOut],
                   backgroundColor: ["#10B981", "#F59E0B", "#EF4444"],
                   borderWidth: 2,
                   borderColor: "#ffffff"

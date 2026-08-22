@@ -3080,6 +3080,15 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     bool isSubmitting = false;
     String? operationKey;
 
+    // This sheet is taller than the screen. Setting an errorText on a field that
+    // has scrolled out of view made Submit look like it did nothing at all, so
+    // the first field with a problem is brought back into view.
+    final itemFieldKey = GlobalKey();
+    final batchFieldKey = GlobalKey();
+    final quantityFieldKey = GlobalKey();
+    final reasonFieldKey = GlobalKey();
+    final notesFieldKey = GlobalKey();
+
     const dispenseReasons = <String>[
       'Prenatal service',
       'Immunization',
@@ -3210,6 +3219,13 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                       !reasonValid ||
                       !notesValid ||
                       !reportRuleValid) {
+                    _revealFirstError([
+                      (itemError, itemFieldKey),
+                      (batchError, batchFieldKey),
+                      (quantityError, quantityFieldKey),
+                      (reasonError, reasonFieldKey),
+                      (notesError, notesFieldKey),
+                    ]);
                     return;
                   }
 
@@ -3358,7 +3374,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                               child: ListView(
                                 padding: const EdgeInsets.only(bottom: 8),
                                 children: [
-                                  const _FormLabel('1. INVENTORY ITEM'),
+                                  _FormLabel('1. INVENTORY ITEM', key: itemFieldKey),
                                   const SizedBox(height: 7),
                                   AppDropdownField<InventoryItem>(
                                     value: selectedItem,
@@ -3381,7 +3397,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                                     },
                                   ),
                                   const SizedBox(height: 16),
-                                  const _FormLabel('2. STOCK BATCH'),
+                                  _FormLabel('2. STOCK BATCH', key: batchFieldKey),
                                   const SizedBox(height: 7),
                                   AppDropdownField<live.InventoryBatchRecord>(
                                     value: selectedBatch,
@@ -3428,6 +3444,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                                     isDispense
                                         ? '3. SERVICE PURPOSE'
                                         : '3. ISSUE REASON',
+                                    key: reasonFieldKey,
                                   ),
                                   const SizedBox(height: 7),
                                   AppDropdownField<String>(
@@ -3459,7 +3476,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                                     },
                                   ),
                                   const SizedBox(height: 16),
-                                  const _FormLabel('4. QUANTITY'),
+                                  _FormLabel('4. QUANTITY', key: quantityFieldKey),
                                   const SizedBox(height: 7),
                                   AppInputField(
                                     controller: quantityController,
@@ -3501,6 +3518,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                                     requiresNotes
                                         ? '5. NOTE (REQUIRED)'
                                         : '5. NOTE (OPTIONAL)',
+                                    key: notesFieldKey,
                                   ),
                                   const SizedBox(height: 7),
                                   AppInputField(
@@ -3565,6 +3583,25 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     await _loadLiveInventory(refresh: true);
     if (!mounted) return;
     AppSnackbar.success(context, successMessage);
+  }
+
+  /// Bring the first field carrying an error back into view.
+  ///
+  /// Pairs are checked in the order they appear on the sheet, so the midwife is
+  /// taken to the earliest problem rather than the last one set.
+  static void _revealFirstError(List<(String?, GlobalKey)> fields) {
+    for (final (error, key) in fields) {
+      if (error == null) continue;
+      final fieldContext = key.currentContext;
+      if (fieldContext == null) continue;
+      Scrollable.ensureVisible(
+        fieldContext,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOut,
+        alignment: 0.15,
+      );
+      return;
+    }
   }
 
   Widget _buildActivityFlowSteps({required bool isDispense}) {
@@ -3935,6 +3972,11 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     String? reasonError;
     bool isSubmitting = false;
 
+    // See _revealFirstError: this sheet also runs past the bottom of the screen.
+    final requestItemKey = GlobalKey();
+    final requestQuantityKey = GlobalKey();
+    final requestReasonKey = GlobalKey();
+
     final submitted = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -3979,6 +4021,11 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                   });
 
                   if (!isItemValid || !isQuantityValid || !isReasonValid) {
+                    _revealFirstError([
+                      (itemError, requestItemKey),
+                      (quantityError, requestQuantityKey),
+                      (reasonError, requestReasonKey),
+                    ]);
                     return;
                   }
                   final contextRecord = _liveContext;
@@ -4109,7 +4156,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                             const SizedBox(height: 18),
                           ],
 
-                          const _FormLabel('Medicine or vaccine'),
+                          _FormLabel('Medicine or vaccine', key: requestItemKey),
                           const SizedBox(height: 7),
                           AppDropdownField<InventoryItem>(
                             hintText: 'Select from BHC catalog',
@@ -4148,7 +4195,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                           ],
 
                           const SizedBox(height: 16),
-                          const _FormLabel('Requested quantity'),
+                          _FormLabel('Requested quantity', key: requestQuantityKey),
                           const SizedBox(height: 7),
                           AppInputField(
                             controller: quantityController,
@@ -4190,7 +4237,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                           ],
 
                           const SizedBox(height: 16),
-                          const _FormLabel('Reason for request'),
+                          _FormLabel('Reason for request', key: requestReasonKey),
                           const SizedBox(height: 7),
                           // Preset first, free text second. A queue of requests
                           // the RHU can group is worth more than forty
@@ -5063,7 +5110,8 @@ class _InventoryFormControllerHostState
 }
 
 class _FormLabel extends StatelessWidget {
-  const _FormLabel(this.label);
+  // The key lets a validation failure scroll its own section back into view.
+  const _FormLabel(this.label, {super.key});
 
   final String label;
 

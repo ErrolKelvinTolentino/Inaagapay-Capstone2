@@ -443,12 +443,13 @@
                   <tr>
                     <th>Item Name</th>
                     <th>Category</th>
-                    <th>Current Stock</th>
+                    <th>Status</th>
+                    <th>On Hand</th>
                     <th>Min Safety Stock</th>
                   </tr>
                 </thead>
                 <tbody id="tbody-stock-alerts">
-                  <tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-secondary);">Loading stock alerts...</td></tr>
+                  <tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-secondary);">Loading stock alerts...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -502,6 +503,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
+    <script src="inventory-stock.js"></script>
     <script src="live-refresh.js"></script>
     <script>
       (function() {
@@ -580,7 +582,8 @@
         let allPregnancies = [];
         let allChildren = [];
         let allImmunizations = [];
-        let allInventoryItems = [];
+        // Stock is held by InventoryStock rather than a local array, because it
+        // needs the batches alongside the catalogue to mean anything.
 
         let chartRiskInstance = null;
         let chartBhcInstance = null;
@@ -651,15 +654,19 @@
           } catch (e) {}
 
           try {
-            const { data: vData } = await db.from("immunization_record").select("*");
+            const { data: vData } = await db.from("immunization_records").select("*");
             allImmunizations = vData || [];
           } catch (e) {}
 
-          // 6. Fetch Inventory Items
+          // 6. Fetch Inventory
+          // Quantities live in inventory_batches, so the catalogue alone cannot
+          // say what is on the shelf. InventoryStock reads both and applies the
+          // batch status, expiry and open-vial rules the inventory page uses.
           try {
-            const { data: invData } = await db.from("inventory_items").select("*");
-            allInventoryItems = invData || [];
-          } catch (e) {}
+            await InventoryStock.load(db);
+          } catch (e) {
+            console.warn("Inventory stock read failed:", e.message || e);
+          }
         }
 
         function populateBhcDropdown() {
@@ -678,7 +685,12 @@
           let filteredPregnancies = allPregnancies;
           let filteredMidwives = allMidwives;
           let filteredChildren = allChildren;
-          let filteredInventory = allInventoryItems;
+
+          // Stock is filtered by which shelf to read, not by filtering the
+          // catalogue: every item exists everywhere, what differs is the batches
+          // standing at that health centre.
+          const stockFacility = selectedBhcId === "all" ? "all" : selectedBhcId;
+          const stockFacilityCount = allBhcs.length + 1; // BHC shelves + the RHU depot
 
           if (selectedBhcId !== "all") {
             const bhcIdNum = parseInt(selectedBhcId);
@@ -687,7 +699,6 @@
             filteredPregnancies = allPregnancies.filter(p => motherIds.has(p.mother_id));
             filteredMidwives = allMidwives.filter(m => m.assigned_bhc_id === bhcIdNum);
             filteredChildren = allChildren.filter(c => motherIds.has(c.mother_id));
-            filteredInventory = allInventoryItems.filter(i => i.bhc_id === bhcIdNum || !i.bhc_id);
           }
 
           // KPI 1: Mothers
@@ -713,7 +724,7 @@
           document.getElementById("kpi-bhc-count").textContent = selectedBhcId === "all" ? `${allBhcs.length} Active BHCs` : "1 Selected BHC";
 
           // KPI 5: Stock Alerts
-          const shortageItems = filteredInventory.filter(i => (i.current_quantity || 0) <= (i.minimum_reorder_level || 10));
+          const shortageItems = InventoryStock.shortages(stockFacility, stockFacilityCount);
           document.getElementById("kpi-stock-alerts").textContent = shortageItems.length.toLocaleString();
 
           // Render Charts
@@ -1041,18 +1052,29 @@
           if (!tbody) return;
 
           if (!shortageItems.length) {
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-secondary);"><i class="fa-solid fa-circle-check" style="color:var(--success); margin-right:6px;"></i>All inventory items are well supplied above safety thresholds.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-secondary);"><i class="fa-solid fa-circle-check" style="color:var(--success); margin-right:6px;"></i>All inventory items are well supplied above safety thresholds.</td></tr>`;
             return;
           }
 
-          tbody.innerHTML = shortageItems.map(item => `
+          const CATEGORY_LABEL = {
+            vaccine: "Vaccine", supplement: "Supplement",
+            medical_device: "Medical Device", contraceptive: "Contraceptive",
+          };
+
+          tbody.innerHTML = shortageItems.map(row => {
+            const statusBadge = row.status === "out"
+              ? `<span class="badge badge-suspended" style="color:var(--error);">Out of Stock</span>`
+              : `<span class="badge badge-low">Low</span>`;
+            return `
             <tr>
-              <td style="font-weight:600; color:var(--text-primary);">${esc(item.item_name || 'Medical Item')}</td>
-              <td><span class="badge badge-low">${esc(item.category || 'Supply')}</span></td>
-              <td style="text-align:center; font-weight:700; color:var(--error);">${item.current_quantity || 0} ${esc(item.unit || 'pcs')}</td>
-              <td style="text-align:center; color:var(--text-secondary);">${item.minimum_reorder_level || 10} ${esc(item.unit || 'pcs')}</td>
+              <td style="font-weight:600; color:var(--text-primary);">${esc(row.name)}</td>
+              <td><span class="badge badge-admin">${esc(CATEGORY_LABEL[row.itemType] || row.itemType)}</span></td>
+              <td style="text-align:center;">${statusBadge}</td>
+              <td style="text-align:center; font-weight:700; color:var(--error);">${esc(InventoryStock.describe(row))}</td>
+              <td style="text-align:center; color:var(--text-secondary);">${row.threshold} ${esc(row.unit)}</td>
             </tr>
-          `).join("");
+          `;
+          }).join("");
         }
 
         function renderBhcComparativeTable() {
@@ -1075,7 +1097,9 @@
             const bPregnancies = allPregnancies.filter(p => motherIds.has(p.mother_id) && (p.status || "ongoing").toLowerCase() === "ongoing");
             const bHighRisk = bPregnancies.filter(p => (p.pregnancy_risk_level || "").toLowerCase() === "high").length;
             const bMidwives = allMidwives.filter(m => m.assigned_bhc_id === b.bhc_id);
-            const bStockShortages = allInventoryItems.filter(i => (i.bhc_id === b.bhc_id || !i.bhc_id) && (i.current_quantity || 0) <= (i.minimum_reorder_level || 10)).length;
+            // Read this health centre's own shelf, at its own per-facility
+            // threshold — not the combined one, which is scaled across shelves.
+            const bStockShortages = InventoryStock.shortages(String(b.bhc_id), 1).length;
 
             // Immunization rate is derived from this BHC's own children, not a
             // fixed placeholder — this column feeds RHU reporting.
@@ -1126,7 +1150,7 @@
           db,
           tables: [
             "accounts", "mothers", "midwives", "pregnancies", "children",
-            "immunization_record", "inventory_items", "inventory_batches",
+            "immunization_records", "inventory_items", "inventory_batches",
             "bhc", "health_facilities"
           ],
           refresh: initReports,

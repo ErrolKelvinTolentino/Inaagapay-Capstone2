@@ -1034,7 +1034,7 @@
         window.viewChildDetails = async (childId) => {
           const { data } = await db.from("children").select(`
             *, mothers (mother_id, accounts!mothers_account_id_fkey (first_name, last_name)),
-            birth_details (birthdate, birth_weight, birthplace_city_municipality), child_details (*), immunization_record (*, vaccines (*))
+            birth_details (birthdate, birth_weight, birthplace_city_municipality), child_details (*), immunization_records (*, vaccines (*))
           `).eq("child_id", childId).single();
           if (data) {
             document.getElementById("detail-title").innerHTML = '<i class="fa-solid fa-baby"></i> Child Details';
@@ -1046,7 +1046,7 @@
                 <div class="detail-row"><div class="detail-label">Birthdate:</div><div class="detail-value">${fmtDate(data.birth_details?.birthdate)}</div></div>
                 <div class="detail-row"><div class="detail-label">Birth Weight:</div><div class="detail-value">${data.birth_details?.birth_weight || "—"} kg</div></div>
                 <div class="detail-row"><div class="detail-label">Birth Place:</div><div class="detail-value">${esc(data.birth_details?.birthplace_city_municipality || "—")}</div></div>
-                <div class="detail-row"><div class="detail-label">Vaccinations:</div><div class="detail-value">${data.immunization_record?.length || 0} recorded</div></div>
+                <div class="detail-row"><div class="detail-label">Vaccinations:</div><div class="detail-value">${data.immunization_records?.length || 0} recorded</div></div>
               </div>
             `;
             document.getElementById("detail-modal").classList.add("show");

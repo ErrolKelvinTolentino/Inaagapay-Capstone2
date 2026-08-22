@@ -157,4 +157,78 @@ void main() {
       expect(stock.availableDosesOn(), 72); // 60 + 12 = 72 available doses
     });
   });
+
+  // The titles below are written by the distribution RPCs in SQL. Classification
+  // used to be exact string equality against them, so rewording one in a
+  // migration dropped the notification out of the midwife's inventory feed with
+  // no error anywhere — invisible to the analyzer and to every other test.
+  group('inventory notifications survive a reworded title', () {
+    InventoryNotificationRecord? parse(String title, String message) {
+      return InventoryNotificationRecord.tryFromJson({
+        'notification_id': 1,
+        'account_id': 9,
+        'title': title,
+        'message': message,
+        'is_read': false,
+        'created_at': '2026-08-24T09:00:00Z',
+      });
+    }
+
+    test('an approval is recognised', () {
+      final record = parse(
+        'Stock request approved',
+        'Your stock request #12 was approved by RHU Main.',
+      );
+      expect(record?.kind, InventoryNotificationKind.approved);
+    });
+
+    test('a rejection is told apart from an approval by its message', () {
+      final record = parse(
+        'Stock request update',
+        'Your stock request #12 was not approved. Out of stock at the depot.',
+      );
+      expect(record?.kind, InventoryNotificationKind.rejected);
+    });
+
+    test('the original issue title is still recognised', () {
+      final record = parse(
+        'Incoming stocks from RHU Main',
+        '40 units of BCG Vaccine are waiting for your receipt confirmation.',
+      );
+      expect(record?.kind, InventoryNotificationKind.issued);
+    });
+
+    test('the tier-neutral issue title is recognised too', () {
+      final record = parse(
+        'Incoming stocks',
+        '40 units of BCG Vaccine from Baliwag RHU III are waiting for your '
+        'receipt confirmation.',
+      );
+      expect(record?.kind, InventoryNotificationKind.issued);
+    });
+
+    test('a low-stock warning is recognised', () {
+      final record = parse(
+        'Low stock after activity',
+        'BCG Vaccine is now below its reorder level.',
+      );
+      expect(record?.kind, InventoryNotificationKind.lowStock);
+    });
+
+    test('the admin-facing new-request alert stays out of the midwife feed', () {
+      final record = parse(
+        'New stock request',
+        'Pinagbarilan BHC requested 40 units of BCG Vaccine.',
+      );
+      expect(record, isNull);
+    });
+
+    test('an unrelated notification is not swept in', () {
+      final record = parse(
+        'Checkup reminder',
+        'Maria has a prenatal checkup tomorrow.',
+      );
+      expect(record, isNull);
+    });
+  });
 }
