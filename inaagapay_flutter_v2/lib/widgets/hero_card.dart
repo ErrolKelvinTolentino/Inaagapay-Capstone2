@@ -70,11 +70,19 @@ class HeroCard extends StatelessWidget {
     final bool isDashboardArtwork = title == null && subtitle == null;
 
     if (isDashboardArtwork) {
+      // The card a mother sees first, sized like it.
+      //
+      // At a 60px image inside 12px of padding it was smaller than the baby
+      // size card further down the page — the illustration that is the reason
+      // she opened the app was the least prominent thing on screen. The
+      // artwork is now 116px in a circle with room around it, which is what
+      // makes it read as a hero rather than a row.
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
         decoration: BoxDecoration(
           color: AppColors.bgPrimary,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.08),
@@ -90,44 +98,48 @@ class HeroCard extends StatelessWidget {
               children: [
                 Center(
                   child: Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(20),
                     decoration: const BoxDecoration(
                       shape: BoxShape.circle,
                       color: AppColors.bgSecondary,
                     ),
                     child: image != null
-                        ? Image(image: image!, height: 60, fit: BoxFit.cover)
+                        ? Image(image: image!, height: 116, fit: BoxFit.contain)
                         : const Icon(
                             Icons.person,
-                            size: 40,
+                            size: 72,
                             color: AppColors.brandPrimary,
                           ),
                   ),
                 ),
                 if (showWeekBadge && week != null)
                   Positioned(
-                    top: 6,
-                    right: 24,
+                    top: 10,
+                    right: 0,
                     child: _WeekBadge(week: week!),
                   ),
               ],
             ),
             if (showHeartRow) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Icon(Icons.favorite,
-                      size: 16, color: AppColors.brandPrimary),
-                  const SizedBox(width: 6),
-                  Text(
-                    LanguageService.translate(
-                      'Your baby is growing beautifully!',
-                      'Maganda ang paglaki ng iyong sanggol!',
-                    ),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
+                      size: 18, color: AppColors.brandPrimary),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      LanguageService.translate(
+                        'Your baby is growing beautifully!',
+                        'Maganda ang paglaki ng iyong sanggol!',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 ],

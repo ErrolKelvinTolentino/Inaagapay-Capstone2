@@ -8,6 +8,7 @@ import '../../widgets/app_input_field.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/branded_date_picker.dart';
+import '../../widgets/profile_helpers.dart';
 import '../../widgets/dialog_box.dart';
 import '../../widgets/secondary_header.dart';
 import '../../services/weight_gain_engine.dart';
@@ -90,7 +91,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
   double? _calculatedBMI;
   String? _bmiClassification;
-  String? _bmiWarning;
 
   /// True when the BMI was worked back from her current weight because she did
   /// not know her pre-pregnancy weight. Shown to her — an estimate she is told
@@ -1405,7 +1405,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     void clear() {
       _calculatedBMI = null;
       _bmiClassification = null;
-      _bmiWarning = null;
       _isBmiEstimated = false;
       _bmiEstimationMethod = null;
       _expectedGainMin = null;
@@ -1453,14 +1452,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         );
         _expectedGainMin = range['min'];
         _expectedGainMax = range['max'];
-        _bmiWarning = 'For a $category pre-pregnancy BMI, the expected total '
-            'gain by week $weeks is '
-            '${_expectedGainMin!.toStringAsFixed(1)}–'
-            '${_expectedGainMax!.toStringAsFixed(1)} kg.';
       } else {
         _expectedGainMin = null;
         _expectedGainMax = null;
-        _bmiWarning = null;
       }
     });
   }
@@ -1538,42 +1532,41 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
                 _calculatedBMI!.toStringAsFixed(1),
                 style: const TextStyle(
-                  fontSize: 26,
+                  fontSize: 30,
                   fontWeight: FontWeight.bold,
+                  height: 1,
                   color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(width: 10),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.brandPrimary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    _bmiClassification!,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.brandText,
-                    ),
+              const SizedBox(width: 6),
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'kg/m²',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ),
+              const Spacer(),
+              // The same BMI pill the profile pages use — amber for
+              // underweight, green for normal, orange and red above. It was
+              // brand pink for every category, which made a pill that exists
+              // to distinguish four states look identical in all four.
+              _bmiCategoryPill(_bmiClassification!),
             ],
           ),
           if (_isBmiEstimated) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               _estimationExplanation,
               style: TextStyle(
@@ -1583,49 +1576,52 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               ),
             ),
           ],
-          if (_bmiWarning != null) ...[
-            const SizedBox(height: 12),
+          if (_expectedGainMin != null && _expectedGainMax != null) ...[
+            const SizedBox(height: 14),
             const Divider(height: 1, color: AppColors.borderPrimary),
-            const SizedBox(height: 12),
-            const Text(
-              'EXPECTED WEIGHT GAIN',
-              style: TextStyle(
+            const SizedBox(height: 14),
+            Text(
+              'EXPECTED BY WEEK $_aogWeeksValue',
+              style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.5,
                 color: Color(0xFF5A5A5A),
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              _bmiWarning!,
-              style: TextStyle(
-                  fontSize: 12, height: 1.45, color: Colors.grey.shade700),
-            ),
-            if (_actualGain != null) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      'So far: ${_actualGain! >= 0 ? '+' : ''}'
-                      '${_actualGain!.toStringAsFixed(1)} kg',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF475569),
-                      ),
+            const SizedBox(height: 10),
+            // Two figures side by side rather than a sentence with the numbers
+            // buried inside it. The whole point of this block is the comparison
+            // between what is expected and what has happened, and a paragraph
+            // makes the reader assemble that themselves.
+            Row(
+              children: [
+                Expanded(
+                  child: _gainStat(
+                    label: 'Expected range',
+                    value: '${_expectedGainMin!.toStringAsFixed(1)}–'
+                        '${_expectedGainMax!.toStringAsFixed(1)} kg',
+                  ),
+                ),
+                if (_actualGain != null) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _gainStat(
+                      label: 'Gained so far',
+                      value: '${_actualGain! >= 0 ? '+' : ''}'
+                          '${_actualGain!.toStringAsFixed(1)} kg',
                     ),
                   ),
                 ],
-              ),
-            ],
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Based on a ${_bmiClassification!.toLowerCase()} pre-pregnancy '
+              'BMI. Your midwife will review this at your check-up.',
+              style: TextStyle(
+                  fontSize: 11.5, height: 1.4, color: Colors.grey.shade600),
+            ),
           ],
           const SizedBox(height: 8),
           Theme(
@@ -1666,6 +1662,70 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// One figure in the pair the expected-gain block compares.
+  Widget _gainStat({required String label, required String value}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 5),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The shared BMI pill, coloured by category.
+  ///
+  /// `getBMIStatusColor` is the app's single answer to "what colour is this
+  /// category", so the pill here matches the one on her profile and on the
+  /// midwife's rather than being a third opinion.
+  Widget _bmiCategoryPill(String category) {
+    final color = getBMIStatusColor(category);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        category,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
       ),
     );
   }

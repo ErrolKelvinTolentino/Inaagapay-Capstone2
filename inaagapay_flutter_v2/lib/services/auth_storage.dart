@@ -138,6 +138,22 @@ class AuthStorage {
     return val.split('|||');
   }
 
+  /// Whether this mother was assigned to a health centre last time we looked.
+  ///
+  /// Cached so the shell can draw the right set of tabs on its first frame
+  /// instead of showing five and removing two once the query returns. The
+  /// database is still the authority — this only decides what is painted
+  /// before the answer arrives, and an unregistered mother is the safe default
+  /// because she is the one this gate exists for.
+  static Future<void> saveBhcRegistered(bool registered) async {
+    await _storage.write(key: 'bhc_registered', value: registered.toString());
+  }
+
+  static Future<bool> wasBhcRegistered() async {
+    final value = await _storage.read(key: 'bhc_registered');
+    return value == 'true';
+  }
+
   /// Alert categories the user has switched off in Settings.
   ///
   /// Stored as the muted set rather than the enabled set, so a category added

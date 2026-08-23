@@ -21,6 +21,67 @@ import 'notifications_screen.dart';
 import 'help_support_screen.dart';
 import '../../widgets/main_button.dart';
 
+/// The mother's bottom-navigation destinations.
+///
+/// Children and Records are the two that need a health centre behind them:
+/// child records, immunisations, checkups, ultrasounds and lab results are all
+/// entered by a midwife, so before a mother is assigned to a BHC those tabs
+/// open onto nothing. Hiding them is kinder than showing her two permanently
+/// empty pages, and it makes the reason she cannot see them a single fact
+/// rather than five separate empty states.
+///
+/// Hotlines is deliberately *not* gated. It is emergency contact information,
+/// and an unregistered mother is precisely the one with no midwife to call —
+/// she needs it more than a registered mother, not less.
+enum _MotherTab {
+  home(
+    icon: Icons.home_outlined,
+    activeIcon: Icons.home,
+    labelEnglish: 'Home',
+    labelFilipino: 'Bahay',
+  ),
+  journal(
+    icon: Icons.menu_book_outlined,
+    activeIcon: Icons.menu_book,
+    labelEnglish: 'Journal',
+    labelFilipino: 'Journal',
+  ),
+  children(
+    icon: Icons.child_care_outlined,
+    activeIcon: Icons.child_care,
+    labelEnglish: 'Children',
+    labelFilipino: 'Mga Anak',
+    requiresBhc: true,
+  ),
+  records(
+    icon: Icons.folder_outlined,
+    activeIcon: Icons.folder,
+    labelEnglish: 'Records',
+    labelFilipino: 'Mga Tala',
+    requiresBhc: true,
+  ),
+  hotlines(
+    icon: Icons.phone_outlined,
+    activeIcon: Icons.phone,
+    labelEnglish: 'Hotlines',
+    labelFilipino: 'Hotlines',
+  );
+
+  const _MotherTab({
+    required this.icon,
+    required this.activeIcon,
+    required this.labelEnglish,
+    required this.labelFilipino,
+    this.requiresBhc = false,
+  });
+
+  final IconData icon;
+  final IconData activeIcon;
+  final String labelEnglish;
+  final String labelFilipino;
+  final bool requiresBhc;
+}
+
 class MotherDashboardShell extends StatefulWidget {
   const MotherDashboardShell({super.key});
 
@@ -41,18 +102,76 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
   bool _isOffline = false;
   Timer? _connectivityTimer;
 
-  final List<Widget> _screens = const [
-    MotherDashboard(),
-    MotherJournalScreen(),
-    MotherChildrenScreen(),
-    RecordsScreen(),
-    _HotlinesScreen(),
-  ];
+  /// Whether she is assigned to a health centre. Drives which tabs exist.
+  bool _isBhcRegistered = false;
+
+  /// The tabs she can currently reach, in order.
+  ///
+  /// `_currentIndex` indexes into *this*, not into [_MotherTab.values] — which
+  /// is the whole reason the tabs are modelled rather than written out five
+  /// times. With hardcoded positions, hiding Children would silently turn
+  /// index 3 from Records into Hotlines and index 4 into a range error.
+  List<_MotherTab> get _visibleTabs => _MotherTab.values
+      .where((tab) => !tab.requiresBhc || _isBhcRegistered)
+      .toList();
+
+  Widget _screenFor(_MotherTab tab) {
+    switch (tab) {
+      case _MotherTab.home:
+        return const MotherDashboard();
+      case _MotherTab.journal:
+        return const MotherJournalScreen();
+      case _MotherTab.children:
+        return const MotherChildrenScreen();
+      case _MotherTab.records:
+        return const RecordsScreen();
+      case _MotherTab.hotlines:
+        return const _HotlinesScreen();
+    }
+  }
+
+  /// Reads her assignment and rebuilds the tab set around it.
+  ///
+  /// Clamps the selection: if she is viewing Records when the set shrinks,
+  /// leaving `_currentIndex` where it is would point past the end of the list.
+  Future<void> _refreshBhcRegistration() async {
+    final cached = await AuthStorage.wasBhcRegistered();
+    if (mounted && cached != _isBhcRegistered) {
+      setState(() {
+        _isBhcRegistered = cached;
+        _currentIndex = _currentIndex.clamp(0, _visibleTabs.length - 1);
+      });
+    }
+
+    final motherId = await AuthStorage.getMotherId();
+    if (motherId == null) return;
+    try {
+      final row = await SupabaseService.client
+          .from('mothers')
+          .select('assigned_bhc_id')
+          .eq('mother_id', motherId)
+          .maybeSingle();
+      final registered = row != null && row['assigned_bhc_id'] != null;
+      await AuthStorage.saveBhcRegistered(registered);
+      if (mounted && registered != _isBhcRegistered) {
+        setState(() {
+          _isBhcRegistered = registered;
+          _currentIndex = _currentIndex.clamp(0, _visibleTabs.length - 1);
+        });
+      }
+    } catch (e) {
+      // On a failed read she keeps whatever she had. Guessing "registered"
+      // would show her tabs that cannot load; guessing the opposite would take
+      // records away from someone who has them.
+      debugPrint('Could not refresh BHC registration: $e');
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _loadMotherData();
+    _refreshBhcRegistration();
     _setupNotifications();
     _checkConnectivity();
     // Re-check connectivity every 30 seconds
@@ -81,16 +200,10 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
     final accountId = await AuthStorage.getUserId();
     if (accountId == null || !mounted) return;
 
-    final motherId = await AuthStorage.getMotherId();
-    bool unlinked = false;
-    if (motherId != null) {
-      final motherResponse = await SupabaseService.client
-          .from('mothers')
-          .select('assigned_bhc_id')
-          .eq('mother_id', motherId)
-          .maybeSingle();
-      unlinked = motherResponse == null || motherResponse['assigned_bhc_id'] == null;
-    }
+    // Same fact the tabs are built from, so the badge and the navigation can
+    // never disagree about whether she is assigned to a health centre.
+    await _refreshBhcRegistration();
+    final unlinked = !_isBhcRegistered;
 
     final count = await NotificationService.getUnreadCount(accountId);
     if (mounted) {
@@ -527,13 +640,17 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
     return ValueListenableBuilder<AppLanguage>(
       valueListenable: LanguageService.selectedLanguage,
       builder: (context, language, _) {
-        final titles = [
-          LanguageService.translate('HOME', 'Bahay'),
-          LanguageService.translate('JOURNAL', 'Journal'),
-          LanguageService.translate('CHILDREN', 'Mga Anak'),
-          LanguageService.translate('RECORDS', 'Mga Tala'),
-          LanguageService.translate('HOTLINES', 'Hotlines'),
-        ];
+        // Driven off the same list as the tabs. As a fixed five-element array
+        // indexed by _currentIndex, this would have captioned Hotlines
+        // "CHILDREN" the moment a tab was hidden — the header and the page
+        // disagreeing with no error to notice.
+        final tabs = _visibleTabs;
+        final titles = tabs
+            .map((tab) => LanguageService.translate(
+                tab.labelEnglish.toUpperCase(), tab.labelFilipino))
+            .toList();
+        final safeIndex =
+            tabs.isEmpty ? 0 : _currentIndex.clamp(0, tabs.length - 1);
 
         return Scaffold(
           backgroundColor: AppColors.bgPrimaryOf(context),
@@ -567,7 +684,7 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
                         ),
                       ),
                       Text(
-                        titles[_currentIndex],
+                        titles[safeIndex],
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -675,8 +792,8 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
                 // Content
                 Expanded(
                   child: IndexedStack(
-                    index: _currentIndex,
-                    children: _screens,
+                    index: safeIndex,
+                    children: tabs.map(_screenFor).toList(),
                   ),
                 ),
               ],
@@ -701,41 +818,15 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _NavItem(
-                  icon: Icons.home_outlined,
-                  activeIcon: Icons.home,
-                  label: LanguageService.translate('Home', 'Bahay'),
-                  isActive: _currentIndex == 0,
-                  onTap: () => setState(() => _currentIndex = 0),
-                ),
-                _NavItem(
-                  icon: Icons.menu_book_outlined,
-                  activeIcon: Icons.menu_book,
-                  label: LanguageService.translate('Journal', 'Journal'),
-                  isActive: _currentIndex == 1,
-                  onTap: () => setState(() => _currentIndex = 1),
-                ),
-                _NavItem(
-                  icon: Icons.child_care_outlined,
-                  activeIcon: Icons.child_care,
-                  label: LanguageService.translate('Children', 'Mga Anak'),
-                  isActive: _currentIndex == 2,
-                  onTap: () => setState(() => _currentIndex = 2),
-                ),
-                _NavItem(
-                  icon: Icons.folder_outlined,
-                  activeIcon: Icons.folder,
-                  label: LanguageService.translate('Records', 'Mga Tala'),
-                  isActive: _currentIndex == 3,
-                  onTap: () => setState(() => _currentIndex = 3),
-                ),
-                _NavItem(
-                  icon: Icons.phone_outlined,
-                  activeIcon: Icons.phone,
-                  label: LanguageService.translate('Hotlines', 'Hotlines'),
-                  isActive: _currentIndex == 4,
-                  onTap: () => setState(() => _currentIndex = 4),
-                ),
+                for (final (index, tab) in tabs.indexed)
+                  _NavItem(
+                    icon: tab.icon,
+                    activeIcon: tab.activeIcon,
+                    label: LanguageService.translate(
+                        tab.labelEnglish, tab.labelFilipino),
+                    isActive: safeIndex == index,
+                    onTap: () => setState(() => _currentIndex = index),
+                  ),
               ],
             ),
           ),

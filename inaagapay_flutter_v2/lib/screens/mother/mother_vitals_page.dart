@@ -417,7 +417,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      _t('Log My Vitals', 'Itala ang Aking Vitals'),
+                      _t('Add my weight', 'Idagdag ang timbang ko'),
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -427,8 +427,8 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                     const SizedBox(height: 4),
                     Text(
                       _t(
-                        'Self-recorded entries will be visible on your history.',
-                        'Ang mga sariling naitalang impormasyon ay makikita sa iyong kasaysayan.',
+                        'Your midwife will see this too.',
+                        'Makikita rin ito ng iyong midwife.',
                       ),
                       style: const TextStyle(
                         fontSize: 12,
@@ -537,7 +537,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                                 ),
                               )
                             : Text(
-                                _t('Save Vitals', 'I-save ang Vitals'),
+                                _t('Save', 'I-save'),
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -650,21 +650,6 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
     final minX = startWeek;
     final maxX = endWeek;
 
-    String getBmiCategoryLabel(String category) {
-      switch (category) {
-        case 'Underweight':
-          return _t('Underweight', 'Mababa ang Timbang');
-        case 'Normal':
-          return _t('Normal', 'Normal');
-        case 'Overweight':
-          return _t('Overweight', 'Sobra sa Timbang');
-        case 'Obese':
-          return _t('Obese', 'Mataba');
-        default:
-          return _t(category, category);
-      }
-    }
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -689,14 +674,14 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                   size: 20, color: AppColors.brandPrimary),
               const SizedBox(width: 8),
               Text(
-                _t('Weight Gain Progression Chart', 'Tsart ng Progression ng Timbang'),
+                _t('Your Weight Over Time', 'Timbang Mo sa Paglipas ng Panahon'),
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            _t('Total maternal weight (kg) plotted against recommended bounds',
+            _t('Your weight at each entry, next to the ideal range',
                'Aktwal na timbang (kg) kumpara sa inirerekomendang saklaw ng IOM'),
             style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
@@ -712,7 +697,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
               ),
               const SizedBox(width: 4),
               Text(
-                _t('Actual Weight', 'Aktwal na Timbang'),
+                _t('Your weight', 'Timbang mo'),
                 style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
               ),
               const SizedBox(width: 16),
@@ -729,8 +714,12 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
               ),
               const SizedBox(width: 4),
               Text(
-                '${_t('IOM Recommended Bounds', 'Inirerekomendang Saklaw ng IOM')} (${getBmiCategoryLabel(result.bmiCategory)})',
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+                // "IOM Recommended Bounds (Normal)" names the guideline body
+                // and the BMI category in a chart legend. Both are already
+                // stated where they belong — the category in the rows above,
+                // the source in the references expander.
+                _t('Ideal range', 'Tamang saklaw'),
+                style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -926,16 +915,21 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
         break;
     }
 
+    // The same three words as her dashboard and the midwife's card.
+    //
+    // "Within expected monitoring range" is a phrase from a monitoring system,
+    // not from a conversation, and it was long enough to fill the pill on its
+    // own. "Slightly above" also understated a mother well over the range.
     String getStatusDisplayLabel(WeightGainStatus status) {
       switch (status) {
         case WeightGainStatus.normal:
-          return _t('Within expected monitoring range', 'Nasa loob ng inaasahang saklaw ng pagsubaybay');
+          return _t('Within ideal', 'Nasa tamang saklaw');
         case WeightGainStatus.low:
-          return _t('Slightly lower than expected monitoring range', 'Bahagyang mas mababa sa inaasahang saklaw');
+          return _t('Below ideal', 'Mababa sa saklaw');
         case WeightGainStatus.high:
-          return _t('Slightly above expected monitoring range', 'Bahagyang mas mataas sa inaasahang saklaw');
+          return _t('Above ideal', 'Mataas sa saklaw');
         case WeightGainStatus.insufficient:
-          return _t('Insufficient data', 'Kulang na data');
+          return _t('Need more weights', 'Kulang pa ang timbang');
       }
     }
 
@@ -1028,40 +1022,46 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Her own words for her own numbers. "BMI Category", "Actual
+                // Gain" and "Baseline Weight" are column headings from a
+                // clinical form; a mother reading her own record should not
+                // have to translate them.
                 _weightInfoRow(
-                  _t('BMI Category', 'Kategorya ng BMI'),
+                  _t('Body size before pregnancy', 'Sukat bago mabuntis'),
                   getBmiCategoryLabel(result.bmiCategory),
                 ),
                 _weightInfoRow(
-                  _t('Current Weight', 'Kasalukuyang Timbang'),
-                  '${result.currentWeight.toStringAsFixed(1)} kg',
+                  _t('Weight now', 'Timbang ngayon'),
+                  _kg(result.currentWeight),
                 ),
                 if (result.baselineWeight != null)
                   _weightInfoRow(
                     result.mode == WeightGainMode.full
-                        ? _t('Pre-Pregnancy Weight', 'Timbang Bago Mabuntis')
-                        : _t('Baseline Weight', 'Baseline na Timbang'),
-                    '${result.baselineWeight!.toStringAsFixed(1)} kg',
+                        ? _t('Weight before pregnancy', 'Timbang bago mabuntis')
+                        : _t('Starting weight', 'Panimulang timbang'),
+                    _kg(result.baselineWeight!),
                   ),
                 if (result.actualGain != null)
                   _weightInfoRow(
-                    _t('Actual Gain', 'Aktwal na Dagdag'),
-                    '${result.actualGain! >= 0 ? '+' : ''}${result.actualGain!.toStringAsFixed(1)} kg',
+                    _t('Gained so far', 'Nadagdag na'),
+                    '${result.actualGain! >= 0 ? '+' : ''}${_kg(result.actualGain!)}',
                   ),
                 if (result.expectedGainMin != null && result.expectedGainMax != null)
                   _weightInfoRow(
-                    _t('Expected Gain', 'Inaasahang Dagdag'),
-                    '${result.expectedGainMin!.toStringAsFixed(1)} - ${result.expectedGainMax!.toStringAsFixed(1)} kg',
+                    _t('Ideal by now', 'Tamang dagdag ngayon'),
+                    '${_kg(result.expectedGainMin!)} – ${_kg(result.expectedGainMax!)}',
                   )
                 else if (result.expectedGain != null)
                   _weightInfoRow(
-                    _t('Expected Gain', 'Inaasahang Dagdag'),
-                    '${result.expectedGain!.toStringAsFixed(1)} kg',
+                    _t('Ideal by now', 'Tamang dagdag ngayon'),
+                    _kg(result.expectedGain!),
                   ),
                 if (result.weeklyGain != null)
                   _weightInfoRow(
-                    _t('Weekly Gain Rate', 'Antas ng Lingguhang Dagdag'),
-                    '${result.weeklyGain!.toStringAsFixed(3)} kg/wk',
+                    _t('Gain each week', 'Dagdag kada linggo'),
+                    // Two decimals, not three. A weight scale a mother owns
+                    // does not measure to a gram.
+                    '${result.weeklyGain!.toStringAsFixed(2)} kg',
                   ),
 
                 const SizedBox(height: 12),
@@ -1114,14 +1114,57 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                     border: Border.all(color: Colors.grey.shade200),
                   ),
                   child: Text(
-                    result.message,
+                    // The engine's own message is written for a midwife —
+                    // "Full BMI-Based Evaluation at Week 8.0. BMI category:
+                    // Normal. Total weight gain: 1.0 kg…" — and every fact in
+                    // it already appears in the rows directly above. What she
+                    // gets instead is the one thing the rows do not say: what
+                    // it means for her.
+                    _plainSummary(result),
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: 12.5,
                       height: 1.5,
                       color: AppColors.textSecondary,
                     ),
                   ),
                 ),
+
+                // The engine can append an ALERT about a sudden gain, which is
+                // the one part of its message a mother must not miss. Kept,
+                // but said in a way she can act on rather than as a note to
+                // rule out edema.
+                if (result.message.contains('ALERT:')) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFFDE68A)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.warning_amber_rounded,
+                            size: 16, color: Color(0xFFD97706)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _t(
+                              'Your weight went up quickly. Please tell your midwife at your next visit, or sooner if you feel swelling in your hands, face or feet.',
+                              'Mabilis na tumaas ang timbang mo. Sabihin sa iyong midwife sa susunod na bisita, o mas maaga kung may pamamaga sa kamay, mukha o paa.',
+                            ),
+                            style: const TextStyle(
+                                fontSize: 12,
+                                height: 1.45,
+                                color: Color(0xFF92400E)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (_isPrePregnancyWeightEstimated) ...[
                   const SizedBox(height: 10),
                   Row(
@@ -1194,6 +1237,45 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
     );
   }
 
+  /// What her numbers mean, in one sentence.
+  ///
+  /// Stated, never instructed: it says where her gain sits and who to ask.
+  /// Telling a mother to eat more or less is advice, and this screen is not
+  /// the one qualified to give it.
+  String _plainSummary(WeightGainResult result) {
+    switch (result.status) {
+      case WeightGainStatus.normal:
+        return _t(
+          'Your weight gain is where it should be for this stage of your pregnancy. Keep logging it so your midwife can follow along.',
+          'Nasa tamang saklaw ang dagdag ng timbang mo para sa yugtong ito ng pagbubuntis. Ipagpatuloy ang pagtatala para masubaybayan ito ng iyong midwife.',
+        );
+      case WeightGainStatus.low:
+        return _t(
+          'You have gained less than the ideal range for this stage. Bring this up with your midwife at your next visit.',
+          'Mas mababa sa tamang saklaw ang nadagdag mo para sa yugtong ito. Banggitin ito sa iyong midwife sa susunod na bisita.',
+        );
+      case WeightGainStatus.high:
+        return _t(
+          'You have gained more than the ideal range for this stage. Bring this up with your midwife at your next visit.',
+          'Mas mataas sa tamang saklaw ang nadagdag mo para sa yugtong ito. Banggitin ito sa iyong midwife sa susunod na bisita.',
+        );
+      case WeightGainStatus.insufficient:
+        return _t(
+          'Log a few more weights and we can show how your gain is going.',
+          'Magtala pa ng ilang timbang para maipakita namin ang takbo ng pagdagdag mo.',
+        );
+    }
+  }
+
+  /// A weight in kilos without a pointless decimal — "45 kg", not "45.0 kg".
+  String _kg(double value) {
+    final rounded = (value * 10).round() / 10;
+    final text = rounded == rounded.roundToDouble()
+        ? rounded.toInt().toString()
+        : rounded.toStringAsFixed(1);
+    return '$text kg';
+  }
+
   Widget _weightInfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
@@ -1206,7 +1288,13 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
           ),
           Text(
             value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            // Softened off near-black. A column of bold #2D2D2D figures on
+            // white is the hardest contrast on the page, and none of these
+            // numbers needs to shout.
+            style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.inputText),
           ),
         ],
       ),

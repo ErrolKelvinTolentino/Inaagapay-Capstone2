@@ -32,7 +32,6 @@ class _MotherDashboardState extends State<MotherDashboard> {
   bool _isLoading = true;
   String? _errorMessage;
   bool _isUnlinked = false;
-  bool _isUnlinkedBannerDismissed = false;
   bool _isVitalsIncomplete = false;
   bool _isVitalsBannerDismissed = false;
 
@@ -1381,7 +1380,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
         color: AppColors.cardColorOf(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppColors.brandPrimary.withValues(alpha: 0.15),
+          color: AppColors.borderPrimary,
         ),
         boxShadow: [
           BoxShadow(
@@ -1426,14 +1425,30 @@ class _MotherDashboardState extends State<MotherDashboard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _t('Baby Size This Week', 'Sukat ng Sanggol Ngayong Linggo'),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.brandPrimary.withValues(alpha: 0.7),
-                    letterSpacing: 0.5,
-                  ),
+                // The app's section label — small brand icon, uppercase grey.
+                // This card and the tip card directly beneath it had two
+                // different heading treatments for the same kind of thing,
+                // both in pink, so the two cards looked like they came from
+                // different screens.
+                Row(
+                  children: [
+                    const Icon(Icons.straighten_rounded,
+                        size: 14, color: AppColors.brandPrimary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _t('Baby Size This Week',
+                                'Sukat ng Sanggol Ngayong Linggo')
+                            .toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                          color: Color(0xFF5A5A5A),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -1611,121 +1626,79 @@ class _MotherDashboardState extends State<MotherDashboard> {
     );
   }
 
-  Widget _buildUnlinkedBhcBanner() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.1),
+  /// Individual mode, stated once and quietly.
+  ///
+  /// This was a warning-coloured banner at the very top of the dashboard,
+  /// listing five features she does not have and carrying a dismiss button —
+  /// the first thing a mother saw every time she opened the app was a notice
+  /// about what her account cannot do. It pushed her own week, her countdown
+  /// and her baby's size below the fold.
+  ///
+  /// Nothing about being unlinked is urgent: it is a standing fact, and the
+  /// app works without it. So it now sits at the foot of the page as one
+  /// tappable row, and the explanation — including what linking unlocks —
+  /// lives in the dialog behind it, where someone who wants it will look.
+  Widget _buildIndividualModeSection() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.warning.withValues(alpha: 0.3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        onTap: _showHowToLinkDialog,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.cardColorOf(context),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.borderPrimary),
+          ),
+          child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
+                  color: AppColors.brandPrimary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
-                  Icons.info_outline_rounded,
-                  color: AppColors.warning,
-                  size: 20,
+                  Icons.link_off_rounded,
+                  size: 18,
+                  color: AppColors.brandPrimary,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  _t('Individual Mode (Unlinked)',
-                      'Indibidwal na Mode (Hindi Naka-link)'),
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _t('Individual Mode (Unlinked)',
+                          'Individual Mode (Hindi naka-link)'),
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _t('Learn how to link your account',
+                          'Alamin kung paano i-link ang iyong account'),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
-                onPressed: () {
-                  setState(() {
-                    _isUnlinkedBannerDismissed = true;
-                  });
-                },
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 22,
+                color: AppColors.textSecondary,
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            _t(
-              'Your account is currently not linked to a Barangay Health Center (BHC). To schedule checkups and receive clinical care from a midwife, please link your account.',
-              'Ang iyong account ay kasalukuyang hindi naka-link sa isang Barangay Health Center (BHC). Upang mag-iskedyul ng checkup at makatanggap ng klinikal na pangangalaga mula sa midwife, mangyaring i-link ang iyong account.',
-            ),
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 12),
-          InkWell(
-            onTap: () => _showHowToLinkDialog(),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _t('How to link your account',
-                      'Paano i-link ang iyong account'),
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.brandText,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.arrow_forward,
-                  size: 14,
-                  color: AppColors.brandText,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.brandPrimary.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _t('Features you\'ll unlock:', 'Mga feature na maa-access mo:'),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _buildFeatureItem(Icons.medical_services_outlined, _t('Prenatal checkup records', 'Mga tala ng prenatal checkup')),
-                _buildFeatureItem(Icons.science_outlined, _t('Lab test results', 'Mga resulta ng lab test')),
-                _buildFeatureItem(Icons.image_outlined, _t('Ultrasound records', 'Mga tala ng ultrasound')),
-                _buildFeatureItem(Icons.monitor_weight_outlined, _t('Weight gain tracking', 'Pagsubaybay sa timbang')),
-                _buildFeatureItem(Icons.smart_toy_outlined, _t('AI health insights', 'AI health insights')),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1815,6 +1788,50 @@ class _MotherDashboardState extends State<MotherDashboard> {
                   '3',
                   _t('The midwife will complete your linking process in the system, and your record will update automatically.',
                       'Tatapusin ng midwife ang proseso ng pag-link sa system, at awtomatikong mag-a-update ang iyong tala.')),
+              const SizedBox(height: 20),
+              // The list that used to sit open on the dashboard. It belongs
+              // here, where someone has asked what linking is for — as a
+              // permanent fixture on her home screen it was a daily list of
+              // what she does not have.
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.brandPrimary.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _t('Features you\'ll unlock:',
+                          'Mga feature na maa-access mo:'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildFeatureItem(
+                        Icons.medical_services_outlined,
+                        _t('Prenatal checkup records',
+                            'Mga tala ng prenatal checkup')),
+                    _buildFeatureItem(Icons.science_outlined,
+                        _t('Lab test results', 'Mga resulta ng lab test')),
+                    _buildFeatureItem(Icons.image_outlined,
+                        _t('Ultrasound records', 'Mga tala ng ultrasound')),
+                    _buildFeatureItem(
+                        Icons.child_care_outlined,
+                        _t('Your children\'s records',
+                            'Mga tala ng iyong anak')),
+                    _buildFeatureItem(
+                        Icons.event_available_outlined,
+                        _t('Checkup scheduling and reminders',
+                            'Pag-iskedyul at paalala ng checkup')),
+                  ],
+                ),
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -2538,7 +2555,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
         color: AppColors.cardColorOf(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppColors.brandPrimary.withValues(alpha: 0.2),
+          color: AppColors.borderPrimary,
         ),
       ),
       child: Column(
@@ -2546,19 +2563,19 @@ class _MotherDashboardState extends State<MotherDashboard> {
         children: [
           Row(
             children: [
-              Icon(
+              const Icon(
                 Icons.lightbulb_outline,
                 color: AppColors.brandPrimary,
-                size: 20,
+                size: 14,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Text(
-                _t('Tip of the Week', 'Tip ng Linggo'),
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.brandPrimary,
-                  letterSpacing: 0.3,
+                _t('Tip of the Week', 'Tip ng Linggo').toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                  color: Color(0xFF5A5A5A),
                 ),
               ),
               const Spacer(),
@@ -2631,11 +2648,6 @@ class _MotherDashboardState extends State<MotherDashboard> {
                             // state should be set apart, not tucked in.
                             const SizedBox(height: 20),
 
-                            if (_isUnlinked && !_isUnlinkedBannerDismissed) ...[
-                              const SizedBox(height: 16),
-                              _buildUnlinkedBhcBanner(),
-                            ],
-
                             if (_isVitalsIncomplete && !_isVitalsBannerDismissed) ...[
                               const SizedBox(height: 16),
                               _buildVitalsIncompleteBanner(),
@@ -2684,12 +2696,26 @@ class _MotherDashboardState extends State<MotherDashboard> {
                             // same subject twice, and a mother reasonably
                             // expects the first title to already contain the
                             // second card.
-                            if (!_isUnlinked && _hasPregnancy) ...[
+                            // Shown whether or not she is linked to a health
+                            // centre. Weight gain is worked out from weights
+                            // she logs herself, so it is one of the few
+                            // clinical things that genuinely does not need a
+                            // midwife — and hiding it left an unlinked mother
+                            // logging vitals with nowhere to see the result.
+                            if (_hasPregnancy) ...[
                               const SizedBox(height: 16),
                               _buildVitalsCard(),
                             ],
 
-                            const SizedBox(height: 20),
+                            // Last on the page, where a standing fact about
+                            // her account belongs — after everything she came
+                            // to read.
+                            if (_isUnlinked) ...[
+                              const SizedBox(height: 24),
+                              _buildIndividualModeSection(),
+                            ],
+
+                            const SizedBox(height: 24),
                           ],
                         ),
                       ),
@@ -2741,6 +2767,39 @@ class _MotherDashboardState extends State<MotherDashboard> {
     );
   }
 
+  /// Opens the vitals page. Shared by the card and its Log Vitals button, so
+  /// the two cannot drift into behaving differently.
+  Future<void> _openVitalsPage() async {
+    // 0 is this screen's "no pregnancy loaded" sentinel, and the vitals page
+    // uses the id unguarded — it would insert pregnancy_id 0 and surface a raw
+    // foreign-key error.
+    if (_pregnancyId == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_t(
+            'Set up your pregnancy details first, then you can log your vitals.',
+            'I-set up muna ang detalye ng iyong pagbubuntis bago mag-log ng vitals.',
+          )),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final motherId = await AuthStorage.getMotherId();
+    if (motherId == null || !mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MotherVitalsPage(
+          motherId: motherId,
+          pregnancyId: _pregnancyId,
+          lastMenstrualPeriod: _lmpDate != null ? _dateIso(_lmpDate!) : null,
+        ),
+      ),
+    ).then((_) => _loadDashboardData());
+  }
+
   Widget _buildVitalsCard() {
     final hasVitals = _latestWeight != null || _latestBp != null;
 
@@ -2752,7 +2811,9 @@ class _MotherDashboardState extends State<MotherDashboard> {
           return _t('Midwife Log', 'Tala ng Midwife');
         case 'mother_self':
         default:
-          return _t('Self-logged', 'Sariling Tala');
+          // "Self-logged" is system vocabulary. Said back to the person who
+          // did it, in her own words.
+          return _t('You logged this', 'Ikaw ang naglagay');
       }
     }
 
@@ -2798,37 +2859,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          onTap: () async {
-            // 0 is this screen's "no pregnancy loaded" sentinel, and the vitals
-            // page uses the id unguarded — it would insert pregnancy_id 0 and
-            // surface a raw foreign-key error. Every other consumer on this
-            // screen checks for it; this one did not.
-            if (_pregnancyId == 0) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(_t(
-                    'Set up your pregnancy details first, then you can log your vitals.',
-                    'I-set up muna ang detalye ng iyong pagbubuntis bago mag-log ng vitals.',
-                  )),
-                  backgroundColor: AppColors.warning,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-              return;
-            }
-            final motherId = await AuthStorage.getMotherId();
-            if (motherId == null || !mounted) return;
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => MotherVitalsPage(
-                  motherId: motherId,
-                  pregnancyId: _pregnancyId,
-                  lastMenstrualPeriod: _lmpDate != null ? _dateIso(_lmpDate!) : null,
-                ),
-              ),
-            ).then((_) => _loadDashboardData());
-          },
+          onTap: _openVitalsPage,
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
@@ -2855,11 +2886,14 @@ class _MotherDashboardState extends State<MotherDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _t('My Vitals & Weight Gain', 'Aking Vitals & Timbang'),
+                        _t('My Weight', 'Aking Timbang'),
+                        // Softened off near-black. #2D2D2D against white is a
+                        // harder contrast than this card needs, and on a cheap
+                        // screen in daylight it reads as heavier still.
                         style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.inputText,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -2951,12 +2985,58 @@ class _MotherDashboardState extends State<MotherDashboard> {
                   const SizedBox(height: 16),
                   _buildWeightGainSummary(),
                 ],
+
+                // An explicit way in.
+                //
+                // The whole card was tappable, which is discoverable only by
+                // trying it — and the chevron sits beside the latest reading,
+                // so it reads as "open this reading" rather than "add one".
+                // Logging a weight is the action that keeps everything above
+                // it moving, so it gets a button that says so.
+                // Filled, not outlined.
+                //
+                // This is the one thing she is meant to do on this card, and
+                // an outline is the weakest affordance the app has — on a
+                // low-brightness screen a thin pink line on white barely
+                // registers as a button at all. "Add my weight today" says
+                // what it does; "Log Vitals" is the system's word for it.
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _openVitalsPage,
+                    icon: const Icon(Icons.add_rounded, size: 20),
+                    label: Text(
+                        _t('Add my weight today', 'Idagdag ang timbang ngayon')),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.brandPrimary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: const StadiumBorder(),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      textStyle: const TextStyle(
+                          fontSize: 14.5, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  /// A weight in kilos, without a pointless decimal.
+  ///
+  /// "0.0 kg" and "1.0 kg" are how a computer writes a number. A whole number
+  /// is written as one.
+  String _kg(double value) {
+    final rounded = (value * 10).round() / 10;
+    final text = rounded == rounded.roundToDouble()
+        ? rounded.toInt().toString()
+        : rounded.toStringAsFixed(1);
+    return '$text kg';
   }
 
   /// Where her gain sits against the range recommended for her BMI category.
@@ -3037,14 +3117,61 @@ class _MotherDashboardState extends State<MotherDashboard> {
                 ],
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
+            // A legend, because the bar cannot be read without one.
+            //
+            // A green band and a coloured marker mean nothing on their own —
+            // a mother seeing this for the first time has no way to know which
+            // part is her. Two labelled swatches cost one line and make the
+            // whole picture self-explanatory.
+            Row(
+              children: [
+                Container(
+                  width: 14,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  // Named the same as the pill above it. "Healthy range" beside
+                  // a verdict of "Within ideal" is two names for one band.
+                  _t('Ideal range', 'Tamang saklaw'),
+                  style: const TextStyle(
+                      fontSize: 11.5, color: AppColors.textSecondary),
+                ),
+                const SizedBox(width: 14),
+                Container(
+                  width: 10,
+                  height: 13,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _t('You', 'Ikaw'),
+                  style: const TextStyle(
+                      fontSize: 11.5, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             Text(
+              // Plainer than "Recommended for you: 0.0–1.4 kg". An en-dash
+              // between two decimals is notation, not a sentence, and the
+              // number that matters most is the one at the top of the range.
               _t(
-                'Recommended for you: ${min.toStringAsFixed(1)}–${max.toStringAsFixed(1)} kg by week $_week',
-                'Inirerekomenda para sa iyo: ${min.toStringAsFixed(1)}–${max.toStringAsFixed(1)} kg sa linggo $_week',
+                'By week $_week, most mothers gain ${_kg(min)} to ${_kg(max)}.',
+                'Sa linggo $_week, karamihan ng ina ay tumataba ng ${_kg(min)} hanggang ${_kg(max)}.',
               ),
               style: const TextStyle(
-                fontSize: 12,
+                fontSize: 12.5,
+                height: 1.4,
                 color: AppColors.textSecondary,
               ),
             ),
@@ -3096,21 +3223,26 @@ class _MotherDashboardState extends State<MotherDashboard> {
     if (result == null) return const SizedBox.shrink();
 
     final (statusColor, statusLabel) = switch (result.status) {
+      // The same three words the midwife's card uses, so a mother and her
+      // midwife looking at the same pregnancy read the same verdict. "A little
+      // above" also understated it — someone 8 kg over a 1.4 kg ceiling was
+      // being told she was a little above.
       WeightGainStatus.normal => (
           AppColors.success,
-          _t('On track', 'Nasa tamang landas')
+          _t('Within ideal', 'Nasa tamang saklaw')
         ),
       WeightGainStatus.low => (
           AppColors.warning,
-          _t('A little below', 'Bahagyang mababa')
+          _t('Below ideal', 'Mababa sa saklaw')
         ),
       WeightGainStatus.high => (
           AppColors.error,
-          _t('A little above', 'Bahagyang mataas')
+          _t('Above ideal', 'Mataas sa saklaw')
         ),
       WeightGainStatus.insufficient => (
           AppColors.textSecondary,
-          _t('Not enough data yet', 'Kulang pa ang data')
+          // "Data" is a word from the system's side of the screen.
+          _t('Need more weights', 'Kulang pa ang timbang')
         ),
     };
 
@@ -3120,11 +3252,11 @@ class _MotherDashboardState extends State<MotherDashboard> {
         Row(
           children: [
             Text(
-              _t('Weight gain', 'Dagdag na timbang'),
+              _t('Weight gained so far', 'Nadagdag na timbang'),
               style: const TextStyle(
-                fontSize: 13,
+                fontSize: 13.5,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                color: AppColors.inputText,
               ),
             ),
             const Spacer(),
@@ -3148,28 +3280,17 @@ class _MotherDashboardState extends State<MotherDashboard> {
         ),
         if (result.actualGain != null) ...[
           const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                '${result.actualGain! >= 0 ? '+' : ''}${result.actualGain!.toStringAsFixed(1)} kg',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                  height: 1,
-                  color: statusColor,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _t('so far', 'hanggang ngayon'),
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
+          // The heading above already says "so far", so the trailing label is
+          // gone and the number stands on its own at a size that carries
+          // across a small screen held at arm's length.
+          Text(
+            '${result.actualGain! >= 0 ? '+' : ''}${_kg(result.actualGain!)}',
+            style: TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.w900,
+              height: 1,
+              color: statusColor,
+            ),
           ),
           if (result.expectedGainMin != null &&
               result.expectedGainMax != null) ...[
