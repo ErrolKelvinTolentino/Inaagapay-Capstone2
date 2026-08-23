@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
 import '../../services/language_service.dart';
+import '../../services/maternal_td_service.dart';
 import '../../services/mother_profile_service.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/headline.dart';
@@ -35,6 +36,14 @@ class _RecordsScreenState extends State<RecordsScreen>
   List<Map<String, dynamic>> _ultrasounds = [];
   List<Map<String, dynamic>> _labTests = [];
   List<Map<String, dynamic>> _maternalVitals = [];
+
+  /// Her own details, for the record header the midwife's viewer already shows.
+  Map<String, dynamic>? _profile;
+  String? _patientNumber;
+
+  /// Td doses, newest first. Held against the mother rather than a pregnancy,
+  /// because protection carries across them.
+  List<MaternalTdRecord> _tdDoses = [];
   Map<int, int> _pregnancyFetalCounts = {};
   Map<int, String> _checkupSymptomSummaries = {};
 
@@ -99,13 +108,47 @@ class _RecordsScreenState extends State<RecordsScreen>
         throw Exception('Mother ID not found');
       }
 
+      // Only columns that exist on `mothers`. The patient number lives on
+      // `facility_assignments`, not here, and naming it in this select would
+      // make PostgREST reject the whole request — taking the unlinked check
+      // and every record on the page down with it.
       final motherResponse = await SupabaseService.client
           .from('mothers')
-          .select('assigned_bhc_id')
+          .select('assigned_bhc_id, birthdate, blood_type, gravida, para, '
+              'account:account_id (first_name, middle_name, last_name, '
+              'extension_name)')
           .eq('mother_id', _motherId!)
           .maybeSingle();
       _isUnlinked =
           motherResponse == null || motherResponse['assigned_bhc_id'] == null;
+      _profile = motherResponse;
+
+      // Fetched separately, through the same helper the midwife's view uses.
+      try {
+        _patientNumber =
+            await SupabaseService.getPatientNumberForMother(_motherId!);
+      } catch (e) {
+        debugPrint('Could not load patient number: $e');
+        _patientNumber = null;
+      }
+
+      // Her Td doses, loaded on their own and allowed to fail on their own.
+      // They hang off the mother rather than a pregnancy — protection carries
+      // across pregnancies — so they are fetched here rather than per-pregnancy.
+      try {
+        final td = await MaternalTdService.fetchStatus(_motherId!);
+        _tdDoses = td.doses.values.toList()
+          ..sort((a, b) {
+            // Undated doses last, so they never displace a dated one.
+            if (a.date == null && b.date == null) return 0;
+            if (a.date == null) return 1;
+            if (b.date == null) return -1;
+            return b.date!.compareTo(a.date!);
+          });
+      } catch (e) {
+        debugPrint('Could not load Td history: $e');
+        _tdDoses = [];
+      }
 
       final pregnanciesResponse = await SupabaseService.client
           .from('pregnancies')
@@ -421,6 +464,56 @@ class _RecordsScreenState extends State<RecordsScreen>
     return name.isEmpty ? null : name;
   }
 
+  /// The header the midwife's record viewer shows, built from her own record.
+  ///
+  /// Same component, same fields — a mother opening her ultrasound should see
+  /// the document her midwife sees, not a stripped-down copy of it.
+  RecordPatient? _recordPatient() {
+    final profile = _profile;
+    if (profile == null) return null;
+
+    final account = profile['account'] as Map<String, dynamic>?;
+    final name = [
+      account?['first_name'],
+      account?['middle_name'],
+      account?['last_name'],
+      account?['extension_name'],
+    ]
+        .map((p) => p?.toString().trim() ?? '')
+        .where((p) => p.isNotEmpty && p != 'null')
+        .join(' ');
+    if (name.isEmpty) return null;
+
+    String? age;
+    final birthdate = DateTime.tryParse(profile['birthdate']?.toString() ?? '');
+    if (birthdate != null) {
+      final years =
+          (DateTime.now().difference(birthdate).inDays / 365.25).floor();
+      if (years >= 0) age = '$years';
+    }
+
+    String? obstetric;
+    final g = profile['gravida']?.toString();
+    final para = profile['para']?.toString();
+    if (g != null && g.isNotEmpty && g != 'null') {
+      obstetric = 'G$g';
+      if (para != null && para.isNotEmpty && para != 'null') {
+        obstetric = '${obstetric}P$para';
+      }
+    }
+
+    final blood = profile['blood_type']?.toString().trim();
+
+    return RecordPatient(
+      name: name,
+      idLabel: _patientNumber,
+      age: age,
+      obstetric: obstetric,
+      bloodType:
+          (blood == null || blood.isEmpty || blood == 'null') ? null : blood,
+    );
+  }
+
   void _showRecordDetails({
     required String title,
     required List<MapEntry<String, String>> rows,
@@ -436,6 +529,10 @@ class _RecordsScreenState extends State<RecordsScreen>
     String? ultrasoundClassification,
     String? approvedByName,
     bool? isMidwifeApproved,
+    String? remarksSource,
+    List<MapEntry<String, String>> resultRows = const [],
+    String? resultsTitle,
+    Future<List<String>>? pendingImages,
   }) {
     Navigator.push(
       context,
@@ -443,6 +540,11 @@ class _RecordsScreenState extends State<RecordsScreen>
         builder: (_) => RecordDetailScreen(
           approvedByName: approvedByName,
           isMidwifeApproved: isMidwifeApproved,
+          patient: _recordPatient(),
+          remarksSource: remarksSource,
+          resultRows: resultRows,
+          resultsTitle: resultsTitle,
+          pendingImages: pendingImages,
           title: title,
           rows: rows,
           icon: icon,
@@ -1073,6 +1175,25 @@ class _RecordsScreenState extends State<RecordsScreen>
       });
     }
 
+    // Td doses sit in the same list as everything else rather than on a page of
+    // their own: a mother looking for "what happened in August" should not have
+    // to know which kind of record it was before she can find it.
+    for (final dose in _tdDoses) {
+      // A dose can be on file without a date — a backfilled record from a
+      // card the mother brought in. It still belongs in her history, so it is
+      // carried with a null date and sorted to the end rather than dropped.
+      allRecords.add({
+        'record_type': 'td',
+        'record_date': dose.date?.toIso8601String(),
+        'td_dose_key': dose.doseKey,
+        'td_facility': dose.facilityName,
+        'td_source': dose.source,
+        'td_protection_until': dose.protectionUntil?.toIso8601String(),
+        'td_next_due': dose.nextDueDate?.toIso8601String(),
+        'td_remarks': dose.remarks,
+      });
+    }
+
     if (_selectedFilter != 'all') {
       allRecords = allRecords
           .where((record) => record['record_type'] == _selectedFilter)
@@ -1297,7 +1418,14 @@ class _RecordsScreenState extends State<RecordsScreen>
                     child: AppDropdownField<String>(
                       hintText: _t('All Records', 'Lahat ng Records'),
                       value: _selectedFilter,
-                      options: const ['all', 'checkup', 'ultrasound', 'labtest', 'maternal_vital'],
+                      options: const [
+                        'all',
+                        'checkup',
+                        'ultrasound',
+                        'labtest',
+                        'td',
+                        'maternal_vital'
+                      ],
                       displayStringForOption: (value) {
                         switch (value) {
                           case 'all':
@@ -1308,6 +1436,8 @@ class _RecordsScreenState extends State<RecordsScreen>
                             return _t('Ultrasounds Only', 'Ultrasounds Lang');
                           case 'labtest':
                             return _t('Lab Tests Only', 'Lab Tests Lang');
+                          case 'td':
+                            return _t('Td Vaccines Only', 'Td Bakuna Lang');
                           case 'maternal_vital':
                             return _t('Self-logged Vitals Only', 'Sariling Vitals Lang');
                           default:
@@ -1457,6 +1587,7 @@ class _RecordsScreenState extends State<RecordsScreen>
                       final isLabTest = record['record_type'] == 'labtest';
                       final isMaternalVital =
                           record['record_type'] == 'maternal_vital';
+                      final isTd = record['record_type'] == 'td';
 
                       final typeColor = isCheckup
                           ? AppColors.brandPrimary
@@ -1464,13 +1595,16 @@ class _RecordsScreenState extends State<RecordsScreen>
                               ? AppColors.brandAccent
                               : isLabTest
                                   ? AppColors.warning
-                                  : Colors.teal;
+                                  : isTd
+                                      ? AppColors.success
+                                      : Colors.teal;
 
                       final dateCreated = _formatDateTime(
                           record['recorded_at'] ??
                               record['created_at'] ??
                               record['createdAt'] ??
-                              record['checkup_datetime']);
+                              record['checkup_datetime'] ??
+                              (isTd ? record['record_date'] : null));
 
                       final titleText = isCheckup
                           ? _t('Prenatal Checkup', 'Prenatal Checkup')
@@ -1478,7 +1612,9 @@ class _RecordsScreenState extends State<RecordsScreen>
                               ? _t('Ultrasound', 'Ultrasound')
                               : isLabTest
                                   ? (record['lab_test_type'] ?? _t('Lab Test', 'Lab Test'))
-                                  : _t('Self-logged Vitals', 'Sariling Vitals');
+                                  : isTd
+                                      ? '${record['td_dose_key']} ${_t('Vaccine', 'Bakuna')}'
+                                      : _t('Self-logged Vitals', 'Sariling Vitals');
 
                       final showConductDate = (isUltrasound || isLabTest) &&
                           !_isSameDay(
@@ -2007,6 +2143,65 @@ class _RecordsScreenState extends State<RecordsScreen>
                                     MapEntry(
                                       _t('Notes', 'Mga Tala'),
                                       _formatInputValue(record['notes']),
+                                    ),
+                                  ],
+                                );
+                              } else if (isTd) {
+                                if (mounted && !hasClosedLoading) {
+                                  Navigator.of(context, rootNavigator: true)
+                                      .pop();
+                                  hasClosedLoading = true;
+                                }
+                                final givenOn =
+                                    _formatDate(record['record_date']);
+                                final protectionUntil =
+                                    record['td_protection_until'];
+                                final nextDue = record['td_next_due'];
+                                // "Given here" or the name of the facility that
+                                // gave it — a dose from another clinic is still
+                                // her dose, and the record should say where it
+                                // came from rather than quietly implying this
+                                // health centre gave it.
+                                final source =
+                                    record['td_source']?.toString() ?? '';
+                                final facility =
+                                    record['td_facility']?.toString();
+                                _showRecordDetails(
+                                  title:
+                                      '${record['td_dose_key']} ${_t('Vaccine', 'Bakuna')}',
+                                  subtitle:
+                                      '${_t('Given on', 'Ibinigay noong')} $givenOn',
+                                  icon: Icons.vaccines_rounded,
+                                  rows: [
+                                    MapEntry(_t('Dose', 'Dose'),
+                                        record['td_dose_key']?.toString() ?? '—'),
+                                    MapEntry(
+                                        _t('Date given', 'Petsa ng pagbibigay'),
+                                        givenOn),
+                                    MapEntry(
+                                      _t('Given at', 'Ibinigay sa'),
+                                      (facility != null && facility.isNotEmpty)
+                                          ? facility
+                                          : (source == 'outside'
+                                              ? _t('Another facility',
+                                                  'Ibang pasilidad')
+                                              : _notInputted()),
+                                    ),
+                                    MapEntry(
+                                      _t('Protected until', 'Protektado hanggang'),
+                                      protectionUntil != null
+                                          ? _formatDate(protectionUntil)
+                                          : _notInputted(),
+                                    ),
+                                    MapEntry(
+                                      _t('Next dose due', 'Susunod na dose'),
+                                      nextDue != null
+                                          ? _formatDate(nextDue)
+                                          : _noneRecorded(),
+                                    ),
+                                    MapEntry(
+                                      _t('Remarks', 'Mga Tala'),
+                                      _formatInputValue(record['td_remarks']),
                                     ),
                                   ],
                                 );
