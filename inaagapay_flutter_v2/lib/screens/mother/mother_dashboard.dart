@@ -59,6 +59,18 @@ class _MotherDashboardState extends State<MotherDashboard> {
   DateTime? _latestVitalsDate;
   String? _latestVitalsSource;
   WeightGainResult? _weightGainResult;
+
+  /// The BMI category from the most recent evaluation a midwife saved, or null
+  /// while this mother has only ever assessed herself.
+  String? _midwifeBmiCategory;
+
+  /// When that assessment was made, so the chart can say whose yardstick it is
+  /// using rather than silently switching.
+  DateTime? _midwifeAssessedAt;
+
+  /// True when the starting weight was worked back from her earliest reading
+  /// because no pre-pregnancy weight was ever stated.
+  bool _baselineIsEstimated = false;
   double? _prePregnancyWeight;
   double? _heightCm;
   DateTime? _nextScheduleDate;
@@ -598,12 +610,37 @@ class _MotherDashboardState extends State<MotherDashboard> {
           effectiveAog = DateTime.now().difference(_lmpDate!).inDays / 7.0;
         }
 
+        // The midwife's own assessment, when she has made one.
+        //
+        // Once a mother is booked at a health centre, the category her midwife
+        // recorded is the one her chart should be read against — it outranks
+        // anything worked out from a self-logged weight. Her self-logged
+        // readings still appear in the series either way; it is the yardstick
+        // that changes, not the points on the chart.
+        await _loadMidwifeAssessment();
+
+        // Where the series starts.
+        //
+        // This screen passed the stated pre-pregnancy weight straight through,
+        // so a mother who did not know hers got null — and `evaluate` dropped
+        // to its limited mode with "analysis may be limited", while the vitals
+        // page, which derives a baseline, charted her fine. Same mother, two
+        // screens, two answers.
+        final baseline = WeightGainEngine.baselineWeightFor(
+          statedPrePregnancyWeight: _prePregnancyWeight,
+          readingsAscending: weightReadingsAsc,
+          heightCm: _heightCm,
+          fetalCount: _fetalCount,
+        );
+        _baselineIsEstimated = baseline.isEstimated;
+
         _weightGainResult = WeightGainEngine.evaluate(
           currentWeight: currentWeight,
           aogWeeks: effectiveAog,
           allCheckups: weightReadingsAsc,
-          prePregnancyWeight: _prePregnancyWeight,
+          prePregnancyWeight: baseline.weight,
           heightCm: _heightCm,
+          midwifeBmiCategory: _midwifeBmiCategory,
           fetalCount: _fetalCount,
         );
       } else {
@@ -2762,6 +2799,23 @@ class _MotherDashboardState extends State<MotherDashboard> {
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
           onTap: () async {
+            // 0 is this screen's "no pregnancy loaded" sentinel, and the vitals
+            // page uses the id unguarded — it would insert pregnancy_id 0 and
+            // surface a raw foreign-key error. Every other consumer on this
+            // screen checks for it; this one did not.
+            if (_pregnancyId == 0) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(_t(
+                    'Set up your pregnancy details first, then you can log your vitals.',
+                    'I-set up muna ang detalye ng iyong pagbubuntis bago mag-log ng vitals.',
+                  )),
+                  backgroundColor: AppColors.warning,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              return;
+            }
             final motherId = await AuthStorage.getMotherId();
             if (motherId == null || !mounted) return;
             Navigator.push(
@@ -3006,6 +3060,37 @@ class _MotherDashboardState extends State<MotherDashboard> {
   /// Both cards previously navigated to the same MotherVitalsPage, so nothing
   /// is lost by folding one into the other — it was two doors to one room,
   /// announced with two titles about the same subject.
+  /// Reads the latest weight-gain evaluation a midwife saved for this
+  /// pregnancy.
+  ///
+  /// Isolated and allowed to fail on its own: a mother with no checkups has no
+  /// rows here, and that is the normal case before she is booked at a health
+  /// centre — not an error, and never a reason to leave her without a chart.
+  Future<void> _loadMidwifeAssessment() async {
+    // 0 is this screen's "no pregnancy loaded" sentinel, not a real id.
+    final pregnancyId = _pregnancyId;
+    if (pregnancyId == 0) return;
+    try {
+      final row = await SupabaseService.client
+          .from('weight_gain_evaluations')
+          .select('bmi_category, created_at')
+          .eq('pregnancy_id', pregnancyId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      final category = row?['bmi_category']?.toString();
+      _midwifeBmiCategory =
+          (category != null && category.trim().isNotEmpty) ? category : null;
+      _midwifeAssessedAt =
+          DateTime.tryParse(row?['created_at']?.toString() ?? '');
+    } catch (e) {
+      debugPrint('Could not load midwife weight assessment: $e');
+      _midwifeBmiCategory = null;
+      _midwifeAssessedAt = null;
+    }
+  }
+
   Widget _buildWeightGainSummary() {
     final result = _weightGainResult;
     if (result == null) return const SizedBox.shrink();
@@ -3097,6 +3182,72 @@ class _MotherDashboardState extends State<MotherDashboard> {
             ),
           ],
         ],
+        const SizedBox(height: 10),
+        _weightGainSourceLine(),
+      ],
+    );
+  }
+
+  /// Whose yardstick this reading was measured against.
+  ///
+  /// Before she is booked at a health centre her chart is worked out from what
+  /// she has entered herself; afterwards it is read against the category her
+  /// midwife recorded. The number can change at that moment, so the reason is
+  /// on screen rather than left as an unexplained shift.
+  Widget _weightGainSourceLine() {
+    final assessed = _midwifeAssessedAt;
+    final byMidwife = _midwifeBmiCategory != null;
+
+    final text = byMidwife
+        ? (assessed != null
+            ? _t(
+                'Measured against your midwife\'s assessment from '
+                    '${DateFormat('MMM d, yyyy').format(assessed.toLocal())}.',
+                'Batay sa pagsusuri ng iyong midwife noong '
+                    '${DateFormat('MMM d, yyyy').format(assessed.toLocal())}.',
+              )
+            : _t(
+                'Measured against your midwife\'s assessment.',
+                'Batay sa pagsusuri ng iyong midwife.',
+              ))
+        : _t(
+            'Worked out from the measurements you entered yourself. Your '
+                'midwife will review this at your first check-up.',
+            'Batay sa mga sukat na ikaw mismo ang naglagay. Susuriin ito ng '
+                'iyong midwife sa unang check-up mo.',
+          );
+
+    // A derived starting weight is said out loud. She can replace it at any
+    // time by entering her real pre-pregnancy weight, and the estimate then
+    // disappears — so the line names the fix, not just the caveat.
+    final estimateNote = _baselineIsEstimated
+        ? _t(
+            ' Your starting weight is an estimate — add your pre-pregnancy '
+                'weight to make this exact.',
+            ' Tinatayang timbang lang ang simula — idagdag ang timbang mo bago '
+                'ka nagbuntis para maging tumpak ito.',
+          )
+        : '';
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          byMidwife ? Icons.verified_outlined : Icons.edit_note_rounded,
+          size: 13,
+          color: AppColors.textSecondary,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            '$text$estimateNote',
+            style: const TextStyle(
+              fontSize: 11,
+              height: 1.35,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
       ],
     );
   }

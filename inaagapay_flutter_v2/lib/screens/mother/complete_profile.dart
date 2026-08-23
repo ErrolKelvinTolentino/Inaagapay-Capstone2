@@ -10,6 +10,7 @@ import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/branded_date_picker.dart';
 import '../../widgets/dialog_box.dart';
 import '../../widgets/secondary_header.dart';
+import '../../services/weight_gain_engine.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_storage.dart';
 import '../../services/push_notification_service.dart';
@@ -90,6 +91,16 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   double? _calculatedBMI;
   String? _bmiClassification;
   String? _bmiWarning;
+
+  /// True when the BMI was worked back from her current weight because she did
+  /// not know her pre-pregnancy weight. Shown to her — an estimate she is told
+  /// is an estimate is useful; one presented as measured is not.
+  bool _isBmiEstimated = false;
+  String? _bmiEstimationMethod;
+
+  double? _expectedGainMin;
+  double? _expectedGainMax;
+  double? _actualGain;
 
   @override
   void initState() {
@@ -570,7 +581,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       }
       if (!hasHeight || !hasWeight || (_knowsPrePregnancyWeight && !hasPpw)) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please fill out all measurements or click "Skip for now"'), backgroundColor: AppColors.error),
+          const SnackBar(
+              content: Text('Please enter your height and current weight.'),
+              backgroundColor: AppColors.error),
         );
         return;
       }
@@ -702,6 +715,24 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     return true;
   }
 
+  /// Height and current weight are now required, since the step can no longer
+  /// be skipped. Pre-pregnancy weight stays optional — that is what the "I
+  /// know my pre-pregnancy weight" tick is for, and the engine backtracks it
+  /// when she does not.
+  bool get _canProceedFromStep2 {
+    if (_heightError != null || _weightError != null) return false;
+    final height = double.tryParse(_heightCtrl.text.trim());
+    final weight = double.tryParse(_weightCtrl.text.trim());
+    if (height == null || height <= 0) return false;
+    if (weight == null || weight <= 0) return false;
+    if (_knowsPrePregnancyWeight) {
+      if (_prePregnancyWeightError != null) return false;
+      final ppw = double.tryParse(_prePregnancyWeightCtrl.text.trim());
+      if (ppw == null || ppw <= 0) return false;
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Laid out exactly like Add Mother, which is the same job on the other
@@ -820,32 +851,22 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                                       ? _handlePrimaryAction
                                       : null),
                             )
+                          // No skip. This is account completion, not an
+                          // optional extra — and the height and weight taken
+                          // here are the baseline every later weight-gain
+                          // reading is measured against, so a profile saved
+                          // without them starts a pregnancy record that cannot
+                          // be assessed at all.
                           : MainButton(
                               label: 'Complete Setup',
                               rightIcon: Icons.check_rounded,
-                              onPressed: _handlePrimaryAction,
+                              onPressed: _canProceedFromStep2
+                                  ? _handlePrimaryAction
+                                  : null,
                             ),
                     ),
                   ],
                 ),
-                if (_currentStep == _totalSteps - 1) ...[
-                  const SizedBox(height: 4),
-                  TextButton(
-                    onPressed: () {
-                      _heightCtrl.clear();
-                      _weightCtrl.clear();
-                      _prePregnancyWeightCtrl.clear();
-                      _saveProfileAndContinue();
-                    },
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.brandPrimary,
-                      shape: const StadiumBorder(),
-                      textStyle: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
-                    child: const Text('Skip for now'),
-                  ),
-                ],
               ],
             ),
           ),
@@ -1362,70 +1383,308 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     _calculateBMI();
   }
 
+  /// Pre-pregnancy BMI and the weight gain expected by this week.
+  ///
+  /// This went through `WeightGainEngine` rather than working it out here.
+  /// The previous version carried its own copy of the BMI cut-points and of
+  /// the IOM weekly gain rates — 0.44/0.58, 0.35/0.50, 0.23/0.33, 0.17/0.27 —
+  /// written out inline. Those numbers are a cited clinical rule set that the
+  /// engine already owns, and a second copy on the mother's screen is a second
+  /// copy that can drift from the midwife's without anyone noticing.
+  ///
+  /// It also refused to compute anything at all when she did not know her
+  /// pre-pregnancy weight, which is precisely the case the engine's
+  /// backtracking exists to handle.
   void _calculateBMI() {
-    if (!_knowsPrePregnancyWeight) {
-      setState(() {
-        _calculatedBMI = null;
-        _bmiClassification = null;
-        _bmiWarning = null;
-        _prePregnancyWeightWarning = null;
-      });
-      return;
-    }
-
     final height = double.tryParse(_heightCtrl.text.trim());
-    final ppw = double.tryParse(_prePregnancyWeightCtrl.text.trim());
+    final currentWeight = double.tryParse(_weightCtrl.text.trim());
+    final knownPpw = _knowsPrePregnancyWeight
+        ? double.tryParse(_prePregnancyWeightCtrl.text.trim())
+        : null;
 
-    if (height != null && ppw != null && height > 0) {
-      final heightM = height / 100;
-      final bmi = ppw / (heightM * heightM);
-      _calculatedBMI = bmi;
-
-      if (bmi < 18.5) {
-        _bmiClassification = 'Underweight';
-      } else if (bmi < 25) {
-        _bmiClassification = 'Normal';
-      } else if (bmi < 30) {
-        _bmiClassification = 'Overweight';
-      } else {
-        _bmiClassification = 'Obese';
-      }
-
-      int weeks = 0;
-      if (_selectedLmp != null) {
-        weeks = DateTime.now().difference(_selectedLmp!).inDays ~/ 7;
-      }
-
-      if (weeks <= 12) {
-        _bmiWarning =
-            'Recommended total weight gain for this week (Week $weeks) is 0.5 - 2.0 kg.';
-      } else {
-        final double minRate;
-        final double maxRate;
-        if (bmi < 18.5) {
-          minRate = 0.44;
-          maxRate = 0.58;
-        } else if (bmi < 25) {
-          minRate = 0.35;
-          maxRate = 0.50;
-        } else if (bmi < 30) {
-          minRate = 0.23;
-          maxRate = 0.33;
-        } else {
-          minRate = 0.17;
-          maxRate = 0.27;
-        }
-        final minGain = 0.5 + (weeks - 12) * minRate;
-        final maxGain = 2.0 + (weeks - 12) * maxRate;
-        _bmiWarning =
-            'Recommended total weight gain for this week (Week $weeks) is ${minGain.toStringAsFixed(1)} - ${maxGain.toStringAsFixed(1)} kg.';
-      }
-    } else {
+    void clear() {
       _calculatedBMI = null;
       _bmiClassification = null;
       _bmiWarning = null;
+      _isBmiEstimated = false;
+      _bmiEstimationMethod = null;
+      _expectedGainMin = null;
+      _expectedGainMax = null;
+      _actualGain = null;
     }
-    setState(() {});
+
+    if (height == null || height <= 0) {
+      setState(clear);
+      return;
+    }
+
+    // Backtracking needs a current weight to work from; a known pre-pregnancy
+    // weight can stand in for it on its own.
+    final weightForEstimate = currentWeight ?? knownPpw;
+    if (weightForEstimate == null || weightForEstimate <= 0) {
+      setState(clear);
+      return;
+    }
+
+    final result = WeightGainEngine.estimatePrePregnancyBMI(
+      currentWeightKg: weightForEstimate,
+      heightCm: height,
+      aogWeeks: _aogWeeksValue,
+      knownPrePregnancyWeight: knownPpw,
+    );
+
+    setState(() {
+      _calculatedBMI = (result['bmi'] as num?)?.toDouble();
+      _bmiClassification = result['category'] as String?;
+      _isBmiEstimated = result['isEstimated'] == true;
+      _bmiEstimationMethod = result['method'] as String?;
+
+      final baselineWeight = (result['estimatedWeight'] as num?)?.toDouble();
+      _actualGain = (currentWeight != null && baselineWeight != null)
+          ? currentWeight - baselineWeight
+          : null;
+
+      final category = _bmiClassification;
+      final weeks = _aogWeeksValue;
+      if (category != null && weeks > 0) {
+        final range = WeightGainEngine.getExpectedGainAt(
+          aogWeeks: weeks.toDouble(),
+          bmiCategory: category,
+        );
+        _expectedGainMin = range['min'];
+        _expectedGainMax = range['max'];
+        _bmiWarning = 'For a $category pre-pregnancy BMI, the expected total '
+            'gain by week $weeks is '
+            '${_expectedGainMin!.toStringAsFixed(1)}–'
+            '${_expectedGainMax!.toStringAsFixed(1)} kg.';
+      } else {
+        _expectedGainMin = null;
+        _expectedGainMax = null;
+        _bmiWarning = null;
+      }
+    });
+  }
+
+  /// Completed weeks of gestation from whichever dating method she used.
+  int get _aogWeeksValue {
+    if (_selectedLmp != null) {
+      final days = DateTime.now().difference(_selectedLmp!).inDays;
+      if (days >= 0) return days ~/ 7;
+    }
+    return int.tryParse(_aogWeeks.text.trim()) ?? 0;
+  }
+
+  /// What her measurements mean, in the vocabulary the rest of the app uses.
+  ///
+  /// Stated, never judged: the card reports where her gain sits against the
+  /// IOM range for her BMI category and stops there. It does not tell her she
+  /// is gaining too much or too little — that reading belongs to her midwife,
+  /// and this is a form she is filling in alone on her phone.
+  Widget _buildWeightGainCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderPrimary),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.monitor_weight_outlined,
+                  size: 16, color: AppColors.brandPrimary),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'PRE-PREGNANCY BMI',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: Color(0xFF5A5A5A),
+                  ),
+                ),
+              ),
+              // Says out loud that the figure was worked back rather than
+              // measured, so she can weigh it accordingly.
+              if (_isBmiEstimated)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: const Text(
+                    'ESTIMATED',
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.3,
+                      color: Color(0xFF92400E),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _calculatedBMI!.toStringAsFixed(1),
+                style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.brandPrimary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    _bmiClassification!,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.brandText,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_isBmiEstimated) ...[
+            const SizedBox(height: 6),
+            Text(
+              _estimationExplanation,
+              style: TextStyle(
+                fontSize: 11.5,
+                height: 1.4,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+          if (_bmiWarning != null) ...[
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: AppColors.borderPrimary),
+            const SizedBox(height: 12),
+            const Text(
+              'EXPECTED WEIGHT GAIN',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+                color: Color(0xFF5A5A5A),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _bmiWarning!,
+              style: TextStyle(
+                  fontSize: 12, height: 1.45, color: Colors.grey.shade700),
+            ),
+            if (_actualGain != null) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      'So far: ${_actualGain! >= 0 ? '+' : ''}'
+                      '${_actualGain!.toStringAsFixed(1)} kg',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+          const SizedBox(height: 8),
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              title: const Text(
+                'Clinical Disclaimer & References',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.brandPrimary,
+                ),
+              ),
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(top: 2, bottom: 4),
+              dense: true,
+              children: [
+                Text(
+                  'Disclaimer: This compares your weight against published '
+                  'weight gain ranges for your pre-pregnancy BMI category and '
+                  'shows where it sits. It is a guide for monitoring, not a '
+                  'diagnosis, and it does not replace your midwife\'s '
+                  'assessment.',
+                  style: TextStyle(
+                      fontSize: 10, height: 1.4, color: Colors.grey.shade600),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'References:\n'
+                  '• Institute of Medicine (IOM) & National Research Council '
+                  '(NRC). (2009). Weight Gain During Pregnancy: Reexamining '
+                  'the Guidelines. Washington, DC: The National Academies '
+                  'Press.',
+                  style: TextStyle(
+                      fontSize: 10, height: 1.4, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// How the estimate was reached, in her words rather than the engine's.
+  String get _estimationExplanation {
+    switch (_bmiEstimationMethod) {
+      case 'current_weight_early':
+        return 'Worked out from your current weight. Before 14 weeks, weight '
+            'usually changes very little, so this is close to your '
+            'pre-pregnancy weight.';
+      case 'backtracked':
+        return 'Worked back from your current weight and how far along you '
+            'are. Your midwife can correct it if you find your actual '
+            'pre-pregnancy weight.';
+      default:
+        return 'Worked out from the measurements you entered. Your midwife can '
+            'correct it later.';
+    }
   }
 
   Widget _vitalsStep() {
@@ -1435,11 +1694,14 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Unlock advanced clinical tracking by providing your height and weight. You can skip this step if you don\'t have these measurements right now.',
+            'These are the starting point your weight gain is measured from '
+            'for the rest of your pregnancy. If you do not know your '
+            'pre-pregnancy weight, untick the box below and we will work it '
+            'out from what you enter.',
             style: TextStyle(
               fontSize: 13,
               color: Colors.grey.shade600,
-              height: 1.4,
+              height: 1.45,
             ),
           ),
           const SizedBox(height: 16),
@@ -1527,46 +1789,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           ],
           if (_calculatedBMI != null && _bmiClassification != null) ...[
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.brandPrimary.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.2)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Calculated BMI: ${_calculatedBMI!.toStringAsFixed(1)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.brandPrimary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          _bmiClassification!,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.brandPrimary),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_bmiWarning != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      _bmiWarning!,
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700, height: 1.4),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+            _buildWeightGainCard(),
           ],
           const SizedBox(height: 32),
         ],

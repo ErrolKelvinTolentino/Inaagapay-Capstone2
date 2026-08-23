@@ -517,26 +517,34 @@ class WeightGainEngine {
     double? heightCm,
     String? midwifeBmiCategory,
   }) {
-    // Priority 1: Pre-pregnancy BMI
+    // Priority 1: Pre-pregnancy BMI — an actual starting weight, so nothing
+    // beats it.
     if (prePregnancyWeight != null && heightCm != null && heightCm > 0) {
       final heightM = heightCm / 100;
       final bmi = prePregnancyWeight / (heightM * heightM);
       return _bmiToCategory(bmi);
     }
 
-    // Priority 2: Current BMI (estimated — less reliable during pregnancy)
+    // Priority 2: The category a midwife recorded at a checkup.
+    //
+    // This used to sit below the current-weight estimate, which meant a
+    // midwife's assessment was only consulted when there was no weight at all
+    // to guess from — in practice, never. A clinician's stated category
+    // outranks a figure derived from a pregnant woman's current weight, and
+    // the comment on that estimate says why: it carries the gestational gain
+    // and reads higher than the true pre-pregnancy category.
+    if (midwifeBmiCategory != null && midwifeBmiCategory.isNotEmpty) {
+      final normalized = midwifeBmiCategory.trim();
+      if (iomGuidelines.containsKey(normalized)) return normalized;
+    }
+
+    // Priority 3: Current BMI (estimated — less reliable during pregnancy)
     // During pregnancy, current weight includes gestational weight gain,
     // which can push the BMI category higher than the true pre-pregnancy category.
     if (currentWeight != null && heightCm != null && heightCm > 0) {
       final heightM = heightCm / 100;
       final bmi = currentWeight / (heightM * heightM);
       return _bmiToCategory(bmi);
-    }
-
-    // Priority 3: Midwife manual input
-    if (midwifeBmiCategory != null && midwifeBmiCategory.isNotEmpty) {
-      final normalized = midwifeBmiCategory.trim();
-      if (iomGuidelines.containsKey(normalized)) return normalized;
     }
 
     // Priority 4: Default — use widest safe range
@@ -572,6 +580,55 @@ class WeightGainEngine {
     if (prePregnancyWeight != null) return 'Pre-Pregnancy BMI';
     if (currentWeight != null) return 'Estimated BMI (current weight)';
     return 'BMI Unavailable';
+  }
+
+  /// The weight a gain series should be measured from, and whether that weight
+  /// was stated by someone or derived by this engine.
+  ///
+  /// A stated pre-pregnancy weight always wins. Without one, the baseline is
+  /// worked back from the *earliest* reading on file rather than the latest:
+  /// backtracking from the latest would move the starting point every time a
+  /// new weight is logged, so a mother's day zero would drift as her pregnancy
+  /// progressed. The earliest reading never changes, and it is the shorter
+  /// extrapolation, so it is both stable and closer to the truth.
+  ///
+  /// Nothing here is persisted. A derived baseline is a reading of the data,
+  /// not a fact about the mother, and writing it to `pre_pregnancy_weight`
+  /// would put a guess where a midwife reads a measurement.
+  ///
+  /// [readingsAscending] must be oldest-first, in the same shape `evaluate`
+  /// takes.
+  static ({double? weight, bool isEstimated}) baselineWeightFor({
+    double? statedPrePregnancyWeight,
+    required List<Map<String, dynamic>> readingsAscending,
+    double? heightCm,
+    int fetalCount = 1,
+  }) {
+    if (statedPrePregnancyWeight != null && statedPrePregnancyWeight > 0) {
+      return (weight: statedPrePregnancyWeight, isEstimated: false);
+    }
+    if (heightCm == null || heightCm <= 0 || readingsAscending.isEmpty) {
+      return (weight: null, isEstimated: false);
+    }
+
+    final earliest = readingsAscending.first;
+    final earliestWeight = _toDouble(earliest['checkup_weight']);
+    if (earliestWeight == null || earliestWeight <= 0) {
+      return (weight: null, isEstimated: false);
+    }
+    final earliestAog = _toDouble(earliest['age_of_gestation']) ?? 0;
+
+    final result = estimatePrePregnancyBMI(
+      currentWeightKg: earliestWeight,
+      heightCm: heightCm,
+      aogWeeks: earliestAog.toInt(),
+      fetalCount: fetalCount,
+    );
+    final weight = (result['estimatedWeight'] as num?)?.toDouble();
+    return (
+      weight: weight,
+      isEstimated: weight != null && result['isEstimated'] == true,
+    );
   }
 
   /// Estimates pre-pregnancy BMI using backtracking when the mother

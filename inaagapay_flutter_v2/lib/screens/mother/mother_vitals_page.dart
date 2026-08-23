@@ -247,20 +247,19 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
         }
       }
 
-      double? prePregnancyWeight = _prePregnancyWeight;
-      if (prePregnancyWeight == null && deduplicatedReadings.isNotEmpty && _heightCm != null && _heightCm! > 0) {
-        final earliest = deduplicatedReadings.first;
-        final earliestWeight = (earliest['checkup_weight'] as num).toDouble();
-        final earliestAog = (earliest['age_of_gestation'] as num?)?.toDouble() ?? 0.0;
-        final estResult = WeightGainEngine.estimatePrePregnancyBMI(
-          currentWeightKg: earliestWeight,
-          heightCm: _heightCm!,
-          aogWeeks: earliestAog.toInt(),
-          fetalCount: _fetalCount,
-        );
-        prePregnancyWeight = (estResult['estimatedWeight'] as num?)?.toDouble();
-        _prePregnancyWeight = prePregnancyWeight; // Cache locally
-      }
+      // Same derivation the dashboard uses, so both screens start their series
+      // from the same weight. This was written out here and nowhere else, which
+      // is why the dashboard fell back to a limited evaluation for exactly the
+      // mothers this page could still chart.
+      final baseline = WeightGainEngine.baselineWeightFor(
+        statedPrePregnancyWeight: _prePregnancyWeight,
+        readingsAscending: deduplicatedReadings,
+        heightCm: _heightCm,
+        fetalCount: _fetalCount,
+      );
+      final double? prePregnancyWeight = baseline.weight;
+      _prePregnancyWeight = prePregnancyWeight; // Cache locally
+      _isPrePregnancyWeightEstimated = baseline.isEstimated;
 
       if (deduplicatedReadings.isNotEmpty) {
         final latest = deduplicatedReadings.last;

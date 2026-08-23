@@ -72,6 +72,14 @@ Future<DateTime?> showBrandedDatePicker({
               fontWeight: FontWeight.bold,
               color: AppColors.brandPrimary,
             ),
+            // The rule between the header and the calendar.
+            //
+            // Material draws it in the theme's outline colour, which lands as
+            // a hard black bar edge-to-edge — the heaviest thing in a dialog
+            // that is otherwise all soft pink. Dropped to the same hairline
+            // every card in the app uses, so it still separates the date being
+            // edited from the grid without being the first thing seen.
+            dividerColor: AppColors.borderPrimary,
             surfaceTintColor: Colors.transparent,
           ),
         ),
