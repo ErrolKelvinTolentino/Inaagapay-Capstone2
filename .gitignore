@@ -77,3 +77,7 @@ inaagapay_flutter_v2/supabase/functions/send-push/service-account.json
 # Supabase CLI scratch — records which project this checkout is linked to.
 # Local state, not project source.
 supabase/.temp/
+
+# Point-in-time data dumps from database/backups/backup.js.
+# The script is tracked; the captures it produces are not.
+database/backups/*/

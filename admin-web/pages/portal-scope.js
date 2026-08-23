@@ -68,6 +68,57 @@
   const session = readSession();
   const scope = Object.assign(fallbackScope(session), readCachedScope() || {});
 
+  // facility_id -> ids of the facilities directly beneath it. Built from the
+  // two lists the context RPC returns, and thrown away whenever the scope is
+  // re-read so it can never describe a hierarchy that has since changed.
+  let childIndexCache = null;
+
+  // facility_id -> Set of every id in that branch. coversFacility is called
+  // once per row per render — the stock matrix alone asks it 540 times — so the
+  // walk is done once per branch and the answer kept, rather than rebuilt for
+  // every batch. Dropped alongside childIndexCache whenever the scope changes.
+  let subtreeCache = null;
+
+  function childIndex() {
+    if (childIndexCache) return childIndexCache;
+    const index = {};
+    const link = (parentId, childId) => {
+      if (parentId === undefined || parentId === null) return;
+      if (childId === undefined || childId === null) return;
+      const key = String(parentId);
+      const list = index[key] || (index[key] = []);
+      const id = String(childId);
+      if (!list.includes(id)) list.push(id);
+    };
+    // child_facilities carries no parent of its own: by definition those
+    // facilities hang off the office this account runs.
+    (scope.child_facilities || []).forEach((f) => link(scope.facility_id, f.facility_id));
+    (scope.bhc_facilities || []).forEach((f) => link(f.parent_facility_id, f.facility_id));
+    childIndexCache = index;
+    return index;
+  }
+
+  function subtreeSet(facilityId) {
+    if (!subtreeCache) subtreeCache = new Map();
+    const key = String(facilityId);
+    const cached = subtreeCache.get(key);
+    if (cached) return cached;
+
+    const index = childIndex();
+    const seen = new Set();
+    const queue = [key];
+    while (queue.length > 0) {
+      const id = queue.shift();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      (index[id] || []).forEach((childId) => {
+        if (!seen.has(childId)) queue.push(childId);
+      });
+    }
+    subtreeCache.set(key, seen);
+    return seen;
+  }
+
   const PortalScope = {
     get role() { return scope.role; },
     get accountType() { return scope.account_type; },
@@ -149,16 +200,49 @@
       return ids.map(String).includes(String(facilityId));
     },
 
+    /**
+     * Every facility id this one covers, itself included.
+     *
+     * Seen from the municipal office a Rural Health Unit is a branch, not a
+     * shelf: stock sits in its own depot and in each barangay health centre
+     * reporting to it. Filtering a page to one RHU therefore has to match the
+     * whole branch, or the officer reads zero while four BHCs below are
+     * stocked. An RHU account only ever selects leaf BHCs, where the subtree is
+     * the facility itself and nothing changes.
+     */
+    subtreeIds(facilityId) {
+      if (facilityId === undefined || facilityId === null || facilityId === "") return [];
+      return Array.from(subtreeSet(facilityId));
+    },
+
+    /** True when a row filed against a facility sits under the given branch. */
+    coversFacility(branchId, facilityId) {
+      if (facilityId === undefined || facilityId === null || facilityId === 0 ||
+          String(facilityId) === "null") {
+        // Depot rows are reached through the "central" sentinel, never by
+        // naming a facility below this office.
+        return false;
+      }
+      return subtreeSet(branchId).has(String(facilityId));
+    },
+
     /** Display name for a facility id, depot included. */
     facilityLabel(facilityId, facilities) {
       if (facilityId === undefined || facilityId === null || facilityId === 0) {
         return scope.depot_name;
       }
-      const list = facilities || scope.child_facilities || [];
-      const hit = list.find(
-        (f) => String(f.facility_id ?? f.bhc_id) === String(facilityId)
-      );
-      return (hit && (hit.name || hit.bhc_name)) || `Facility #${facilityId}`;
+      // The municipal office holds stock two levels down, so a batch can be
+      // filed against a BHC that is not one of its own children. Searching the
+      // leaves as well is what stops those rows reading "Facility #3".
+      const pools = [facilities, scope.child_facilities, scope.bhc_facilities];
+      for (const list of pools) {
+        if (!Array.isArray(list)) continue;
+        const hit = list.find(
+          (f) => String(f.facility_id ?? f.bhc_id) === String(facilityId)
+        );
+        if (hit) return hit.name || hit.bhc_name || `Facility #${facilityId}`;
+      }
+      return `Facility #${facilityId}`;
     },
 
     /**
@@ -221,6 +305,8 @@
         if (!data || data.success !== true) return scope;
 
         Object.assign(scope, data, { ready: true });
+        childIndexCache = null;
+        subtreeCache = null;
         localStorage.setItem(SCOPE_KEY, JSON.stringify(scope));
       } catch (e) {
         // PGRST202 / 42883 simply mean the MHO migration has not been run here.
@@ -230,6 +316,8 @@
     },
 
     clear() {
+      childIndexCache = null;
+      subtreeCache = null;
       localStorage.removeItem(SCOPE_KEY);
     },
 

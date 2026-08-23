@@ -11,95 +11,227 @@ BEGIN;
 ALTER TABLE public.inventory_items ADD COLUMN IF NOT EXISTS generic_name VARCHAR(255);
 ALTER TABLE public.inventory_items ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE public.inventory_items ADD COLUMN IF NOT EXISTS doses_per_unit INTEGER NOT NULL DEFAULT 1;
+-- Every row below states its own shelf life, so the column default is only
+-- reached by items this script does not create. Zero — "not a multi-dose vial"
+-- — is the safer thing to inherit than the six hours the earlier migrations
+-- declared, which was wrong for every tablet and single-dose vial.
+ALTER TABLE public.inventory_items ADD COLUMN IF NOT EXISTS open_vial_shelf_hours INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE public.inventory_batches ADD COLUMN IF NOT EXISTS doses_remaining_in_open_vial INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE public.inventory_batches ADD COLUMN IF NOT EXISTS open_vials_count INTEGER NOT NULL DEFAULT 0;
 
 -- 1. Wipe existing inventory movement ledger, requests, transfers, batches, and items
-TRUNCATE TABLE public.inventory_transactions CASCADE;
-TRUNCATE TABLE public.inventory_transfers CASCADE;
-TRUNCATE TABLE public.inventory_stock_requests CASCADE;
-TRUNCATE TABLE public.inventory_batches CASCADE;
+--
+-- This used to be four TRUNCATE ... CASCADE statements, which quietly took the
+-- clinical history with them. TRUNCATE CASCADE does not consult ON DELETE
+-- actions: it empties every table holding a foreign key to the named one. Both
+-- immunization_records.inventory_batch_id and maternal_td_records
+-- .inventory_batch_id are declared ON DELETE SET NULL precisely so that
+-- clearing stock does not erase the record of a dose being given — and
+-- TRUNCATE CASCADE overrode that and truncated those tables outright. Re-running
+-- this seed to refresh inventory therefore destroyed immunization and maternal
+-- Td history as a side effect.
+--
+-- Unlink first, then delete. Clinical rows survive with their batch reference
+-- cleared, which is what the schema always intended.
+DO $unlink$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT n.nspname AS sch, cl.relname AS tbl, a.attname AS col
+      FROM pg_constraint c
+      JOIN pg_class     cl ON cl.oid = c.conrelid
+      JOIN pg_namespace n  ON n.oid  = cl.relnamespace
+      JOIN pg_class     pf ON pf.oid = c.confrelid
+      JOIN unnest(c.conkey) AS k(attnum) ON true
+      JOIN pg_attribute a  ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+     WHERE c.contype = 'f'
+       AND pf.relname IN ('inventory_batches', 'inventory_items')
+       AND NOT a.attnotnull                       -- a NOT NULL FK cannot be unlinked
+       AND cl.relname NOT IN ('inventory_batches', 'inventory_items',
+                              'inventory_transactions', 'inventory_transfers',
+                              'inventory_stock_requests')
+  LOOP
+    EXECUTE format('UPDATE %I.%I SET %I = NULL WHERE %I IS NOT NULL',
+                   r.sch, r.tbl, r.col, r.col);
+    RAISE NOTICE 'Unlinked %.% from the inventory tables.', r.tbl, r.col;
+  END LOOP;
+END
+$unlink$;
+
+-- Ordered so each table is emptied before the one it points at. Plain DELETE,
+-- not TRUNCATE: it honours the ON DELETE rules the schema declares.
+DELETE FROM public.inventory_transactions;
+DELETE FROM public.inventory_transfers;
+DELETE FROM public.inventory_stock_requests;
+DELETE FROM public.inventory_batches;
 DELETE FROM public.inventory_items;
 
 -- 2. Insert ONLY Vaccines and Prenatal / Checkup Supplements into inventory_items
-INSERT INTO public.inventory_items (name, generic_name, item_type, unit_of_measure, doses_per_unit, minimum_stock_threshold, is_archived)
+-- doses_per_unit is the vial's dose capacity as procured; open_vial_shelf_hours
+-- is how long the remaining doses stay usable once the seal is broken, under
+-- the WHO multi-dose vial policy:
+--
+--   Group 1 — liquid, preservative-containing (OPV, IPV, Td): 28 days = 672 h
+--   Group 2 — freeze-dried, reconstituted (BCG, MR, MMR):      6 hours
+--   Single-dose presentations and oral supplements:            0, no open vial
+--
+-- IPV is the one to watch. It is a 5-dose vial in the Philippine EPI (10-dose
+-- also exists; 20-dose does not), and the OPV rule in
+-- migrations/20260819_fix_open_vial_deduction_and_linkage.sql matches on
+-- '%polio%', which catches "IPV Polio Vaccine" too and rewrites it to 20. Run
+-- migrations/20260825_vaccine_catalogue_corrections.sql after that migration,
+-- or after re-running this seed, to put it back.
+INSERT INTO public.inventory_items (name, generic_name, item_type, unit_of_measure, doses_per_unit, open_vial_shelf_hours, minimum_stock_threshold, is_archived)
 VALUES
   -- DOH Child & Maternal Vaccines
-  ('BCG Vaccine', 'Bacillus Calmette-Guérin (Tuberculosis)', 'vaccine', 'vials', 20, 20, false),
-  ('Hepatitis B Vaccine', 'Hepatitis B (Pediatric Birth Dose)', 'vaccine', 'vials', 1, 25, false),
-  ('Pentavalent Vaccine', 'DPT-HepB-Hib Combination', 'vaccine', 'vials', 1, 30, false),
-  ('OPV Polio Vaccine', 'Oral Polio Vaccine (bOPV)', 'vaccine', 'vials', 20, 30, false),
-  ('IPV Polio Vaccine', 'Inactivated Polio Vaccine', 'vaccine', 'vials', 1, 20, false),
-  ('PCV-13 Vaccine', 'Pneumococcal Conjugate 13-Valent', 'vaccine', 'vials', 1, 25, false),
-  ('MR Vaccine', 'Measles-Rubella Vaccine', 'vaccine', 'vials', 10, 20, false),
-  ('MMR Vaccine', 'Measles-Mumps-Rubella Vaccine', 'vaccine', 'vials', 10, 20, false),
-  ('Tetanus Diphtheria (Td) Vaccine', 'Tetanus-Diphtheria Toxoid (Maternal)', 'vaccine', 'vials', 10, 30, false),
+  ('BCG Vaccine', 'Bacillus Calmette-Guérin (Tuberculosis)', 'vaccine', 'vials', 20, 6, 20, false),
+  ('Hepatitis B Vaccine', 'Hepatitis B (Pediatric Birth Dose)', 'vaccine', 'vials', 1, 0, 25, false),
+  ('Pentavalent Vaccine', 'DPT-HepB-Hib Combination', 'vaccine', 'vials', 1, 0, 30, false),
+  ('OPV Polio Vaccine', 'Oral Polio Vaccine (bOPV)', 'vaccine', 'vials', 20, 672, 30, false),
+  ('IPV Polio Vaccine', 'Inactivated Polio Vaccine', 'vaccine', 'vials', 5, 672, 20, false),
+  ('PCV-13 Vaccine', 'Pneumococcal Conjugate 13-Valent', 'vaccine', 'vials', 1, 0, 25, false),
+  ('Rotavirus Vaccine', 'Live Attenuated Human Rotavirus (Oral)', 'vaccine', 'doses', 1, 0, 25, false),
+  ('MR Vaccine', 'Measles-Rubella Vaccine', 'vaccine', 'vials', 10, 6, 20, false),
+  ('MMR Vaccine', 'Measles-Mumps-Rubella Vaccine', 'vaccine', 'vials', 10, 6, 20, false),
+  ('Tetanus Diphtheria (Td) Vaccine', 'Tetanus-Diphtheria Toxoid (Maternal)', 'vaccine', 'vials', 10, 672, 30, false),
 
   -- Prenatal & Maternal Checkup Supplements
-  ('Ferrous Sulfate + Folic Acid', 'Iron 60mg + Folic Acid 400mcg', 'supplement', 'tablets', 1, 200, false),
-  ('Calcium Carbonate', 'Elemental Calcium 500mg (Prenatal)', 'supplement', 'tablets', 1, 150, false),
-  ('Vitamin A 200,000 IU', 'Retinol Palmitate High-Dose', 'supplement', 'capsules', 1, 100, false),
-  ('Micronutrient Powder (MNP)', 'Multiple Micronutrient Sachets', 'supplement', 'sachets', 1, 150, false),
-  ('Ascorbic Acid (Vitamin C)', 'Vitamin C 500mg Tablet', 'supplement', 'tablets', 1, 100, false);
+  ('Ferrous Sulfate + Folic Acid', 'Iron 60mg + Folic Acid 400mcg', 'supplement', 'tablets', 1, 0, 200, false),
+  ('Calcium Carbonate', 'Elemental Calcium 500mg (Prenatal)', 'supplement', 'tablets', 1, 0, 150, false),
+  ('Vitamin A 200,000 IU', 'Retinol Palmitate High-Dose', 'supplement', 'capsules', 1, 0, 100, false),
+  ('Micronutrient Powder (MNP)', 'Multiple Micronutrient Sachets', 'supplement', 'sachets', 1, 0, 150, false),
+  ('Ascorbic Acid (Vitamin C)', 'Vitamin C 500mg Tablet', 'supplement', 'tablets', 1, 0, 100, false);
 
--- 3. Seed Central Warehouse Batches for all items (facility_id IS NULL)
+-- ============================================================================
+-- Facility stock — three tiers, not two
+--
+-- Stock flows Municipal Warehouse -> Rural Health Unit depot -> barangay
+-- health centre. This seed used to skip the middle rung entirely: it filled
+-- the warehouse and every BHC and left all four RHU depots empty, so the
+-- municipal portal showed every Rural Health Unit holding nothing.
+--
+-- Quantities come from each item's own minimum_stock_threshold rather than a
+-- flat 500/100. A flat 100 at a BHC sat below the 150-200 threshold of every
+-- supplement, so a freshly seeded database opened with all five supplements
+-- reading low at all five health centres. Scaling off the threshold keeps each
+-- tier comfortably stocked, and stays correct if a threshold is later edited.
+--
+--   Municipal Warehouse   25x threshold    Bulk upstream, working stock at the
+--   RHU depot              8x threshold    edge — roughly how the real supply
+--   Barangay health centre 3x threshold    chain is weighted.
+--
+-- Received dates step down the chain (60 / 40 / 20 days ago) so the movement
+-- ledger reads in the order the stock actually travelled.
+-- ============================================================================
+
+-- 3. Seed the Municipal Warehouse (facility_id IS NULL)
 INSERT INTO public.inventory_batches (item_id, facility_id, batch_number, quantity_received, quantity_remaining, received_date, expiration_date, manufacturer, status)
-SELECT 
-  item_id, 
-  NULL, 
-  'BATCH-CENTRAL-' || item_id || '-01', 
-  500, 
-  500, 
-  CURRENT_DATE - INTERVAL '15 days', 
-  CURRENT_DATE + INTERVAL '365 days', 
-  'DOH Central Supply Depot', 
+SELECT
+  i.item_id,
+  NULL,
+  'MW-' || i.item_id || '-01',
+  i.minimum_stock_threshold * 25,
+  i.minimum_stock_threshold * 25,
+  CURRENT_DATE - INTERVAL '60 days',
+  CURRENT_DATE + INTERVAL '24 months',
+  'DOH Central Supply Depot',
   'active'
-FROM public.inventory_items;
+FROM public.inventory_items i
+WHERE i.is_archived = false;
 
--- 4. Seed Active BHC Stock Batches for each BHC facility
--- Connects inventory to all active Barangay Health Centers in public.health_facilities
+-- 4. Seed downstream facility stock
+
+-- 4a. Each Rural Health Unit's own depot. This is the rung the seed used to
+--     miss, and the reason every per-RHU figure in the municipal portal read
+--     zero before the subtree roll-up was added to PortalScope.
 INSERT INTO public.inventory_batches (item_id, facility_id, batch_number, quantity_received, quantity_remaining, received_date, expiration_date, manufacturer, status)
-SELECT 
-  i.item_id, 
-  hf.facility_id, 
-  'BATCH-BHC' || hf.facility_id || '-' || i.item_id, 
-  100, 
-  100, 
-  CURRENT_DATE - INTERVAL '10 days', 
-  CURRENT_DATE + INTERVAL '300 days', 
-  'DOH Regional Distribution Hub', 
+SELECT
+  i.item_id,
+  hf.facility_id,
+  COALESCE(hf.facility_code, 'RHU' || hf.facility_id) || '-' || i.item_id || '-01',
+  i.minimum_stock_threshold * 8,
+  i.minimum_stock_threshold * 8,
+  CURRENT_DATE - INTERVAL '40 days',
+  CURRENT_DATE + INTERVAL '20 months',
+  'DOH Central Supply Depot',
   'active'
 FROM public.inventory_items i
 CROSS JOIN public.health_facilities hf
-WHERE hf.facility_type = 'BHC';
+WHERE i.is_archived = false
+  AND hf.facility_type = 'RHU'
+  AND COALESCE(hf.is_active, true);
 
--- Fallback: If health_facilities table has no BHC records, insert default batches for BHC IDs 1..5
+-- 4b. Each barangay health centre.
 INSERT INTO public.inventory_batches (item_id, facility_id, batch_number, quantity_received, quantity_remaining, received_date, expiration_date, manufacturer, status)
-SELECT 
-  i.item_id, 
-  f.bhc_id, 
-  'BATCH-BHC' || f.bhc_id || '-' || i.item_id, 
-  100, 
-  100, 
-  CURRENT_DATE - INTERVAL '10 days', 
-  CURRENT_DATE + INTERVAL '300 days', 
-  'DOH Regional Distribution Hub', 
+SELECT
+  i.item_id,
+  hf.facility_id,
+  'BHC' || hf.facility_id || '-' || i.item_id || '-01',
+  i.minimum_stock_threshold * 3,
+  i.minimum_stock_threshold * 3,
+  CURRENT_DATE - INTERVAL '20 days',
+  CURRENT_DATE + INTERVAL '18 months',
+  'DOH Regional Distribution Hub',
   'active'
 FROM public.inventory_items i
-CROSS JOIN (VALUES (1), (2), (3), (4), (5)) AS f(bhc_id)
-WHERE NOT EXISTS (SELECT 1 FROM public.health_facilities WHERE facility_type = 'BHC');
+CROSS JOIN public.health_facilities hf
+WHERE i.is_archived = false
+  AND hf.facility_type = 'BHC'
+  AND COALESCE(hf.is_active, true);
+
+-- The fallback that used to sit here invented batches at facility ids 1..5
+-- whenever health_facilities held no BHC rows. Those ids now belong to real
+-- facilities in the MHO hierarchy, so guessing them would file stock against
+-- whatever happens to occupy them. Report the problem instead of seeding
+-- fiction.
+DO $seedcheck$
+DECLARE
+  v_rhus INTEGER;
+  v_bhcs INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_rhus FROM public.health_facilities WHERE facility_type = 'RHU';
+  SELECT COUNT(*) INTO v_bhcs FROM public.health_facilities WHERE facility_type = 'BHC';
+
+  IF v_rhus = 0 OR v_bhcs = 0 THEN
+    RAISE WARNING 'Seeded % RHU depot(s) and % barangay health centre(s). Run migrations/20260821_mho_tier.sql first if you expected the full Baliwag hierarchy.', v_rhus, v_bhcs;
+  ELSE
+    RAISE NOTICE 'Seeded the Municipal Warehouse, % RHU depot(s) and % barangay health centre(s).', v_rhus, v_bhcs;
+  END IF;
+END
+$seedcheck$;
 
 -- 5. Record Initial Receipt Transactions in Movement Ledger
-INSERT INTO public.inventory_transactions (batch_id, facility_id, transaction_type, quantity, reference_type, performed_by, logged_at)
-SELECT 
-  batch_id, 
-  facility_id, 
-  'receipt', 
-  quantity_received, 
-  'Initial DOH Vaccine & Prenatal Supplement Allocation', 
-  1, 
-  CURRENT_TIMESTAMP - INTERVAL '10 days'
-FROM public.inventory_batches;
+--
+-- performed_by is resolved rather than hardcoded to account 1: the municipal
+-- officer if there is one, otherwise the lowest active portal account. A fixed
+-- id breaks the foreign key the moment that account is removed.
+INSERT INTO public.inventory_transactions (batch_id, facility_id, transaction_type, quantity, reference_type, notes, performed_by, logged_at, resulting_quantity_remaining)
+SELECT
+  b.batch_id,
+  b.facility_id,
+  'receipt',
+  b.quantity_received,
+  CASE
+    WHEN b.facility_id IS NULL    THEN 'Initial DOH Allocation'
+    WHEN hf.facility_type = 'RHU' THEN 'Municipal Warehouse Allocation'
+    ELSE                               'Rural Health Unit Allocation'
+  END,
+  CASE
+    WHEN b.facility_id IS NULL    THEN 'Opening stock received into the Municipal Warehouse.'
+    WHEN hf.facility_type = 'RHU' THEN 'Allocated from the Municipal Warehouse to ' || hf.name || '.'
+    ELSE 'Allocated to ' || COALESCE(hf.name, 'this health centre') || '.'
+  END,
+  (SELECT a.account_id
+     FROM public.accounts a
+    WHERE a.account_type IN ('mho', 'admin')
+      AND a.status = 'active'
+    ORDER BY CASE WHEN a.account_type = 'mho' THEN 0 ELSE 1 END, a.account_id
+    LIMIT 1),
+  b.received_date::timestamptz + INTERVAL '9 hours',
+  b.quantity_remaining
+FROM public.inventory_batches b
+LEFT JOIN public.health_facilities hf ON hf.facility_id = b.facility_id;
 
 -- 6. Link Clinical Vaccines table to Physical Inventory Items
 ALTER TABLE public.vaccines 

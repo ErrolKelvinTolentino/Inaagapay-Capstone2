@@ -49,10 +49,17 @@
     return id === null || id === undefined || id === 0 || String(id) === "null";
   }
 
+  // A named facility means its whole branch. From the municipal office a Rural
+  // Health Unit is not a shelf but a subtree: its own depot plus the barangay
+  // health centres it supplies. Matching only the RHU's own facility_id made
+  // dashboard and report figures read zero for an RHU that had distributed its
+  // stock downward. For an RHU account the children are leaves, so the subtree
+  // is the facility itself and nothing changes.
   function matchesFacility(batch, facilityFilter) {
     if (facilityFilter === "central") return isDepotBatch(batch);
     if (facilityFilter === "all" || facilityFilter === "" ||
         facilityFilter === null || facilityFilter === undefined) return true;
+    if (window.PortalScope) return window.PortalScope.coversFacility(facilityFilter, batch.facility_id);
     return String(batch.facility_id) === String(facilityFilter);
   }
 

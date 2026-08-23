@@ -1017,7 +1017,7 @@
             <div class="toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
               <div>
                 <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-hospital-user" style="color: var(--brand-primary); margin-right: 6px;"></i> Stock Levels Across All Barangay Health Centers</h3>
-                <p style="margin: 3px 0 0; font-size: 12.5px; color: var(--text-secondary);">Real-time inventory stock balance breakdown for every health facility</p>
+                <p style="margin: 3px 0 0; font-size: 12.5px; color: var(--text-secondary);" id="matrix-subtitle">Real-time inventory stock balance breakdown for every health facility</p>
               </div>
               <button class="btn btn-secondary btn-sm" onclick="exportCatalogCSV()"><i class="fa-solid fa-file-csv"></i> Export Matrix CSV</button>
             </div>
@@ -2379,10 +2379,22 @@
         // Health Office that is still the warehouse rows with facility_id NULL;
         // for a Rural Health Unit it is that RHU's own facility_id. Routing the
         // sentinel through PortalScope is what lets one page serve both tiers.
-        function batchMatchesFacility(batch, facilityFilter) {
+        //
+        // A named facility matches its whole branch, not just its own shelf.
+        // The municipal officer picking "Baliwag RHU III" means the RHU and the
+        // barangay health centres under it: stock is delivered down to the BHCs,
+        // so an RHU that has distributed everything holds nothing in its own
+        // depot and every tile on this page read zero. An RHU account only ever
+        // picks leaf BHCs, whose branch is the facility itself, so its numbers
+        // are unchanged.
+        function facilityMatches(rowFacilityId, facilityFilter) {
           if (!facilityFilter || facilityFilter === "all" || facilityFilter === "") return true;
-          if (facilityFilter === "central") return PortalScope.isDepot(batch.facility_id);
-          return String(batch.facility_id) === String(facilityFilter);
+          if (facilityFilter === "central") return PortalScope.isDepot(rowFacilityId);
+          return PortalScope.coversFacility(facilityFilter, rowFacilityId);
+        }
+
+        function batchMatchesFacility(batch, facilityFilter) {
+          return facilityMatches(batch.facility_id, facilityFilter);
         }
 
         function getItemBatches(itemId, facilityFilter = "all") {
@@ -2393,16 +2405,6 @@
           return getItemBatches(itemId, facilityFilter)
             .filter(isUsableBatch)
             .sort((a, b) => String(a.expiration_date || "9999-12-31").localeCompare(String(b.expiration_date || "9999-12-31")))[0] || null;
-        }
-
-        function calculateFacilityUsableStock(itemId, facilityId) {
-          return batches
-            .filter(batch =>
-              batch.item_id === itemId &&
-              isUsableBatch(batch) &&
-              String(batch.facility_id) === String(facilityId)
-            )
-            .reduce((sum, batch) => sum + Number(batch.quantity_remaining || 0), 0);
         }
 
         function isTransferInTransit(transfer) {
@@ -2782,15 +2784,8 @@
         }
 
         function getItemStockMetrics(itemId, facilityFilter) {
-          const itemBatches = batches.filter(b => {
-            if (b.item_id !== itemId) return false;
-            if (facilityFilter === "central") {
-              return b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null";
-            } else if (facilityFilter !== "all" && facilityFilter !== "" && facilityFilter !== null) {
-              return String(b.facility_id) === String(facilityFilter);
-            }
-            return true;
-          });
+          const itemBatches = batches.filter(b =>
+            b.item_id === itemId && facilityMatches(b.facility_id, facilityFilter));
 
           const item = items.find(i => String(i.item_id) === String(itemId));
           const dosesPerUnit = itemDosesPerUnit(item);
@@ -3070,12 +3065,7 @@
             const statusMatch = b.status === 'active' && (exp <= thirtyDays);
             if (!statusMatch) return false;
             
-            if (bhcFilter === "central") {
-              return b.facility_id === null || b.facility_id === 0 || b.facility_id === undefined || String(b.facility_id) === "null";
-            } else if (bhcFilter !== "all") {
-              return String(b.facility_id) === String(bhcFilter);
-            }
-            return true;
+            return facilityMatches(b.facility_id, bhcFilter);
           }).length;
           document.getElementById("kpi-expiring-batches").textContent = expiringCount;
 
@@ -3263,6 +3253,15 @@
           const tbody = document.getElementById("matrix-tbody");
           if (!thead || !tbody) return;
 
+          // A municipal column totals a whole branch, so name what it counts
+          // rather than letting the officer read it as the RHU's own shelf.
+          const subtitle = document.getElementById("matrix-subtitle");
+          if (subtitle) {
+            subtitle.textContent = PortalScope.isMho
+              ? "Each Rural Health Unit column totals its own depot plus the barangay health centres reporting to it."
+              : "Real-time inventory stock balance breakdown for every health facility";
+          }
+
           // Build Headers
           let headersHtml = `
             <tr>
@@ -3319,11 +3318,7 @@
           const filtered = batches.filter(b => {
             if (status && b.status !== status) return false;
 
-            if (bhcFilter === "central") {
-              if (b.facility_id !== null && b.facility_id !== 0 && b.facility_id !== undefined && String(b.facility_id) !== "null") return false;
-            } else if (bhcFilter !== "all") {
-              if (String(b.facility_id) !== String(bhcFilter)) return false;
-            }
+            if (!facilityMatches(b.facility_id, bhcFilter)) return false;
 
             const item = items.find(i => i.item_id === b.item_id);
             const searchStr = `${b.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""}`.toLowerCase();
@@ -3730,11 +3725,7 @@
           const filtered = transactions.filter(t => {
             if (type && t.transaction_type !== type) return false;
 
-            if (bhcFilter === "central") {
-              if (t.facility_id !== null && t.facility_id !== 0 && t.facility_id !== undefined && String(t.facility_id) !== "null") return false;
-            } else if (bhcFilter !== "all") {
-              if (String(t.facility_id) !== String(bhcFilter)) return false;
-            }
+            if (!facilityMatches(t.facility_id, bhcFilter)) return false;
 
             if (!isDateInTxFilter(t.logged_at, dateFilter, customStart, customEnd)) return false;
 
@@ -3847,11 +3838,7 @@
 
           const filtered = transactions.filter(t => {
             if (type && t.transaction_type !== type) return false;
-            if (bhcFilter === "central") {
-              if (t.facility_id !== null && t.facility_id !== 0 && t.facility_id !== undefined && String(t.facility_id) !== "null") return false;
-            } else if (bhcFilter !== "all") {
-              if (String(t.facility_id) !== String(bhcFilter)) return false;
-            }
+            if (!facilityMatches(t.facility_id, bhcFilter)) return false;
             if (!isDateInTxFilter(t.logged_at, dateFilter, customStart, customEnd)) return false;
 
             const batch = batches.find(b => b.batch_id === t.batch_id);
@@ -4257,8 +4244,7 @@
 
           transactions.forEach(t => {
             if ((t.logged_at || "").startsWith(monthVal) && t.transaction_type === "dispense") {
-              if (bhcFilter === "central" && t.facility_id !== null && t.facility_id !== 0) return;
-              if (bhcFilter !== "all" && bhcFilter !== "central" && String(t.facility_id) !== String(bhcFilter)) return;
+              if (!facilityMatches(t.facility_id, bhcFilter)) return;
 
               const batch = batches.find(b => b.batch_id === t.batch_id);
               if (selectedItemId !== "all" && batch && String(batch.item_id) !== String(selectedItemId)) return;
@@ -4378,8 +4364,7 @@
 
           transactions.forEach(t => {
             if ((t.logged_at || "").startsWith(monthVal)) {
-              if (bhcFilter === "central" && t.facility_id !== null && t.facility_id !== 0) return;
-              if (bhcFilter !== "all" && bhcFilter !== "central" && String(t.facility_id) !== String(bhcFilter)) return;
+              if (!facilityMatches(t.facility_id, bhcFilter)) return;
 
               const qty = Math.abs(t.quantity || 0);
               if (t.transaction_type === 'receipt') totalReceivedMonth += qty;
@@ -6354,14 +6339,7 @@
 
           return (batches || []).filter(b => {
             if (batchOpenDoses(b) <= 0) return false;
-            if (scope === "central") {
-              return b.facility_id === null || b.facility_id === 0 ||
-                     b.facility_id === undefined || String(b.facility_id) === "null";
-            }
-            if (scope !== "all" && scope !== "" && scope !== null) {
-              return String(b.facility_id) === String(scope);
-            }
-            return true;
+            return facilityMatches(b.facility_id, scope);
           }).map(batch => {
             const item = items.find(i => String(i.item_id) === String(batch.item_id));
             return {
@@ -6881,15 +6859,20 @@
         }
 
         /**
-         * Label for a facility id whose name this page could not resolve.
+         * Label for a facility id this page's own dropdown does not carry.
          *
-         * This used to read `BHC #12`, which was a guess that happened to be
-         * right while every downstream facility was a barangay health centre.
+         * `bhcs` only ever holds this office's immediate children, but the
+         * municipal office holds stock two levels down: a batch can sit at a
+         * barangay health centre while the list names only the four RHUs. The
+         * scope knows the whole subtree, so ask it first.
+         *
+         * The bare-id fallback used to read `BHC #12`, a guess that happened to
+         * be right while every downstream facility was a barangay health centre.
          * Under the municipal office the same id is usually an RHU, so the
          * neutral wording is the only one that is never wrong.
          */
         function unknownFacilityLabel(facilityId) {
-          return `Facility #${facilityId}`;
+          return PortalScope.facilityLabel(facilityId, bhcs) || `Facility #${facilityId}`;
         }
 
         // Only fixed chrome — headings, labels, buttons, column headers. Table
@@ -7074,12 +7057,18 @@
             { key: "all",     name: "All Facilities", sub: "Combined view",   icon: "fa-layer-group" },
             { key: "central", name: PortalScope.depotName, sub: "Your depot", icon: "fa-warehouse" },
           ];
-          (bhcs || []).forEach(b => options.push({
-            key: String(b.bhc_id),
-            name: b.bhc_name,
-            sub: b.facility_code || PortalScope.childTypeLabel,
-            icon: "fa-hospital",
-          }));
+          (bhcs || []).forEach(b => {
+            // subtreeIds counts the facility itself, so anything above one means
+            // this card is a branch total rather than a single shelf.
+            const below = PortalScope.subtreeIds(b.bhc_id).length - 1;
+            const code = b.facility_code || PortalScope.childTypeLabel;
+            options.push({
+              key: String(b.bhc_id),
+              name: b.bhc_name,
+              sub: below > 0 ? `${code} + ${below} BHC${below === 1 ? "" : "s"}` : code,
+              icon: "fa-hospital",
+            });
+          });
           return options;
         }
 
@@ -7105,12 +7094,7 @@
           const expiring = (batches || []).filter(b => {
             if (b.status !== "active") return false;
             if (!(new Date(b.expiration_date) <= soon)) return false;
-            if (facilityKey === "central") {
-              return b.facility_id === null || b.facility_id === 0 ||
-                     b.facility_id === undefined || String(b.facility_id) === "null";
-            }
-            if (facilityKey !== "all") return String(b.facility_id) === String(facilityKey);
-            return true;
+            return facilityMatches(b.facility_id, facilityKey);
           }).length;
 
           return { stocked, low, expiring };
