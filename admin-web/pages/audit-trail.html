@@ -68,44 +68,62 @@
         <div class="page-header">
           <div class="page-title-block">
             <h1 class="page-title">Activity Log</h1>
-            <p class="page-subtitle">See everything that happened in your system</p>
+            <p class="page-subtitle">Every recorded action, with the full account of what happened</p>
           </div>
-          <div class="page-actions" style="display: flex; gap: 8px;">
-            <button class="btn btn-primary btn-sm" id="export-btn"><i class="fa-solid fa-file-pdf"></i> Download PDF Report</button>
+          <div class="page-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-sm" id="export-btn"><i class="fa-solid fa-table-list"></i> Summary PDF</button>
+            <button class="btn btn-primary btn-sm" id="export-detail-btn"><i class="fa-solid fa-file-lines"></i> Detailed PDF</button>
+            <button class="btn btn-secondary btn-sm" id="print-list-btn"><i class="fa-solid fa-print"></i> Print Log</button>
             <button class="btn btn-secondary btn-sm" id="refresh-btn"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
           </div>
         </div>
 
+        <div class="audit-banner" id="audit-banner" hidden></div>
+
         <div class="audit-stats-grid" id="audit-stats"></div>
 
         <div class="card">
-          <div class="toolbar" style="border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding-bottom: 18px;">
+          <div class="toolbar" style="border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding-bottom: 18px; flex-wrap: wrap; gap: 10px;">
             <div class="search-box">
               <i class="fa-solid fa-magnifying-glass"></i>
-              <input class="form-control" type="search" id="search-input" placeholder="Search by user or action..." />
+              <input class="form-control" type="search" id="search-input" placeholder="Search people, items, batches, facilities, notes..." />
             </div>
-            <div class="filter-group">
+            <div class="filter-group" style="flex-wrap: wrap; gap: 8px;">
+              <select class="form-select" id="filter-module" style="width: auto">
+                <option value="">All Areas</option>
+              </select>
+              <select class="form-select" id="filter-severity" style="width: auto">
+                <option value="">Any Importance</option>
+                <option value="critical">Critical</option>
+                <option value="warning">Needs Attention</option>
+                <option value="notice">Notable</option>
+                <option value="info">Routine</option>
+              </select>
               <select class="form-select" id="filter-action" style="width: auto">
                 <option value="">All Activities</option>
-                <option value="login">Signed In</option><option value="logout">Signed Out</option>
-                <option value="create_account">Account Added</option><option value="update_account">Account Modified</option>
-                <option value="delete_account">Account Removed</option><option value="assign_midwife">Midwife Reassigned</option>
-                <option value="create_mother">Mother Registered</option><option value="update_mother">Mother Information Updated</option>
-                <option value="create_pregnancy">Pregnancy Record Added</option><option value="update_pregnancy">Pregnancy Updated</option>
-                <option value="create_checkup">Prenatal Checkup Added</option><option value="update_checkup">Checkup Updated</option>
-                <option value="create_ultrasound">Ultrasound Added</option><option value="create_labtest">Lab Test Added</option>
-                <option value="create_child">Child Record Added</option><option value="ai_insight_generated">AI Analysis Generated</option>
-                <option value="ai_insight_edited">AI Analysis Edited</option><option value="ai_insight_approved">AI Analysis Approved</option>
-                <option value="database_backup">Backup Created</option><option value="database_restore">System Restored</option>
+              </select>
+              <select class="form-select" id="filter-actor" style="width: auto">
+                <option value="">Anyone</option>
               </select>
               <input type="date" class="form-control" id="filter-date-from" style="width: auto" />
               <input type="date" class="form-control" id="filter-date-to" style="width: auto" />
+              <button class="btn btn-secondary btn-sm" id="clear-filters-btn"><i class="fa-solid fa-xmark"></i> Clear</button>
             </div>
           </div>
           <div class="table-wrap" style="border: none; border-radius: 0">
             <table class="data-table">
-              <thead><tr><th>Date & Time</th><th>User</th><th>What Happened</th><th>Type</th><th>Description</th><th style="text-align: center">Details</th></tr></thead>
-              <tbody id="audit-tbody"><tr><td colspan="6" style="text-align:center;padding:48px;"><div class="spinner" style="margin:0 auto 12px"></div>Loading activities...</td></tr></tbody>
+              <thead>
+                <tr>
+                  <th>Date &amp; Time</th>
+                  <th>Who</th>
+                  <th>What Happened</th>
+                  <th>Area</th>
+                  <th>Record</th>
+                  <th>Summary</th>
+                  <th style="text-align: center">Full Note</th>
+                </tr>
+              </thead>
+              <tbody id="audit-tbody"><tr><td colspan="7" style="text-align:center;padding:48px;"><div class="spinner" style="margin:0 auto 12px"></div>Loading activities...</td></tr></tbody>
             </table>
           </div>
           <div class="card-footer" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; border-top:1.5px solid var(--border-primary); padding:16px 24px;">
@@ -118,26 +136,38 @@
     </div>
 
     <div class="modal-overlay" id="detail-modal">
-      <div class="modal" style="max-width: 680px">
+      <div class="modal" style="max-width: 860px">
         <div class="modal-header">
-          <h2 class="modal-title"><i class="fa-solid fa-clipboard-list" style="color: var(--brand-primary); margin-right: 8px;"></i>Activity Details</h2>
+          <h2 class="modal-title"><i class="fa-solid fa-clipboard-list" style="color: var(--brand-primary); margin-right: 8px;"></i>Audit Record</h2>
           <button class="modal-close" id="detail-modal-close"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body" id="detail-body"></div>
-        <div class="modal-footer"><button class="btn btn-secondary btn-sm" id="detail-close-btn">Close</button></div>
+        <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end;">
+          <button class="btn btn-primary btn-sm" id="detail-print-btn"><i class="fa-solid fa-print"></i> Print this record</button>
+          <button class="btn btn-primary btn-sm" id="detail-pdf-btn"><i class="fa-solid fa-file-pdf"></i> Save as PDF</button>
+          <button class="btn btn-secondary btn-sm" id="detail-close-btn">Close</button>
+        </div>
       </div>
     </div>
+
+    <!-- Everything printed is rendered here first. Keeping one print surface for
+         both a single record and the whole log means the print stylesheet stays
+         a handful of rules instead of one per screen element. -->
+    <div id="print-root" aria-hidden="true"></div>
+
     <div id="toast-container"></div>
 
     <style>
-      .audit-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:16px; margin-bottom:24px; }
+      .audit-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px,1fr)); gap:16px; margin-bottom:24px; }
       .audit-stat-card { background: var(--card-bg); border:1.5px solid var(--border-primary); border-radius: var(--radius-md); padding:18px 20px; }
       .audit-stat-val { font-size:24px; font-weight:700; }
-      .audit-stat-lbl { font-size:11px; color:var(--text-secondary); font-weight:600; text-transform:uppercase; }
+      .audit-stat-lbl { font-size:11px; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:.02em; }
       .page-btn { width:36px; height:36px; border-radius:50%; border:1.5px solid var(--border-primary); background:var(--card-bg); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; margin:0 2px; }
       .page-btn.active { background:var(--brand-primary); color:white; border-color:var(--brand-primary); }
       .page-btn[disabled] { opacity:0.4; cursor:not-allowed; }
-      
+
+      .audit-banner { border:1.5px solid var(--warning, #f57c00); background:#fff8e1; color:#8a5300; border-radius:12px; padding:12px 16px; margin-bottom:18px; font-size:13px; line-height:1.5; }
+
       /* Badge colors */
       .badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-block; }
       .badge-admin { background: #e3f2fd; color: #1976d2; }
@@ -147,6 +177,64 @@
       .badge-suspended { background: #ffebee; color: #d32f2f; }
       .badge-midwife { background: #f3e5f5; color: #7b1fa2; }
       .badge-mother { background: #fce4ec; color: #c2185b; }
+
+      /* Severity */
+      .sev-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:middle; }
+      .sev-critical { background:#d32f2f; }
+      .sev-warning  { background:#f57c00; }
+      .sev-notice   { background:#1976d2; }
+      .sev-info     { background:#9e9e9e; }
+      .sev-chip { font-size:11px; font-weight:700; padding:3px 10px; border-radius:10px; text-transform:uppercase; letter-spacing:.03em; }
+      .sev-chip.sev-critical { background:#ffebee; color:#c62828; }
+      .sev-chip.sev-warning  { background:#fff3e0; color:#ef6c00; }
+      .sev-chip.sev-notice   { background:#e3f2fd; color:#1565c0; }
+      .sev-chip.sev-info     { background:#f5f5f5; color:#616161; }
+
+      .module-chip { background: var(--brand-secondary); padding:2px 8px; border-radius:5px; font-size:11px; white-space:nowrap; }
+
+      /* The printable record */
+      .audit-doc { font-size:13px; line-height:1.6; color: var(--text-primary); }
+      .audit-doc-head { border-bottom:2px solid var(--brand-primary); padding-bottom:12px; margin-bottom:16px; }
+      .audit-doc-title { font-size:18px; font-weight:700; margin:0 0 6px; }
+      .audit-doc-meta { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+      .audit-doc-narrative { background: var(--bg-primary); border:1px solid var(--border-primary); border-left:4px solid var(--brand-primary); border-radius:10px; padding:14px 16px; margin-bottom:18px; white-space:pre-wrap; }
+      .audit-sec { border:1px solid var(--border-primary); border-radius:10px; padding:14px 16px; margin-bottom:14px; }
+      .audit-sec-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary); margin-bottom:10px; }
+      .audit-kv { display:grid; grid-template-columns: minmax(160px, 34%) 1fr; gap:6px 14px; }
+      .audit-kv dt { font-weight:600; color:var(--text-secondary); }
+      .audit-kv dd { margin:0; word-break:break-word; }
+      .audit-kv dt.key-strong, .audit-kv dt.key-strong + dd { color:var(--brand-primary); font-weight:700; }
+      .audit-diff { width:100%; border-collapse:collapse; font-size:12px; }
+      .audit-diff th, .audit-diff td { border:1px solid var(--border-primary); padding:6px 9px; text-align:left; vertical-align:top; }
+      .audit-diff th { background:var(--bg-primary); font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+      .audit-diff td.was { color:#c62828; }
+      .audit-diff td.now { color:#2e7d32; }
+      .audit-raw { margin-top:6px; }
+      .audit-raw summary { cursor:pointer; font-size:12px; font-weight:600; color:var(--text-secondary); }
+      .audit-raw pre { background:var(--bg-primary); border:1px solid var(--border-primary); border-radius:8px; padding:10px; overflow-x:auto; font-size:11px; margin-top:8px; }
+
+      #print-root { display:none; }
+
+      @media print {
+        /* Only the print surface goes on paper. Hiding the app shell rather than
+           re-styling it keeps a printed record free of nav, buttons and toasts. */
+        body > *:not(#print-root) { display:none !important; }
+        #print-root { display:block !important; }
+        #print-root { font-family: "DM Sans", Arial, sans-serif; color:#000; font-size:11.5pt; }
+        .print-sheet { page-break-after: always; }
+        .print-sheet:last-child { page-break-after: auto; }
+        .print-brand { border-bottom:3px solid #ff68a5; padding-bottom:8px; margin-bottom:14px; }
+        .print-brand h1 { font-size:15pt; margin:0 0 2px; }
+        .print-brand p { margin:0; font-size:9pt; color:#555; }
+        .audit-doc-narrative { background:#fafafa !important; border-left:3px solid #ff68a5 !important; }
+        .audit-sec, .audit-diff th, .audit-diff td { border-color:#bbb !important; }
+        .audit-raw { display:none !important; }
+        .print-foot { margin-top:16px; padding-top:8px; border-top:1px solid #bbb; font-size:8.5pt; color:#555; }
+        table.print-list { width:100%; border-collapse:collapse; font-size:8.5pt; }
+        table.print-list th, table.print-list td { border:1px solid #bbb; padding:4px 6px; text-align:left; vertical-align:top; }
+        table.print-list th { background:#f2f2f2; }
+        @page { margin: 14mm; }
+      }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -164,201 +252,301 @@
 
         if (window.verifyAdminSessionWithDB) { window.verifyAdminSessionWithDB(db); }
 
-        // ----- RESOLVE CACHE -----
-        const resolveCache = new Map();
+        /* ── Formatting helpers ─────────────────────────────────────────── */
 
-        async function resolveAccountName(accountId){
-          if(!accountId) return null;
-          const cacheKey = `acc_${accountId}`;
-          if(resolveCache.has(cacheKey)) return resolveCache.get(cacheKey);
-          try{
-            const { data } = await db.from('accounts').select('first_name, last_name').eq('account_id', accountId).single();
-            if(data){
-              const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
-              if(name){ resolveCache.set(cacheKey, name); return name; }
-            }
-          }catch(e){ console.warn(e); }
-          return null;
+        // Escapes quotes as well as tags. The narratives this page renders quote
+        // the operator's own words ("reason: ..."), and those land inside title=
+        // and other attributes, where an unescaped double quote ends the
+        // attribute early and injects the rest as markup.
+        function esc(s){
+          return String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
         }
 
-        async function resolveAIResponseLabel(aiResponseId){
-          if(!aiResponseId) return null;
-          const cacheKey = `ai_${aiResponseId}`;
-          if(resolveCache.has(cacheKey)) return resolveCache.get(cacheKey);
-          try{
-            const { data } = await db.from('ai_responses').select('response_type, response_category').eq('ai_response_id', aiResponseId).single();
-            if(data){
-              let label = data.response_type || data.response_category;
-              if(label){
-                const readable = label.split('_').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
-                resolveCache.set(cacheKey, readable);
-                return readable;
-              }
-            }
-          }catch(e){}
-          return null;
-        }
-
-        async function resolveReferenceLabel(tableName, recordId){
-          if(!tableName || !recordId) return null;
-          const cacheKey = `ref_${tableName}_${recordId}`;
-          if(resolveCache.has(cacheKey)) return resolveCache.get(cacheKey);
-          let label = null;
-          try{
-            if(tableName === 'lab_tests'){
-              const { data } = await db.from('lab_tests').select('lab_test_type, lab_test_date').eq('lab_test_id', recordId).single();
-              if(data){
-                const date = data.lab_test_date ? new Date(data.lab_test_date).toLocaleDateString('en-PH',{year:'numeric', month:'short', day:'numeric'}) : '';
-                label = `${data.lab_test_type || 'Lab Test'}${date ? ` (${date})` : ''}`;
-              }
-            }
-            else if(tableName === 'ultrasounds'){
-              const { data } = await db.from('ultrasounds').select('ultrasound_date').eq('ultrasound_id', recordId).single();
-              if(data){
-                const date = data.ultrasound_date ? new Date(data.ultrasound_date).toLocaleDateString('en-PH',{year:'numeric', month:'short', day:'numeric'}) : '';
-                label = `Ultrasound Scan${date ? ` (${date})` : ''}`;
-              }
-            }
-            else if(tableName === 'pregnancies'){
-              const { data } = await db.from('pregnancies').select('expected_date_of_delivery').eq('pregnancy_id', recordId).single();
-              if(data){
-                const edd = data.expected_date_of_delivery ? new Date(data.expected_date_of_delivery).toLocaleDateString('en-PH',{year:'numeric', month:'short', day:'numeric'}) : '';
-                label = `Pregnancy Record${edd ? ` - Due ${edd}` : ''}`;
-              }
-            }
-            else if(tableName === 'prenatal_checkups' || tableName === 'pregnancies_checkups'){
-              const { data } = await db.from('prenatal_checkups').select('checkup_datetime').eq('prenatal_checkup_id', recordId).single();
-              if(data){
-                const dt = data.checkup_datetime ? new Date(data.checkup_datetime).toLocaleDateString('en-PH',{year:'numeric', month:'short', day:'numeric'}) : '';
-                label = `Prenatal Checkup${dt ? ` (${dt})` : ''}`;
-              }
-            }
-            else if(tableName === 'mothers'){
-              const { data } = await db.from('mothers').select('account_id').eq('mother_id', recordId).single();
-              if(data && data.account_id){
-                const accountName = await resolveAccountName(data.account_id);
-                if(accountName) label = accountName;
-              }
-            }
-            else if(tableName === 'children'){
-              const { data } = await db.from('children').select('first_name, last_name').eq('child_id', recordId).single();
-              if(data){
-                label = [data.first_name, data.last_name].filter(Boolean).join(' ');
-              }
-            }
-            if(label){
-              resolveCache.set(cacheKey, label);
-              return label;
-            }
-          }catch(e){ console.warn(`resolveRef ${tableName}:`, e.message); }
-          return null;
-        }
-
-        function getReadableTableName(tableName){
-          const map = { lab_tests:'Laboratory Test', ultrasounds:'Ultrasound', pregnancies:'Pregnancy', prenatal_checkups:'Prenatal Checkup', mothers:'Mother', children:'Child' };
-          return map[tableName] || tableName?.replace(/_/g,' ')?.replace(/\b\w/g,l=>l.toUpperCase());
-        }
-
-        async function formatFieldValue(key, value, parentObj){
-          if(value === null || value === undefined || value === '') return '<span style="color:var(--text-secondary);">—</span>';
-          if(key === 'approved_by' && typeof value === 'number'){
-            const name = await resolveAccountName(value);
-            return name || 'Unknown User';
-          }
-          if(key === 'created_by' || key === 'updated_by' || key === 'deleted_by' || key === 'reviewed_by'){
-            const numericVal = typeof value === 'number' ? value : parseInt(value);
-            if(!isNaN(numericVal)){
-              const name = await resolveAccountName(numericVal);
-              return name || `User #${numericVal}`;
-            }
-          }
-          if(key === 'ai_response_id' && typeof value === 'number'){
-            const aiLabel = await resolveAIResponseLabel(value);
-            return aiLabel || 'AI Analysis';
-          }
-          if(key === 'reference_id' && parentObj?.reference_table && typeof value === 'number'){
-            const refLabel = await resolveReferenceLabel(parentObj.reference_table, value);
-            return refLabel || 'Unknown Record';
-          }
-          if(key === 'reference_table'){
-            return getReadableTableName(value);
-          }
-          if(key === 'status'){
-            const statusMap = { active:'Active', inactive:'Inactive', suspended:'Suspended', generated:'Generated', approved:'Approved', edited:'Edited' };
-            return statusMap[value] || value;
-          }
-          if(key === 'account_type'){
-            const typeMap = { admin:'Administrator', midwife:'Midwife', mother:'Mother' };
-            return typeMap[value] || value;
-          }
-          if(typeof value === 'string' && value.length > 150) return `<div style="white-space:pre-wrap;font-size:12px;">${esc(value.substring(0,150))}${value.length>150?'...':''}</div>`;
-          return esc(String(value));
-        }
-
-        function esc(s){ const div = document.createElement('div'); div.textContent = s??''; return div.innerHTML; }
+        // audit_trail.action_timestamp is a naive timestamp holding UTC. Without
+        // the Z the browser would read it as local and shift every entry.
         function toUTC(ts){ if(!ts) return null; return new Date(/Z|[+-]\d{2}:?\d{2}$/.test(ts) ? ts : ts+'Z'); }
-        function fmtDT(ts){ if(!ts) return '—'; return toUTC(ts).toLocaleString('en-PH',{timeZone:'Asia/Manila', year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'}); }
-
-        function getHumanReadableActionName(action){
-          const map = { login:'Signed In', logout:'Signed Out', create_account:'Account Added', update_account:'Account Modified', delete_account:'Account Removed', assign_midwife:'Midwife Reassigned', create_mother:'Mother Registered', update_mother:'Mother Updated', create_pregnancy:'Pregnancy Added', update_pregnancy:'Pregnancy Updated', create_checkup:'Checkup Added', update_checkup:'Checkup Updated', create_ultrasound:'Ultrasound Added', create_labtest:'Lab Test Added', create_child:'Child Added', ai_insight_generated:'AI Analysis Generated', ai_insight_edited:'AI Analysis Edited', ai_insight_approved:'AI Analysis Approved', database_backup:'Backup Created', database_restore:'System Restored', AI_GENERATED:'AI Generated', AI_EDITED:'AI Edited', AI_APPROVAL:'AI Approved' };
-          return map[action] || action?.replace(/_/g,' ')?.replace(/\b\w/g,l=>l.toUpperCase());
+        function fmtDT(ts){
+          if(!ts) return '—';
+          return toUTC(ts).toLocaleString('en-PH',{timeZone:'Asia/Manila', year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'});
         }
-        function getHumanReadableDescription(log){
-          if(log.description) return log.description;
-          return getHumanReadableActionName(log.action) + ' performed';
+        function fmtDTLong(ts){
+          if(!ts) return '—';
+          return toUTC(ts).toLocaleString('en-PH',{timeZone:'Asia/Manila', dateStyle:'full', timeStyle:'medium'});
         }
-        function getActionCategory(action){
-          const cat = { login:'Auth', logout:'Auth', create_account:'Accounts', update_account:'Accounts', delete_account:'Accounts', assign_midwife:'Staff', create_mother:'Patient', update_mother:'Patient', create_pregnancy:'Pregnancy', update_pregnancy:'Pregnancy', create_checkup:'Medical', update_checkup:'Medical', create_ultrasound:'Medical', create_labtest:'Medical', create_child:'Child', ai_insight_generated:'AI', ai_insight_edited:'AI', ai_insight_approved:'AI', database_backup:'System', database_restore:'System' };
-          return cat[action] || 'Activity';
+        function titleCase(s){
+          return String(s ?? '').replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
         }
 
-        let allLogs=[], filtered=[], page=1;
-        const PAGE_SIZE=20;
+        const SEVERITY_LABEL = { critical:'Critical', warning:'Needs Attention', notice:'Notable', info:'Routine' };
+        function severityOf(log){
+          const s = String(log.severity || '').toLowerCase();
+          return SEVERITY_LABEL[s] ? s : 'info';
+        }
+
+        /* ── Vocabulary ──────────────────────────────────────────────────
+           Plain-English names for action codes. Anything not listed falls
+           back to a title-cased version of the code itself, so a new action
+           added by a later migration still reads sensibly here without this
+           file having to be edited first. */
+        const ACTION_LABELS = {
+          login:'Signed In', logout:'Signed Out', login_failed:'Sign-In Failed',
+          session_idle_timeout:'Session Timed Out',
+          create_account:'Account Added', update_account:'Account Modified',
+          delete_account:'Account Removed', change_password:'Password Changed',
+          change_account_status:'Account Status Changed', suspend_account:'Account Suspended',
+          change_account_role:'Account Role Changed',
+          assign_midwife:'Midwife Reassigned', assign_facility:'Posted to Facility',
+          reassign_facility:'Facility Reassigned', end_facility_assignment:'Posting Ended',
+          remove_facility_assignment:'Posting Removed',
+          create_mother:'Mother Registered', update_mother:'Mother Updated',
+          create_mother_record:'Mother Registered', update_mother_record:'Mother Updated',
+          create_pregnancy:'Pregnancy Added', update_pregnancy:'Pregnancy Updated',
+          create_checkup:'Checkup Added', update_checkup:'Checkup Updated',
+          create_prenatal_checkup:'Prenatal Checkup Recorded', update_prenatal_checkup:'Prenatal Checkup Amended',
+          create_ultrasound:'Ultrasound Added', create_labtest:'Lab Test Added',
+          create_lab_test:'Lab Test Recorded', create_child:'Child Added',
+          create_child_record:'Child Registered', update_child_record:'Child Record Updated',
+          create_immunization:'Immunisation Recorded', update_immunization:'Immunisation Amended',
+          create_growth_record:'Growth Measurement Recorded',
+          ai_insight_generated:'AI Analysis Generated', ai_insight_edited:'AI Analysis Edited',
+          ai_insight_approved:'AI Analysis Approved',
+          database_backup:'Backup Created', database_restore:'System Restored',
+          AI_GENERATED:'AI Generated', AI_EDITED:'AI Edited', AI_APPROVAL:'AI Approved',
+
+          /* Inventory — the chain a unit of stock travels */
+          submit_inventory_stock_request:'Stock Requested',
+          approve_stock_request:'Stock Request Approved',
+          reject_stock_request:'Stock Request Rejected',
+          issue_stock_request:'Stock Request Issued',
+          receive_stock_request:'Stock Request Received',
+          complete_stock_request:'Stock Request Completed',
+          cancel_stock_request:'Stock Request Cancelled',
+          update_stock_request:'Stock Request Updated',
+          archive_stock_request:'Stock Request Archived',
+          unarchive_stock_request:'Stock Request Restored',
+          issue_inventory_transfer:'Stock Dispatched',
+          receive_inventory_transfer:'Stock Received',
+          cancel_inventory_transfer:'Dispatch Cancelled',
+          update_inventory_transfer_delivery:'Delivery Plan Revised',
+          create_inventory_batch:'Batch Booked In',
+          inventory_batch_increase:'Batch Stock Increased',
+          inventory_batch_decrease:'Batch Stock Reduced',
+          discard_inventory_batch:'Batch Discarded',
+          expire_inventory_batch:'Batch Expired',
+          relocate_inventory_batch:'Batch Relocated',
+          update_inventory_batch:'Batch Updated',
+          dispose_inventory_batch:'Stock Disposed',
+          create_inventory_item:'Catalogue Item Added',
+          update_inventory_item:'Catalogue Item Updated',
+          archive_inventory_item:'Catalogue Item Archived',
+          restore_inventory_item:'Catalogue Item Restored',
+          inventory_movement_receipt:'Stock Received Into Facility',
+          inventory_movement_dispense:'Stock Dispensed',
+          inventory_movement_transfer:'Stock Moved Between Facilities',
+          inventory_movement_adjustment:'Stock Adjusted',
+          inventory_movement_expiry_disposal:'Stock Written Off',
+          dispense_inventory:'Stock Dispensed', adjust_inventory:'Stock Adjusted',
+          receive_inventory_batch:'Batch Booked In',
+          dispense_bhc_inventory:'Stock Dispensed at Health Centre'
+        };
+        function actionLabel(action){ return ACTION_LABELS[action] || titleCase(action); }
+
+        // Badge tone by what the action does, not by an ever-growing lookup.
+        function actionBadgeClass(log){
+          switch(severityOf(log)){
+            case 'critical': return 'badge-suspended';
+            case 'warning':  return 'badge-low';
+            case 'notice':   return 'badge-admin';
+            default:         return 'badge-active';
+          }
+        }
+
+        function moduleOf(log){ return log.module || 'Activity'; }
+
+        function summaryOf(log){
+          return log.description || log.narrative || (actionLabel(log.action) + ' performed');
+        }
+
+        function actorOf(log){
+          return log.actor_name || 'System';
+        }
+        function actorRoleLabel(log){
+          const r = String(log.actor_role || '').toLowerCase();
+          const map = { admin:'Administrator', mho:'Municipal Health Office', midwife:'Midwife', mother:'Mother', system:'System', unknown:'Unknown' };
+          return map[r] || titleCase(r || 'System');
+        }
+
+        /* ── Data ───────────────────────────────────────────────────────── */
+
+        let allLogs = [], filtered = [], page = 1, detailedMode = true;
+        const PAGE_SIZE = 20;
+
+        const DETAIL_COLUMNS = [
+          'audit_id','action_timestamp','action','table_name','row_id','description',
+          'narrative','details','related_ids','entity_label','module','severity','source',
+          'event_key','ip_address','old_data','new_data','account_id',
+          'actor_name','actor_role','actor_facility_name','actor_email'
+        ].join(', ');
 
         async function loadAudit(){
+          const tbody = document.getElementById('audit-tbody');
           try{
-            const { data, error } = await db.from('audit_trail').select('*, accounts(first_name, last_name, email_address, account_type)').order('action_timestamp',{ascending:false}).limit(5000);
+            // Preferred: the read model, which resolves the actor for rows written
+            // before the snapshot columns existed.
+            const { data, error } = await db
+              .from('audit_trail_detailed')
+              .select(DETAIL_COLUMNS)
+              .order('action_timestamp', { ascending:false })
+              .limit(5000);
+
             if(!error && data){
               allLogs = data;
+              detailedMode = true;
+              showBanner(null);
             } else {
-              // Resilient Fallback Query without FK join
-              const { data: baseLogs, error: logErr } = await db.from('audit_trail').select('*').order('action_timestamp',{ascending:false}).limit(5000);
+              // The migration has not been applied. Fall back to the base table so
+              // the page still works, and say plainly what is missing rather than
+              // quietly showing a thinner log.
+              detailedMode = false;
+              const { data: baseLogs, error: logErr } = await db
+                .from('audit_trail').select('*')
+                .order('action_timestamp', { ascending:false }).limit(5000);
               if (logErr) throw logErr;
-              const accountIds = [...new Set((baseLogs||[]).map(l=>l.account_id).filter(Boolean))];
-              let accMap = {};
-              if (accountIds.length > 0) {
-                const { data: accs } = await db.from('accounts').select('account_id, first_name, last_name, email_address, account_type').in('account_id', accountIds);
-                (accs||[]).forEach(a => accMap[a.account_id] = a);
+
+              const ids = [...new Set((baseLogs||[]).map(l => l.account_id).filter(Boolean))];
+              const accMap = {};
+              if (ids.length) {
+                const { data: accs } = await db.from('accounts')
+                  .select('account_id, first_name, last_name, email_address, account_type')
+                  .in('account_id', ids);
+                (accs||[]).forEach(a => { accMap[a.account_id] = a; });
               }
-              allLogs = (baseLogs||[]).map(l => ({ ...l, accounts: accMap[l.account_id] || null }));
+              allLogs = (baseLogs||[]).map(l => {
+                const a = accMap[l.account_id];
+                return Object.assign({}, l, {
+                  actor_name: a ? [a.first_name, a.last_name].filter(Boolean).join(' ') : 'System',
+                  actor_role: a ? a.account_type : 'system',
+                  actor_email: a ? a.email_address : null
+                });
+              });
+              showBanner(
+                'Detailed audit records are not switched on for this database yet. ' +
+                'You are seeing the short form of each entry. Run ' +
+                'database/migrations/20260826_audit_trail_completeness.sql in the Supabase SQL editor ' +
+                'to record the full account of every action, including stock movements.'
+              );
             }
+
+            buildFilterOptions();
             renderStats();
             applyFilters();
           }catch(e){
-            document.getElementById('audit-tbody').innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--error);">Error loading activity log: ${esc(e.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--error);">Could not load the activity log: ${esc(e.message)}</td></tr>`;
           }
         }
 
+        function showBanner(msg){
+          const el = document.getElementById('audit-banner');
+          if(!msg){ el.hidden = true; el.textContent = ''; return; }
+          el.hidden = false;
+          el.innerHTML = `<i class="fa-solid fa-circle-info"></i> ${esc(msg)}`;
+        }
+
+        // Filter options come from the data itself, so an action introduced by a
+        // future migration is filterable the moment it first appears.
+        function buildFilterOptions(){
+          const modules = [...new Set(allLogs.map(moduleOf))].sort();
+          const actions = [...new Set(allLogs.map(l => l.action).filter(Boolean))]
+            .sort((a,b) => actionLabel(a).localeCompare(actionLabel(b)));
+          const actors  = [...new Set(allLogs.map(actorOf))].sort();
+
+          fillSelect('filter-module',   modules, m => m, m => m);
+          fillSelect('filter-action',   actions, a => a, actionLabel);
+          fillSelect('filter-actor',    actors,  a => a, a => a);
+        }
+
+        function fillSelect(id, values, valueFn, labelFn){
+          const el = document.getElementById(id);
+          const keep = el.value;
+          const first = el.options[0];
+          el.innerHTML = '';
+          el.appendChild(first);
+          values.forEach(v => {
+            const o = document.createElement('option');
+            o.value = valueFn(v);
+            o.textContent = labelFn(v);
+            el.appendChild(o);
+          });
+          if ([...el.options].some(o => o.value === keep)) el.value = keep;
+        }
+
         function renderStats(){
-          const counts={};
-          allLogs.forEach(l=>counts[l.action]=(counts[l.action]||0)+1);
-          const topActions = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5);
-          const labels={ login:'Sign Ins', logout:'Sign Outs', create_account:'Accounts Added', update_account:'Accounts Modified', delete_account:'Accounts Removed', create_mother:'Mothers Registered', create_pregnancy:'Pregnancies', create_checkup:'Checkups', ai_insight_generated:'AI Analyses' };
-          const colors = ['var(--brand-primary)','var(--success)','var(--warning)','var(--error)','var(--info)'];
-          document.getElementById('audit-stats').innerHTML = topActions.map(([act,cnt],i)=>`<div class="audit-stat-card"><div class="audit-stat-val" style="color:${colors[i]};">${cnt}</div><div class="audit-stat-lbl">${labels[act]||getHumanReadableActionName(act)}</div></div>`).join('');
+          const sev = { critical:0, warning:0, notice:0, info:0 };
+          const mods = {};
+          allLogs.forEach(l => {
+            sev[severityOf(l)]++;
+            const m = moduleOf(l);
+            mods[m] = (mods[m] || 0) + 1;
+          });
+
+          const topModules = Object.entries(mods).sort((a,b) => b[1]-a[1]).slice(0,3);
+          const cards = [
+            { val: allLogs.length, lbl: 'Total Entries', color: 'var(--brand-primary)' },
+            { val: sev.critical,   lbl: 'Critical',      color: '#d32f2f' },
+            { val: sev.warning,    lbl: 'Needs Attention', color: '#f57c00' }
+          ].concat(topModules.map(([m,c]) => ({ val:c, lbl:m, color:'var(--info, #1976d2)' })));
+
+          document.getElementById('audit-stats').innerHTML = cards.map(c =>
+            `<div class="audit-stat-card"><div class="audit-stat-val" style="color:${c.color};">${c.val}</div><div class="audit-stat-lbl">${esc(c.lbl)}</div></div>`
+          ).join('');
+        }
+
+        /* ── Filtering ──────────────────────────────────────────────────── */
+
+        // Searching only the summary line would miss the very detail this page
+        // now records, so the haystack includes the narrative, every structured
+        // detail value and the related-record ids.
+        function searchHaystack(log){
+          if (log.__hay) return log.__hay;
+          const parts = [
+            log.description, log.narrative, log.entity_label, log.action,
+            actionLabel(log.action), moduleOf(log), actorOf(log),
+            log.actor_facility_name, log.table_name, log.row_id
+          ];
+          const sections = log.details && log.details.sections;
+          if (Array.isArray(sections)) {
+            sections.forEach(s => {
+              parts.push(s.title);
+              (s.rows || []).forEach(r => { parts.push(r.label); parts.push(r.value); });
+            });
+          }
+          if (log.related_ids && typeof log.related_ids === 'object') {
+            Object.entries(log.related_ids).forEach(([k,v]) => { parts.push(k); parts.push(v); });
+          }
+          log.__hay = parts.filter(Boolean).join(' ').toLowerCase();
+          return log.__hay;
         }
 
         function applyFilters(){
-          const q = document.getElementById('search-input').value.trim().toLowerCase();
-          const action = document.getElementById('filter-action').value;
+          const q    = document.getElementById('search-input').value.trim().toLowerCase();
+          const mod  = document.getElementById('filter-module').value;
+          const sev  = document.getElementById('filter-severity').value;
+          const act  = document.getElementById('filter-action').value;
+          const who  = document.getElementById('filter-actor').value;
           const from = document.getElementById('filter-date-from').value;
-          const to = document.getElementById('filter-date-to').value;
-          filtered = allLogs.filter(l=>{
-            if(action && l.action!==action) return false;
-            if(q){
-              const text = [getHumanReadableDescription(l), getActionCategory(l.action), l.accounts?.first_name, l.accounts?.last_name].filter(Boolean).join(' ').toLowerCase();
-              if(!text.includes(q)) return false;
-            }
+          const to   = document.getElementById('filter-date-to').value;
+
+          filtered = allLogs.filter(l => {
+            if(mod && moduleOf(l) !== mod) return false;
+            if(sev && severityOf(l) !== sev) return false;
+            if(act && l.action !== act) return false;
+            if(who && actorOf(l) !== who) return false;
+            if(q && !searchHaystack(l).includes(q)) return false;
             if(from){
               const ts = toUTC(l.action_timestamp);
               if(!ts || ts < new Date(from+'T00:00:00+08:00')) return false;
@@ -369,250 +557,520 @@
             }
             return true;
           });
-          page=1;
+          page = 1;
           renderTable();
         }
 
-        const ACTION_BADGES = {
-          login: ['badge-admin','Signed In'],
-          logout: ['badge-inactive','Signed Out'],
-          create_account: ['badge-low','Account Added'],
-          update_account: ['badge-active','Account Modified'],
-          delete_account: ['badge-suspended','Account Removed'],
-          assign_midwife: ['badge-admin','Midwife Reassigned'],
-          create_mother: ['badge-low','Mother Registered'],
-          update_mother: ['badge-active','Mother Updated'],
-          create_pregnancy: ['badge-low','Pregnancy Added'],
-          update_pregnancy: ['badge-active','Pregnancy Updated'],
-          create_checkup: ['badge-low','Checkup Added'],
-          update_checkup: ['badge-active','Checkup Updated'],
-          create_ultrasound: ['badge-low','Ultrasound Added'],
-          create_labtest: ['badge-low','Lab Test Added'],
-          create_child: ['badge-low','Child Added'],
-          ai_insight_generated: ['badge-midwife','AI Analysis Generated'],
-          ai_insight_edited: ['badge-active','AI Analysis Edited'],
-          ai_insight_approved: ['badge-active','AI Analysis Approved'],
-          database_backup: ['badge-low','Backup Created'],
-          database_restore: ['badge-suspended','System Restored']
-        };
+        /* ── Table ──────────────────────────────────────────────────────── */
 
         function renderTable(){
           const start = (page-1)*PAGE_SIZE;
           const slice = filtered.slice(start, start+PAGE_SIZE);
           const tbody = document.getElementById('audit-tbody');
-          if(filtered.length===0){
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:48px;">No matching activities.</td></tr>';
+
+          if(filtered.length === 0){
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:48px;">No matching activities.</td></tr>';
             document.getElementById('page-info').textContent = 'Showing 0 of 0';
             document.getElementById('pagination').innerHTML = '';
             return;
           }
-          tbody.innerHTML = slice.map((l,idx)=>{
-            const who = l.accounts ? [l.accounts.first_name,l.accounts.last_name].filter(Boolean).join(' ') : 'System';
-            const [badgeCls, badgeLabel] = ACTION_BADGES[l.action] || ['badge-inactive', getHumanReadableActionName(l.action)];
+
+          tbody.innerHTML = slice.map((l, idx) => {
+            const sev = severityOf(l);
             return `<tr>
-              <td style="white-space:nowrap;">${fmtDT(l.action_timestamp)}</td>
-              <td><div style="font-weight:600;">${esc(who)}</div>${l.accounts ? `<div style="font-size:11px;color:var(--text-secondary);">${l.accounts.account_type==='admin'?'Admin':l.accounts.account_type==='midwife'?'Midwife':'Mother'}</div>`:''}</td>
-              <td><span class="badge ${badgeCls}">${badgeLabel}</span></td>
-              <td><span style="background:var(--brand-secondary);padding:2px 8px;border-radius:5px;font-size:11px;">${getActionCategory(l.action)}</span></td>
-              <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(getHumanReadableDescription(l))}</td>
-              <td style="text-align:center;">${(l.old_data || l.new_data) ? `<button class="btn btn-icon btn-secondary btn-sm" onclick="showDetail(${start+idx})" style="width:32px;height:32px;border-radius:50%;"><i class="fa-solid fa-eye"></i></button>` : '—'}</td>
+              <td style="white-space:nowrap;"><span class="sev-dot sev-${sev}" title="${esc(SEVERITY_LABEL[sev])}"></span>${fmtDT(l.action_timestamp)}</td>
+              <td>
+                <div style="font-weight:600;">${esc(actorOf(l))}</div>
+                <div style="font-size:11px;color:var(--text-secondary);">${esc(actorRoleLabel(l))}${l.actor_facility_name ? ' &middot; ' + esc(l.actor_facility_name) : ''}</div>
+              </td>
+              <td><span class="badge ${actionBadgeClass(l)}">${esc(actionLabel(l.action))}</span></td>
+              <td><span class="module-chip">${esc(moduleOf(l))}</span></td>
+              <td style="max-width:200px;font-size:12px;">${l.entity_label ? esc(l.entity_label) : '<span style="color:var(--text-secondary)">—</span>'}</td>
+              <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(summaryOf(l))}">${esc(summaryOf(l))}</td>
+              <td style="text-align:center;">
+                <button class="btn btn-icon btn-secondary btn-sm" onclick="showDetail(${start+idx})" title="Read the full note" style="width:32px;height:32px;border-radius:50%;"><i class="fa-solid fa-eye"></i></button>
+              </td>
             </tr>`;
           }).join('');
-          document.getElementById('page-info').textContent = `Showing ${start+1}–${Math.min(start+PAGE_SIZE, filtered.length)} of ${filtered.length}`;
+
+          document.getElementById('page-info').textContent =
+            `Showing ${start+1}–${Math.min(start+PAGE_SIZE, filtered.length)} of ${filtered.length}`;
           renderPagination();
         }
+
         function renderPagination(){
           const total = Math.ceil(filtered.length/PAGE_SIZE);
           const pg = document.getElementById('pagination');
-          if(total<=1){ pg.innerHTML=''; return; }
+          if(total <= 1){ pg.innerHTML = ''; return; }
           let html = `<button class="page-btn" onclick="gotoPage(${page-1})" ${page===1?'disabled':''}><i class="fa-solid fa-chevron-left"></i></button>`;
-          for(let i=1;i<=total;i++){
-            if(total>7 && i>2 && i<page-1){ html+='<span style="padding:0 4px;">…</span>'; i=page-1; continue; }
-            if(total>7 && i>page+1 && i<total-1){ html+='<span style="padding:0 4px;">…</span>'; i=total-1; continue; }
+          for(let i=1; i<=total; i++){
+            if(total>7 && i>2 && i<page-1){ html += '<span style="padding:0 4px;">…</span>'; i = page-1; continue; }
+            if(total>7 && i>page+1 && i<total-1){ html += '<span style="padding:0 4px;">…</span>'; i = total-1; continue; }
             html += `<button class="page-btn${i===page?' active':''}" onclick="gotoPage(${i})">${i}</button>`;
           }
           html += `<button class="page-btn" onclick="gotoPage(${page+1})" ${page===total?'disabled':''}><i class="fa-solid fa-chevron-right"></i></button>`;
           pg.innerHTML = html;
         }
-        window.gotoPage = (p)=>{ page=p; renderTable(); };
+        window.gotoPage = (p) => { page = p; renderTable(); };
 
-        window.showDetail = async (idx)=>{
-          const log = filtered[idx];
-          if(!log) return;
-          document.getElementById('detail-body').innerHTML = '<div style="text-align:center;padding:24px;"><div class="spinner"></div>Loading details...</div>';
-          document.getElementById('detail-modal').classList.add('show');
+        /* ── The record document ────────────────────────────────────────
+           One builder used by the modal, the print sheet and the PDF, so what
+           somebody reads on screen is exactly what comes out of the printer. */
 
-          const approvedBy = log.approved_by ? await resolveAccountName(log.approved_by) : null;
-          let referenceLabel = null;
-          if(log.reference_table && log.reference_id){
-            referenceLabel = await resolveReferenceLabel(log.reference_table, log.reference_id);
-          }
-          let aiLabel = null;
-          if(log.ai_response_id){
-            aiLabel = await resolveAIResponseLabel(log.ai_response_id);
-          }
-
-          async function formatChangeData(obj){
-            if(!obj) return '<span style="color:var(--text-secondary);">No changes recorded</span>';
-            const entries = Object.entries(obj).filter(([k,v])=> v!==null && v!==undefined && v!=='');
-            const formatted = [];
-            for(let [key, val] of entries){
-              const displayKey = key.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase());
-              let displayVal = await formatFieldValue(key, val, obj);
-              formatted.push(`<div style="margin-bottom:10px;"><strong>${displayKey}:</strong> ${displayVal}</div>`);
-            }
-            return formatted.join('');
-          }
-
-          const oldHtml = log.old_data ? await formatChangeData(log.old_data) : null;
-          const newHtml = log.new_data ? await formatChangeData(log.new_data) : null;
-
-          const actionReadable = getHumanReadableActionName(log.action);
-          const description = getHumanReadableDescription(log);
-          const performer = log.accounts ? [log.accounts.first_name, log.accounts.last_name].filter(Boolean).join(' ') : 'System';
-
-          let extraInfo = '';
-          if(approvedBy) extraInfo += `<div style="margin-bottom:8px;"><strong>Approved By:</strong> ${esc(approvedBy)}</div>`;
-          if(referenceLabel){
-            const sourceTable = getReadableTableName(log.reference_table);
-            extraInfo += `<div style="margin-bottom:8px;"><strong>${sourceTable}:</strong> ${esc(referenceLabel)}</div>`;
-          }else if(log.reference_table && log.reference_id && !referenceLabel){
-            extraInfo += `<div style="margin-bottom:8px;"><strong>${getReadableTableName(log.reference_table)}:</strong> Unknown Record</div>`;
-          }
-          if(aiLabel) extraInfo += `<div style="margin-bottom:8px;"><strong>AI Analysis:</strong> ${esc(aiLabel)}</div>`;
-          else if(log.ai_response_id && !aiLabel) extraInfo += `<div style="margin-bottom:8px;"><strong>AI Analysis:</strong> Analysis Record</div>`;
-
-          document.getElementById('detail-body').innerHTML = `
-            <div style="display:grid;gap:16px;">
-              <div style="background:var(--bg-primary);padding:14px;border-radius:12px;border:1px solid var(--border-primary);">
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);margin-bottom:12px;">Activity Details</div>
-                <div style="margin-bottom:8px;"><strong>What Happened:</strong> ${actionReadable}</div>
-                <div style="margin-bottom:8px;"><strong>Description:</strong> ${esc(description)}</div>
-                <div style="margin-bottom:8px;"><strong>Date & Time:</strong> ${fmtDT(log.action_timestamp)}</div>
-                <div style="margin-bottom:8px;"><strong>Performed By:</strong> ${esc(performer)}</div>
-                ${extraInfo}
-              </div>
-              ${oldHtml ? `<div style="background:var(--error-10);padding:14px;border-radius:12px;border-left:4px solid var(--error);"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--error);margin-bottom:12px;">Previous Values</div>${oldHtml}</div>` : ''}
-              ${newHtml ? `<div style="background:var(--success-10);padding:14px;border-radius:12px;border-left:4px solid var(--success);"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--success);margin-bottom:12px;">New Values</div>${newHtml}</div>` : ''}
-            </div>
-          `;
+        const RELATED_LABELS = {
+          request_id:'Stock request', transfer_id:'Transfer', batch_id:'Batch record',
+          source_batch_id:'Source batch', destination_batch_id:'Destination batch',
+          item_id:'Catalogue item', facility_id:'Facility',
+          source_facility_id:'Origin facility', destination_facility_id:'Destination facility',
+          transaction_id:'Ledger entry', disposal_id:'Disposal record',
+          account_id:'Account', account_type:'Account type',
+          issued_by:'Issued by (account)', received_by:'Received by (account)',
+          requested_by:'Requested by (account)', reviewed_by:'Reviewed by (account)',
+          reference_type:'Reference', reference_id:'Referenced record',
+          record_id:'Record', table:'Table', mother_id:'Mother', child_id:'Child',
+          pregnancy_id:'Pregnancy'
         };
 
-        ["detail-modal-close","detail-close-btn"].forEach(id=>document.getElementById(id)?.addEventListener('click',()=>document.getElementById('detail-modal').classList.remove('show')));
-        document.getElementById('detail-modal')?.addEventListener('click',(e)=>{ if(e.target===e.currentTarget) e.currentTarget.classList.remove('show'); });
+        // Fields that must never be reprinted, whatever a snapshot happens to hold.
+        // Mirrors public.audit_redact() in the database.
+        const REDACTED = new Set([
+          'password_hash','password','verification_code','reset_code',
+          'last_login_token','temporary_password','pending_password_hash','auth_id'
+        ]);
 
-        document.getElementById('export-btn')?.addEventListener('click',()=>{
-          if(!filtered.length) return;
-          
+        function redactSnapshot(obj){
+          if (!obj || typeof obj !== 'object') return obj;
+          const out = {};
+          Object.entries(obj).forEach(([k,v]) => { out[k] = REDACTED.has(k) ? '[redacted]' : v; });
+          return out;
+        }
+
+        function shortValue(v){
+          if (v === null || v === undefined || v === '') return '—';
+          if (typeof v === 'object') return JSON.stringify(v);
+          const s = String(v);
+          return s.length > 400 ? s.slice(0,400) + '…' : s;
+        }
+
+        function changedFields(log){
+          const oldD = log.old_data, newD = log.new_data;
+          if (!oldD || !newD || typeof oldD !== 'object' || typeof newD !== 'object') return [];
+          const keys = [...new Set([...Object.keys(oldD), ...Object.keys(newD)])].sort();
+          return keys
+            .filter(k => JSON.stringify(oldD[k]) !== JSON.stringify(newD[k]))
+            .map(k => ({
+              key: titleCase(k),
+              was: REDACTED.has(k) ? '(not recorded)' : shortValue(oldD[k]),
+              now: REDACTED.has(k) ? '(changed)'      : shortValue(newD[k])
+            }));
+        }
+
+        function buildRecordHTML(log, opts){
+          opts = opts || {};
+          const sev = severityOf(log);
+          const sections = (log.details && Array.isArray(log.details.sections)) ? log.details.sections : [];
+          const diffs = changedFields(log);
+
+          const sectionHTML = sections.map(s => `
+            <div class="audit-sec">
+              <div class="audit-sec-title">${esc(s.title || 'Details')}</div>
+              <dl class="audit-kv">
+                ${(s.rows||[]).map(r => {
+                  const strong = /^(MOVED FROM|MOVED TO)$/.test(String(r.label||''));
+                  return `<dt class="${strong?'key-strong':''}">${esc(titleCase(r.label))}</dt><dd>${esc(r.value)}</dd>`;
+                }).join('')}
+              </dl>
+            </div>`).join('');
+
+          const relatedRows = (log.related_ids && typeof log.related_ids === 'object')
+            ? Object.entries(log.related_ids).filter(([,v]) => v !== null && v !== undefined && v !== '')
+            : [];
+
+          const relatedHTML = relatedRows.length ? `
+            <div class="audit-sec">
+              <div class="audit-sec-title">Records this entry connects</div>
+              <dl class="audit-kv">
+                ${relatedRows.map(([k,v]) =>
+                  `<dt>${esc(RELATED_LABELS[k] || titleCase(k))}</dt><dd>${esc(shortValue(v))}</dd>`
+                ).join('')}
+              </dl>
+            </div>` : '';
+
+          const diffHTML = diffs.length ? `
+            <div class="audit-sec">
+              <div class="audit-sec-title">Exactly what changed (${diffs.length} field${diffs.length===1?'':'s'})</div>
+              <table class="audit-diff">
+                <thead><tr><th style="width:30%">Field</th><th style="width:35%">Was</th><th style="width:35%">Became</th></tr></thead>
+                <tbody>
+                  ${diffs.map(d => `<tr><td>${esc(d.key)}</td><td class="was">${esc(d.was)}</td><td class="now">${esc(d.now)}</td></tr>`).join('')}
+                </tbody>
+              </table>
+            </div>` : '';
+
+          // The database redacts credentials before storing a snapshot, but this
+          // dump is the one place that prints a snapshot verbatim, so it redacts
+          // again rather than trusting that every row it is handed came from a
+          // migrated database.
+          const rawHTML = opts.forPrint ? '' : `
+            <details class="audit-raw">
+              <summary>Show the raw stored record</summary>
+              <pre>${esc(JSON.stringify({
+                audit_id: log.audit_id, action: log.action, table_name: log.table_name,
+                row_id: log.row_id, event_key: log.event_key, source: log.source,
+                old_data: redactSnapshot(log.old_data), new_data: redactSnapshot(log.new_data)
+              }, null, 2))}</pre>
+            </details>`;
+
+          return `
+            <div class="audit-doc">
+              <div class="audit-doc-head">
+                <p class="audit-doc-title">${esc(actionLabel(log.action))}${log.entity_label ? ' — ' + esc(log.entity_label) : ''}</p>
+                <div class="audit-doc-meta">
+                  <span class="sev-chip sev-${sev}">${esc(SEVERITY_LABEL[sev])}</span>
+                  <span class="module-chip">${esc(moduleOf(log))}</span>
+                  <span style="font-size:12px;color:var(--text-secondary);">Record #${esc(log.audit_id)} &middot; ${esc(fmtDTLong(log.action_timestamp))}</span>
+                </div>
+              </div>
+
+              <div class="audit-doc-narrative">${esc(log.narrative || summaryOf(log))}</div>
+
+              <div class="audit-sec">
+                <div class="audit-sec-title">Who performed this</div>
+                <dl class="audit-kv">
+                  <dt>Name</dt><dd>${esc(actorOf(log))}</dd>
+                  <dt>Role</dt><dd>${esc(actorRoleLabel(log))}</dd>
+                  ${log.actor_facility_name ? `<dt>Acting from</dt><dd>${esc(log.actor_facility_name)}</dd>` : ''}
+                  ${log.actor_email ? `<dt>E-mail on file</dt><dd>${esc(log.actor_email)}</dd>` : ''}
+                  <dt>When</dt><dd>${esc(fmtDTLong(log.action_timestamp))} (Philippine time)</dd>
+                  <dt>Recorded from</dt><dd>${esc(sourceLabel(log.source))}</dd>
+                  ${log.ip_address ? `<dt>Network address</dt><dd>${esc(log.ip_address)}</dd>` : ''}
+                  ${log.table_name ? `<dt>Data affected</dt><dd>${esc(titleCase(log.table_name))}${log.row_id ? ' #' + esc(log.row_id) : ''}</dd>` : ''}
+                </dl>
+              </div>
+
+              ${sectionHTML}
+              ${relatedHTML}
+              ${diffHTML}
+              ${rawHTML}
+            </div>`;
+        }
+
+        function sourceLabel(src){
+          const map = {
+            database_trigger:'Recorded automatically by the database when the data changed',
+            admin_portal:'Admin portal',
+            application:'Application',
+            mobile_app:'Midwife mobile app',
+            system:'Automated system task',
+            legacy:'Recorded before detailed auditing was enabled'
+          };
+          return map[src] || 'Application';
+        }
+
+        /* ── Detail modal ───────────────────────────────────────────────── */
+
+        let currentLog = null;
+
+        window.showDetail = function(idx){
+          const log = filtered[idx];
+          if(!log) return;
+          currentLog = log;
+          document.getElementById('detail-body').innerHTML = buildRecordHTML(log, { forPrint:false });
+          document.getElementById('detail-modal').classList.add('show');
+        };
+
+        function closeDetail(){
+          document.getElementById('detail-modal').classList.remove('show');
+        }
+        ['detail-modal-close','detail-close-btn'].forEach(id =>
+          document.getElementById(id)?.addEventListener('click', closeDetail));
+        document.getElementById('detail-modal')?.addEventListener('click', e => {
+          if(e.target === e.currentTarget) closeDetail();
+        });
+
+        /* ── Printing ───────────────────────────────────────────────────── */
+
+        function printBrand(subtitle){
+          return `
+            <div class="print-brand">
+              <h1>INAAGAPAY — MATERNAL &amp; CHILD HEALTH SYSTEM</h1>
+              <p>${esc(subtitle)}</p>
+            </div>`;
+        }
+
+        function printFoot(extra){
+          const by = [session.first_name, session.last_name].filter(Boolean).join(' ') || 'Administrator';
+          return `<div class="print-foot">Printed by ${esc(by)} on ${esc(new Date().toLocaleString('en-PH'))}.${extra ? ' ' + esc(extra) : ''}</div>`;
+        }
+
+        function doPrint(html){
+          const root = document.getElementById('print-root');
+          root.innerHTML = html;
+          // Clearing afterwards keeps the hidden surface from growing across
+          // repeated prints and from being picked up by the page search.
+          const cleanup = () => { root.innerHTML = ''; window.removeEventListener('afterprint', cleanup); };
+          window.addEventListener('afterprint', cleanup);
+          window.print();
+        }
+
+        document.getElementById('detail-print-btn')?.addEventListener('click', () => {
+          if(!currentLog) return;
+          doPrint(`
+            <div class="print-sheet">
+              ${printBrand('AUDIT RECORD — official extract from the system activity log')}
+              ${buildRecordHTML(currentLog, { forPrint:true })}
+              ${printFoot('This extract reproduces audit record #' + currentLog.audit_id + ' in full.')}
+            </div>`);
+        });
+
+        document.getElementById('print-list-btn')?.addEventListener('click', () => {
+          if(!filtered.length){ showToast('There is nothing to print with the current filters.', 'warning'); return; }
+          const rows = filtered.map(l => `
+            <tr>
+              <td>${esc(fmtDT(l.action_timestamp))}</td>
+              <td>${esc(actorOf(l))}<br><span style="color:#666">${esc(actorRoleLabel(l))}</span></td>
+              <td>${esc(actionLabel(l.action))}</td>
+              <td>${esc(moduleOf(l))}</td>
+              <td>${esc(SEVERITY_LABEL[severityOf(l)])}</td>
+              <td>${esc(l.entity_label || '—')}</td>
+              <td>${esc(summaryOf(l))}</td>
+            </tr>`).join('');
+          doPrint(`
+            <div class="print-sheet">
+              ${printBrand('SYSTEM AUDIT TRAIL — ' + filtered.length + ' entries, ' + describeFilters())}
+              <table class="print-list">
+                <thead><tr><th>Date &amp; Time</th><th>Who</th><th>What Happened</th><th>Area</th><th>Importance</th><th>Record</th><th>Summary</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+              ${printFoot()}
+            </div>`);
+        });
+
+        function describeFilters(){
+          const bits = [];
+          const q = document.getElementById('search-input').value.trim();
+          const mod = document.getElementById('filter-module').value;
+          const sev = document.getElementById('filter-severity').value;
+          const act = document.getElementById('filter-action').value;
+          const who = document.getElementById('filter-actor').value;
+          const from = document.getElementById('filter-date-from').value;
+          const to = document.getElementById('filter-date-to').value;
+          if(q)   bits.push(`search "${q}"`);
+          if(mod) bits.push(`area ${mod}`);
+          if(sev) bits.push(`importance ${SEVERITY_LABEL[sev]}`);
+          if(act) bits.push(`activity ${actionLabel(act)}`);
+          if(who) bits.push(`by ${who}`);
+          if(from || to) bits.push(`dated ${from || 'the beginning'} to ${to || 'today'}`);
+          return bits.length ? 'filtered by ' + bits.join(', ') : 'no filters applied';
+        }
+
+        /* ── PDF export ─────────────────────────────────────────────────── */
+
+        function pdfChrome(doc, title, pageNo, totalPages){
+          const w = doc.internal.pageSize.width;
+          const h = doc.internal.pageSize.height;
+          doc.setFillColor(255, 104, 165);
+          doc.rect(0, 0, w, 18, 'F');
+          doc.setTextColor(255,255,255);
+          doc.setFont('helvetica','bold'); doc.setFontSize(12);
+          doc.text('INAAGAPAY: MATERNAL & CHILD HEALTH SYSTEM', 14, 12);
+          doc.setFont('helvetica','normal'); doc.setFontSize(9);
+          doc.text(title, w - 14, 12, { align:'right' });
+          doc.setFontSize(8); doc.setTextColor(128,128,128);
+          const by = [session.first_name, session.last_name].filter(Boolean).join(' ') || 'Administrator';
+          doc.text(`Generated by ${by} | ${new Date().toLocaleString('en-PH')}`, 14, h - 8);
+          doc.text(`Page ${pageNo} of ${totalPages}`, w - 14, h - 8, { align:'right' });
+          doc.setTextColor(0,0,0);
+        }
+
+        document.getElementById('export-btn')?.addEventListener('click', () => {
+          if(!filtered.length){ showToast('There is nothing to export with the current filters.', 'warning'); return; }
           const { jsPDF } = window.jspdf;
-          const doc = new jsPDF('l', 'mm', 'a4'); // Landscape A4: 297mm x 210mm
-          
-          const headers = ["Date & Time", "User", "Role", "What Happened", "Type", "Description"];
-          const bodyData = filtered.map(l=>[
-            fmtDT(l.action_timestamp),
-            l.accounts ? [l.accounts.first_name, l.accounts.last_name].filter(Boolean).join(' ') : 'System',
-            l.accounts ? (l.accounts.account_type === 'admin' ? 'Admin' : l.accounts.account_type === 'midwife' ? 'Midwife' : 'Mother') : 'System',
-            getHumanReadableActionName(l.action),
-            getActionCategory(l.action),
-            getHumanReadableDescription(l) || '—'
-          ]);
-          
+          const doc = new jsPDF('l', 'mm', 'a4');
+
           doc.autoTable({
-            head: [headers],
-            body: bodyData,
+            head: [['Date & Time','Who','Role','What Happened','Area','Importance','Record','Summary']],
+            body: filtered.map(l => [
+              fmtDT(l.action_timestamp), actorOf(l), actorRoleLabel(l),
+              actionLabel(l.action), moduleOf(l), SEVERITY_LABEL[severityOf(l)],
+              l.entity_label || '—', summaryOf(l)
+            ]),
             startY: 32,
             margin: { top: 25, bottom: 15, left: 14, right: 14 },
             theme: 'striped',
-            headStyles: { fillColor: [255, 104, 165], textColor: [255, 255, 255], fontStyle: 'bold' },
-            styles: { fontSize: 8.5, cellPadding: 3, font: 'helvetica' },
+            headStyles: { fillColor: [255,104,165], textColor: [255,255,255], fontStyle:'bold' },
+            styles: { fontSize: 7.5, cellPadding: 2.4, font:'helvetica', overflow:'linebreak' },
             columnStyles: {
-              0: { cellWidth: 42 }, // Date & Time
-              1: { cellWidth: 35 }, // User
-              2: { cellWidth: 20 }, // Role
-              3: { cellWidth: 35 }, // What Happened
-              4: { cellWidth: 22 }, // Type
-              5: { cellWidth: 'auto' } // Description
+              0:{cellWidth:30}, 1:{cellWidth:28}, 2:{cellWidth:20}, 3:{cellWidth:33},
+              4:{cellWidth:20}, 5:{cellWidth:20}, 6:{cellWidth:40}, 7:{cellWidth:'auto'}
             }
           });
-          
-          const totalPages = doc.internal.getNumberOfPages();
-          for (let i = 1; i <= totalPages; i++) {
+
+          const total = doc.internal.getNumberOfPages();
+          for(let i=1; i<=total; i++){
             doc.setPage(i);
-            
-            // Header bar
-            doc.setFillColor(255, 104, 165);
-            doc.rect(0, 0, doc.internal.pageSize.width, 18, 'F');
-            
-            // Header Text
-            doc.setTextColor(255, 255, 255);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(12);
-            doc.text('INAAGAPAY: MATERNAL & CHILD HEALTH SYSTEM', 14, 12);
-            
-            doc.setFontSize(9);
-            doc.setFont('helvetica', 'normal');
-            doc.text('SYSTEM AUDIT TRAIL REPORT', doc.internal.pageSize.width - 14, 12, { align: 'right' });
-            
-            // First Page metadata
-            if (i === 1) {
-              doc.setTextColor(50, 50, 50);
-              doc.setFont('helvetica', 'bold');
-              doc.setFontSize(10);
+            pdfChrome(doc, 'SYSTEM AUDIT TRAIL REPORT', i, total);
+            if(i === 1){
+              doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(50,50,50);
               doc.text(`Total Records: ${filtered.length}`, 14, 26);
-              doc.setFont('helvetica', 'normal');
-              doc.text(`Filters Applied: ${document.getElementById('search-input').value.trim() ? 'Search="' + document.getElementById('search-input').value.trim() + '"' : 'None'} | Action="${document.getElementById('filter-action').value || 'All'}"`, doc.internal.pageSize.width - 14, 26, { align: 'right' });
+              doc.setFont('helvetica','normal');
+              doc.text(describeFilters(), doc.internal.pageSize.width - 14, 26, { align:'right' });
             }
-            
-            // Footer
-            doc.setFontSize(8);
-            doc.setTextColor(128, 128, 128);
-            doc.text(`Generated by Admin: ${session.first_name} ${session.last_name} | Date: ${new Date().toLocaleString('en-PH')}`, 14, doc.internal.pageSize.height - 8);
-            doc.text(`Page ${i} of ${totalPages}`, doc.internal.pageSize.width - 14, doc.internal.pageSize.height - 8, { align: 'right' });
           }
-          
-          doc.save(`audit_report_${new Date().toISOString().slice(0,10)}.pdf`);
+          doc.save(`audit_summary_${new Date().toISOString().slice(0,10)}.pdf`);
         });
 
-        document.getElementById('refresh-btn')?.addEventListener('click',loadAudit);
-        document.getElementById('sidebar-toggle')?.addEventListener('click',()=>document.querySelector('.app-sidebar')?.classList.toggle('open'));
-        document.getElementById('logout-btn')?.addEventListener('click', async ()=>{
+        // The long form: one block of prose plus every recorded detail, per entry.
+        // Capped, because a five-thousand-entry narrative export is a hung tab
+        // rather than a document anybody reads.
+        const DETAIL_PDF_LIMIT = 300;
+
+        function buildDetailPdf(logs, filename, title){
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF('p', 'mm', 'a4');
+          const w = doc.internal.pageSize.width;
+          const h = doc.internal.pageSize.height;
+          const left = 14, right = w - 14, wrap = right - left;
+          let y = 28;
+
+          function need(space){
+            if(y + space > h - 16){ doc.addPage(); y = 28; }
+          }
+          function para(text, size, style, color){
+            doc.setFont('helvetica', style || 'normal');
+            doc.setFontSize(size || 9);
+            doc.setTextColor.apply(doc, color || [0,0,0]);
+            const lines = doc.splitTextToSize(String(text ?? ''), wrap);
+            lines.forEach(line => { need(6); doc.text(line, left, y); y += size ? size * 0.42 + 1.4 : 4.6; });
+          }
+
+          logs.forEach((log, i) => {
+            if(i > 0){ doc.addPage(); y = 28; }
+
+            para(actionLabel(log.action) + (log.entity_label ? ' — ' + log.entity_label : ''), 12, 'bold');
+            y += 1;
+            para(`Record #${log.audit_id}  ·  ${SEVERITY_LABEL[severityOf(log)]}  ·  ${moduleOf(log)}  ·  ${fmtDTLong(log.action_timestamp)}`, 8, 'normal', [110,110,110]);
+            y += 3;
+
+            doc.setDrawColor(255,104,165); doc.setLineWidth(0.6);
+            need(4); doc.line(left, y, right, y); y += 5;
+
+            para(log.narrative || summaryOf(log), 9.5, 'normal');
+            y += 3;
+
+            para('WHO PERFORMED THIS', 8, 'bold', [110,110,110]); y += 1;
+            const who = [
+              ['Name', actorOf(log)],
+              ['Role', actorRoleLabel(log)],
+              ['Acting from', log.actor_facility_name || '—'],
+              ['When', fmtDTLong(log.action_timestamp) + ' (Philippine time)'],
+              ['Recorded from', sourceLabel(log.source)],
+              ['Data affected', log.table_name ? titleCase(log.table_name) + (log.row_id ? ' #' + log.row_id : '') : '—']
+            ];
+            who.forEach(([k,v]) => para(`${k}: ${v}`, 8.5, 'normal'));
+            y += 3;
+
+            const sections = (log.details && Array.isArray(log.details.sections)) ? log.details.sections : [];
+            sections.forEach(s => {
+              para(String(s.title || 'Details').toUpperCase(), 8, 'bold', [110,110,110]); y += 1;
+              (s.rows||[]).forEach(r => para(`${titleCase(r.label)}: ${r.value}`, 8.5, 'normal'));
+              y += 3;
+            });
+
+            const diffs = changedFields(log);
+            if(diffs.length){
+              para(`EXACTLY WHAT CHANGED (${diffs.length})`, 8, 'bold', [110,110,110]); y += 1;
+              diffs.forEach(d => para(`${d.key}: "${d.was}"  ->  "${d.now}"`, 8.5, 'normal'));
+              y += 3;
+            }
+
+            const rel = (log.related_ids && typeof log.related_ids === 'object')
+              ? Object.entries(log.related_ids).filter(([,v]) => v !== null && v !== undefined && v !== '')
+              : [];
+            if(rel.length){
+              para('RECORDS THIS ENTRY CONNECTS', 8, 'bold', [110,110,110]); y += 1;
+              rel.forEach(([k,v]) => para(`${RELATED_LABELS[k] || titleCase(k)}: ${shortValue(v)}`, 8.5, 'normal'));
+            }
+          });
+
+          const total = doc.internal.getNumberOfPages();
+          for(let i=1; i<=total; i++){ doc.setPage(i); pdfChrome(doc, title, i, total); }
+          doc.save(filename);
+        }
+
+        document.getElementById('export-detail-btn')?.addEventListener('click', () => {
+          if(!filtered.length){ showToast('There is nothing to export with the current filters.', 'warning'); return; }
+          const slice = filtered.slice(0, DETAIL_PDF_LIMIT);
+          if(filtered.length > DETAIL_PDF_LIMIT){
+            showToast(`Exporting the most recent ${DETAIL_PDF_LIMIT} of ${filtered.length} entries in full. Narrow the filters for the rest.`, 'info');
+          }
+          buildDetailPdf(slice, `audit_detailed_${new Date().toISOString().slice(0,10)}.pdf`, 'DETAILED AUDIT REPORT');
+        });
+
+        document.getElementById('detail-pdf-btn')?.addEventListener('click', () => {
+          if(!currentLog) return;
+          buildDetailPdf([currentLog], `audit_record_${currentLog.audit_id}.pdf`, 'AUDIT RECORD EXTRACT');
+        });
+
+        /* ── Wiring ─────────────────────────────────────────────────────── */
+
+        document.getElementById('refresh-btn')?.addEventListener('click', loadAudit);
+        document.getElementById('sidebar-toggle')?.addEventListener('click', () =>
+          document.querySelector('.app-sidebar')?.classList.toggle('open'));
+
+        document.getElementById('clear-filters-btn')?.addEventListener('click', () => {
+          ['search-input','filter-module','filter-severity','filter-action','filter-actor','filter-date-from','filter-date-to']
+            .forEach(id => { document.getElementById(id).value = ''; });
+          applyFilters();
+        });
+
+        document.getElementById('logout-btn')?.addEventListener('click', async () => {
           if(confirm('Logout?')){
             try {
-              await db.from('audit_trail').insert({ account_id:session.account_id, action:'logout', description:'Logged out from admin portal' });
-            } catch (e) {
-              console.warn(e);
-            }
+              await db.from('audit_trail').insert({
+                account_id: session.account_id,
+                action: 'logout',
+                table_name: 'accounts',
+                description: 'Logged out from the admin portal'
+              });
+            } catch (e) { console.warn(e); }
             localStorage.removeItem(SESSION_KEY); PortalScope.clear();
-            window.location.href='../index.html';
+            window.location.href = '../index.html';
           }
         });
-        document.getElementById("header-user-name").textContent = [session.first_name, session.last_name].filter(Boolean).join(" ") || "Admin";
-        document.getElementById("header-avatar").textContent = ((session.first_name?.[0]??"")+(session.last_name?.[0]??"")).toUpperCase() || "A";
+
+        document.getElementById('header-user-name').textContent =
+          [session.first_name, session.last_name].filter(Boolean).join(' ') || 'Admin';
+        document.getElementById('header-avatar').textContent =
+          ((session.first_name?.[0] ?? '') + (session.last_name?.[0] ?? '')).toUpperCase() || 'A';
 
         let searchTimer;
-        ['search-input','filter-action','filter-date-from','filter-date-to'].forEach(id=>{
-          const el=document.getElementById(id);
-          if(el && (el.type==='search'||el.tagName==='INPUT')) el.addEventListener('input',()=>{ clearTimeout(searchTimer); searchTimer=setTimeout(applyFilters,280); });
-          else if(el) el.addEventListener('change',applyFilters);
-        });
-        loadAudit();
+        ['search-input','filter-module','filter-severity','filter-action','filter-actor','filter-date-from','filter-date-to']
+          .forEach(id => {
+            const el = document.getElementById(id);
+            if(!el) return;
+            if(el.tagName === 'SELECT') el.addEventListener('change', applyFilters);
+            else el.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 280); });
+          });
 
-        function showToast(msg, type) {
-          const icons = { success: "fa-circle-check", error: "fa-circle-xmark", warning: "fa-triangle-exclamation", info: "fa-circle-info" };
-          const c = document.getElementById("toast-container");
-          const t = document.createElement("div");
+        function showToast(msg, type){
+          const icons = { success:'fa-circle-check', error:'fa-circle-xmark', warning:'fa-triangle-exclamation', info:'fa-circle-info' };
+          const c = document.getElementById('toast-container');
+          const t = document.createElement('div');
           t.className = `toast ${type}`;
           t.innerHTML = `<i class="fa-solid ${icons[type]}"></i><span class="toast-text">${esc(msg)}</span><button class="toast-close" onclick="this.closest('.toast').remove()"><i class="fa-solid fa-xmark"></i></button>`;
           c.appendChild(t);
           setTimeout(() => {
-            t.style.animation = "fadeOut .3s ease forwards";
-            t.addEventListener("animationend", () => t.remove());
+            t.style.animation = 'fadeOut .3s ease forwards';
+            t.addEventListener('animationend', () => t.remove());
           }, 4500);
         }
 
+        loadAudit();
+
         window.AdminLiveRefresh?.start({
           db,
-          tables: ["audit_trail", "accounts"],
+          tables: ['audit_trail', 'accounts'],
           refresh: loadAudit,
         });
       })();

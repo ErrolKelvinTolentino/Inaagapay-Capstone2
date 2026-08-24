@@ -791,6 +791,201 @@
         color: #667085;
         font-size: 9.5px;
       }
+
+      /* ═══════════════════════════════════════════════════════════════
+         SHARED TABLE CONTROLS
+
+         Every table on this page previously had its own toolbar shape,
+         its own idea of which filters were worth offering, and — except
+         for the movement ledger — no sorting at all. These classes give
+         all six the same anatomy:
+
+             [ search ] [ filters ] [ date range ]      [ export ]
+             Showing 12 of 340 · 2 filters active · Clear
+
+         so that learning one table teaches you the rest.
+         ═══════════════════════════════════════════════════════════════ */
+
+      .table-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 14px 18px 10px;
+      }
+      .table-controls-fields {
+        display: flex;
+        gap: 8px;
+        flex: 1;
+        flex-wrap: wrap;
+        align-items: center;
+        min-width: 0;
+      }
+      .table-controls .search-box { flex: 1 1 220px; min-width: 200px; max-width: 340px; }
+      .table-controls .form-select,
+      .table-controls .form-control { font-size: 12px; }
+
+      /* The custom range only appears when the preset asks for it, so the
+         common case is not paying for two date inputs it never uses. */
+      .date-range-wrap {
+        display: none;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 8px;
+        border: 1px dashed var(--border-primary);
+        border-radius: 8px;
+        background: var(--bg-secondary);
+      }
+      .date-range-wrap.show { display: inline-flex; }
+      .date-range-wrap input[type="date"] {
+        width: auto;
+        padding: 3px 7px;
+        font-size: 11.5px;
+        height: 28px;
+      }
+      .date-range-sep { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+
+      /* The line that answers "why is this table empty?" without the officer
+         having to re-read every dropdown to find the one still set. */
+      .table-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 0 18px 12px;
+        font-size: 11.5px;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border-primary);
+      }
+      .table-meta strong { color: var(--text-primary); font-weight: 700; }
+      .table-meta-dot { opacity: 0.45; }
+      .table-meta-filters {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: rgba(255, 104, 165, 0.12);
+        color: var(--brand-primary);
+        font-weight: 700;
+        padding: 2px 9px;
+        border-radius: 20px;
+      }
+      .btn-clear-filters {
+        border: 1px solid var(--border-primary);
+        background: #fff;
+        color: var(--text-secondary);
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 10px;
+        border-radius: 20px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .btn-clear-filters:hover { border-color: var(--brand-primary); color: var(--brand-primary); }
+
+      /* Sortable column headers.
+         The indicator is always in the DOM, at low opacity when the column is
+         not the active sort, so the header row does not reflow by a pixel when
+         you click between columns. */
+      table.data-table thead th.th-sort {
+        cursor: pointer;
+        user-select: none;
+        transition: color 0.12s ease, background 0.12s ease;
+      }
+      table.data-table thead th.th-sort:hover {
+        background: rgba(255, 104, 165, 0.09);
+        color: var(--brand-primary);
+      }
+      table.data-table thead th.th-sort .sort-ind {
+        margin-left: 5px;
+        font-size: 9px;
+        opacity: 0.3;
+      }
+      table.data-table thead th.th-sort[aria-sort="ascending"],
+      table.data-table thead th.th-sort[aria-sort="descending"] {
+        color: var(--brand-primary);
+        background: rgba(255, 104, 165, 0.07);
+      }
+      table.data-table thead th.th-sort[aria-sort="ascending"] .sort-ind,
+      table.data-table thead th.th-sort[aria-sort="descending"] .sort-ind { opacity: 1; }
+      table.data-table thead th.th-sort:focus-visible {
+        outline: 2px solid var(--brand-primary);
+        outline-offset: -2px;
+      }
+
+      /* Empty states that distinguish "nothing here" from "nothing matches",
+         because the fix for those two is completely different. */
+      .table-empty { text-align: center; padding: 44px 20px; color: var(--text-secondary); }
+      .table-empty i.table-empty-icon { font-size: 30px; display: block; margin-bottom: 10px; opacity: 0.45; }
+      .table-empty-title { font-size: 13.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+      .table-empty-hint { font-size: 12px; margin-bottom: 12px; }
+
+      /* Collapsible secondary sections.
+         The Distribution and Audit hubs each stack several full tables, so
+         reaching the last one meant scrolling past all of the others. Sections
+         now fold, and remember whether they were folded. */
+      .section-toggle {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--text-secondary);
+        font-size: 13px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .section-toggle:hover { background: var(--bg-secondary); color: var(--brand-primary); }
+      .section-toggle .chev { transition: transform 0.18s ease; }
+      .card.is-collapsed .chev { transform: rotate(-90deg); }
+      .card.is-collapsed .collapsible-body { display: none; }
+
+      /* Header action overflow menu.
+         Five equally-weighted buttons competed for attention and pushed the
+         live-sync badge onto its own line at laptop widths. The two actions
+         used daily stay out; the rest move in here. */
+      .action-menu { position: relative; display: inline-block; }
+      .action-menu-panel {
+        display: none;
+        position: absolute;
+        right: 0;
+        top: calc(100% + 6px);
+        min-width: 232px;
+        background: #fff;
+        border: 1px solid var(--border-primary);
+        border-radius: 10px;
+        box-shadow: 0 10px 28px rgba(16, 24, 40, 0.14);
+        padding: 6px;
+        z-index: 60;
+      }
+      .action-menu.open .action-menu-panel { display: block; }
+      .action-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        background: none;
+        border: none;
+        text-align: left;
+        padding: 9px 10px;
+        border-radius: 7px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--text-primary);
+        cursor: pointer;
+      }
+      .action-menu-item:hover { background: var(--bg-secondary); color: var(--brand-primary); }
+      .action-menu-item i { width: 16px; text-align: center; color: var(--brand-primary); }
+      .action-menu-sep { height: 1px; background: var(--border-primary); margin: 5px 2px; }
+
+      @media (max-width: 900px) {
+        .table-controls { padding: 12px 14px 8px; }
+        .table-controls .search-box { max-width: none; }
+        .table-meta { padding: 0 14px 10px; }
+      }
     </style>
   </head>
   <body>
@@ -853,12 +1048,36 @@
             </div>
             <p class="page-subtitle" id="page-subtitle-inventory" style="margin-top: 4px; margin-bottom: 12px;">Track vaccines, contraceptives, supplements, and medical supplies across all barangay health centers</p>
           </div>
+          <!-- Two actions out, the rest in a menu.
+               Stock coming in and stock going out are the daily jobs and stay
+               one click away. Adding a catalogue entry, dispensing and the alert
+               hub are occasional, and as five equal-weight buttons they made the
+               row wrap at laptop widths and gave no clue which mattered. The
+               alert count still surfaces on the trigger, so nothing urgent is
+               hidden behind a click. -->
           <div class="page-actions" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-            <button class="btn btn-secondary btn-sm" id="open-alerts-hub-btn" onclick="openAlertsModal()"><i class="fa-solid fa-bell" style="color:var(--brand-primary);"></i> Alert Hub <span id="alerts-hub-count" class="badge" style="background:var(--brand-primary); color:white; margin-left:4px; display:none;">0</span></button>
-            <button class="btn btn-secondary btn-sm" id="open-item-modal-btn" onclick="openModal('modal-item')"><i class="fa-solid fa-plus"></i> Add Item Catalog</button>
-            <button class="btn btn-primary btn-sm" id="open-batch-modal-btn" onclick="openModal('modal-batch')"><i class="fa-solid fa-box-archive"></i> Receive Stock Batch</button>
-            <button class="btn btn-outline-pink btn-sm" id="open-dispense-modal-btn" onclick="openModal('modal-dispense')"><i class="fa-solid fa-hand-holding-medical"></i> Dispense / Adjust Stock</button>
+            <button class="btn btn-primary btn-sm" id="open-batch-modal-btn" onclick="openModal('modal-batch')"><i class="fa-solid fa-box-archive"></i> Receive Stock</button>
             <button class="btn btn-primary btn-sm" id="open-issue-modal-btn" onclick="openGeneralIssueModal()" style="background:#8b5cf6; border-color:#8b5cf6;"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock to BHC</button>
+
+            <div class="action-menu" id="inventory-action-menu">
+              <button class="btn btn-secondary btn-sm" id="inventory-action-menu-btn" aria-haspopup="true" aria-expanded="false">
+                <i class="fa-solid fa-ellipsis"></i> More
+                <span id="alerts-hub-count" class="badge" style="background:var(--brand-primary); color:white; margin-left:4px; display:none;">0</span>
+              </button>
+              <div class="action-menu-panel" role="menu" aria-labelledby="inventory-action-menu-btn">
+                <button class="action-menu-item" role="menuitem" id="open-alerts-hub-btn" onclick="closeActionMenu(); openAlertsModal();">
+                  <i class="fa-solid fa-bell"></i> Alert Hub
+                  <span id="alerts-hub-count-menu" class="badge" style="background:var(--brand-primary); color:white; margin-left:auto; display:none;">0</span>
+                </button>
+                <button class="action-menu-item" role="menuitem" id="open-dispense-modal-btn" onclick="closeActionMenu(); openModal('modal-dispense');">
+                  <i class="fa-solid fa-hand-holding-medical"></i> Dispense / Adjust Stock
+                </button>
+                <div class="action-menu-sep"></div>
+                <button class="action-menu-item" role="menuitem" id="open-item-modal-btn" onclick="closeActionMenu(); openModal('modal-item');">
+                  <i class="fa-solid fa-plus"></i> Add Catalogue Item
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -960,47 +1179,46 @@
 
           <!-- Subview A: Catalog Summary Table -->
           <div id="catalog-subview-summary" class="card">
-            <div class="toolbar" style="display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
-              <div style="display: flex; gap: 12px; flex: 1; flex-wrap: wrap;">
-                <div class="search-box" style="flex: 1; min-width: 240px;">
+            <div class="table-controls">
+              <div class="table-controls-fields">
+                <div class="search-box">
                   <i class="fa-solid fa-magnifying-glass"></i>
-                  <input class="form-control" type="search" id="catalog-search" placeholder="Search items by brand or generic name..." />
+                  <input class="form-control" type="search" id="catalog-search" placeholder="Search brand, generic or item code..." />
                 </div>
-                <div class="filter-group">
-                  <select class="form-select" id="catalog-filter-type" style="width: auto">
-                    <option value="">All Categories</option>
-                    <option value="vaccine">Vaccines</option>
-                    <option value="supplement">Supplements</option>
-                    <option value="contraceptive">Contraceptives</option>
-                    <option value="medical_device">Medical Supplies</option>
-                  </select>
-                  <select class="form-select" id="catalog-filter-stock" style="width: auto">
-                    <option value="">All Stock Levels</option>
-                    <option value="low">Low Stock Only</option>
-                    <option value="out">Out of Stock Only</option>
-                    <option value="normal">Normal Stock Only</option>
-                  </select>
-                  <select class="form-select" id="catalog-filter-archived" style="width: auto">
-                    <option value="active">Active Items Only</option>
-                    <option value="archived">Archived Items Only</option>
-                    <option value="all">All Catalog Items</option>
-                  </select>
-                </div>
+                <select class="form-select" id="catalog-filter-type" style="width: auto" aria-label="Filter by category">
+                  <option value="">All Categories</option>
+                  <option value="vaccine">Vaccines</option>
+                  <option value="supplement">Supplements</option>
+                  <option value="contraceptive">Contraceptives</option>
+                  <option value="medical_device">Medical Supplies</option>
+                </select>
+                <select class="form-select" id="catalog-filter-stock" style="width: auto" aria-label="Filter by stock level">
+                  <option value="">All Stock Levels</option>
+                  <option value="low">Low Stock Only</option>
+                  <option value="out">Out of Stock Only</option>
+                  <option value="normal">Normal Stock Only</option>
+                </select>
+                <select class="form-select" id="catalog-filter-archived" style="width: auto" aria-label="Filter by archive state">
+                  <option value="active">Active Items Only</option>
+                  <option value="archived">Archived Items Only</option>
+                  <option value="all">All Catalog Items</option>
+                </select>
               </div>
-              <button class="btn btn-secondary btn-sm" id="export-catalog-csv" onclick="exportCatalogCSV()"><i class="fa-solid fa-file-csv"></i> Export Catalog CSV</button>
+              <button class="btn btn-secondary btn-sm" id="export-catalog-csv" onclick="exportCatalogCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
             </div>
+            <div class="table-meta" id="catalog-meta"></div>
 
             <div class="table-wrap" style="border: none; border-radius: 0">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Item Details</th>
-                    <th>Unit</th>
-                    <th style="text-align: right">Added</th>
-                    <th style="text-align: right">Issued</th>
-                    <th style="text-align: right">Allocated</th>
-                    <th style="text-align: right">Available</th>
-                    <th style="text-align: center">Status</th>
+                    <th class="th-sort" data-sort="catalog:name" tabindex="0">Item Details<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="catalog:unit" tabindex="0">Unit<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="catalog:added" tabindex="0" style="text-align: right">Added<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="catalog:issued" tabindex="0" style="text-align: right">Issued<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="catalog:allocated" tabindex="0" style="text-align: right">Allocated<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="catalog:available" tabindex="0" style="text-align: right">Available<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="catalog:status" tabindex="0" style="text-align: center">Status<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th style="text-align: center">Action</th>
                   </tr>
                 </thead>
@@ -1040,35 +1258,58 @@
 
           <!-- Subview C: Active Batches & Expiry Tracker -->
           <div id="catalog-subview-batches" class="card" style="display: none;">
-            <div class="toolbar" style="display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
-              <div style="display: flex; gap: 12px; flex: 1; flex-wrap: wrap;">
-                <div class="search-box" style="flex: 1; min-width: 240px;">
+            <div class="table-controls">
+              <div class="table-controls-fields">
+                <div class="search-box">
                   <i class="fa-solid fa-magnifying-glass"></i>
-                  <input class="form-control" type="search" id="batches-search" placeholder="Search batch number, brand, or generic name..." />
+                  <input class="form-control" type="search" id="batches-search" placeholder="Search batch no., brand, generic or manufacturer..." />
                 </div>
-                <div class="filter-group">
-                  <select class="form-select" id="batches-filter-status" style="width: auto">
-                    <option value="">All Statuses</option>
-                    <option value="active">Active</option>
-                    <option value="expired">Expired</option>
-                    <option value="discarded">Discarded</option>
-                  </select>
+                <select class="form-select" id="batches-filter-status" style="width: auto" aria-label="Filter by batch status">
+                  <option value="">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="expired">Expired</option>
+                  <option value="discarded">Discarded</option>
+                </select>
+                <!-- The question actually asked of this table is "what is about
+                     to go off?", and until now it could only be answered by
+                     reading every row's countdown badge. -->
+                <select class="form-select" id="batches-filter-expiry" style="width: auto" aria-label="Filter by expiry window">
+                  <option value="">Any Expiry</option>
+                  <option value="expired">Already Expired</option>
+                  <option value="30">Expiring within 30 days</option>
+                  <option value="60">Expiring within 60 days</option>
+                  <option value="90">Expiring within 90 days</option>
+                  <option value="safe">More than 90 days left</option>
+                </select>
+                <select class="form-select" id="batches-filter-date" style="width: auto" aria-label="Filter by date received">
+                  <option value="all">Received: Any Date</option>
+                  <option value="today">Received Today</option>
+                  <option value="7d">Received Last 7 Days</option>
+                  <option value="30d">Received Last 30 Days</option>
+                  <option value="this_month">Received This Month</option>
+                  <option value="custom">Received: Custom Range…</option>
+                </select>
+                <div class="date-range-wrap" id="batches-custom-date-wrap">
+                  <input type="date" id="batches-date-start" class="form-control" aria-label="Received from" />
+                  <span class="date-range-sep">to</span>
+                  <input type="date" id="batches-date-end" class="form-control" aria-label="Received to" />
                 </div>
               </div>
-              <button class="btn btn-secondary btn-sm" id="export-batches-csv" onclick="exportBatchesCSV()"><i class="fa-solid fa-file-csv"></i> Export Batches CSV</button>
+              <button class="btn btn-secondary btn-sm" id="export-batches-csv" onclick="exportBatchesCSV()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
             </div>
+            <div class="table-meta" id="batches-meta"></div>
 
             <div class="table-wrap" style="border: none; border-radius: 0">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Batch / Lot #</th>
-                    <th>Item Details</th>
-                    <th>Location</th>
-                    <th>Received Date</th>
-                    <th>Expiration Date</th>
-                    <th style="text-align: right">Remaining Qty</th>
-                    <th style="text-align: center">Countdown</th>
+                    <th class="th-sort" data-sort="batches:batch" tabindex="0">Batch / Lot #<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="batches:item" tabindex="0">Item Details<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="batches:location" tabindex="0">Location<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="batches:received" tabindex="0">Received Date<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="batches:expiration" tabindex="0">Expiration Date<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="batches:remaining" tabindex="0" style="text-align: right">Remaining Qty<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="batches:expiration" tabindex="0" style="text-align: center">Countdown<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th style="text-align: center">Action</th>
                   </tr>
                 </thead>
@@ -1092,8 +1333,19 @@
                 <h3 style="margin:0;font-size:15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-clipboard-list" style="color:var(--brand-primary);margin-right:7px;"></i> Midwife Stock Requests from Barangay Health Centers</h3>
                 <p style="margin:4px 0 0;color:var(--text-secondary);font-size:12.5px;">Review requested items from BHC midwives, approve requested quotas, and dispatch central warehouse batches.</p>
               </div>
-              <div class="filter-group">
-                <select class="form-select" id="request-filter-status" style="width:auto;" onchange="renderStockRequests()">
+              <button class="btn btn-secondary btn-sm" id="refresh-requests-btn" onclick="loadInventoryData()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+            </div>
+
+            <!-- This table had a status dropdown and nothing else: no search, no
+                 way to ask "what did Sto. Nino ask for", no way to bound it by
+                 date. On a busy month it was a wall of rows you paged through. -->
+            <div class="table-controls" style="padding-top: 12px;">
+              <div class="table-controls-fields">
+                <div class="search-box">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input class="form-control" type="search" id="requests-search" placeholder="Search request no., barangay, midwife, item or reason..." />
+                </div>
+                <select class="form-select" id="request-filter-status" style="width:auto;" aria-label="Filter by request status">
                   <option value="">All Request Statuses</option>
                   <option value="pending">Pending</option>
                   <option value="approved">Approved</option>
@@ -1101,24 +1353,41 @@
                   <option value="received">Received</option>
                   <option value="rejected">Rejected</option>
                 </select>
-                <select class="form-select" id="requests-filter-archived" style="width:auto;" onchange="renderStockRequests()">
+                <select class="form-select" id="requests-filter-facility" style="width:auto;" aria-label="Filter by requesting facility">
+                  <option value="">All Requesting Facilities</option>
+                </select>
+                <select class="form-select" id="requests-filter-archived" style="width:auto;" aria-label="Filter by archive state">
                   <option value="active">Active Requests Only</option>
                   <option value="archived">Archived Requests Only</option>
                   <option value="all">All Requests</option>
                 </select>
-                <button class="btn btn-secondary btn-sm" id="refresh-requests-btn" onclick="loadInventoryData()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+                <select class="form-select" id="requests-filter-date" style="width:auto;" aria-label="Filter by date submitted">
+                  <option value="all">Submitted: Any Date</option>
+                  <option value="today">Submitted Today</option>
+                  <option value="7d">Submitted Last 7 Days</option>
+                  <option value="30d">Submitted Last 30 Days</option>
+                  <option value="this_month">Submitted This Month</option>
+                  <option value="custom">Submitted: Custom Range…</option>
+                </select>
+                <div class="date-range-wrap" id="requests-custom-date-wrap">
+                  <input type="date" id="requests-date-start" class="form-control" aria-label="Submitted from" />
+                  <span class="date-range-sep">to</span>
+                  <input type="date" id="requests-date-end" class="form-control" aria-label="Submitted to" />
+                </div>
               </div>
             </div>
+            <div class="table-meta" id="requests-meta"></div>
+
             <div class="table-wrap" style="border:none;border-radius:0;">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Request #</th>
-                    <th>Barangay / Requested By</th>
-                    <th>Item Details</th>
-                    <th style="text-align:right;">Quantity</th>
+                    <th class="th-sort" data-sort="requests:submitted" tabindex="0">Request #<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="requests:facility" tabindex="0">Barangay / Requested By<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="requests:item" tabindex="0">Item Details<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="requests:quantity" tabindex="0" style="text-align:right;">Quantity<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th>Reason / Midwife Remarks</th>
-                    <th style="text-align:center;">Status</th>
+                    <th class="th-sort" data-sort="requests:status" tabindex="0" style="text-align:center;">Status<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th style="text-align:center;">Action</th>
                   </tr>
                 </thead>
@@ -1131,20 +1400,54 @@
           </div>
 
           <!-- Section B: Issued Transfers Tracker -->
-          <div class="card" style="margin-bottom:20px;">
-            <div class="card-header" style="padding:16px 20px;border-bottom:1px solid var(--border-primary);">
-              <h3 style="margin:0;font-size:15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-truck-ramp-box" style="color:var(--brand-primary);margin-right:7px;"></i> Issued Stock Transfers (In-Transit Tracker)</h3>
-              <p style="margin:4px 0 0;color:var(--text-secondary);font-size:12.5px;">Monitor dispatched transfers awaiting receipt confirmation by destination BHC midwives.</p>
+          <div class="card is-collapsible" id="section-transfers" style="margin-bottom:20px;">
+            <div class="card-header" style="padding:16px 20px;border-bottom:1px solid var(--border-primary);display:flex;justify-content:space-between;align-items:center;gap:12px;">
+              <div>
+                <h3 style="margin:0;font-size:15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-truck-ramp-box" style="color:var(--brand-primary);margin-right:7px;"></i> Issued Stock Transfers (In-Transit Tracker)</h3>
+                <p style="margin:4px 0 0;color:var(--text-secondary);font-size:12.5px;">Monitor dispatched transfers awaiting receipt confirmation by destination BHC midwives.</p>
+              </div>
+              <button class="section-toggle" onclick="toggleSection('section-transfers')" aria-expanded="true" aria-controls="section-transfers-body" title="Collapse or expand this section">
+                <i class="fa-solid fa-chevron-down chev"></i>
+              </button>
             </div>
+            <div class="collapsible-body" id="section-transfers-body">
+            <div class="table-controls">
+              <div class="table-controls-fields">
+                <div class="search-box">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input class="form-control" type="search" id="transfers-search" placeholder="Search transfer no., destination, batch or item..." />
+                </div>
+                <select class="form-select" id="transfers-filter-status" style="width:auto;" aria-label="Filter by receipt status">
+                  <option value="">All Receipt Statuses</option>
+                  <option value="pending_receipt">Pending Receipt</option>
+                  <option value="received">Received</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <select class="form-select" id="transfers-filter-date" style="width:auto;" aria-label="Filter by date issued">
+                  <option value="all">Issued: Any Date</option>
+                  <option value="today">Issued Today</option>
+                  <option value="7d">Issued Last 7 Days</option>
+                  <option value="30d">Issued Last 30 Days</option>
+                  <option value="this_month">Issued This Month</option>
+                  <option value="custom">Issued: Custom Range…</option>
+                </select>
+                <div class="date-range-wrap" id="transfers-custom-date-wrap">
+                  <input type="date" id="transfers-date-start" class="form-control" aria-label="Issued from" />
+                  <span class="date-range-sep">to</span>
+                  <input type="date" id="transfers-date-end" class="form-control" aria-label="Issued to" />
+                </div>
+              </div>
+            </div>
+            <div class="table-meta" id="transfers-meta"></div>
             <div class="table-wrap" style="border:none;border-radius:0;">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Issued Date</th>
-                    <th>Destination BHC</th>
-                    <th>Item Details</th>
-                    <th style="text-align:right;">Qty Issued</th>
-                    <th style="text-align:center;">Receipt Status</th>
+                    <th class="th-sort" data-sort="transfers:issued" tabindex="0">Issued Date<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="transfers:destination" tabindex="0">Destination BHC<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="transfers:item" tabindex="0">Item Details<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="transfers:quantity" tabindex="0" style="text-align:right;">Qty Issued<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="transfers:status" tabindex="0" style="text-align:center;">Receipt Status<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th>Remarks &amp; Actions</th>
                   </tr>
                 </thead>
@@ -1154,32 +1457,37 @@
               </table>
             </div>
             <div id="transfers-pagination"></div>
+            </div><!-- /#section-transfers-body -->
           </div>
 
           <!-- Section C: Barangay Stock Allocation & Coverage Matrix -->
-          <div class="card">
+          <div class="card is-collapsible" id="section-allocation">
             <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
               <div>
                 <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-chart-pie" style="color: var(--brand-primary); margin-right: 8px;"></i> Barangay Stock Allocation &amp; Coverage Quota Matrix</h3>
                 <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 12.5px;">Suggested distribution quotas calculated from each health center's registered patient load and its recorded monthly burn rate.</p>
               </div>
-              <div style="display: flex; gap: 10px;">
+              <div style="display: flex; gap: 10px; align-items: center;">
                 <select class="form-select" id="allocation-item-select" style="width: auto; min-width: 220px;" onchange="renderBarangayAllocation()">
                   <option value="">— All Items Overview —</option>
                 </select>
                 <button class="btn btn-primary btn-sm" onclick="openGeneralIssueModal()" style="background:#8b5cf6; border-color:#8b5cf6;"><i class="fa-solid fa-paper-plane"></i> Issue Stock Transfer</button>
+                <button class="section-toggle" onclick="toggleSection('section-allocation')" aria-expanded="true" aria-controls="section-allocation-body" title="Collapse or expand this section">
+                  <i class="fa-solid fa-chevron-down chev"></i>
+                </button>
               </div>
             </div>
+            <div class="collapsible-body" id="section-allocation-body">
             <div class="table-wrap" style="border: none; border-radius: 0;">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Barangay Health Center</th>
-                    <th>Registered Patient Load</th>
-                    <th style="text-align: right;">Current Stock on Hand</th>
-                    <th style="text-align: right;">Monthly Cons. Rate</th>
-                    <th style="text-align: center;">Days Coverage</th>
-                    <th style="text-align: right;">Suggested Quota Allocation</th>
+                    <th class="th-sort" data-sort="allocation:facility" tabindex="0">Barangay Health Center<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="allocation:load" tabindex="0">Registered Patient Load<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="allocation:stock" tabindex="0" style="text-align: right;">Current Stock on Hand<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="allocation:burn" tabindex="0" style="text-align: right;">Monthly Cons. Rate<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="allocation:coverage" tabindex="0" style="text-align: center;">Days Coverage<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="allocation:quota" tabindex="0" style="text-align: right;">Suggested Quota Allocation<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th style="text-align: center;">Patient Load Share</th>
                     <th style="text-align: center;">Action</th>
                   </tr>
@@ -1189,6 +1497,7 @@
                 </tbody>
               </table>
             </div>
+            </div><!-- /#section-allocation-body -->
           </div>
         </div>
 
@@ -1205,13 +1514,13 @@
               </div>
               <button class="btn btn-outline-pink btn-sm" id="export-tx-csv-btn" onclick="exportTransactionsCSV()"><i class="fa-solid fa-file-csv"></i> Export Ledger CSV</button>
             </div>
-            <div class="toolbar" style="flex-wrap: wrap; gap: 10px;">
-              <div class="search-box" style="flex: 1; min-width: 220px;">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input class="form-control" type="search" id="tx-search" placeholder="Search by batch, brand, generic, or user..." />
-              </div>
-              <div class="filter-group" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                <select class="form-select" id="tx-filter-type" style="width: auto">
+            <div class="table-controls">
+              <div class="table-controls-fields">
+                <div class="search-box">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input class="form-control" type="search" id="tx-search" placeholder="Search batch, brand, generic, reference or user..." />
+                </div>
+                <select class="form-select" id="tx-filter-type" style="width: auto" aria-label="Filter by movement type">
                   <option value="">All Movement Types</option>
                   <option value="receipt">Stock Receipt (+)</option>
                   <option value="dispense">Dispensed (-)</option>
@@ -1219,32 +1528,38 @@
                   <option value="expiry_disposal">Expiry Disposal (-)</option>
                   <option value="transfer">RHU / BHC Transfer</option>
                 </select>
-                <select class="form-select" id="tx-filter-date" style="width: auto">
+                <select class="form-select" id="tx-filter-direction" style="width: auto" aria-label="Filter by stock direction">
+                  <option value="">In and Out</option>
+                  <option value="in">Stock In Only (+)</option>
+                  <option value="out">Stock Out Only (-)</option>
+                </select>
+                <select class="form-select" id="tx-filter-date" style="width: auto" aria-label="Filter by date">
                   <option value="all">All Dates</option>
                   <option value="today">Today</option>
                   <option value="7d">Last 7 Days</option>
                   <option value="30d">Last 30 Days</option>
                   <option value="this_month">This Month</option>
-                  <option value="custom">Custom Date Range...</option>
+                  <option value="custom">Custom Date Range…</option>
                 </select>
-                <div id="tx-custom-date-wrap" style="display: none; align-items: center; gap: 6px;">
-                  <input type="date" id="tx-date-start" class="form-control" style="width: auto; padding: 4px 8px; font-size: 12px;" />
-                  <span style="font-size: 12px; color: var(--text-secondary);">to</span>
-                  <input type="date" id="tx-date-end" class="form-control" style="width: auto; padding: 4px 8px; font-size: 12px;" />
+                <div class="date-range-wrap" id="tx-custom-date-wrap">
+                  <input type="date" id="tx-date-start" class="form-control" aria-label="From date" />
+                  <span class="date-range-sep">to</span>
+                  <input type="date" id="tx-date-end" class="form-control" aria-label="To date" />
                 </div>
               </div>
             </div>
+            <div class="table-meta" id="tx-meta"></div>
 
             <div class="table-wrap" style="border: none; border-radius: 0">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th style="cursor: pointer;" onclick="toggleTxSort('date')">Date &amp; Time <span id="tx-sort-date"><i class="fa-solid fa-sort"></i></span></th>
-                    <th style="cursor: pointer;" onclick="toggleTxSort('location')">Location <span id="tx-sort-location"><i class="fa-solid fa-sort"></i></span></th>
-                    <th style="cursor: pointer;" onclick="toggleTxSort('type')">Movement Type <span id="tx-sort-type"><i class="fa-solid fa-sort"></i></span></th>
-                    <th style="cursor: pointer;" onclick="toggleTxSort('item')">Item Details <span id="tx-sort-item"><i class="fa-solid fa-sort"></i></span></th>
-                    <th style="text-align: right; cursor: pointer;" onclick="toggleTxSort('qty')">Qty <span id="tx-sort-qty"><i class="fa-solid fa-sort"></i></span></th>
-                    <th>Performed By</th>
+                    <th class="th-sort" data-sort="tx:date" tabindex="0">Date &amp; Time<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="tx:location" tabindex="0">Location<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="tx:type" tabindex="0">Movement Type<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="tx:item" tabindex="0">Item Details<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="tx:qty" tabindex="0" style="text-align: right">Qty<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="tx:user" tabindex="0">Performed By<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th>Reference / Notes</th>
                   </tr>
                 </thead>
@@ -1266,16 +1581,44 @@
               <button class="btn btn-secondary btn-sm" onclick="exportDisposalLog()"><i class="fa-solid fa-file-csv"></i> Export Disposal Log CSV</button>
             </div>
 
+            <div class="table-controls">
+              <div class="table-controls-fields">
+                <div class="search-box">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input class="form-control" type="search" id="disposal-search" placeholder="Search batch no., item or facility..." />
+                </div>
+                <select class="form-select" id="disposal-filter-status" style="width: auto" aria-label="Filter by disposal status">
+                  <option value="">All Disposal Statuses</option>
+                  <option value="pending">Awaiting Disposal</option>
+                  <option value="disposed">Disposed &amp; Logged</option>
+                </select>
+                <select class="form-select" id="disposal-filter-date" style="width: auto" aria-label="Filter by expiry date">
+                  <option value="all">Expired: Any Date</option>
+                  <option value="today">Expired Today</option>
+                  <option value="7d">Expired in Last 7 Days</option>
+                  <option value="30d">Expired in Last 30 Days</option>
+                  <option value="this_month">Expired This Month</option>
+                  <option value="custom">Expired: Custom Range…</option>
+                </select>
+                <div class="date-range-wrap" id="disposal-custom-date-wrap">
+                  <input type="date" id="disposal-date-start" class="form-control" aria-label="Expired from" />
+                  <span class="date-range-sep">to</span>
+                  <input type="date" id="disposal-date-end" class="form-control" aria-label="Expired to" />
+                </div>
+              </div>
+            </div>
+            <div class="table-meta" id="disposal-meta"></div>
+
             <div class="table-wrap" style="border: none; border-radius: 0">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Batch #</th>
-                    <th>Item Details</th>
-                    <th>Location</th>
-                    <th style="text-align: right">Remaining Qty</th>
-                    <th>Expiration Date</th>
-                    <th style="text-align: center">Disposal Status</th>
+                    <th class="th-sort" data-sort="disposal:batch" tabindex="0">Batch #<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="disposal:item" tabindex="0">Item Details<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="disposal:location" tabindex="0">Location<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="disposal:remaining" tabindex="0" style="text-align: right">Remaining Qty<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="disposal:expiration" tabindex="0">Expiration Date<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="disposal:status" tabindex="0" style="text-align: center">Disposal Status<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th style="text-align: center">Action</th>
                   </tr>
                 </thead>
@@ -2097,6 +2440,315 @@
           tx: { currentPage: 1, pageSize: 10 }
         };
 
+        /* ═══════════════════════════════════════════════════════════════════
+           SHARED TABLE CONTROLS
+
+           One registry describing every table's controls and its sort, so the
+           six tables behave identically instead of each re-implementing its
+           own half of the feature. Adding a filter is now: add the <select>,
+           add its id and default here, and read it in that table's render.
+
+           `defaults` matters as much as the list: it is what "clear filters"
+           restores to, and what the active-filter count measures against — so
+           a table defaulting to "Active Items Only" is not reported as
+           filtered when it is simply showing its normal view.
+           ═══════════════════════════════════════════════════════════════════ */
+        const tableViews = {
+          catalog: {
+            sortField: "name", sortAsc: true,
+            render: () => renderCatalog(),
+            defaults: {
+              "catalog-search": "", "catalog-filter-type": "",
+              "catalog-filter-stock": "", "catalog-filter-archived": "active"
+            }
+          },
+          batches: {
+            // Expiry ascending is the only default that puts the batch you
+            // must act on first.
+            sortField: "expiration", sortAsc: true,
+            render: () => renderBatches(),
+            defaults: {
+              "batches-search": "", "batches-filter-status": "",
+              "batches-filter-expiry": "", "batches-filter-date": "all",
+              "batches-date-start": "", "batches-date-end": ""
+            }
+          },
+          requests: {
+            sortField: "submitted", sortAsc: false,
+            render: () => renderStockRequests(),
+            defaults: {
+              "requests-search": "", "request-filter-status": "",
+              "requests-filter-facility": "", "requests-filter-archived": "active",
+              "requests-filter-date": "all", "requests-date-start": "", "requests-date-end": ""
+            }
+          },
+          transfers: {
+            sortField: "issued", sortAsc: false,
+            render: () => renderInventoryTransfers(),
+            defaults: {
+              "transfers-search": "", "transfers-filter-status": "",
+              "transfers-filter-date": "all", "transfers-date-start": "", "transfers-date-end": ""
+            }
+          },
+          tx: {
+            sortField: "date", sortAsc: false,
+            render: () => renderTransactions(),
+            defaults: {
+              "tx-search": "", "tx-filter-type": "", "tx-filter-direction": "",
+              "tx-filter-date": "all", "tx-date-start": "", "tx-date-end": ""
+            }
+          },
+          disposal: {
+            sortField: "expiration", sortAsc: true,
+            render: () => renderDisposalTable(),
+            defaults: {
+              "disposal-search": "", "disposal-filter-status": "",
+              "disposal-filter-date": "all", "disposal-date-start": "", "disposal-date-end": ""
+            }
+          },
+          allocation: {
+            sortField: "coverage", sortAsc: true,
+            render: () => renderBarangayAllocation(),
+            defaults: {}
+          }
+        };
+
+        function ctl(id) { return document.getElementById(id); }
+        function ctlVal(id) { const el = ctl(id); return el ? el.value : ""; }
+
+        function activeFilterCount(key) {
+          const view = tableViews[key];
+          if (!view) return 0;
+          return Object.entries(view.defaults)
+            .filter(([id, def]) => ctl(id) && ctl(id).value !== def)
+            .length;
+        }
+
+        window.clearTableFilters = function (key) {
+          const view = tableViews[key];
+          if (!view) return;
+          Object.entries(view.defaults).forEach(([id, def]) => {
+            const el = ctl(id);
+            if (el) el.value = def;
+          });
+          syncDateRangeVisibility(key);
+          if (paginationState[key]) paginationState[key].currentPage = 1;
+          view.render();
+        };
+
+        /* ── Sorting ─────────────────────────────────────────────────────
+           Comparison is type-aware rather than string-only: numbers sort as
+           numbers and blanks always sink to the bottom regardless of
+           direction, because an empty expiry date floating to the top of an
+           ascending sort is noise, not information. */
+        function cmpValues(a, b) {
+          const aEmpty = a === null || a === undefined || a === "";
+          const bEmpty = b === null || b === undefined || b === "";
+          if (aEmpty && bEmpty) return 0;
+          if (aEmpty) return 1;
+          if (bEmpty) return -1;
+          if (typeof a === "number" && typeof b === "number") return a - b;
+          return String(a).localeCompare(String(b), "en", { numeric: true, sensitivity: "base" });
+        }
+
+        // accessors: { fieldName: row => comparableValue }
+        function sortRows(key, rows, accessors) {
+          const view = tableViews[key];
+          if (!view) return rows;
+          const fn = accessors[view.sortField];
+          if (!fn) return rows;
+
+          const isEmpty = v => v === null || v === undefined || v === "";
+
+          // Copy first: these arrays are the loaded datasets, and sorting them
+          // in place would quietly reorder every other view of the same data.
+          return rows.slice().sort((x, y) => {
+            const a = fn(x), b = fn(y);
+
+            // Blanks are resolved BEFORE the direction is applied, never after.
+            // Negating a comparison that already sorted blanks last flips them
+            // to the top, so reversing an expiry sort would lead with the rows
+            // that have no expiry date — and a facility with no usage history
+            // would head the "least days of cover" list. A missing value is not
+            // an extreme value; it belongs at the bottom either way.
+            const aEmpty = isEmpty(a), bEmpty = isEmpty(b);
+            if (aEmpty && bEmpty) return 0;
+            if (aEmpty) return 1;
+            if (bEmpty) return -1;
+
+            const res = cmpValues(a, b);
+            return view.sortAsc ? res : -res;
+          });
+        }
+
+        window.toggleSort = function (key, field) {
+          const view = tableViews[key];
+          if (!view) return;
+          if (view.sortField === field) {
+            view.sortAsc = !view.sortAsc;
+          } else {
+            view.sortField = field;
+            // Text reads best A->Z; quantities and dates read best largest or
+            // most recent first, which is what someone scanning them wants.
+            view.sortAsc = !/^(qty|quantity|remaining|available|added|issued|allocated|date|submitted|expiration|received|stock|burn|quota|load|coverage)$/.test(field);
+          }
+          if (paginationState[key]) paginationState[key].currentPage = 1;
+          view.render();
+        };
+
+        // Reflects the current sort onto the headers: the arrow, the highlight
+        // and aria-sort for anyone on a screen reader.
+        function syncSortIndicators(key) {
+          const view = tableViews[key];
+          if (!view) return;
+          document.querySelectorAll(`th.th-sort[data-sort^="${key}:"]`).forEach(th => {
+            const field = th.getAttribute("data-sort").split(":")[1];
+            const ind = th.querySelector(".sort-ind");
+            const isActive = field === view.sortField;
+            th.setAttribute("aria-sort", isActive ? (view.sortAsc ? "ascending" : "descending") : "none");
+            if (ind) {
+              ind.className = "fa-solid sort-ind " +
+                (isActive ? (view.sortAsc ? "fa-arrow-up-short-wide" : "fa-arrow-down-wide-short") : "fa-sort");
+            }
+          });
+        }
+
+        /* ── Date ranges ─────────────────────────────────────────────────
+           Presets cover the questions actually asked ("what moved today?"),
+           with a custom range behind them for everything else. Bounds are
+           built in local time: a UTC day boundary would put eight hours of
+           each Philippine day into the wrong bucket. */
+        function dateWindow(key) {
+          const preset = ctlVal(`${key}-filter-date`) || "all";
+          if (preset === "all") return null;
+
+          const now = new Date();
+          const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+          if (preset === "today") {
+            return { from: startOfToday, to: new Date(startOfToday.getTime() + 86400000 - 1) };
+          }
+          if (preset === "7d" || preset === "30d") {
+            const days = preset === "7d" ? 7 : 30;
+            const from = new Date(startOfToday);
+            from.setDate(from.getDate() - (days - 1));
+            return { from, to: new Date(startOfToday.getTime() + 86400000 - 1) };
+          }
+          if (preset === "this_month") {
+            return {
+              from: new Date(now.getFullYear(), now.getMonth(), 1),
+              to: new Date(startOfToday.getTime() + 86400000 - 1)
+            };
+          }
+          if (preset === "custom") {
+            const s = ctlVal(`${key}-date-start`);
+            const e = ctlVal(`${key}-date-end`);
+            if (!s && !e) return null;
+            return {
+              from: s ? new Date(`${s}T00:00:00`) : null,
+              to: e ? new Date(`${e}T23:59:59.999`) : null
+            };
+          }
+          return null;
+        }
+
+        // Accepts a timestamp, a YYYY-MM-DD date string, or a Date.
+        function inDateWindow(value, win) {
+          if (!win) return true;
+          if (!value) return false;
+          const d = value instanceof Date
+            ? value
+            : (/^\d{4}-\d{2}-\d{2}$/.test(String(value))
+                ? new Date(`${value}T12:00:00`)   // midday: immune to DST edges
+                : new Date(value));
+          if (isNaN(d.getTime())) return false;
+          if (win.from && d < win.from) return false;
+          if (win.to && d > win.to) return false;
+          return true;
+        }
+
+        function syncDateRangeVisibility(key) {
+          const wrap = ctl(`${key}-custom-date-wrap`);
+          if (!wrap) return;
+          wrap.classList.toggle("show", ctlVal(`${key}-filter-date`) === "custom");
+        }
+
+        /* ── The line under every toolbar ────────────────────────────────
+           "Showing 12 of 340" plus, when relevant, how many filters are
+           narrowing it and a way out. The single most common confusion on
+           this page was a table that looked broken but was merely filtered. */
+        function renderTableMeta(key, shown, total) {
+          const el = ctl(`${key}-meta`);
+          if (!el) return;
+          const n = activeFilterCount(key);
+          const view = tableViews[key];
+          const sortLabel = view ? view.sortField.replace(/_/g, " ") : "";
+
+          el.innerHTML = `
+            <span>Showing <strong>${shown}</strong> of <strong>${total}</strong> ${total === 1 ? "entry" : "entries"}</span>
+            ${sortLabel ? `<span class="table-meta-dot">·</span><span>sorted by <strong>${esc(sortLabel)}</strong> ${view.sortAsc ? "ascending" : "descending"}</span>` : ""}
+            ${n > 0 ? `
+              <span class="table-meta-dot">·</span>
+              <span class="table-meta-filters"><i class="fa-solid fa-filter"></i> ${n} filter${n === 1 ? "" : "s"} active</span>
+              <button class="btn-clear-filters" onclick="clearTableFilters('${key}')"><i class="fa-solid fa-xmark"></i> Clear filters</button>
+            ` : ""}
+          `;
+        }
+
+        // An empty table means one of two completely different things, and the
+        // fix differs, so say which one it is.
+        function emptyStateRow(key, colspan, icon, emptyTitle, emptyHint) {
+          const n = activeFilterCount(key);
+          if (n > 0) {
+            return `<tr><td colspan="${colspan}"><div class="table-empty">
+              <i class="fa-solid fa-filter-circle-xmark table-empty-icon"></i>
+              <div class="table-empty-title">No rows match your filters</div>
+              <div class="table-empty-hint">${n} filter${n === 1 ? " is" : "s are"} narrowing this table.</div>
+              <button class="btn btn-secondary btn-sm" onclick="clearTableFilters('${key}')"><i class="fa-solid fa-xmark"></i> Clear filters</button>
+            </div></td></tr>`;
+          }
+          return `<tr><td colspan="${colspan}"><div class="table-empty">
+            <i class="fa-solid ${icon} table-empty-icon"></i>
+            <div class="table-empty-title">${esc(emptyTitle)}</div>
+            <div class="table-empty-hint">${esc(emptyHint)}</div>
+          </div></td></tr>`;
+        }
+
+        /* ── Collapsible sections ────────────────────────────────────────
+           Remembered per browser, because whether the allocation matrix is
+           useful to you is a standing preference, not a per-visit decision. */
+        const SECTION_STATE_KEY = "inaagapay_inventory_sections";
+        function readSectionState() {
+          try { return JSON.parse(localStorage.getItem(SECTION_STATE_KEY)) || {}; }
+          catch (e) { return {}; }
+        }
+        window.toggleSection = function (id) {
+          const card = document.getElementById(id);
+          if (!card) return;
+          const collapsed = card.classList.toggle("is-collapsed");
+          const btn = card.querySelector(".section-toggle");
+          if (btn) btn.setAttribute("aria-expanded", String(!collapsed));
+          const state = readSectionState();
+          state[id] = collapsed;
+          try { localStorage.setItem(SECTION_STATE_KEY, JSON.stringify(state)); } catch (e) {}
+        };
+        function restoreSectionState() {
+          const state = readSectionState();
+          Object.entries(state).forEach(([id, collapsed]) => {
+            const card = document.getElementById(id);
+            if (!card || !collapsed) return;
+            card.classList.add("is-collapsed");
+            const btn = card.querySelector(".section-toggle");
+            if (btn) btn.setAttribute("aria-expanded", "false");
+          });
+        }
+
+        /* ── Header overflow menu ────────────────────────────────────── */
+        window.closeActionMenu = function () {
+          document.getElementById("inventory-action-menu")?.classList.remove("open");
+          document.getElementById("inventory-action-menu-btn")?.setAttribute("aria-expanded", "false");
+        };
+
         // Utility Helpers
         function esc(str) { const d = document.createElement("div"); d.textContent = str ?? ""; return d.innerHTML; }
 
@@ -2125,14 +2777,36 @@
           return /schema cache|does not exist|could not find/i.test(msg);
         }
 
-        // Writes an inventory action to the shared audit trail. The audit page already
-        // advertises these action names as filters, but nothing was ever writing them.
-        // `table` names the table the action actually touched. It used to be
-        // hardcoded to inventory_batches for all eight call sites, so approving
-        // a request or cancelling a transfer was filed against the batch table
-        // and the audit trail could not be filtered by what changed.
+        // Writes an inventory action to the shared audit trail.
+        //
+        // Since 20260826_audit_trail_completeness.sql the database audits these
+        // events itself, from triggers on the tables, and does it far better
+        // than this can: it sees the before and after values, both ends of a
+        // transfer, the linked request and its approval, and it cannot be
+        // skipped by a code path that forgets to call. Writing a second row
+        // from here would file every stock action twice.
+        //
+        // So this became a FALLBACK. It probes once for the trigger-written
+        // columns and stays quiet when they are there. A database that has not
+        // had the migration applied keeps the old behaviour rather than losing
+        // its audit trail, which is the same ordering-safe pattern the portal
+        // already uses for approved_quantity and inventory_disposals.
+        let dbSideAuditing = null;   // null = not probed yet
+        async function dbAuditsInventoryItself() {
+          if (dbSideAuditing !== null) return dbSideAuditing;
+          try {
+            const { error } = await db.from("audit_trail").select("event_key").limit(1);
+            dbSideAuditing = !error;
+          } catch (e) {
+            dbSideAuditing = false;
+          }
+          return dbSideAuditing;
+        }
+
         async function logInventoryAudit(action, description, oldData = null, newData = null, table = "inventory_batches") {
           try {
+            if (await dbAuditsInventoryItself()) return;
+
             const { error } = await db.from("audit_trail").insert({
               account_id: actorId,
               action,
@@ -3092,11 +3766,14 @@
           // problems an officer is expected to act on today.
           const staleVialCount = expiredOpenVials(bhcFilter).length;
           const alertCount = lowCount + expiringCount + pendingCount + staleVialCount;
-          const alertBadge = document.getElementById("alerts-hub-count");
-          if (alertBadge) {
+          // Two badges: one on the "More" trigger so an outstanding alert is
+          // still visible with the menu shut, one on the item inside it.
+          ["alerts-hub-count", "alerts-hub-count-menu"].forEach(id => {
+            const alertBadge = document.getElementById(id);
+            if (!alertBadge) return;
             alertBadge.textContent = alertCount;
             alertBadge.style.display = alertCount > 0 ? "inline-flex" : "none";
-          }
+          });
 
           const banner = document.getElementById("inventory-alerts-banner");
           if (banner) {
@@ -3146,37 +3823,62 @@
 
           const isCombined = (bhcFilter === "all" || bhcFilter === "" || bhcFilter === null || bhcFilter === undefined);
 
+          // Stock status is derived, not stored, so it is computed once per item
+          // here and reused by the filter, the sort and the badge below rather
+          // than recomputed three times.
+          const statusRank = { out: 0, low: 1, normal: 2, archived: 3 };
+          const decorate = item => {
+            const metrics = getItemStockMetrics(item.item_id, bhcFilter);
+            const effMin = getItemEffectiveThreshold(item, bhcFilter);
+            const fHealth = isCombined ? getItemFacilityHealth(item) : null;
+            const isOut = metrics.availableDoses === 0;
+            const isLow = !isOut && (metrics.available <= effMin || (isCombined && fHealth && fHealth.hasLowFacilities));
+            return {
+              metrics,
+              state: item.is_archived ? "archived" : isOut ? "out" : isLow ? "low" : "normal"
+            };
+          };
+
           const filtered = items.filter(item => {
             if (archivedFilter === "active" && item.is_archived) return false;
             if (archivedFilter === "archived" && !item.is_archived) return false;
             if (type && item.item_type !== type) return false;
-            const searchStr = `${item.name || ""} ${item.generic_name || ""}`.toLowerCase();
+            const searchStr = `${item.name || ""} ${item.generic_name || ""} ${item.item_code || ""}`.toLowerCase();
             if (q && !searchStr.includes(q)) return false;
 
-            const metrics = getItemStockMetrics(item.item_id, bhcFilter);
-            const effMin = getItemEffectiveThreshold(item, bhcFilter);
-            const fHealth = isCombined ? getItemFacilityHealth(item) : null;
-
-            const isOut = metrics.availableDoses === 0;
-            const isLow = !isOut && (metrics.available <= effMin || (isCombined && fHealth && fHealth.hasLowFacilities));
-            const isNormal = !isOut && !isLow;
-
-            if (stockFilter === "low" && !isLow) return false;
-            if (stockFilter === "out" && !isOut) return false;
-            if (stockFilter === "normal" && !isNormal) return false;
+            if (stockFilter) {
+              const d = decorate(item);
+              if (stockFilter === "low" && d.state !== "low") return false;
+              if (stockFilter === "out" && d.state !== "out") return false;
+              if (stockFilter === "normal" && d.state !== "normal") return false;
+            }
             return true;
           });
 
+          const sorted = sortRows("catalog", filtered, {
+            name: i => i.name || "",
+            unit: i => i.unit_of_measure || "",
+            added: i => decorate(i).metrics.added ?? 0,
+            issued: i => decorate(i).metrics.issued ?? 0,
+            allocated: i => decorate(i).metrics.allocated ?? 0,
+            available: i => decorate(i).metrics.available ?? 0,
+            status: i => statusRank[decorate(i).state] ?? 9
+          });
+          syncSortIndicators("catalog");
+          renderTableMeta("catalog", sorted.length, items.length);
+
           const tbody = document.getElementById("catalog-tbody");
-          if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-folder-open" style="font-size:28px;margin-bottom:8px;display:block;opacity:0.5;"></i>No inventory catalog items found.</td></tr>`;
+          if (sorted.length === 0) {
+            tbody.innerHTML = emptyStateRow("catalog", 8, "fa-folder-open",
+              "No catalogue items yet",
+              "Add an item from the More menu to start tracking stock against it.");
             renderPaginationControls("catalog-pagination", 0, "catalog");
             return;
           }
 
           const state = paginationState.catalog;
           const startIdx = (state.currentPage - 1) * state.pageSize;
-          const paginatedItems = filtered.slice(startIdx, startIdx + state.pageSize);
+          const paginatedItems = sorted.slice(startIdx, startIdx + state.pageSize);
 
           tbody.innerHTML = paginatedItems.map(item => {
             const metrics = getItemStockMetrics(item.item_id, bhcFilter);
@@ -3244,7 +3946,7 @@
             `;
           }).join('');
 
-          renderPaginationControls("catalog-pagination", filtered.length, "catalog");
+          renderPaginationControls("catalog-pagination", sorted.length, "catalog");
         }
 
         // Render Subview B: Barangay Stock Matrix (Side-by-side per-BHC stock levels)
@@ -3310,32 +4012,77 @@
         }
 
         // Render Subview C: Active Batches Table
+        // Whole days from today until a batch expires. Negative once it has.
+        function daysUntilExpiry(dateStr) {
+          if (!dateStr) return null;
+          const exp = new Date(`${dateStr}T12:00:00`);
+          if (isNaN(exp.getTime())) return null;
+          const now = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+          return Math.round((exp - today) / 86400000);
+        }
+
+        function batchLocationName(b) {
+          if (!b.facility_id) return PortalScope.depotName;
+          const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
+          return bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
+        }
+
         function renderBatches() {
-          const q = document.getElementById("batches-search").value.trim().toLowerCase();
-          const status = document.getElementById("batches-filter-status").value;
+          const q = ctlVal("batches-search").trim().toLowerCase();
+          const status = ctlVal("batches-filter-status");
+          const expiryWindow = ctlVal("batches-filter-expiry");
+          const win = dateWindow("batches");
           const bhcFilter = document.getElementById("global-bhc-filter").value;
 
-          const filtered = batches.filter(b => {
+          // The facility scope is a page-level control rather than one of this
+          // table's own filters, so it bounds the denominator too: "12 of 40"
+          // should mean 40 batches at the facility you are looking at, not 40
+          // across the whole municipality.
+          const inScope = batches.filter(b => facilityMatches(b.facility_id, bhcFilter));
+
+          const filtered = inScope.filter(b => {
             if (status && b.status !== status) return false;
 
-            if (!facilityMatches(b.facility_id, bhcFilter)) return false;
+            if (expiryWindow) {
+              const d = daysUntilExpiry(b.expiration_date);
+              if (d === null) return false;
+              if (expiryWindow === "expired" && d >= 0) return false;
+              if (expiryWindow === "safe" && d <= 90) return false;
+              if (/^\d+$/.test(expiryWindow) && !(d >= 0 && d <= Number(expiryWindow))) return false;
+            }
+
+            if (!inDateWindow(b.received_date, win)) return false;
 
             const item = items.find(i => i.item_id === b.item_id);
-            const searchStr = `${b.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""}`.toLowerCase();
+            const searchStr = `${b.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""} ${b.manufacturer || ""}`.toLowerCase();
             if (q && !searchStr.includes(q)) return false;
             return true;
           });
 
+          const sorted = sortRows("batches", filtered, {
+            batch: b => b.batch_number || "",
+            item: b => items.find(i => i.item_id === b.item_id)?.name || "",
+            location: b => batchLocationName(b),
+            received: b => b.received_date || "",
+            expiration: b => b.expiration_date || "",
+            remaining: b => b.quantity_remaining ?? 0
+          });
+          syncSortIndicators("batches");
+          renderTableMeta("batches", sorted.length, inScope.length);
+
           const tbody = document.getElementById("batches-tbody");
-          if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-box-open" style="font-size:28px;margin-bottom:8px;display:block;opacity:0.5;"></i>No inventory batches found.</td></tr>`;
+          if (sorted.length === 0) {
+            tbody.innerHTML = emptyStateRow("batches", 8, "fa-box-open",
+              "No batches at this facility",
+              "Use Receive Stock to book a consignment in against a catalogue item.");
             renderPaginationControls("batches-pagination", 0, "batches");
             return;
           }
 
           const state = paginationState.batches;
           const startIdx = (state.currentPage - 1) * state.pageSize;
-          const paginatedBatches = filtered.slice(startIdx, startIdx + state.pageSize);
+          const paginatedBatches = sorted.slice(startIdx, startIdx + state.pageSize);
 
           tbody.innerHTML = paginatedBatches.map(b => {
             const item = items.find(i => i.item_id === b.item_id);
@@ -3383,7 +4130,7 @@
             `;
           }).join('');
 
-          renderPaginationControls("batches-pagination", filtered.length, "batches");
+          renderPaginationControls("batches-pagination", sorted.length, "batches");
         }
 
         // Render Barangay Stock Allocation & Coverage Matrix
@@ -3435,7 +4182,11 @@
             return Number.isFinite(ts.getTime()) && ts.getTime() >= THIRTY_DAYS_AGO;
           }
 
-          tbody.innerHTML = bhcs.map(bhc => {
+          // Compute every row first, then sort, then render. These figures are
+          // derived from three different sources, so sorting the output HTML was
+          // never an option — and without this split the column headers could
+          // not be made sortable at all.
+          const allocationRows = bhcs.map(bhc => {
             const load = loadByBhc[bhc.bhc_id] || 0;
             const loadShare = totalLoad > 0 ? load / totalLoad : 0;
 
@@ -3481,7 +4232,23 @@
               statusBadge = `<span class="badge-health-success"><i class="fa-solid fa-circle-check"></i> Optimal (${daysCoverage}d)</span>`;
             }
 
-            return `
+            return { bhc, load, loadShare, bhcStockOnHand, monthlyConsRate, hasRate, daysCoverage, suggestiveQuota, statusBadge };
+          });
+
+          const sortedAllocation = sortRows("allocation", allocationRows, {
+            facility: r => r.bhc.bhc_name || "",
+            load: r => r.load,
+            stock: r => r.bhcStockOnHand,
+            burn: r => r.monthlyConsRate,
+            // A facility with no usage history has unknowable coverage. Sorting
+            // it as 0 would park it among the most urgent, which is the opposite
+            // of what the blank means, so it sinks instead.
+            coverage: r => (r.hasRate ? r.daysCoverage : null),
+            quota: r => (r.suggestiveQuota === null ? null : r.suggestiveQuota)
+          });
+          syncSortIndicators("allocation");
+
+          tbody.innerHTML = sortedAllocation.map(({ bhc, load, loadShare, bhcStockOnHand, monthlyConsRate, hasRate, suggestiveQuota, statusBadge }) => `
               <tr>
                 <td><strong style="color:var(--brand-text);"><i class="fa-solid fa-hospital-user" style="color:var(--brand-primary);margin-right:6px;"></i> ${esc(bhc.bhc_name)}</strong></td>
                 <td>${load.toLocaleString()} registered mother(s)</td>
@@ -3494,38 +4261,76 @@
                   <button class="btn btn-sm btn-primary" onclick="openGeneralIssueModal(); document.getElementById('issue-target-bhc').value='${bhc.bhc_id}';"><i class="fa-solid fa-truck-ramp-box"></i> Allocate Stock</button>
                 </td>
               </tr>
-            `;
-          }).join('');
+            `).join('');
         }
 
         // Render Stock Requests Table
+        // Workflow order, not alphabetical: a status sort should surface what
+        // still needs a decision, and "approved" sorting above "pending"
+        // because A precedes P would bury exactly the wrong rows.
+        const REQUEST_STATUS_RANK = {
+          pending: 0, approved: 1, issued: 2, received: 3, completed: 4, rejected: 5, cancelled: 6
+        };
+
         function renderStockRequests() {
-          const statusFilter = document.getElementById("request-filter-status")?.value || "";
-          const archivedFilter = document.getElementById("requests-filter-archived")?.value || "active";
+          const q = ctlVal("requests-search").trim().toLowerCase();
+          const statusFilter = ctlVal("request-filter-status");
+          const facilityFilter = ctlVal("requests-filter-facility");
+          const archivedFilter = ctlVal("requests-filter-archived") || "active";
+          const win = dateWindow("requests");
+
+          const requestFacilityName = r => {
+            const bhc = bhcs.find(b => String(b.bhc_id) === String(r.facility_id));
+            return bhc?.bhc_name || unknownFacilityLabel(r.facility_id);
+          };
 
           const filtered = stockRequests.filter(r => {
             if (statusFilter && r.status !== statusFilter) return false;
+            if (facilityFilter && String(r.facility_id) !== String(facilityFilter)) return false;
             if (archivedFilter === "active" && r.is_archived) return false;
             if (archivedFilter === "archived" && !r.is_archived) return false;
+            if (!inDateWindow(r.created_at, win)) return false;
+
+            if (q) {
+              const item = items.find(i => i.item_id === r.item_id);
+              const hay = [
+                `#${r.request_id}`, r.request_id, requestFacilityName(r),
+                accountMap[r.requested_by], item?.name, item?.generic_name,
+                r.reason, r.remarks, r.admin_remarks, r.status
+              ].filter(Boolean).join(" ").toLowerCase();
+              if (!hay.includes(q)) return false;
+            }
             return true;
           });
+
+          const sorted = sortRows("requests", filtered, {
+            submitted: r => r.created_at || "",
+            facility: r => requestFacilityName(r),
+            item: r => items.find(i => i.item_id === r.item_id)?.name || "",
+            quantity: r => r.requested_quantity ?? 0,
+            status: r => REQUEST_STATUS_RANK[r.status] ?? 9
+          });
+          syncSortIndicators("requests");
+          renderTableMeta("requests", sorted.length, stockRequests.length);
 
           const tbody = document.getElementById("requests-tbody");
           if (!tbody) return;
           if (workflowLoadError) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:#b45309;"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(workflowLoadError)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#b45309;"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(workflowLoadError)}</td></tr>`;
             renderPaginationControls("requests-pagination", 0, "requests");
             return;
           }
-          if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary);"><i class="fa-solid fa-clipboard-list" style="font-size:28px;margin-bottom:8px;display:block;opacity:0.5;"></i>No stock requests found.</td></tr>';
+          if (sorted.length === 0) {
+            tbody.innerHTML = emptyStateRow("requests", 7, "fa-clipboard-list",
+              "No stock requests yet",
+              "Requests appear here when a midwife submits one from the mobile app.");
             renderPaginationControls("requests-pagination", 0, "requests");
             return;
           }
 
           const state = paginationState.requests;
           const startIdx = (state.currentPage - 1) * state.pageSize;
-          const paginatedReqs = filtered.slice(startIdx, startIdx + state.pageSize);
+          const paginatedReqs = sorted.slice(startIdx, startIdx + state.pageSize);
 
           tbody.innerHTML = paginatedReqs.map(request => {
             const item = items.find(i => i.item_id === request.item_id);
@@ -3585,22 +4390,67 @@
               </tr>`;
           }).join("");
 
-          renderPaginationControls("requests-pagination", filtered.length, "requests");
+          renderPaginationControls("requests-pagination", sorted.length, "requests");
         }
 
         // Render Issued Transfers Table
+        // Pending first: an in-transit tracker exists to show what has not
+        // landed yet, so that is what a status sort should lead with.
+        const TRANSFER_STATUS_RANK = { pending_receipt: 0, received: 1, cancelled: 2 };
+
         function renderInventoryTransfers() {
           const tbody = document.getElementById("transfers-tbody");
           if (!tbody) return;
-          if (inventoryTransfers.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);"><i class="fa-solid fa-truck-ramp-box" style="font-size:28px;margin-bottom:8px;display:block;opacity:0.5;"></i>No issued transfers found.</td></tr>';
+
+          const q = ctlVal("transfers-search").trim().toLowerCase();
+          const statusFilter = ctlVal("transfers-filter-status");
+          const win = dateWindow("transfers");
+
+          const destName = t => {
+            const bhc = bhcs.find(b => String(b.bhc_id) === String(t.destination_facility_id));
+            return bhc?.bhc_name || unknownFacilityLabel(t.destination_facility_id);
+          };
+          const transferItem = t => {
+            const source = batches.find(b => b.batch_id === t.source_batch_id);
+            return source ? items.find(i => i.item_id === source.item_id) : null;
+          };
+
+          const filtered = inventoryTransfers.filter(t => {
+            if (statusFilter && t.status !== statusFilter) return false;
+            if (!inDateWindow(t.issued_at, win)) return false;
+            if (q) {
+              const source = batches.find(b => b.batch_id === t.source_batch_id);
+              const item = transferItem(t);
+              const hay = [
+                `#${t.transfer_id}`, t.transfer_id, destName(t), source?.batch_number,
+                item?.name, item?.generic_name, t.remarks, t.status
+              ].filter(Boolean).join(" ").toLowerCase();
+              if (!hay.includes(q)) return false;
+            }
+            return true;
+          });
+
+          const sorted = sortRows("transfers", filtered, {
+            issued: t => t.issued_at || "",
+            destination: t => destName(t),
+            item: t => transferItem(t)?.name || "",
+            quantity: t => t.quantity_issued ?? 0,
+            status: t => TRANSFER_STATUS_RANK[t.status] ?? 9
+          });
+          syncSortIndicators("transfers");
+          renderTableMeta("transfers", sorted.length, inventoryTransfers.length);
+
+          if (sorted.length === 0) {
+            tbody.innerHTML = emptyStateRow("transfers", 6, "fa-truck-ramp-box",
+              "No stock has been issued yet",
+              "Dispatches appear here the moment you issue stock to a health centre.");
             renderPaginationControls("transfers-pagination", 0, "transfers");
             return;
           }
 
           const state = paginationState.transfers;
           const startIdx = (state.currentPage - 1) * state.pageSize;
-          const paginatedTransfers = inventoryTransfers.slice(startIdx, startIdx + state.pageSize);
+          const paginatedTransfers = sorted.slice(startIdx, startIdx + state.pageSize);
 
           tbody.innerHTML = paginatedTransfers.map(transfer => {
             const source = batches.find(b => b.batch_id === transfer.source_batch_id);
@@ -3651,120 +4501,65 @@
               </tr>`;
           }).join("");
 
-          renderPaginationControls("transfers-pagination", inventoryTransfers.length, "transfers");
-        }
-
-        // Movement Ledger Sorting & Filtering State
-        let txSortField = "date";
-        let txSortAsc = false;
-
-        window.toggleTxSort = function(field) {
-          if (txSortField === field) {
-            txSortAsc = !txSortAsc;
-          } else {
-            txSortField = field;
-            txSortAsc = (field === "qty" || field === "item" || field === "location");
-          }
-          renderTransactions();
-        };
-
-        function updateTxSortIndicators() {
-          const fields = ["date", "location", "type", "item", "qty"];
-          fields.forEach(f => {
-            const el = document.getElementById(`tx-sort-${f}`);
-            if (el) {
-              if (txSortField === f) {
-                el.innerHTML = txSortAsc
-                  ? '<i class="fa-solid fa-arrow-up-short-wide" style="color:var(--brand-primary); margin-left:3px;"></i>'
-                  : '<i class="fa-solid fa-arrow-down-wide-short" style="color:var(--brand-primary); margin-left:3px;"></i>';
-              } else {
-                el.innerHTML = '<i class="fa-solid fa-sort" style="opacity:0.35; margin-left:3px;"></i>';
-              }
-            }
-          });
-        }
-
-        function isDateInTxFilter(dateStr, filterValue, customStart, customEnd) {
-          if (!dateStr || filterValue === "all") return true;
-          const d = asLocalDate(dateStr);
-          if (!d) return true;
-          d.setHours(0,0,0,0);
-          const today = new Date(); today.setHours(0,0,0,0);
-
-          if (filterValue === "today") {
-            return d.getTime() === today.getTime();
-          } else if (filterValue === "7d") {
-            const past7 = new Date(today); past7.setDate(today.getDate() - 7);
-            return d >= past7 && d <= today;
-          } else if (filterValue === "30d") {
-            const past30 = new Date(today); past30.setDate(today.getDate() - 30);
-            return d >= past30 && d <= today;
-          } else if (filterValue === "this_month") {
-            return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
-          } else if (filterValue === "custom") {
-            const start = asLocalDate(customStart);
-            const end = asLocalDate(customEnd);
-            if (start) { start.setHours(0,0,0,0); if (d < start) return false; }
-            if (end) { end.setHours(0,0,0,0); if (d > end) return false; }
-            return true;
-          }
-          return true;
+          renderPaginationControls("transfers-pagination", sorted.length, "transfers");
         }
 
         // Render Movement Ledger
+        //
+        // Sorting and date filtering used to live here as ~70 lines of ledger-only
+        // code, which is why this was the one table on the page that could sort.
+        // Both now come from the shared engine, so every table can.
         function renderTransactions() {
-          const q = document.getElementById("tx-search")?.value.trim().toLowerCase() || "";
-          const type = document.getElementById("tx-filter-type")?.value || "";
-          const dateFilter = document.getElementById("tx-filter-date")?.value || "all";
-          const customStart = document.getElementById("tx-date-start")?.value;
-          const customEnd = document.getElementById("tx-date-end")?.value;
+          const q = ctlVal("tx-search").trim().toLowerCase();
+          const type = ctlVal("tx-filter-type");
+          const direction = ctlVal("tx-filter-direction");
+          const win = dateWindow("tx");
           const bhcFilter = document.getElementById("global-bhc-filter")?.value || "all";
 
-          updateTxSortIndicators();
+          const txLocation = t => {
+            if (!t.facility_id) return PortalScope.depotName;
+            const bh = bhcs.find(x => String(x.bhc_id) === String(t.facility_id));
+            return bh ? bh.bhc_name : unknownFacilityLabel(t.facility_id);
+          };
+          const txItem = t => {
+            const batch = batches.find(b => b.batch_id === t.batch_id);
+            return batch ? items.find(i => i.item_id === batch.item_id) : null;
+          };
 
-          const filtered = transactions.filter(t => {
+          const inScope = transactions.filter(t => facilityMatches(t.facility_id, bhcFilter));
+
+          const filtered = inScope.filter(t => {
             if (type && t.transaction_type !== type) return false;
-
-            if (!facilityMatches(t.facility_id, bhcFilter)) return false;
-
-            if (!isDateInTxFilter(t.logged_at, dateFilter, customStart, customEnd)) return false;
+            if (direction === "in" && !(t.quantity > 0)) return false;
+            if (direction === "out" && !(t.quantity < 0)) return false;
+            if (!inDateWindow(t.logged_at, win)) return false;
 
             const batch = batches.find(b => b.batch_id === t.batch_id);
-            const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
+            const item = txItem(t);
             const user = accountMap[t.performed_by] || "";
             const searchStr = `${batch?.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""} ${user} ${t.reference_type || ""} ${t.activity_reason || ""} ${t.activity_notes || ""}`.toLowerCase();
             if (q && !searchStr.includes(q)) return false;
             return true;
           });
 
-          // Sort Transactions
-          filtered.sort((a, b) => {
-            let res = 0;
-            if (txSortField === "date") {
-              const dA = new Date(a.logged_at || 0).getTime();
-              const dB = new Date(b.logged_at || 0).getTime();
-              res = dA - dB;
-            } else if (txSortField === "qty") {
-              res = (a.quantity || 0) - (b.quantity || 0);
-            } else if (txSortField === "type") {
-              res = String(a.transaction_type || "").localeCompare(String(b.transaction_type || ""));
-            } else if (txSortField === "location") {
-              const locA = a.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(a.facility_id))?.bhc_name || unknownFacilityLabel(a.facility_id)) : PortalScope.depotName;
-              const locB = b.facility_id ? (bhcs.find(x => String(x.bhc_id) === String(b.facility_id))?.bhc_name || unknownFacilityLabel(b.facility_id)) : PortalScope.depotName;
-              res = locA.localeCompare(locB);
-            } else if (txSortField === "item") {
-              const itemA = (batches.find(x => x.batch_id === a.batch_id) ? items.find(i => i.item_id === batches.find(x => x.batch_id === a.batch_id)?.item_id)?.name : "") || "";
-              const itemB = (batches.find(x => x.batch_id === b.batch_id) ? items.find(i => i.item_id === batches.find(x => x.batch_id === b.batch_id)?.item_id)?.name : "") || "";
-              res = itemA.localeCompare(itemB);
-            }
-            return txSortAsc ? res : -res;
+          const sorted = sortRows("tx", filtered, {
+            date: t => new Date(t.logged_at || 0).getTime(),
+            location: t => txLocation(t),
+            type: t => t.transaction_type || "",
+            item: t => txItem(t)?.name || "",
+            qty: t => t.quantity ?? 0,
+            user: t => accountMap[t.performed_by] || ""
           });
+          syncSortIndicators("tx");
+          renderTableMeta("tx", sorted.length, inScope.length);
 
           const tbody = document.getElementById("tx-tbody");
           if (!tbody) return;
 
-          if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-clock-rotate-left" style="font-size:28px;margin-bottom:8px;display:block;opacity:0.5;"></i>No movement records match the current filters.</td></tr>`;
+          if (sorted.length === 0) {
+            tbody.innerHTML = emptyStateRow("tx", 7, "fa-clock-rotate-left",
+              "No stock has moved here yet",
+              "Receipts, dispenses, transfers and disposals are recorded here automatically.");
             renderPaginationControls("tx-pagination", 0, "tx");
             return;
           }
@@ -3779,7 +4574,7 @@
 
           const state = paginationState.tx;
           const startIdx = (state.currentPage - 1) * state.pageSize;
-          const paginatedTx = filtered.slice(startIdx, startIdx + state.pageSize);
+          const paginatedTx = sorted.slice(startIdx, startIdx + state.pageSize);
 
           tbody.innerHTML = paginatedTx.map(t => {
             const batch = batches.find(b => b.batch_id === t.batch_id);
@@ -3824,22 +4619,25 @@
             `;
           }).join('');
 
-          renderPaginationControls("tx-pagination", filtered.length, "tx");
+          renderPaginationControls("tx-pagination", sorted.length, "tx");
         }
 
         // Export Transactions CSV
         window.exportTransactionsCSV = function() {
-          const q = document.getElementById("tx-search")?.value.trim().toLowerCase() || "";
-          const type = document.getElementById("tx-filter-type")?.value || "";
+          // Reads the same controls through the same helpers the table does, so
+          // the file and the screen can no longer disagree about what is in view.
+          const q = ctlVal("tx-search").trim().toLowerCase();
+          const type = ctlVal("tx-filter-type");
+          const direction = ctlVal("tx-filter-direction");
+          const win = dateWindow("tx");
           const bhcFilter = document.getElementById("global-bhc-filter")?.value || "all";
-          const dateFilter = document.getElementById("tx-filter-date")?.value || "all";
-          const customStart = document.getElementById("tx-date-start")?.value;
-          const customEnd = document.getElementById("tx-date-end")?.value;
 
           const filtered = transactions.filter(t => {
             if (type && t.transaction_type !== type) return false;
+            if (direction === "in" && !(t.quantity > 0)) return false;
+            if (direction === "out" && !(t.quantity < 0)) return false;
             if (!facilityMatches(t.facility_id, bhcFilter)) return false;
-            if (!isDateInTxFilter(t.logged_at, dateFilter, customStart, customEnd)) return false;
+            if (!inDateWindow(t.logged_at, win)) return false;
 
             const batch = batches.find(b => b.batch_id === t.batch_id);
             const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
@@ -3888,14 +4686,45 @@
           const tbody = document.getElementById("disposal-tbody");
           if (!tbody) return;
 
-          const expiredOrDamagedBatches = batches.filter(b => b.status === 'discarded' || b.status === 'expired' || isBatchExpired(b));
+          const q = ctlVal("disposal-search").trim().toLowerCase();
+          const statusFilter = ctlVal("disposal-filter-status");
+          const win = dateWindow("disposal");
 
-          if (expiredOrDamagedBatches.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-circle-check" style="font-size:28px;color:#059669;margin-bottom:8px;display:block;"></i>No expired or damaged stock batches requiring disposal.</td></tr>`;
+          const allDisposable = batches.filter(b => b.status === 'discarded' || b.status === 'expired' || isBatchExpired(b));
+
+          const expiredOrDamagedBatches = allDisposable.filter(b => {
+            if (statusFilter === "disposed" && b.status !== "discarded") return false;
+            if (statusFilter === "pending" && b.status === "discarded") return false;
+            if (!inDateWindow(b.expiration_date, win)) return false;
+            if (q) {
+              const item = items.find(i => i.item_id === b.item_id);
+              const hay = [b.batch_number, item?.name, item?.generic_name, batchLocationName(b)]
+                .filter(Boolean).join(" ").toLowerCase();
+              if (!hay.includes(q)) return false;
+            }
+            return true;
+          });
+
+          const sorted = sortRows("disposal", expiredOrDamagedBatches, {
+            batch: b => b.batch_number || "",
+            item: b => items.find(i => i.item_id === b.item_id)?.name || "",
+            location: b => batchLocationName(b),
+            remaining: b => b.quantity_remaining ?? 0,
+            expiration: b => b.expiration_date || "",
+            // Awaiting disposal first: that is the column someone acts on.
+            status: b => (b.status === "discarded" ? 1 : 0)
+          });
+          syncSortIndicators("disposal");
+          renderTableMeta("disposal", sorted.length, allDisposable.length);
+
+          if (sorted.length === 0) {
+            tbody.innerHTML = emptyStateRow("disposal", 7, "fa-circle-check",
+              "Nothing is awaiting disposal",
+              "Expired and written-off batches appear here for certification.");
             return;
           }
 
-          tbody.innerHTML = expiredOrDamagedBatches.map(b => {
+          tbody.innerHTML = sorted.map(b => {
             const item = items.find(i => i.item_id === b.item_id);
             const bhcUnusableRecord = transactions.find(t =>
               t.batch_id === b.batch_id &&
@@ -4826,11 +5655,30 @@
 
             // Only cancel a transfer that is still pending. Guarding on status here
             // stops two admins from both cancelling and restoring the stock twice.
-            const { data: cancelled, error: tErr } = await db.from("inventory_transfers")
-              .update({ status: "cancelled" })
+            //
+            // cancelled_by / cancelled_at carry the actor into the row, because the
+            // audit trigger fires on this update and a bare status change tells it
+            // nothing about who called the dispatch off.
+            const cancelPatch = {
+              status: "cancelled",
+              cancelled_by: actorId,
+              cancelled_at: new Date().toISOString()
+            };
+
+            let { data: cancelled, error: tErr } = await db.from("inventory_transfers")
+              .update(cancelPatch)
               .eq("transfer_id", transferId)
               .eq("status", "pending_receipt")
               .select();
+
+            if (tErr && isMissingSchemaError(tErr)) {
+              ({ data: cancelled, error: tErr } = await db.from("inventory_transfers")
+                .update({ status: "cancelled" })
+                .eq("transfer_id", transferId)
+                .eq("status", "pending_receipt")
+                .select());
+            }
+
             if (tErr) throw tErr;
             if (!cancelled || cancelled.length === 0) {
               showToast("This transfer is no longer pending — it may have already been received or cancelled.", "warning");
@@ -6184,6 +7032,27 @@
           // 3. Central Issue Batch Select
           populateIssueBatchDropdown(null);
 
+          // 3b. Requesting-facility filter on the stock requests table.
+          // Populated from the facilities that have actually raised a request,
+          // so the list stays short and never offers a choice that returns
+          // nothing.
+          const reqFacSel = document.getElementById("requests-filter-facility");
+          if (reqFacSel) {
+            const prev = reqFacSel.value;
+            const seen = new Map();
+            stockRequests.forEach(r => {
+              if (r.facility_id == null || seen.has(String(r.facility_id))) return;
+              const bhc = bhcs.find(b => String(b.bhc_id) === String(r.facility_id));
+              seen.set(String(r.facility_id), bhc?.bhc_name || unknownFacilityLabel(r.facility_id));
+            });
+            const opts = [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+            reqFacSel.innerHTML = `<option value="">All Requesting Facilities</option>` +
+              opts.map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join("");
+            // Keep the officer's choice across a refresh, unless that facility
+            // no longer appears at all.
+            if (prev && seen.has(prev)) reqFacSel.value = prev;
+          }
+
           // 4. Allocation Item Select
           const allocSel = document.getElementById("allocation-item-select");
           if (allocSel) {
@@ -6615,9 +7484,26 @@
           btn.innerHTML = '<div class="btn-loader"></div> Processing...';
 
           try {
-            const { data: newBatch, error: bErr } = await db.from("inventory_batches").insert({
-              item_id: itemId, facility_id: facilityId, batch_number: batchNum, quantity_received: qty, quantity_remaining: qty, received_date: recDate, expiration_date: expDate, manufacturer: mfg || null, status: "active"
-            }).select().single();
+            // created_by is what lets the audit trail name the officer who booked
+            // this consignment in. Booking in a batch is a plain insert with no RPC
+            // behind it, so if the row does not carry the actor nothing downstream
+            // can recover it. Written through a retry rather than assumed present,
+            // so a database still on an older migration keeps working.
+            const batchRow = {
+              item_id: itemId, facility_id: facilityId, batch_number: batchNum,
+              quantity_received: qty, quantity_remaining: qty, received_date: recDate,
+              expiration_date: expDate, manufacturer: mfg || null, status: "active",
+              created_by: actorId
+            };
+
+            let { data: newBatch, error: bErr } = await db
+              .from("inventory_batches").insert(batchRow).select().single();
+
+            if (bErr && isMissingSchemaError(bErr)) {
+              delete batchRow.created_by;
+              ({ data: newBatch, error: bErr } = await db
+                .from("inventory_batches").insert(batchRow).select().single());
+            }
 
             if (bErr) throw bErr;
 
@@ -7316,48 +8202,63 @@
           }
         });
 
-        // Search & Filter Listeners with Page Reset
-        ["catalog-search", "catalog-filter-type", "catalog-filter-stock", "catalog-filter-archived"].forEach(id => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          const handler = () => { paginationState.catalog.currentPage = 1; renderCatalog(); };
-          el.addEventListener("input", handler);
-          el.addEventListener("change", handler);
-        });
-
-        ["batches-search", "batches-filter-status"].forEach(id => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          const handler = () => { paginationState.batches.currentPage = 1; renderBatches(); };
-          el.addEventListener("input", handler);
-          el.addEventListener("change", handler);
-        });
-
-        ["tx-search", "tx-filter-type", "tx-filter-date", "tx-date-start", "tx-date-end"].forEach(id => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          const handler = () => {
-            if (id === "tx-filter-date") {
-              const customWrap = document.getElementById("tx-custom-date-wrap");
-              if (customWrap) {
-                customWrap.style.display = el.value === "custom" ? "inline-flex" : "none";
-              }
-            }
-            paginationState.tx.currentPage = 1;
-            renderTransactions();
-          };
-          el.addEventListener("input", handler);
-          el.addEventListener("change", handler);
-        });
-
-        ["request-filter-status", "requests-filter-archived"].forEach(id => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          el.addEventListener("change", () => {
-            paginationState.requests.currentPage = 1;
-            renderStockRequests();
+        /* Search & filter listeners.
+           Driven off the same registry that defines the controls, so a filter
+           added to tableViews is wired automatically instead of needing a
+           matching entry in a second hand-maintained list — which is how the
+           old code ended up with batches-filter-status wired and the requests
+           search never written at all. */
+        Object.keys(tableViews).forEach(key => {
+          const view = tableViews[key];
+          Object.keys(view.defaults).forEach(id => {
+            const el = ctl(id);
+            if (!el) return;
+            const handler = () => {
+              syncDateRangeVisibility(key);
+              if (paginationState[key]) paginationState[key].currentPage = 1;
+              view.render();
+            };
+            // Text inputs fire on every keystroke; selects and dates on commit.
+            el.addEventListener("input", handler);
+            el.addEventListener("change", handler);
           });
+          syncDateRangeVisibility(key);
         });
+
+        // Sortable headers: one delegated listener rather than an inline onclick
+        // per <th>, so a new column only needs the data-sort attribute.
+        document.addEventListener("click", (e) => {
+          const th = e.target.closest("th.th-sort[data-sort]");
+          if (!th) return;
+          const [key, field] = th.getAttribute("data-sort").split(":");
+          if (key && field) window.toggleSort(key, field);
+        });
+        document.addEventListener("keydown", (e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          const th = e.target.closest && e.target.closest("th.th-sort[data-sort]");
+          if (!th) return;
+          e.preventDefault();
+          const [key, field] = th.getAttribute("data-sort").split(":");
+          if (key && field) window.toggleSort(key, field);
+        });
+
+        // Header overflow menu: toggle, close on outside click, close on Escape.
+        (function wireActionMenu() {
+          const menu = document.getElementById("inventory-action-menu");
+          const btn = document.getElementById("inventory-action-menu-btn");
+          if (!menu || !btn) return;
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const open = menu.classList.toggle("open");
+            btn.setAttribute("aria-expanded", String(open));
+          });
+          document.addEventListener("click", (e) => {
+            if (!menu.contains(e.target)) window.closeActionMenu();
+          });
+          document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") window.closeActionMenu();
+          });
+        })();
 
         // Initial Page Boot. Resolve the office this account runs first: the
         // depot, the facilities under it and the rows it may see all follow from
@@ -7366,6 +8267,7 @@
           await PortalScope.refresh(db);
           PortalScope.applyChrome();
           applyScopeLabels();
+          restoreSectionState();
           await loadInventoryData();
         })();
 
