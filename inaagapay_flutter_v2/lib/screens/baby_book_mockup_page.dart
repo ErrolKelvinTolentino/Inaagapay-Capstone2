@@ -1297,6 +1297,7 @@ class _BabyCareGuideBook extends StatefulWidget {
       icon: Icons.auto_stories_rounded,
       imagePath: 'assets/images/baby_guide_page_1.png',
       title: 'How to use this baby book',
+      takeaway: 'Bring this book to every visit.',
       paragraphs: [
         'Keep this Baby Book where every caregiver can find it. Read it together, write down your baby’s growth, vaccines, checkups and special moments, and bring it to every visit so you can discuss each entry with a doctor, nurse, midwife or barangay health worker.',
         'The record belongs with your family, but it works alongside the clinic’s records—not as a replacement for them. Use the questions and notes pages to prepare for appointments, and ask a health worker whenever an instruction is unclear.',
@@ -1309,6 +1310,7 @@ class _BabyCareGuideBook extends StatefulWidget {
       icon: Icons.child_friendly_rounded,
       imagePath: 'assets/images/baby_guide_page_2.png',
       title: 'Baby’s first days',
+      takeaway: 'Hold baby skin-to-skin and feed early.',
       paragraphs: [
         'After birth, keep baby warm with immediate skin-to-skin contact when possible and begin breastfeeding early. Colostrum is baby’s important first milk. The DOH guide also recommends delaying the first bath for about 24 hours while keeping baby clean, warm and close.',
         'Before going home, ask about the newborn examination, newborn screening, vitamin K, eye care, BCG and hepatitis B vaccination. Register the birth certificate within 30 days, then keep the official details and health results together in this book.',
@@ -1321,6 +1323,7 @@ class _BabyCareGuideBook extends StatefulWidget {
       icon: Icons.restaurant_rounded,
       imagePath: 'assets/images/baby_guide_page_3.png',
       title: 'Feeding through the first year',
+      takeaway: 'Only breast milk until six months.',
       paragraphs: [
         'From birth through six months, give only breast milk—no other food or water—unless a qualified health professional gives different advice for your baby. Feed responsively by noticing early hunger and fullness cues. If feeding is painful or difficult, ask the health center for support.',
         'At about six months, begin safe and nutritious complementary food while continuing breastfeeding. Start with soft mashed food in small amounts, then gradually offer thicker textures, finger foods and varied family foods as baby develops. Use fresh ingredients, sit with baby during meals and never force-feed.',
@@ -1333,6 +1336,7 @@ class _BabyCareGuideBook extends StatefulWidget {
       icon: Icons.health_and_safety_rounded,
       imagePath: 'assets/images/baby_guide_page_4.png',
       title: 'Make every space safer',
+      takeaway: 'Keep baby within reach, always.',
       paragraphs: [
         'A baby needs an attentive adult nearby. For sleep, place baby on a safe, firm sleep surface and keep pillows, loose blankets and soft objects away. Prevent falls, and keep hot liquids, medicines, cleaning products, matches, plastic bags, cords and small choking hazards locked away or out of reach.',
         'Choose age-appropriate toys and supervise all play. Use an appropriate child restraint when travelling, never leave a child alone in a vehicle, and stay within reach around a bath, pool, river or any open water—even for a moment. Keep baby away from tobacco smoke.',
@@ -1345,6 +1349,7 @@ class _BabyCareGuideBook extends StatefulWidget {
       icon: Icons.soap_rounded,
       imagePath: 'assets/images/baby_guide_page_5.png',
       title: 'Clean hands, food and surroundings',
+      takeaway: 'Wash hands before every feed.',
       paragraphs: [
         'Wash hands with soap and safe water for at least 20 seconds before preparing food or feeding baby, and after using the toilet or changing a diaper. Let hands air-dry or use a clean towel. Dispose of stool safely, clean reusable diaper materials carefully and wash the child’s hands too.',
         'Prepare food with clean tools and safe water, keep raw and cooked food separate, cook food thoroughly and protect it from pests. A clean feeding area and safely grown or selected food help make everyday nutrition safer.',
@@ -1357,6 +1362,7 @@ class _BabyCareGuideBook extends StatefulWidget {
       icon: Icons.show_chart_rounded,
       imagePath: 'assets/images/baby_guide_page_6.png',
       title: 'Follow growth and development',
+      takeaway: 'Every child grows at their own pace.',
       paragraphs: [
         'Record weight and length during checkups and review the growth chart with a health worker. Development includes movement, hand skills, self-help, language, thinking, and social-emotional skills. The examples in this book are guides, not strict deadlines, because every child develops at an individual pace.',
         'Help development every day through warm, responsive care. Talk, sing, smile, read and play using clean, safe objects. Notice what interests your child, praise new attempts and write down new skills or concerns so they can be discussed early.',
@@ -1369,6 +1375,7 @@ class _BabyCareGuideBook extends StatefulWidget {
       icon: Icons.medical_services_rounded,
       imagePath: 'assets/images/baby_guide_page_7.png',
       title: 'Checkups, vaccines and warning signs',
+      takeaway: 'Do not wait if baby seems unwell.',
       paragraphs: [
         'The DOH booklet lists routine visits for the newborn period, 3–5 days, and months 1, 2, 4, 6, 9 and 12; then months 15, 18, 24 and 30, followed by annual visits from ages 3 to 10. Bring this book each time and ask the health worker to update growth, findings, vaccines and the return date.',
         'Do not wait for a scheduled visit if baby has trouble breathing, blue or gray skin, fever, seizures, signs of dehydration, poor feeding, unusual sleepiness or another sudden worrying change. Seek prompt care from a health facility. Follow the current national vaccine schedule given by your health center because schedules may be updated.',
@@ -1381,6 +1388,7 @@ class _BabyCareGuideBook extends StatefulWidget {
       icon: Icons.diversity_1_rounded,
       imagePath: 'assets/images/baby_guide_page_8.png',
       title: 'Care is a team effort',
+      takeaway: 'You do not have to do this alone.',
       paragraphs: [
         'Caring for a child takes a village. List the relatives, friends, neighbors and community workers who can offer practical or emotional support. Share the baby’s routines and important instructions with trusted caregivers, and encourage them to record useful observations in the same place.',
         'WHO recommends home-based records to improve communication, care-seeking and support at home. Keep personal health information private, allow only trusted people to view it, and remember that written education works best when it is paired with continuing care and conversation with trained health workers.',
@@ -1616,6 +1624,16 @@ class _GuidePageData {
   final IconData icon;
   final String imagePath;
   final String title;
+
+  /// The one line to take away, for a mother who reads no further.
+  ///
+  /// Every page is two paragraphs of 45–55 words — around 1,100 words across
+  /// the book — written in the register of a public-health booklet. That is a
+  /// lot to ask of someone reading on a phone, in a second language, possibly
+  /// with a baby in the other arm. Each takeaway is drawn from the paragraphs
+  /// beneath it and adds nothing to them; it is a way in, not a replacement.
+  final String takeaway;
+
   final List<String> paragraphs;
   final String source;
   final Color accent;
@@ -1625,6 +1643,7 @@ class _GuidePageData {
     required this.icon,
     required this.imagePath,
     required this.title,
+    required this.takeaway,
     required this.paragraphs,
     required this.source,
     required this.accent,
@@ -1749,33 +1768,106 @@ class _GuidePaperPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 15),
+                    // The takeaway, before the prose.
+                    //
+                    // A mother who reads only this has still got the page.
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: data.accent.withValues(alpha: 0.09),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.push_pin_rounded,
+                              size: 15, color: data.accent),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Text(
+                              data.takeaway,
+                              style: TextStyle(
+                                color: data.accent,
+                                fontSize: 14.5,
+                                height: 1.35,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 15),
                     for (var index = 0;
                         index < data.paragraphs.length;
                         index++) ...[
                       Text(
                         data.paragraphs[index],
-                        textAlign: TextAlign.justify,
+                        // Ragged right, not justified.
+                        //
+                        // Justifying a narrow column stretches the spaces to
+                        // force each line flush, which opens rivers of white
+                        // down the paragraph and gives the eye nothing to track
+                        // — it is measurably harder to read, and hardest for
+                        // people who already read slowly. On a phone-width
+                        // column of 50-word paragraphs it was the worst
+                        // possible setting.
+                        textAlign: TextAlign.start,
                         style: const TextStyle(
                           color: Color(0xFF544C45),
                           fontFamily: 'Georgia',
-                          fontSize: 13,
-                          height: 1.65,
+                          // 13pt serif on a low-density screen is small. The
+                          // book feel is worth keeping; the strain is not.
+                          fontSize: 14.5,
+                          height: 1.7,
                         ),
                       ),
                       if (index != data.paragraphs.length - 1)
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
                     ],
                     const SizedBox(height: 17),
                     Container(height: 1, color: const Color(0xFFEDE4D7)),
-                    const SizedBox(height: 10),
-                    Text(
-                      'SOURCE NOTES  •  ${data.source}',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 9,
-                        height: 1.4,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.15,
+                    const SizedBox(height: 4),
+                    // The citation, folded away.
+                    //
+                    // "SOURCE NOTES • DOH/UNICEF Baby Book: PDF pp. 32–33, 38,
+                    // 41, 58, 74, 88" sat open at the foot of all eight pages.
+                    // A source should be available — a mother is entitled to
+                    // know where advice about her baby comes from — but page
+                    // numbers into a PDF she has never seen are apparatus, not
+                    // information, and they closed every page on a line she
+                    // could not use.
+                    Theme(
+                      data: Theme.of(context)
+                          .copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        title: Text(
+                          'Where this comes from',
+                          style: TextStyle(
+                            color: data.accent,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding:
+                            const EdgeInsets.only(bottom: 6),
+                        dense: true,
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              data.source,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 10,
+                                height: 1.45,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

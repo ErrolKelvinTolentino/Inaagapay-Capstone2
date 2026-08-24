@@ -987,24 +987,28 @@ class _HotlinesScreen extends StatelessWidget {
             children: [
               Text(
                 LanguageService.translate(
-                  'Emergency Hotlines',
-                  'Mga Emergency Hotline',
+                  'Numbers to call',
+                  'Mga numerong matatawagan',
                 ),
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimaryOf(context),
+                  fontWeight: FontWeight.w700,
+                  // Brand pink, like every other page heading on her side.
+                  // "EMERGENCY HOTLINES" in near-black w800 greeted her with
+                  // the word emergency before she had asked anything.
+                  color: AppColors.brandText,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 LanguageService.translate(
-                  'Tap to call the number. Long press to copy to clipboard.',
-                  'I-tap para tawagan ang numero. Pindutin nang matagal para kopyahin sa clipboard.',
+                  'Tap a number to call it. Hold it down to copy.',
+                  'I-tap ang numero para tumawag. Pindutin nang matagal para kopyahin.',
                 ),
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondaryOf(context),
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  height: 1.4,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 20),
@@ -1085,11 +1089,18 @@ class _HotlineButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A white row with a tinted icon, not a tinted pill.
+    //
+    // Six differently-coloured pills stacked down the page — red, pink, red,
+    // blue, orange, purple — read as a colour chart, and none of those colours
+    // was the app's. The service colour now lives only in the small icon disc,
+    // which is enough to tell them apart, and the rest matches every other
+    // list a mother sees.
     return Material(
-      color: color.withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(12),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         onTap: () async {
           final uri = Uri.parse('tel:$number');
           if (await canLaunchUrl(uri)) {
@@ -1122,20 +1133,65 @@ class _HotlineButton extends StatelessWidget {
             ),
           );
         },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.borderPrimary),
+          ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: color,
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
                 ),
+                child: Icon(icon, size: 19, color: color),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.inputText,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    // The number itself, shown rather than hidden behind a
+                    // tap. She could not see what she was about to dial, and
+                    // a number she can read is one she can also write down or
+                    // give to someone else.
+                    Text(
+                      number,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.4,
+                        color: AppColors.brandText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.brandPrimary.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.call_rounded,
+                    size: 18, color: AppColors.brandPrimary),
               ),
             ],
           ),

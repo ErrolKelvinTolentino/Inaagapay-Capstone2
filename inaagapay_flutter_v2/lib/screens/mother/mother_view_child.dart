@@ -654,18 +654,81 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
     }
   }
 
+  /// One colour, one plain sentence about what it means for her child.
+  Widget _referenceRow({
+    required Color colour,
+    required String label,
+    required String meaning,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          margin: const EdgeInsets.only(top: 3),
+          decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: '$label — ',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.inputText,
+                  ),
+                ),
+                TextSpan(
+                  text: meaning,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   void _showReferenceDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
         title: Row(
           children: [
-            const Icon(Icons.info_outline, color: AppColors.brandPrimary),
+            const Icon(Icons.info_outline_rounded,
+                color: AppColors.brandPrimary, size: 20),
             const SizedBox(width: 8),
-            Text(_t('Growth Reference', 'Reference ng Paglaki')),
+            Expanded(
+              child: Text(
+                _t('What the colours mean', 'Ano ang ibig sabihin ng kulay'),
+                style: const TextStyle(
+                  fontSize: 16.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.inputText,
+                ),
+              ),
+            ),
           ],
         ),
+        // Explained by what she sees, not by the statistic underneath it.
+        //
+        // This opened with "Z-scores compare a child's measurements
+        // (BMI-for-age, weight-for-age, height-for-age) to expected values"
+        // and then defined each band as a number between -2 and +2. A mother
+        // tapping an info icon is asking what a colour on her child's card
+        // means; she is not asking to be taught a statistic, and the answer
+        // she needs does not require one.
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -673,31 +736,35 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
             children: [
               Text(
                 _t(
-                  'Our growth indicators are based on the World Health Organization (WHO) Child Growth Standards.',
-                  'Ang mga growth indicator ay batay sa World Health Organization (WHO) Child Growth Standards.',
+                  'We compare your child with the sizes expected for other children of the same age and sex.',
+                  'Inihahambing namin ang iyong anak sa mga sukat na inaasahan sa ibang batang kasing-edad at kasing-kasarian.',
                 ),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, height: 1.4),
+                style: const TextStyle(
+                    fontSize: 13.5, height: 1.5, color: AppColors.inputText),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
+              _referenceRow(
+                colour: AppColors.success,
+                label: _t('Green', 'Berde'),
+                meaning: _t('The usual size for this age.',
+                    'Karaniwang sukat para sa edad na ito.'),
+              ),
+              const SizedBox(height: 10),
+              _referenceRow(
+                colour: AppColors.warning,
+                label: _t('Yellow', 'Dilaw'),
+                meaning: _t(
+                    'Smaller or bigger than usual. Worth showing your midwife — it does not mean something is wrong.',
+                    'Mas maliit o mas malaki kaysa karaniwan. Ipakita sa iyong midwife — hindi ito nangangahulugang may mali.'),
+              ),
+              const SizedBox(height: 14),
               Text(
                 _t(
-                  'Z-scores compare a child\'s measurements (BMI-for-age, weight-for-age, height-for-age) to expected values for healthy growth:',
-                  'Ikinukumpara ng Z-score ang sukat ng bata sa inaasahang sukat para sa malusog na paglaki:',
+                  'Based on the World Health Organization Child Growth Standards. This is a guide for following your child\'s growth, not a diagnosis.',
+                  'Batay sa World Health Organization Child Growth Standards. Gabay ito sa pagsubaybay sa paglaki ng anak mo, hindi diagnosis.',
                 ),
-                style: const TextStyle(fontSize: 13, height: 1.4),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _t('• Within standard range (Green): between -2 and +2 Z-score.', '• Nasa loob ng pamantayan (Green): nasa pagitan ng -2 at +2 Z-score.'),
-                style: const TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w600),
-              ),
-              Text(
-                _t('• Below standard range (Yellow): less than -2 Z-score.', '• Mababa sa pamantayan (Yellow): mas mababa sa -2 Z-score.'),
-                style: const TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600),
-              ),
-              Text(
-                _t('• Above standard range (Yellow): greater than +2 Z-score.', '• Mataas sa pamantayan (Yellow): mas mataas sa +2 Z-score.'),
-                style: const TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                    fontSize: 11, height: 1.45, color: Colors.grey.shade600),
               ),
             ],
           ),
@@ -705,7 +772,13 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK', style: TextStyle(color: AppColors.brandPrimary, fontWeight: FontWeight.bold)),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.brandPrimary,
+              shape: const StadiumBorder(),
+              textStyle:
+                  const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+            child: Text(_t('Got it', 'Naiintindihan ko')),
           ),
         ],
       ),
@@ -786,12 +859,12 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                       style: TextStyle(
                         fontSize: 36,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
+                        color: AppColors.inputText,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      isAvailable ? 'kg/m²' : 'Height or weight missing',
+                      isAvailable ? 'kg/m²' : 'We need a height and weight first',
                       style: TextStyle(
                         fontSize: 13,
                         color: AppColors.textSecondary,
@@ -822,7 +895,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
           ),
           const SizedBox(height: 14),
           Text(
-            'This BMI value is calculated using the latest recorded height and weight.',
+            'Worked out from the last height and weight recorded for your child.',
             style: TextStyle(
               fontSize: 13,
               color: AppColors.textSecondary,
@@ -919,7 +992,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                             borderRadius: BorderRadius.all(Radius.circular(12)),
                           ),
                           child: Text(
-                            _t('Self-logged', 'Sariling Tala'),
+                            _t('You added this', 'Ikaw ang naglagay'),
                             style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
@@ -961,7 +1034,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                   // Detail rows
                   _growthInfoRow(_t('Current Weight', 'Timbang'), '${latestWeight.toStringAsFixed(1)} kg$weightSuffix'),
                   _growthInfoRow(_t('Current Length', 'Haba'), '${latestHeight.toStringAsFixed(1)} cm$heightSuffix'),
-                  _growthInfoRow(_t('Current BMI', 'BMI'), '${latestBMI?.toStringAsFixed(1) ?? 'N/A'} kg/m²'),
+                  _growthInfoRow(_t('Body size now', 'Sukat ng katawan ngayon'), '${latestBMI?.toStringAsFixed(1) ?? 'N/A'} kg/m²'),
                   _growthInfoRow(_t('Age in Weeks', 'Edad (Linggo)'), _t('$latestAgeWeeks weeks old', '$latestAgeWeeks linggo gulang')),
 
                   const SizedBox(height: 12),

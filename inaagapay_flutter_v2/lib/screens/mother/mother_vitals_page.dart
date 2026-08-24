@@ -180,7 +180,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
             'bp_systolic': _toInt(checkup['blood_pressure_systolic']),
             'bp_diastolic': _toInt(checkup['blood_pressure_diastolic']),
             'height_cm': null,
-            'notes': enc['midwife_notes'] ?? 'Official Prenatal Checkup',
+            'notes': enc['midwife_notes'] ?? 'Recorded at your check-up',
             'source': 'prenatal_checkup',
           };
         }),
@@ -359,7 +359,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                 data['age_of_gestation'] = double.parse(aog.toStringAsFixed(1));
               }
 
-              data['notes'] = notes.isNotEmpty ? notes : 'Self-logged vitals';
+              data['notes'] = notes.isNotEmpty ? notes : '';
 
               await SupabaseService.client.from('maternal_vitals').insert(data);
 
@@ -892,7 +892,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
       case 'prenatal_checkup':
         bg = const Color(0xFFE0F2FE);
         fg = const Color(0xFF0369A1);
-        text = _t('Official', 'Opisyal');
+        text = _t('From your midwife', 'Mula sa midwife');
         break;
       case 'midwife_quick':
         bg = const Color(0xFFF3E8FF);
@@ -903,7 +903,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
       default:
         bg = const Color(0xFFFEF3C7);
         fg = const Color(0xFFB45309);
-        text = _t('Self-logged', 'Sariling Tala');
+        text = _t('You added this', 'Ikaw ang naglagay');
         break;
     }
 
@@ -1360,16 +1360,26 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                   const SizedBox(height: 16),
                   _buildWeightChart(),
                   const SizedBox(height: 24),
+                  // The section label used elsewhere in the app: a small brand
+                  // icon and quiet uppercase grey. It was a 20px grey glyph
+                  // beside bold near-black at 16pt — heavier than the two card
+                  // headings above it, so the least important thing on the
+                  // page shouted the loudest, and plain grey-on-grey at the
+                  // same time.
                   Row(
                     children: [
-                      const Icon(Icons.history, size: 20, color: AppColors.textSecondary),
-                      const SizedBox(width: 8),
+                      const Icon(Icons.history_rounded,
+                          size: 14, color: AppColors.brandPrimary),
+                      const SizedBox(width: 6),
                       Text(
-                        _t('Every weight you saved', 'Lahat ng timbang na na-save mo'),
+                        _t('Every weight you saved',
+                                'Lahat ng timbang na na-save mo')
+                            .toUpperCase(),
                         style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                          color: Color(0xFF5A5A5A),
                         ),
                       ),
                     ],
@@ -1500,7 +1510,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              _t('AOG', 'Edad ng Gest.'),
+                                              _t('Week', 'Linggo'),
                                               style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                                             ),
                                             Text(

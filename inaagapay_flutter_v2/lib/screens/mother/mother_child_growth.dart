@@ -274,6 +274,50 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
     }
   }
 
+  /// One colour, one plain sentence about what it means for her child.
+  Widget _colourMeaningRow({
+    required Color colour,
+    required String label,
+    required String meaning,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          margin: const EdgeInsets.only(top: 3),
+          decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: '$label — ',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.inputText,
+                  ),
+                ),
+                TextSpan(
+                  text: meaning,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   void _showReferenceDialog() {
     showDialog(
       context: context,
@@ -283,34 +327,67 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
           children: const [
             Icon(Icons.info_outline, color: AppColors.brandPrimary),
             SizedBox(width: 8),
-            Text('Growth Reference'),
+            Expanded(
+              child: Text(
+                'What the colours mean',
+                style: TextStyle(
+                  fontSize: 16.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.inputText,
+                ),
+              ),
+            ),
           ],
         ),
+        // The same answer the Overview tab gives, in the same words.
+        //
+        // This defined each colour band as a number between -2 and +2 and
+        // opened by explaining what a Z-score is. A mother tapping an info
+        // icon wants to know what the colour on her child's card means — the
+        // statistic behind it is not the answer, and naming it does not make
+        // the answer clearer.
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text(
-                'Our growth indicators are based on the World Health Organization (WHO) Child Growth Standards.',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, height: 1.4),
+            children: [
+              const Text(
+                'We compare your child with the sizes expected for other children of the same age and sex.',
+                style: TextStyle(
+                    fontSize: 13.5, height: 1.5, color: AppColors.inputText),
               ),
-              SizedBox(height: 12),
-              Text(
-                'Z-scores compare a child\'s measurements (BMI-for-age, weight-for-age, height-for-age) to expected values for healthy growth:',
-                style: TextStyle(fontSize: 13, height: 1.4),
+              const SizedBox(height: 14),
+              _colourMeaningRow(
+                colour: AppColors.success,
+                label: 'Green',
+                meaning: 'The usual size for this age.',
               ),
-              SizedBox(height: 8),
-              Text('• Within standard range (Green): between -2 and +2 Z-score.', style: TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w600)),
-              Text('• Below standard range (Yellow): less than -2 Z-score.', style: TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600)),
-              Text('• Above standard range (Yellow): greater than +2 Z-score.', style: TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
+              _colourMeaningRow(
+                colour: AppColors.warning,
+                label: 'Yellow',
+                meaning:
+                    'Smaller or bigger than usual. Worth showing your midwife — it does not mean something is wrong.',
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Based on the World Health Organization Child Growth Standards. This is a guide for following your child\'s growth, not a diagnosis.',
+                style: TextStyle(
+                    fontSize: 11, height: 1.45, color: Colors.grey.shade600),
+              ),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK', style: TextStyle(color: AppColors.brandPrimary, fontWeight: FontWeight.bold)),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.brandPrimary,
+              shape: const StadiumBorder(),
+              textStyle:
+                  const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+            child: const Text('Got it'),
           ),
         ],
       ),
@@ -554,7 +631,7 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(64),
         child: SecondaryHeader(
-          title: LanguageService.translate('Growth Analytics', 'Pagsusuri sa Paglaki'),
+          title: LanguageService.translate('How they are growing', 'Pagsusuri sa Paglaki'),
           onBack: widget.onBack,
         ),
       ),
@@ -695,7 +772,7 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
             bmiLabels.length >= 2 &&
             bmiValues.length == bmiLabels.length)
           ChartCard(
-            title: 'BMI History',
+            title: 'Body size over time',
             lineColor: AppColors.brandPrimary,
             values: bmiValues,
             labels: bmiLabels,
@@ -704,10 +781,10 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
             startingValue: bmiValues.first.toStringAsFixed(1),
             latestLabel: 'Latest',
             latestValue: latestBMI > 0 ? latestBMI.toStringAsFixed(1) : 'n/a',
-            insightText: 'BMI trend indicates body composition changes.',
+            insightText: 'How your child’s build is changing as they grow.',
           ),
         if (activeTab == 0 && bmiValues.length < 2)
-          _buildInsufficientDataMessage('BMI'),
+          _buildInsufficientDataMessage('body size'),
 
         if (activeTab == 1 &&
             weightValues.length >= 2 &&
@@ -1262,7 +1339,7 @@ $recordsSummary
             : AppColors.brandPrimary;
 
     final headerText = activeTab == 0
-        ? (isFilipino ? 'PAGSURI NG BMI' : 'BMI INSIGHT')
+        ? (isFilipino ? 'SUKAT NG KATAWAN' : 'BODY SIZE')
         : activeTab == 1
             ? (isFilipino ? 'PAGSURI NG TIMBANG' : 'WEIGHT INSIGHT')
             : (isFilipino ? 'PAGSURI NG TANGKAD' : 'HEIGHT INSIGHT');
@@ -1652,7 +1729,7 @@ $recordsSummary
                   Icon(Icons.straighten, size: 18, color: AppColors.brandText),
                   const SizedBox(width: 8),
                   Text(
-                    'Calculated BMI',
+                    'Body size',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
