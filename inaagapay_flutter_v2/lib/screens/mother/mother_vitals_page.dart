@@ -10,6 +10,7 @@ import '../../services/language_service.dart';
 import '../../services/weight_gain_engine.dart';
 import '../../models/weight_gain_models.dart';
 import '../../widgets/app_input_field.dart';
+import '../../widgets/secondary_header.dart';
 
 class MotherVitalsPage extends StatefulWidget {
   final int motherId;
@@ -374,7 +375,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(this.context).showSnackBar(
                   SnackBar(
-                    content: Text(_t('Vitals logged successfully!', 'Matagumpay na naitala ang mga vital!')),
+                    content: Text(_t('Your weight was saved.', 'Na-save ang timbang mo.')),
                     backgroundColor: AppColors.success,
                     behavior: SnackBarBehavior.floating,
                   ),
@@ -781,67 +782,95 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                   ),
                 ),
                 borderData: FlBorderData(show: false),
+                // Order matters: fl_chart paints these in sequence, so the band
+                // is laid down first and her own line goes on top of it. Drawn
+                // the other way round, the lower bound's opaque fill would
+                // erase her line exactly when she is below the range — the one
+                // case she most needs to see.
                 lineBarsData: [
-                  // Actual spots
-                  LineChartBarData(
-                    spots: actualSpots,
-                    isCurved: true,
-                    color: AppColors.brandPrimary,
-                    barWidth: 3,
-                    dotData: FlDotData(
-                      show: true,
-                      getDotPainter: (spot, percent, barData, index) =>
-                          FlDotCirclePainter(
-                        radius: 4,
-                        color: Colors.white,
-                        strokeWidth: 2,
-                        strokeColor: AppColors.brandPrimary,
+                  // The ideal range as one shaded band, not two dashed lines.
+                  //
+                  // Two grey dashed curves ask the reader to work out that the
+                  // space between them is the target — a convention borrowed
+                  // from clinical growth charts. Filling it turns the whole
+                  // idea into one instruction anybody can follow: keep the
+                  // pink line in the green.
+                  if (maxSpots.isNotEmpty && minSpots.isNotEmpty)
+                    LineChartBarData(
+                      spots: maxSpots,
+                      isCurved: true,
+                      color: AppColors.success.withValues(alpha: 0.45),
+                      barWidth: 1.5,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: AppColors.success.withValues(alpha: 0.13),
+                        applyCutOffY: false,
+                        spotsLine: const BarAreaSpotsLine(show: false),
                       ),
                     ),
-                  ),
-                  // Recommended Min
                   if (minSpots.isNotEmpty)
                     LineChartBarData(
                       spots: minSpots,
                       isCurved: true,
-                      color: Colors.grey.shade400,
+                      color: AppColors.success.withValues(alpha: 0.45),
                       barWidth: 1.5,
-                      dashArray: [5, 5],
                       dotData: const FlDotData(show: false),
+                      // Paints the card colour back over everything below the
+                      // lower bound, leaving only the corridor tinted.
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: Colors.white,
+                        applyCutOffY: false,
+                        spotsLine: const BarAreaSpotsLine(show: false),
+                      ),
                     ),
-                  // Recommended Max
-                  if (maxSpots.isNotEmpty)
-                    LineChartBarData(
-                      spots: maxSpots,
-                      isCurved: true,
-                      color: Colors.grey.shade400,
-                      barWidth: 1.5,
-                      dashArray: [5, 5],
-                      dotData: const FlDotData(show: false),
+                  // Her own weight, last, so nothing can cover it.
+                  LineChartBarData(
+                    spots: actualSpots,
+                    isCurved: true,
+                    color: AppColors.brandPrimary,
+                    barWidth: 3.5,
+                    dotData: FlDotData(
+                      show: true,
+                      getDotPainter: (spot, percent, barData, index) =>
+                          FlDotCirclePainter(
+                        radius: 5,
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                        strokeColor: AppColors.brandPrimary,
+                      ),
                     ),
+                  ),
                 ],
                 lineTouchData: LineTouchData(
                   touchTooltipData: LineTouchTooltipData(
                     getTooltipItems: (touchedSpots) {
-                      return touchedSpots.map((spot) {
-                        String prefix = '';
-                        if (spot.barIndex == 0) {
-                          prefix = _t('Actual: ', 'Aktwal: ');
-                        } else if (spot.barIndex == 1) {
-                          prefix = _t('IOM Min: ', 'IOM Min: ');
-                        } else if (spot.barIndex == 2) {
-                          prefix = _t('IOM Max: ', 'IOM Max: ');
-                        }
-                        final weekStr = _t('Week', 'Linggo');
-                        return LineTooltipItem(
-                          '$prefix$weekStr ${spot.x.toInt()}\n${spot.y.toStringAsFixed(1)} kg',
-                          const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        );
-                      }).toList();
+                      // Only her own line answers a tap now.
+                      //
+                      // The band is context, not data — three tooltips saying
+                      // "IOM Min", "IOM Max" and her weight on one tap was
+                      // three readings where she asked for one. The prefixes
+                      // were also keyed to the old drawing order and would now
+                      // label the wrong lines.
+                      final lastIndex =
+                          touchedSpots.isEmpty ? -1 : touchedSpots.length - 1;
+                      return [
+                        for (var i = 0; i < touchedSpots.length; i++)
+                          if (i == lastIndex)
+                            LineTooltipItem(
+                              '${_t('Week', 'Linggo')} '
+                              '${touchedSpots[i].x.toInt()}\n'
+                              '${_kg(touchedSpots[i].y)}',
+                              const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12.5,
+                              ),
+                            )
+                          else
+                            null,
+                      ];
                     },
                   ),
                 ),
@@ -989,7 +1018,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                         color: statusColor, size: 22),
                     const SizedBox(width: 8),
                     Text(
-                      _t('Weight Gain Analysis', 'Pagsusuri sa Timbang'),
+                      _t('How your weight is going', 'Kumusta ang timbang mo'),
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                     ),
                   ],
@@ -1305,15 +1334,15 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bgPrimaryOf(context),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0.5,
-        title: Text(
-          _t('My Vitals & Weight Gain', 'Aking Vitals & Timbang'),
-          style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+      // The app's own header, in brand pink. This was a Material AppBar with
+      // a near-black title and a hairline shadow — the one screen in the
+      // mother's app that still looked like a settings page.
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(56),
+        child: SecondaryHeader(
+          title: _t('My Weight', 'Aking Timbang'),
+          onBack: () => Navigator.pop(context),
         ),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
       body: _isLoading
           ? const Center(
@@ -1336,7 +1365,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                       const Icon(Icons.history, size: 20, color: AppColors.textSecondary),
                       const SizedBox(width: 8),
                       Text(
-                        _t('Vitals History Log', 'Kasaysayan ng mga Vital'),
+                        _t('Every weight you saved', 'Lahat ng timbang na na-save mo'),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -1359,7 +1388,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                           const Icon(Icons.favorite_border, size: 40, color: Colors.grey),
                           const SizedBox(height: 8),
                           Text(
-                            _t('No vitals logged yet. Tap the button below to start tracking!', 
+                            _t('No weight saved yet. Tap the pink button below to add your first one.', 
                                'Wala pang naitalang vitals. Tapikin ang button sa ibaba upang magsimula!'),
                             style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                             textAlign: TextAlign.center,
@@ -1552,7 +1581,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
         elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         icon: const Icon(Icons.add),
-        label: Text(_t('Log Vitals', 'Itala ang Vitals')),
+        label: Text(_t('Add weight', 'Idagdag ang timbang')),
       ),
     );
   }

@@ -45,6 +45,11 @@ class JournalService {
         'mother_id': motherId,
         'title': entry.title.isEmpty ? null : entry.title,
         'content': entry.content,
+        // `mood` and `entry_date` have been in this table since the first
+        // schema and were never written to. The mood is the part a mother who
+        // does not write can still leave.
+        'mood': entry.mood?.name,
+        'entry_date': DateTime.now().toIso8601String().split('T').first,
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       });
@@ -80,6 +85,7 @@ class JournalService {
           .update({
             'title': entry.title.isEmpty ? null : entry.title,
             'content': entry.content,
+            'mood': entry.mood?.name,
             'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('entry_id', entryId);

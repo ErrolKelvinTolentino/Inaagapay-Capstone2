@@ -73,6 +73,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
 
       final notifications = await NotificationService.getNotifications(accountId);
+      await _loadLocalReadIds();
       if (!mounted) return;
       setState(() {
         _isUnlinked = unlinked;
@@ -111,15 +112,90 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  /// Ids of the locally-built notices she has already read.
+  ///
+  /// The two "action required" notices are not database rows — they are built
+  /// from her account state on every load, with `is_read: false` baked in. So
+  /// marking one read updated a copy in memory and nothing else, and it came
+  /// back unread the moment she left the tab. Their read state has to live
+  /// somewhere, and there is no row to put it in.
+  final Set<String> _localReadIds = <String>{};
+
+  /// A stable key for a notice that has no database id.
+  static String? _localKeyFor(Map<String, dynamic> n) {
+    final id = n['notification_id'];
+    if (id is int && id > 0) return null; // a real row; the server tracks it
+    final type = n['type']?.toString();
+    return (type == null || type.isEmpty) ? null : 'mother_notice_$type';
+  }
+
+  bool _isRead(Map<String, dynamic> n) {
+    final localKey = _localKeyFor(n);
+    if (localKey != null) return _localReadIds.contains(localKey);
+    return n['is_read'] == true;
+  }
+
+  Future<void> _loadLocalReadIds() async {
+    final accountId = _accountId;
+    if (accountId == null) return;
+    try {
+      final stored = await AuthStorage.getReadAlertIds(accountId);
+      if (mounted) _localReadIds.addAll(stored);
+    } catch (e) {
+      debugPrint('Could not load read notices: $e');
+    }
+  }
+
+  Future<void> _persistLocalReadIds() async {
+    final accountId = _accountId;
+    if (accountId == null) return;
+    try {
+      await AuthStorage.saveReadAlertIds(accountId, _localReadIds.toList());
+    } catch (e) {
+      debugPrint('Could not save read notices: $e');
+    }
+  }
+
+  Future<void> _markRead(Map<String, dynamic> n) async {
+    if (_isRead(n)) return;
+
+    final localKey = _localKeyFor(n);
+    if (localKey != null) {
+      setState(() => _localReadIds.add(localKey));
+      await _persistLocalReadIds();
+      return;
+    }
+
+    setState(() => n['is_read'] = true);
+    try {
+      await NotificationService.markAsRead(n['notification_id']);
+    } catch (e) {
+      debugPrint('Could not mark notification read: $e');
+    }
+  }
+
   Future<void> _markAllRead() async {
     if (_accountId == null) return;
-    await NotificationService.markAllAsRead(_accountId!);
-    if (!mounted) return;
+
+    // Local notices first, so they stay read too. Marking "all" read and
+    // watching two of them return was the most visible half of this bug.
     setState(() {
-      for (var n in _notifications) {
-        n['is_read'] = true;
+      for (final n in _notifications) {
+        final localKey = _localKeyFor(n);
+        if (localKey != null) {
+          _localReadIds.add(localKey);
+        } else {
+          n['is_read'] = true;
+        }
       }
     });
+    await _persistLocalReadIds();
+
+    try {
+      await NotificationService.markAllAsRead(_accountId!);
+    } catch (e) {
+      debugPrint('Could not mark all read: $e');
+    }
   }
 
   IconData _iconForType(String? type) {
@@ -278,7 +354,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasUnread = _notifications.any((n) => n['is_read'] == false);
+    final hasUnread = _notifications.any((n) => !_isRead(n));
 
     return Scaffold(
       backgroundColor: AppColors.bgPrimary,
@@ -361,7 +437,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final n = _notifications[index];
-                      final isRead = n['is_read'] == true;
+                      final isRead = _isRead(n);
                       final type = n['type'] as String?;
                       final isUnlinkedBhc = type == 'unlinked_bhc';
                       final isVitalsIncomplete = type == 'vitals_incomplete';
@@ -377,11 +453,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
                       return GestureDetector(
                         onTap: () async {
+                          // Opening a notice counts as reading it, whichever
+                          // kind it is. The action notices used to open their
+                          // dialog and return without ever being marked, which
+                          // is why they stayed unread no matter how often she
+                          // tapped them.
+                          await _markRead(n);
+                          if (!context.mounted) return;
                           if (isUnlinkedBhc) {
                             _showHowToLinkDialog();
-                            return;
-                          }
-                          if (isVitalsIncomplete) {
+                          } else if (isVitalsIncomplete) {
                             if (_motherId != null && _pregnancyId != null) {
                               _showSetupVitalsBottomSheet(
                                 motherId: _motherId!,
@@ -389,11 +470,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 lmpDate: _lmpDate,
                               );
                             }
-                            return;
-                          }
-                          if (!isRead) {
-                            await NotificationService.markAsRead(n['notification_id']);
-                            setState(() => n['is_read'] = true);
                           }
                         },
                         child: Container(
@@ -425,16 +501,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             children: [
                               // Icon in a tinted disc, the same treatment the
                               // dashboard and Children cards use.
+                              // Read state lives in the icon, the same way it
+                              // does on the midwife's notification page:
+                              // severity colour while unread, solid brand pink
+                              // with a white glyph once she has seen it.
                               Container(
                                 width: 42,
                                 height: 42,
                                 decoration: BoxDecoration(
-                                  color: _colorForType(type)
-                                      .withValues(alpha: 0.12),
+                                  color: isRead
+                                      ? AppColors.brandPrimary
+                                      : _colorForType(type)
+                                          .withValues(alpha: 0.12),
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(_iconForType(type),
-                                    color: _colorForType(type), size: 21),
+                                child: Icon(
+                                  _iconForType(type),
+                                  color: isRead
+                                      ? Colors.white
+                                      : _colorForType(type),
+                                  size: 21,
+                                ),
                               ),
                               const SizedBox(width: 13),
                               Expanded(
@@ -485,7 +572,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                   ],
                                 ),
                               ),
-                              if (!isRead && !isAction) ...[
+                              // The action notices used to be excluded here,
+                              // because nothing could mark them read. Now that
+                              // they can be, they carry the same dot as
+                              // everything else.
+                              if (!isRead) ...[
                                 const SizedBox(width: 8),
                                 Container(
                                   width: 9,

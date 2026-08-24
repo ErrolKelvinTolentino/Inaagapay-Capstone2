@@ -205,10 +205,26 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
     await _refreshBhcRegistration();
     final unlinked = !_isBhcRegistered;
 
+    // The unlinked notice counts only while she has not read it.
+    //
+    // This added 1 unconditionally, so an unlinked mother's bell carried a
+    // badge she could never clear — she could open the page, read the notice,
+    // and come back to the same red dot for the rest of her pregnancy.
+    var localUnread = 0;
+    if (unlinked) {
+      try {
+        final readIds = await AuthStorage.getReadAlertIds(accountId);
+        if (!readIds.contains('mother_notice_unlinked_bhc')) localUnread = 1;
+      } catch (e) {
+        debugPrint('Could not read notice state: $e');
+        localUnread = 1;
+      }
+    }
+
     final count = await NotificationService.getUnreadCount(accountId);
     if (mounted) {
       setState(() {
-        _unreadCount = count + (unlinked ? 1 : 0);
+        _unreadCount = count + localUnread;
       });
     }
 
@@ -704,30 +720,48 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
                           );
                           _setupNotifications();
                         },
+                        // The midwife's bell, with one change: at rest it uses
+                        // the softer ink rather than near-black, which is the
+                        // standing rule on the mother's side.
                         icon: Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            const Icon(
-                              Icons.notifications_none_rounded,
+                            Icon(
+                              _unreadCount > 0
+                                  ? Icons.notifications_active_rounded
+                                  : Icons.notifications_none_rounded,
                               size: 24,
-                              color: AppColors.textPrimary,
+                              color: _unreadCount > 0
+                                  ? AppColors.brandPrimary
+                                  : AppColors.inputText,
                             ),
                             if (_unreadCount > 0)
                               Positioned(
-                                right: -4,
-                                top: -4,
-                                child: Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.error,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Text(
-                                    _unreadCount > 9 ? '9+' : '$_unreadCount',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700,
+                                top: -2,
+                                right: -2,
+                                child: IgnorePointer(
+                                  child: Container(
+                                    constraints: const BoxConstraints(
+                                        minWidth: 16, minHeight: 16),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEF4444),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: Colors.white, width: 1.5),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      _unreadCount > 99
+                                          ? '99+'
+                                          : '$_unreadCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        height: 1,
+                                      ),
                                     ),
                                   ),
                                 ),

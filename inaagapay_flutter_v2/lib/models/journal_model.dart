@@ -1,5 +1,7 @@
 // lib/models/journal_model.dart
 
+import 'journal_mood.dart';
+
 class JournalEntry {
   final int entryId;
   final int motherId;
@@ -8,6 +10,9 @@ class JournalEntry {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  /// How she felt that day, when she chose one.
+  final JournalMood? mood;
+
   JournalEntry({
     required this.entryId,
     required this.motherId,
@@ -15,6 +20,7 @@ class JournalEntry {
     required this.content,
     required this.createdAt,
     required this.updatedAt,
+    this.mood,
   });
 
   factory JournalEntry.fromJson(Map<String, dynamic> json) {
@@ -25,6 +31,7 @@ class JournalEntry {
       content: json['content']?.toString() ?? '',
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
+      mood: JournalMood.fromStored(json['mood']),
     );
   }
 
@@ -36,6 +43,7 @@ class JournalEntry {
       'content': content,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'mood': mood?.name,
     };
   }
 }
@@ -43,16 +51,19 @@ class JournalEntry {
 class CreateJournalEntry {
   final String title;
   final String content;
+  final JournalMood? mood;
 
   CreateJournalEntry({
     required this.title,
     required this.content,
+    this.mood,
   });
 
   Map<String, dynamic> toJson() {
     return {
       'title': title.isEmpty ? null : title,
       'content': content,
+      'mood': mood?.name,
     };
   }
 }
@@ -60,16 +71,19 @@ class CreateJournalEntry {
 class UpdateJournalEntry {
   final String title;
   final String content;
+  final JournalMood? mood;
 
   UpdateJournalEntry({
     required this.title,
     required this.content,
+    this.mood,
   });
 
   Map<String, dynamic> toJson() {
     return {
       'title': title.isEmpty ? null : title,
       'content': content,
+      'mood': mood?.name,
     };
   }
 }
