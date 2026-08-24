@@ -815,11 +815,24 @@
 
         async function loadAuditTrail() {
           try {
-            const { data, error } = await db
+            // The detail columns exist only after
+            // 20260826_audit_trail_completeness.sql. Ask for them, and fall back
+            // to the original set if the database has not been migrated yet,
+            // rather than failing the whole feed over a missing column.
+            const BASE_COLS = "audit_id, account_id, action, description, action_timestamp, old_data, new_data, table_name";
+            let { data, error } = await db
               .from("audit_trail")
-              .select("audit_id, account_id, action, description, action_timestamp, old_data, new_data, table_name")
+              .select(BASE_COLS + ", narrative, entity_label, actor_name")
               .order("action_timestamp", { ascending: false })
               .limit(10);
+
+            if (error) {
+              ({ data, error } = await db
+                .from("audit_trail")
+                .select(BASE_COLS)
+                .order("action_timestamp", { ascending: false })
+                .limit(10));
+            }
             if (error) throw error;
             cachedAuditLogs = data || [];
             const tbody = document.getElementById("recent-audit-body");
@@ -836,7 +849,10 @@
               const who = log.account_id ? (accountNameCache.get(log.account_id) || 'Administrator') : 'System';
               const [badgeCls, actionLabel] = ACTION_BADGES[log.action] || ['badge-inactive', getHumanReadableActionName(log.action)];
               const category = getActionCategory(log.action);
-              const hasDetails = !!(log.old_data || log.new_data);
+              // narrative alone is enough to be worth opening: an entry written by
+              // the app itself carries no before/after snapshot but still has a
+              // full account of what happened.
+              const hasDetails = !!(log.old_data || log.new_data || log.narrative);
               return `
                 <tr>
                   <td style="white-space:nowrap; font-size:12px; color:var(--text-secondary);">${formatTimestamp(log.action_timestamp)}</td>
@@ -883,16 +899,51 @@
             newHtml += `</div>`;
           }
           
+          // narrative and the structured detail sections exist once
+          // 20260826_audit_trail_completeness.sql has been applied. Rendered when
+          // present so this feed shows the same account of the event the Activity
+          // Log page does, and skipped silently when it is not.
+          let narrativeHtml = '';
+          if (data.narrative) {
+            narrativeHtml = `<div style="background:var(--bg-secondary);padding:14px;border-radius:12px;border-left:4px solid var(--brand-primary);margin-top:16px;white-space:pre-wrap;line-height:1.6;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);margin-bottom:10px;">What Happened</div>
+              ${escapeHtml(data.narrative)}
+            </div>`;
+          }
+
+          let sectionsHtml = '';
+          const sections = data.details && Array.isArray(data.details.sections) ? data.details.sections : [];
+          sections.forEach(s => {
+            const rows = (s.rows || [])
+              .map(r => `<div style="margin-bottom:6px;"><strong>${escapeHtml(r.label)}:</strong> ${escapeHtml(r.value)}</div>`)
+              .join('');
+            if (!rows) return;
+            sectionsHtml += `<div style="background:var(--bg-secondary);padding:14px;border-radius:12px;border:1px solid var(--border-primary);margin-top:16px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);margin-bottom:10px;">${escapeHtml(s.title || 'Details')}</div>
+              ${rows}
+            </div>`;
+          });
+
+          const fullNoteLink = `<div style="margin-top:16px;font-size:12px;">
+            <a href="audit-trail.html" style="color:var(--brand-primary);font-weight:600;">Open the Activity Log to print this record &rarr;</a>
+          </div>`;
+
           const detailBody = `
             <div style="background:var(--bg-secondary);padding:14px;border-radius:12px;border:1px solid var(--border-primary);">
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);margin-bottom:12px;">Activity Log Metadata</div>
               <div style="margin-bottom:8px;"><strong>Action:</strong> ${actionReadable}</div>
               <div style="margin-bottom:8px;"><strong>Description:</strong> ${escapeHtml(data.description || '—')}</div>
               <div style="margin-bottom:8px;"><strong>Timestamp:</strong> ${formatTimestamp(data.action_timestamp)}</div>
-              <div style="margin-bottom:8px;"><strong>Performer:</strong> ${escapeHtml(performer)}</div>
+              <div style="margin-bottom:8px;"><strong>Performer:</strong> ${escapeHtml(data.actor_name || performer)}</div>
+              ${data.actor_role ? `<div style="margin-bottom:8px;"><strong>Role:</strong> ${escapeHtml(data.actor_role)}</div>` : ''}
+              ${data.actor_facility_name ? `<div style="margin-bottom:8px;"><strong>Acting from:</strong> ${escapeHtml(data.actor_facility_name)}</div>` : ''}
+              ${data.entity_label ? `<div style="margin-bottom:8px;"><strong>Record:</strong> ${escapeHtml(data.entity_label)}</div>` : ''}
             </div>
+            ${narrativeHtml}
+            ${sectionsHtml}
             ${oldHtml}
             ${newHtml}
+            ${fullNoteLink}
           `;
           
           document.getElementById("detail-body").innerHTML = detailBody;
