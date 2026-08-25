@@ -1012,6 +1012,301 @@ table.data-table tbody tr:hover td {
   align-items: center;
 }
 
+/* ── Modern Date Range Picker & Controls ───────────── */
+.date-range-picker-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #FFFFFF;
+  border: 1px solid #DCDFE4;
+  border-radius: 8px;
+  padding: 3px 10px;
+  height: 38px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.date-range-picker-group:focus-within {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(255, 104, 165, 0.15);
+}
+
+.date-range-picker-group .date-icon {
+  color: var(--brand-primary);
+  font-size: 13px;
+  margin-right: 2px;
+}
+
+.date-range-picker-group .date-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.date-range-picker-group .date-input {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 500;
+  padding: 2px 4px;
+  height: 28px;
+  outline: none;
+}
+
+.date-range-picker-group .date-input:invalid {
+  color: var(--error);
+}
+
+.date-range-picker-group .date-sep {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  padding: 0 2px;
+}
+
+.date-range-picker-group .date-clear-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 12px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  transition: color var(--transition-fast);
+}
+
+.date-range-picker-group .date-clear-btn:hover {
+  color: var(--error);
+}
+
+/* ── Date Preset Pills ────────────────────────────── */
+.date-presets-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.date-preset-btn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  border-radius: 16px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.date-preset-btn:hover {
+  background: rgba(255, 104, 165, 0.08);
+  border-color: rgba(255, 104, 165, 0.3);
+  color: var(--brand-primary);
+}
+
+.date-preset-btn.active {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(255, 104, 165, 0.3);
+}
+
+/* ── Sorting Controls ─────────────────────────────── */
+.sort-control-group {
+  display: inline-flex;
+  align-items: center;
+  background: #FFFFFF;
+  border: 1px solid #DCDFE4;
+  border-radius: 8px;
+  height: 38px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  transition: border-color var(--transition-fast);
+}
+
+.sort-control-group:focus-within {
+  border-color: var(--brand-primary);
+}
+
+.sort-control-group .sort-label {
+  padding: 0 8px 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+
+.sort-control-group .sort-select {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 500;
+  padding: 0 8px;
+  height: 100%;
+  outline: none;
+  cursor: pointer;
+}
+
+.sort-direction-btn {
+  background: #fafbfc;
+  border: none;
+  border-left: 1px solid #DCDFE4;
+  height: 100%;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sort-direction-btn:hover {
+  background: rgba(255, 104, 165, 0.1);
+  color: var(--brand-primary);
+}
+
+.sort-direction-btn.active {
+  color: var(--brand-primary);
+  font-weight: 700;
+}
+
+/* ── Clickable Sortable Table Headers ─────────────── */
+th.th-sortable {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+th.th-sortable:hover {
+  background: #f8fafc !important;
+  color: var(--brand-primary) !important;
+}
+
+th.th-sortable .sort-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  font-size: 11px;
+  color: #cbd5e1;
+  transition: color var(--transition-fast);
+}
+
+th.th-sortable:hover .sort-indicator {
+  color: var(--brand-primary);
+}
+
+th.th-sortable.sort-active {
+  color: var(--brand-primary) !important;
+  background: rgba(255, 104, 165, 0.04) !important;
+}
+
+th.th-sortable.sort-active .sort-indicator {
+  color: var(--brand-primary);
+  font-weight: 800;
+}
+
+/* ── Active Filter Chips Bar ──────────────────────── */
+.active-filters-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 20px;
+  background: #fafbfc;
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 12px;
+}
+
+.active-filters-bar:empty {
+  display: none;
+}
+
+.active-filters-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 2px 8px 2px 10px;
+  font-size: 11.5px;
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  transition: border-color var(--transition-fast);
+}
+
+.filter-chip strong {
+  color: var(--brand-text);
+  font-weight: 600;
+}
+
+.filter-chip-remove {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.filter-chip-remove:hover {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.filter-clear-all-link {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--brand-primary);
+  cursor: pointer;
+  margin-left: 6px;
+  background: transparent;
+  border: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-decoration: underline;
+  transition: color var(--transition-fast);
+}
+
+.filter-clear-all-link:hover {
+  color: var(--brand-accent);
+}
+
 /* ── Body scroll-lock when any modal is open ─────── */
 body.modal-open {
   overflow: hidden;

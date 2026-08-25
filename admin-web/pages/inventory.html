@@ -2586,45 +2586,41 @@
 
     <!-- Modal 9: Item Breakdown & Stock Summary Drawer -->
     <div class="modal-overlay" id="modal-item-details">
-      <div class="modal" style="max-width: 720px; width: 90%; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
-        <div class="modal-header" style="padding: 18px 24px 14px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
+      <div class="modal" style="max-width: 860px; width: 92%; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 45px rgba(0,0,0,0.18);">
+        <div class="modal-header" style="padding: 16px 24px 14px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center; background:#ffffff;">
           <div>
-            <h2 class="modal-title" id="item-details-title" style="font-size: 16px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-boxes-stacked" style="color:var(--brand-primary);"></i> Item Breakdown &amp; Stock Summary</h2>
-            <div id="item-details-subtitle" data-scope-copy style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Detailed view across Central and BHC facilities</div>
+            <h2 class="modal-title" id="item-details-title" style="font-size: 17px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-boxes-stacked" style="color:var(--brand-primary);"></i> Item Breakdown &amp; Stock Summary</h2>
+            <div id="item-details-subtitle" data-scope-copy style="font-size:12px; color:var(--text-secondary); margin-top:3px;"></div>
           </div>
           <button class="modal-close" onclick="closeModal('modal-item-details')"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div class="modal-body" id="item-details-body" style="max-height: 70vh; overflow-y: auto; padding: 20px 24px;">
+        <div class="modal-body" id="item-details-body" style="max-height: 74vh; overflow-y: auto; padding: 20px 24px; background:#fafbfc;">
           <div class="spinner" style="margin: 40px auto;"></div>
         </div>
-        <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #fafafa; display: flex; justify-content: space-between; gap: 10px;">
-          <button class="btn btn-secondary" onclick="closeModal('modal-item-details')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px;">Close</button>
+        <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #ffffff; display: flex; justify-content: space-between; gap: 10px;">
+          <button class="btn btn-secondary" onclick="closeModal('modal-item-details')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600;">Close</button>
           <div style="display: flex; gap: 8px;">
-            <button class="btn btn-secondary" id="item-details-edit-btn" style="height: 36px; padding: 0 14px; border-radius: 8px; font-size: 13px;"><i class="fa-solid fa-pen-to-square"></i> Edit Catalog</button>
-            <button class="btn btn-primary" id="item-details-receive-btn" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px;"><i class="fa-solid fa-plus"></i> Receive Batch</button>
+            <button class="btn btn-secondary" id="item-details-edit-btn" style="height: 36px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight:600;"><i class="fa-solid fa-pen-to-square"></i> Edit Catalog</button>
+            <button class="btn btn-primary" id="item-details-receive-btn" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600; box-shadow:0 2px 8px rgba(255,104,165,0.3);"><i class="fa-solid fa-plus"></i> Receive Batch</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Modal: One inventory event, in full.
-         The audit triggers write a narrative meant to be read on its own and
-         printed — a paragraph that says what moved, from where to where, against
-         which request and who decided it. Until now the inventory page had
-         nowhere to show it. -->
+    <!-- Modal: One inventory event, in full. -->
     <div class="modal-overlay" id="modal-invaudit-detail">
-      <div class="modal" style="max-width: 720px; width: 90%; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
-        <div class="modal-header" style="padding: 18px 24px 14px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
+      <div class="modal" style="max-width: 820px; width: 92%; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 45px rgba(0,0,0,0.18);">
+        <div class="modal-header" style="padding: 16px 24px 14px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center; background:#ffffff;">
           <div>
-            <h2 class="modal-title" id="invaudit-detail-title" style="font-size: 16px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-file-signature" style="color:var(--brand-primary);"></i> Inventory Event</h2>
-            <div id="invaudit-detail-subtitle" style="font-size:12px; color:var(--text-secondary); margin-top:2px;"></div>
+            <h2 class="modal-title" id="invaudit-detail-title" style="font-size: 17px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-file-signature" style="color:var(--brand-primary);"></i> Inventory Audit Event</h2>
+            <div id="invaudit-detail-subtitle" style="font-size:12px; color:var(--text-secondary); margin-top:3px;"></div>
           </div>
           <button class="modal-close" onclick="closeModal('modal-invaudit-detail')"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div class="modal-body" id="invaudit-detail-body" style="max-height: 70vh; overflow-y: auto; padding: 20px 24px;"></div>
-        <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #fafafa; display: flex; justify-content: flex-end; gap: 10px;">
-          <button class="btn btn-secondary" onclick="closeModal('modal-invaudit-detail')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px;">Close</button>
-          <button class="btn btn-primary" onclick="window.print()" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px;"><i class="fa-solid fa-print"></i> Print Record</button>
+        <div class="modal-body" id="invaudit-detail-body" style="max-height: 74vh; overflow-y: auto; padding: 20px 24px; background:#fafbfc;"></div>
+        <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #ffffff; display: flex; justify-content: flex-end; gap: 10px;">
+          <button class="btn btn-secondary" onclick="closeModal('modal-invaudit-detail')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600;">Close</button>
+          <button class="btn btn-primary" onclick="window.print()" style="height: 36px; padding: 0 18px; border-radius: 8px; font-size: 13px; font-weight:600; box-shadow:0 2px 8px rgba(255,104,165,0.3);"><i class="fa-solid fa-print"></i> Print Record</button>
         </div>
       </div>
     </div>
@@ -2957,13 +2953,53 @@
         function syncDateRangeVisibility(key) {
           const wrap = ctl(`${key}-custom-date-wrap`);
           if (!wrap) return;
-          wrap.classList.toggle("show", ctlVal(`${key}-filter-date`) === "custom");
+          const isCustom = ctlVal(`${key}-filter-date`) === "custom";
+          wrap.classList.toggle("show", isCustom);
+
+          const startInput = ctl(`${key}-date-start`);
+          const endInput = ctl(`${key}-date-end`);
+          const today = localDateKey();
+
+          if (startInput && endInput) {
+            // Apply historical upper bound to past-event hubs
+            if (["requests", "transfers", "tx", "invaudit"].includes(key)) {
+              startInput.max = today;
+              endInput.max = today;
+            }
+
+            if (!startInput.dataset.boundConstraints) {
+              startInput.dataset.boundConstraints = "true";
+              startInput.addEventListener("change", () => {
+                if (startInput.value) {
+                  endInput.min = startInput.value;
+                  if (endInput.value && endInput.value < startInput.value) {
+                    endInput.value = startInput.value;
+                  }
+                } else {
+                  endInput.removeAttribute("min");
+                }
+              });
+
+              endInput.addEventListener("change", () => {
+                if (endInput.value) {
+                  startInput.max = endInput.value;
+                  if (startInput.value && startInput.value > endInput.value) {
+                    startInput.value = endInput.value;
+                  }
+                } else {
+                  if (["requests", "transfers", "tx", "invaudit"].includes(key)) {
+                    startInput.max = today;
+                  } else {
+                    startInput.removeAttribute("max");
+                  }
+                }
+              });
+            }
+          }
         }
 
         /* ── The line under every toolbar ────────────────────────────────
-           "Showing 12 of 340" plus, when relevant, how many filters are
-           narrowing it and a way out. The single most common confusion on
-           this page was a table that looked broken but was merely filtered. */
+           "Showing 12 of 340" plus active filter chips and individual remove actions. */
         function renderTableMeta(key, shown, total) {
           const el = ctl(`${key}-meta`);
           if (!el) return;
@@ -2971,15 +3007,67 @@
           const view = tableViews[key];
           const sortLabel = view ? view.sortField.replace(/_/g, " ") : "";
 
-          el.innerHTML = `
-            <span>Showing <strong>${shown}</strong> of <strong>${total}</strong> ${total === 1 ? "entry" : "entries"}</span>
-            ${sortLabel ? `<span class="table-meta-dot">·</span><span>sorted by <strong>${esc(sortLabel)}</strong> ${view.sortAsc ? "ascending" : "descending"}</span>` : ""}
-            ${n > 0 ? `
-              <span class="table-meta-dot">·</span>
-              <span class="table-meta-filters"><i class="fa-solid fa-filter"></i> ${n} filter${n === 1 ? "" : "s"} active</span>
-              <button class="btn-clear-filters" onclick="clearTableFilters('${key}')"><i class="fa-solid fa-xmark"></i> Clear filters</button>
-            ` : ""}
+          // Collect descriptive active filter chips for this hub
+          const chips = [];
+          const q = (ctlVal(`${key}-search`) || "").trim();
+          if (q) chips.push({ label: "Search", val: `"${q}"`, clear: () => { const el = ctl(`${key}-search`); if(el){ el.value = ""; el.dispatchEvent(new Event("input")); } } });
+
+          const cat = ctlVal(`${key}-filter-category`);
+          if (cat) chips.push({ label: "Category", val: cat.replace(/_/g, " "), clear: () => { const el = ctl(`${key}-filter-category`); if(el){ el.value = ""; el.dispatchEvent(new Event("change")); } } });
+
+          const stat = ctlVal(`${key}-filter-status`);
+          if (stat) chips.push({ label: "Status", val: stat.replace(/_/g, " "), clear: () => { const el = ctl(`${key}-filter-status`); if(el){ el.value = ""; el.dispatchEvent(new Event("change")); } } });
+
+          const datePreset = ctlVal(`${key}-filter-date`);
+          if (datePreset && datePreset !== "all") {
+            const dateLabel = datePreset === "custom"
+              ? `${ctlVal(`${key}-date-start`) || "Start"} → ${ctlVal(`${key}-date-end`) || "End"}`
+              : datePreset.replace(/_/g, " ");
+            chips.push({
+              label: "Date",
+              val: dateLabel,
+              clear: () => {
+                const sel = ctl(`${key}-filter-date`);
+                if (sel) { sel.value = "all"; sel.dispatchEvent(new Event("change")); }
+                const s = ctl(`${key}-date-start`), e = ctl(`${key}-date-end`);
+                if (s) s.value = "";
+                if (e) e.value = "";
+                syncDateRangeVisibility(key);
+              }
+            });
+          }
+
+          const chipsHtml = chips.length === 0 ? "" : `
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:6px; width:100%;">
+              <span style="font-size:10.5px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.3px;">Active Filters:</span>
+              ${chips.map((c, i) => `
+                <span class="filter-chip" style="font-size:11px; padding:1px 8px;">
+                  <span><strong>${esc(c.label)}:</strong> ${esc(c.val)}</span>
+                  <button type="button" class="filter-chip-remove" data-hub="${key}" data-chip-idx="${i}" title="Remove filter"><i class="fa-solid fa-xmark"></i></button>
+                </span>
+              `).join("")}
+              <button type="button" class="filter-clear-all-link" onclick="clearTableFilters('${key}')" style="font-size:11px;"><i class="fa-solid fa-rotate-left"></i> Clear all</button>
+            </div>
           `;
+
+          el.innerHTML = `
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%;">
+              <span>Showing <strong>${shown}</strong> of <strong>${total}</strong> ${total === 1 ? "entry" : "entries"}</span>
+              ${sortLabel ? `<span class="table-meta-dot">·</span><span>sorted by <strong>${esc(sortLabel)}</strong> ${view.sortAsc ? "ascending" : "descending"}</span>` : ""}
+              ${n > 0 ? `
+                <span class="table-meta-dot">·</span>
+                <span class="table-meta-filters"><i class="fa-solid fa-filter"></i> ${n} filter${n === 1 ? "" : "s"} active</span>
+              ` : ""}
+            </div>
+            ${chipsHtml}
+          `;
+
+          el.querySelectorAll(`.filter-chip-remove[data-hub="${key}"]`).forEach(btn => {
+            const idx = parseInt(btn.dataset.chipIdx, 10);
+            btn.addEventListener("click", () => {
+              if (chips[idx]) chips[idx].clear();
+            });
+          });
         }
 
         // An empty table means one of two completely different things, and the
@@ -3038,6 +3126,10 @@
 
         // Utility Helpers
         function esc(str) { const d = document.createElement("div"); d.textContent = str ?? ""; return d.innerHTML; }
+        function titleCase(str) {
+          if (!str) return "";
+          return String(str).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+        }
 
         // Local (Asia/Manila) calendar date, not UTC. toISOString() would roll the
         // date over at 08:00 local time and mis-bucket a third of each day's movements.
@@ -5440,13 +5532,14 @@
               : `<span style="color:var(--text-secondary);">—</span>`;
 
             const notes = [t.notes, t.activity_notes].filter(Boolean);
+            const hasReasonOrNotes = isBhcUnusableRecord || t.activity_reason || notes.length > 0;
             const activityDetails = isBhcUnusableRecord
-              ? `<div>${esc(t.reference_type || "Stock reported unusable")}</div>
-                 <div style="font-size:10.5px;color:var(--text-primary);margin-top:3px;"><strong>Reason:</strong> ${esc(String(t.activity_reason || "not recorded").replaceAll("_", " "))}</div>
-                 ${notes.length ? `<div style="font-size:10.5px;margin-top:2px;"><strong>Note:</strong> ${esc(notes.join(" · "))}</div>` : ""}`
-              : `<div>${esc(t.reference_type || "—")}${t.reference_id ? ` <span style="font-family:monospace;">#${esc(String(t.reference_id))}</span>` : ""}</div>
-                 ${t.activity_reason ? `<div style="font-size:10.5px;margin-top:2px;"><strong>Reason:</strong> ${esc(String(t.activity_reason).replaceAll("_", " "))}</div>` : ""}
-                 ${notes.length ? `<div style="font-size:10.5px;margin-top:2px;">${esc(notes.join(" · "))}</div>` : ""}`;
+              ? `<div><strong style="color:var(--text-primary);">${esc(t.reference_type || "Stock reported unusable")}</strong></div>
+                 <div style="font-size:10.5px;color:var(--text-primary);margin-top:3px;"><strong>Reason:</strong> <span style="color:#dc2626;font-weight:600;">${esc(String(t.activity_reason || "not recorded").replaceAll("_", " "))}</span></div>
+                 ${notes.length ? `<div style="font-size:10.5px;margin-top:2px;color:var(--text-secondary);"><strong>Note:</strong> ${esc(notes.join(" · "))}</div>` : ""}`
+              : `<div><strong style="color:var(--text-primary);">${esc(t.reference_type || "Direct Movement")}</strong>${t.reference_id ? ` <span style="font-family:monospace;font-size:11px;background:#f1f5f9;padding:1px 4px;border-radius:4px;">#${esc(String(t.reference_id))}</span>` : ""}</div>
+                 ${t.activity_reason ? `<div style="font-size:10.5px;margin-top:2px;color:var(--text-primary);"><strong>Reason:</strong> ${esc(String(t.activity_reason).replaceAll("_", " "))}</div>` : ""}
+                 ${notes.length ? `<div style="font-size:10.5px;margin-top:2px;color:var(--brand-text);font-style:italic;"><i class="fa-solid fa-note-sticky" style="margin-right:3px;"></i>${esc(notes.join(" · "))}</div>` : ""}`;
 
             const locName = txLocation(t);
             const routeCell = transfer
@@ -5470,13 +5563,13 @@
                 <td style="text-align:right;font-weight:700;color:${t.quantity < 0 ? '#dc2626' : '#059669'};">${qtyStr}${doseNote}</td>
                 <td style="text-align:right;">${balanceCell}</td>
                 <td>${esc(accountMap[t.performed_by] || "System / Admin")}</td>
-                <td style="font-size:12px;color:var(--text-secondary);">
+                <td style="font-size:12px;color:var(--text-secondary);vertical-align:middle;">
                   ${activityDetails}
-                  <div style="margin-top:5px;">
-                    <button class="btn-xs" onclick="openMovementNarrative(${Number(t.transaction_id)})"
-                            title="Read the full written account of this movement"
-                            style="padding:1px 6px;font-size:10px;border:none;background:rgba(255,104,165,0.12);color:var(--brand-primary);border-radius:4px;cursor:pointer;">
-                      <i class="fa-solid fa-book-open"></i> Why
+                  <div style="margin-top:6px;">
+                    <button class="action-pill-btn pill-pink" onclick="openMovementNarrative(${Number(t.transaction_id)})"
+                            title="Read full audit record &amp; notes for this movement"
+                            style="height:22px; padding:0 8px; font-size:10.5px; cursor:pointer;">
+                      <i class="fa-solid fa-file-signature"></i> Audit Note &amp; Details
                     </button>
                   </div>
                 </td>
@@ -5493,24 +5586,97 @@
          * The ledger says a quantity changed. The audit trigger on
          * inventory_transactions wrote a paragraph at the same moment saying
          * what it was for, which end of a transfer it is, and what the batch
-         * held afterwards. Those two records have always described the same
-         * event from different tables; this is the link between them.
+         * held afterwards. If no trigger log was recorded, this dynamically
+         * synthesizes the comprehensive audit note from transaction context.
          */
         window.openMovementNarrative = async function(transactionId) {
-          await loadInventoryAuditLog();
+          if (!inventoryAuditLoaded) {
+            await loadInventoryAuditLog();
+          }
 
-          const row = inventoryAuditRows.find(r =>
-            r.table_name === "inventory_transactions" &&
-            String(r.row_id) === String(transactionId));
+          const txIdStr = String(transactionId);
+          let row = inventoryAuditRows.find(r =>
+            (r.table_name === "inventory_transactions" && String(r.row_id) === txIdStr) ||
+            (r.related_ids && String(r.related_ids.transaction_id) === txIdStr)
+          );
 
-          if (!row) {
-            showToast(inventoryAuditError
-              ? inventoryAuditError
-              : "No written account was recorded for this movement. Movements from before the audit migration only have the ledger line.",
-              "warning");
+          if (row) {
+            window.openInventoryAuditDetail(row);
             return;
           }
-          window.openInventoryAuditDetail(row.audit_id);
+
+          // Dynamic Synthesis Fallback: construct an exhaustive audit note
+          const t = transactions.find(x => String(x.transaction_id) === txIdStr);
+          if (t) {
+            const batch = batches.find(b => b.batch_id === t.batch_id);
+            const item = items.find(i => i.item_id === (batch?.item_id || t.item_id));
+            const facilityObj = (bhcs || []).find(b => String(b.bhc_id) === String(t.facility_id));
+            const facilityName = facilityObj ? facilityObj.bhc_name : (t.facility_id === null || t.facility_id === 'central' ? PortalScope.depotName : unknownFacilityLabel(t.facility_id));
+            const actorName = accountMap[t.performed_by] || 'System / Admin';
+            const notesStr = [t.notes, t.activity_notes].filter(Boolean).join(' · ');
+            const transfer = t.transfer_id ? transfers.find(x => x.transfer_id === t.transfer_id) : null;
+            const isOut = Number(t.quantity) < 0;
+            const signQty = `${t.quantity > 0 ? '+' : ''}${t.quantity}`;
+            const typeLabel = auditActionLabel(t.transaction_type);
+
+            let narrativeProse = `Stock movement recorded: ${signQty} ${item?.unit_of_measure || 'units'} of ${item?.name || 'Item'} (${item?.generic_name || 'Generic'}) for ${facilityName}.\n`;
+            if (t.activity_reason) narrativeProse += `Reason / Clinical Purpose: ${String(t.activity_reason).replace(/_/g, ' ')}.\n`;
+            if (notesStr) narrativeProse += `Officer Notes: ${notesStr}\n`;
+            if (t.resulting_quantity_remaining != null) narrativeProse += `Shelf balance after movement: ${t.resulting_quantity_remaining} ${item?.unit_of_measure || 'units'}.\n`;
+            if (transfer) narrativeProse += `Transfer route: ${facilityName} (Transfer #${transfer.transfer_id}).\n`;
+
+            const syntheticLog = {
+              audit_id: `TX-${t.transaction_id}`,
+              action: `inventory_movement_${t.transaction_type || 'ledger'}`,
+              action_timestamp: t.created_at || t.transaction_date,
+              severity: t.transaction_type === 'expiry_disposal' ? 'warning' : 'info',
+              module: 'Inventory',
+              entity_label: `${item?.name || 'Stock Item'} (Batch #${batch?.batch_number || '—'})`,
+              actor_name: actorName,
+              actor_role: 'Inventory Personnel',
+              actor_facility_name: facilityName,
+              source: 'application',
+              narrative: narrativeProse,
+              description: `${item?.name || 'Item'} ${typeLabel} (${signQty} ${item?.unit_of_measure || 'units'})`,
+              details: {
+                sections: [
+                  {
+                    title: 'Stock Movement Details',
+                    rows: [
+                      { label: 'Item Name', value: item?.name || '—' },
+                      { label: 'Generic Name', value: item?.generic_name || '—' },
+                      { label: 'Batch Number', value: batch?.batch_number || '—' },
+                      { label: 'Batch Expiration Date', value: batch?.expiration_date || '—' },
+                      { label: 'Movement Operation', value: typeLabel },
+                      { label: 'Quantity Transacted', value: `${signQty} ${item?.unit_of_measure || 'units'}` },
+                      { label: 'Ending Shelf Balance', value: t.resulting_quantity_remaining != null ? `${t.resulting_quantity_remaining} ${item?.unit_of_measure || 'units'}` : '—' },
+                      { label: 'Location Facility', value: facilityName },
+                      { label: 'Reference Code', value: t.reference_type ? `${t.reference_type}${t.reference_id ? ' #' + t.reference_id : ''}` : '—' }
+                    ]
+                  },
+                  ...(t.activity_reason || notesStr ? [{
+                    title: 'Reasoning & Clinical Notes',
+                    rows: [
+                      ...(t.activity_reason ? [{ label: 'Reason / Purpose', value: String(t.activity_reason).replace(/_/g, ' ') }] : []),
+                      ...(notesStr ? [{ label: 'Recorded Note', value: notesStr }] : [])
+                    ]
+                  }] : [])
+                ]
+              },
+              related_ids: {
+                transaction_id: t.transaction_id,
+                batch_id: t.batch_id,
+                item_id: item?.item_id,
+                facility_id: t.facility_id,
+                ...(t.transfer_id ? { transfer_id: t.transfer_id } : {}),
+                ...(t.reference_id ? { reference_id: t.reference_id } : {})
+              }
+            };
+            window.openInventoryAuditDetail(syntheticLog);
+            return;
+          }
+
+          showToast("No audit details found for this movement ID.", "warning");
         };
 
         // Export Transactions CSV
@@ -5852,53 +6018,101 @@
           renderPaginationControls("invaudit-pagination", sorted.length, "invaudit");
         }
 
-        /** Full written account of one event, rendered into the shared drawer. */
-        window.openInventoryAuditDetail = function(auditId) {
-          const row = inventoryAuditRows.find(r => Number(r.audit_id) === Number(auditId));
-          if (!row) return;
+        /** Full written account of one event, rendered into the shared modal popup. */
+        window.openInventoryAuditDetail = function(auditIdOrRow) {
+          let row = null;
+          if (auditIdOrRow && typeof auditIdOrRow === "object") {
+            row = auditIdOrRow;
+          } else {
+            row = inventoryAuditRows.find(r => String(r.audit_id) === String(auditIdOrRow));
+          }
+          if (!row) {
+            showToast("Audit details not found.", "warning");
+            return;
+          }
 
           const sev = auditSeverityOf(row);
-          const when = auditDate(row.action_timestamp)?.toLocaleString("en-PH") ?? "—";
+          const when = row.action_timestamp ? (auditDate(row.action_timestamp)?.toLocaleString("en-PH", { dateStyle: 'full', timeStyle: 'medium' }) ?? String(row.action_timestamp)) : "—";
+          const actLabel = auditActionLabel(row.action);
 
           const sections = (row.details && Array.isArray(row.details.sections)) ? row.details.sections : [];
           const sectionsHtml = sections.map(section => `
-            <h4 style="font-size:13px;margin:16px 0 8px;color:var(--text-primary);">${esc(section.title || "Details")}</h4>
-            <div class="table-wrap">
-              <table class="data-table">
-                <tbody>
-                  ${(section.rows || []).map(kv => `
-                    <tr>
-                      <td style="width:38%;font-weight:600;color:var(--text-secondary);">${esc(kv.label)}</td>
-                      <td>${esc(kv.value)}</td>
-                    </tr>`).join("")}
-                </tbody>
-              </table>
+            <div style="background:#ffffff; border:1px solid var(--border-primary); border-radius:10px; padding:14px 16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+              <h4 style="font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--text-secondary); margin:0 0 10px; display:flex; align-items:center; gap:6px;">
+                <i class="fa-solid fa-layer-group" style="color:var(--brand-primary); font-size:11px;"></i> ${esc(section.title || "Details")}
+              </h4>
+              <div class="table-wrap" style="border:1px solid #f1f5f9; border-radius:8px;">
+                <table class="data-table">
+                  <tbody>
+                    ${(section.rows || []).map(kv => `
+                      <tr>
+                        <td style="width:36%; font-weight:600; color:var(--text-secondary); background:#fafbfc;">${esc(kv.label)}</td>
+                        <td style="font-weight:600; color:var(--text-primary);">${esc(kv.value)}</td>
+                      </tr>`).join("")}
+                  </tbody>
+                </table>
+              </div>
             </div>`).join("");
 
           const related = (row.related_ids && typeof row.related_ids === "object")
             ? Object.entries(row.related_ids).filter(([, v]) => v !== null && v !== undefined && v !== "")
             : [];
           const relatedHtml = related.length === 0 ? "" : `
-            <h4 style="font-size:13px;margin:16px 0 8px;color:var(--text-primary);">Traces Back To</h4>
-            <div style="display:flex;flex-wrap:wrap;gap:6px;">
-              ${related.map(([k, v]) => `<span class="select-chip chip-batch" style="font-size:10.5px;">${esc(k.replace(/_/g, " "))}: ${esc(String(v))}</span>`).join("")}
+            <div style="background:#ffffff; border:1px solid var(--border-primary); border-radius:10px; padding:14px 16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+              <h4 style="font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--text-secondary); margin:0 0 10px; display:flex; align-items:center; gap:6px;">
+                <i class="fa-solid fa-link" style="color:var(--brand-primary); font-size:11px;"></i> Connected System Records
+              </h4>
+              <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                ${related.map(([k, v]) => `
+                  <span class="select-chip chip-batch" style="font-size:11px; padding:4px 8px;">
+                    <strong style="text-transform:capitalize;">${esc(k.replace(/_/g, " "))}:</strong> #${esc(String(v))}
+                  </span>`).join("")}
+              </div>
             </div>`;
 
           document.getElementById("invaudit-detail-title").innerHTML =
-            `<i class="fa-solid fa-file-signature" style="color:var(--brand-primary);margin-right:8px;"></i> ${esc(auditActionLabel(row.action))}`;
+            `<i class="fa-solid fa-file-signature" style="color:var(--brand-primary); margin-right:8px;"></i> ${esc(actLabel)}`;
           document.getElementById("invaudit-detail-subtitle").textContent =
-            `${row.entity_label || "Inventory event"} · Record #${row.audit_id} · ${when}`;
+            `${row.entity_label || "Inventory Event"} · Record #${row.audit_id} · ${when}`;
 
           document.getElementById("invaudit-detail-body").innerHTML = `
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; align-items:center;">
               ${AUDIT_SEVERITY_BADGE[sev]}
-              <span class="select-chip chip-location" style="font-size:10.5px;"><i class="fa-solid fa-user"></i> ${esc(row.actor_name || "System")}${row.actor_role ? ` (${esc(row.actor_role)})` : ""}</span>
-              ${row.actor_facility_name ? `<span class="select-chip chip-location" style="font-size:10.5px;"><i class="fa-solid fa-hospital"></i> ${esc(row.actor_facility_name)}</span>` : ""}
-              ${row.source ? `<span class="select-chip chip-qty" style="font-size:10.5px;"><i class="fa-solid fa-plug"></i> ${esc(String(row.source).replace(/_/g, " "))}</span>` : ""}
+              <span class="module-chip" data-mod="Inventory" style="font-size:11px;"><i class="fa-solid fa-boxes-stacked"></i> Inventory Audit</span>
+              <span style="font-size:11.5px; color:var(--text-secondary); margin-left:auto; font-weight:600;"><i class="fa-solid fa-clock" style="margin-right:4px;"></i>${esc(when)}</span>
             </div>
-            <div style="background:var(--bg-secondary);border-left:4px solid var(--brand-primary);border-radius:8px;padding:14px 16px;font-size:12.5px;line-height:1.6;white-space:pre-wrap;">
-              ${esc(row.narrative || row.description || "No written account was recorded for this event.")}
+
+            <div style="background:#fff5f8; border:1px solid #fbcfe8; border-left:4px solid var(--brand-primary); border-radius:10px; padding:14px 18px; margin-bottom:16px; box-shadow:0 1px 4px rgba(255,104,165,0.06);">
+              <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--brand-text); margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+                <i class="fa-solid fa-align-left"></i> Full Written Account &amp; Reasoning
+              </div>
+              <div style="font-size:13px; line-height:1.6; color:var(--text-primary); white-space:pre-wrap; font-weight:500;">${esc(row.narrative || row.description || "No written narrative was attached to this event.")}</div>
             </div>
+
+            <div style="background:#ffffff; border:1px solid var(--border-primary); border-radius:10px; padding:14px 16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+              <h4 style="font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--text-secondary); margin:0 0 10px; display:flex; align-items:center; gap:6px;">
+                <i class="fa-solid fa-user-shield" style="color:var(--brand-primary); font-size:11px;"></i> Responsible Officer &amp; Origin
+              </h4>
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:10px 16px; font-size:12px;">
+                <div>
+                  <span style="color:var(--text-secondary); font-weight:600; display:block; font-size:10.5px; text-transform:uppercase;">Personnel</span>
+                  <strong style="color:var(--text-primary); font-size:13px;">${esc(row.actor_name || "System Administrator")}</strong>
+                </div>
+                <div>
+                  <span style="color:var(--text-secondary); font-weight:600; display:block; font-size:10.5px; text-transform:uppercase;">Role Authorization</span>
+                  <span class="badge badge-admin" style="margin-top:2px;">${esc(row.actor_role || "Administrator / Midwife")}</span>
+                </div>
+                <div>
+                  <span style="color:var(--text-secondary); font-weight:600; display:block; font-size:10.5px; text-transform:uppercase;">Facility Location</span>
+                  <strong style="color:var(--text-primary);"><i class="fa-solid fa-hospital" style="color:var(--brand-primary); font-size:11px; margin-right:4px;"></i>${esc(row.actor_facility_name || PortalScope.depotName)}</strong>
+                </div>
+                <div>
+                  <span style="color:var(--text-secondary); font-weight:600; display:block; font-size:10.5px; text-transform:uppercase;">Source / Interface</span>
+                  <span style="color:var(--text-primary); font-weight:600;">${esc(String(row.source || 'admin_portal').replace(/_/g, ' ').toUpperCase())}</span>
+                </div>
+              </div>
+            </div>
+
             ${sectionsHtml}
             ${relatedHtml}
           `;
@@ -7349,142 +7563,246 @@
 
         // Item Details Breakdown Drawer
         window.openItemDetails = function(itemId) {
-          const item = items.find(i => i.item_id === itemId);
-          if (!item) return;
+          try {
+            const item = items.find(i => String(i.item_id) === String(itemId) || i.item_id == itemId);
+            if (!item) {
+              console.warn("openItemDetails: Item not found for id", itemId);
+              showToast("Catalogue item record not found.", "warning");
+              return;
+            }
 
-          document.getElementById("item-details-title").innerHTML = `<i class="fa-solid fa-boxes-stacked" style="color:var(--brand-primary);margin-right:8px;"></i> ${esc(item.name)}`;
-          const dpu = item.doses_per_unit || 1;
-          document.getElementById("item-details-subtitle").textContent = `Category: ${item.item_type.replace('_',' ')} • Unit: ${item.unit_of_measure} (${dpu} dose${dpu === 1 ? '' : 's'}/unit) • Min Threshold: ${item.minimum_stock_threshold || 50}`;
+            const itemBatches = batches.filter(b => String(b.item_id) === String(itemId) || b.item_id == itemId);
+            const itemMetrics = getItemStockMetrics(itemId, "all");
+            const dpu = item.doses_per_unit || 1;
+            const genericName = item.generic_name || item.name;
+            const threshold = item.minimum_stock_threshold || 50;
+            const isLowStock = itemMetrics.available <= threshold && itemMetrics.available > 0;
+            const isOutOfStock = itemMetrics.available === 0;
 
-          const itemMetrics = getItemStockMetrics(itemId, "all");
-          const itemBatches = batches.filter(b => b.item_id === itemId);
+            const manufacturers = [...new Set(itemBatches.map(b => b.manufacturer).filter(Boolean))];
+            const manufacturersStr = manufacturers.length > 0 ? manufacturers.join(", ") : (item.manufacturer || "Standard Municipal Health Supply");
 
-          // Per-facility rows now carry both transit legs and a way to act on
-          // them, because "why did this centre's count drop?" is answered by
-          // the outbound column and nothing else on the page.
-          const facilityStockRow = (label, facilityKey, actionsHtml, rowStyle = "") => {
-            const m = getItemStockMetrics(itemId, facilityKey);
-            const incoming = calculateInTransitPerItem(itemId, facilityKey);
-            const outgoing = calculateOutboundInTransitPerItem(itemId, facilityKey);
-            return `
-              <tr${rowStyle ? ` style="${rowStyle}"` : ""}>
-                <td><strong>${esc(label)}</strong></td>
-                <td style="text-align:right;">+${m.added}</td>
-                <td style="text-align:right;">${m.issued}</td>
-                <td style="text-align:right;color:#d97706;">${m.allocated}</td>
-                <td style="text-align:right;color:${incoming ? '#15803d' : 'var(--text-secondary)'};">${incoming ? `+${incoming}` : '—'}</td>
-                <td style="text-align:right;color:${outgoing ? '#be123c' : 'var(--text-secondary)'};">${outgoing ? `−${outgoing}` : '—'}</td>
-                <td style="text-align:right;font-weight:700;color:var(--brand-primary);">${m.available}</td>
-                <td style="text-align:center;">${actionsHtml}</td>
-              </tr>
-            `;
-          };
+            const categoryIcons = {
+              vaccine: 'fa-vial-virus',
+              supplement: 'fa-capsules',
+              medical_device: 'fa-stethoscope',
+              contraceptive: 'fa-heart-pulse'
+            };
+            const catKey = String(item.item_type || 'supplement').toLowerCase();
+            const catIcon = categoryIcons[catKey] || 'fa-box';
+            const catLabel = titleCase(item.item_type || 'Medicine / Supplement');
 
-          const facilityRows = bhcs.map(bhc =>
-            facilityStockRow(bhc.bhc_name, bhc.bhc_id, `
-              <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">
-                <button class="btn-xs" style="padding:2px 6px;font-size:10px;border:1px solid var(--border-primary);background:#fff;border-radius:5px;cursor:pointer;" onclick="closeModal('modal-item-details'); openGeneralIssueModal('${bhc.bhc_id}')" title="Send stock to this facility"><i class="fa-solid fa-arrow-down"></i> Send to</button>
-                <button class="btn-xs" style="padding:2px 6px;font-size:10px;border:1px solid var(--border-primary);background:#fff;border-radius:5px;cursor:pointer;" onclick="closeModal('modal-item-details'); openGeneralIssueModal(null, '${bhc.bhc_id}')" title="Move stock out of this facility"><i class="fa-solid fa-arrow-up-right-from-square"></i> Move out</button>
-              </div>`)
-          );
+            let stockStatusBadge = `<span class="badge-health-success"><i class="fa-solid fa-circle-check"></i> In Stock</span>`;
+            if (isOutOfStock) {
+              stockStatusBadge = `<span class="badge-health-danger"><i class="fa-solid fa-circle-xmark"></i> Out of Stock</span>`;
+            } else if (isLowStock) {
+              stockStatusBadge = `<span class="badge-health-warning"><i class="fa-solid fa-triangle-exclamation"></i> Low Stock Alert</span>`;
+            }
 
-          const centralMetrics = getItemStockMetrics(itemId, "central");
-          const centralRow = facilityStockRow(
-            PortalScope.depotName,
-            "central",
-            `<button class="btn-xs" style="padding:2px 6px;font-size:10px;border:1px solid var(--border-primary);background:#fff;border-radius:5px;cursor:pointer;" onclick="closeModal('modal-item-details'); openGeneralIssueModal()" title="Issue from this depot"><i class="fa-solid fa-truck-ramp-box"></i> Issue</button>`,
-            "background:rgba(255,104,165,0.05);"
-          );
+            const titleEl = document.getElementById("item-details-title");
+            if (titleEl) {
+              titleEl.innerHTML = `<i class="fa-solid fa-boxes-stacked" style="color:var(--brand-primary);margin-right:8px;"></i> ${esc(item.name)}`;
+            }
 
-          const batchRows = itemBatches.length === 0
-            ? '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:20px;">No batches recorded for this item yet.</td></tr>'
-            : itemBatches.map(b => {
-                const loc = batchLocationName(b);
-                const expired = isBatchExpired(b);
-                const badge = expired || b.status === 'expired'
-                  ? '<span class="badge-health-danger">Expired</span>'
-                  : b.status === 'discarded'
-                    ? '<span class="badge-health-muted">Discarded</span>'
-                    : '<span class="badge-health-success">Active</span>';
-                return `
-                  <tr>
-                    <td><strong style="font-family:monospace;">${esc(b.batch_number)}</strong></td>
-                    <td>${esc(loc)}</td>
-                    <td>${b.expiration_date}</td>
-                    <td style="text-align:right;">${b.quantity_received}</td>
-                    <td style="text-align:right;font-weight:700;">${b.quantity_remaining}</td>
-                    <td style="text-align:center;">${badge}</td>
-                  </tr>
-                `;
-              }).join('');
+            const subEl = document.getElementById("item-details-subtitle");
+            if (subEl) {
+              subEl.innerHTML = `<span style="color:var(--brand-text); font-weight:700; font-style:italic;">Generic: ${esc(genericName)}</span> &middot; <span style="text-transform:capitalize;">${esc(catLabel)}</span> &middot; Catalog #ITEM-${esc(String(item.item_id).padStart(4, '0'))}`;
+            }
 
-          document.getElementById("item-details-body").innerHTML = `
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:12px; margin-bottom:20px;">
-              <div style="background:var(--bg-secondary); padding:12px; border-radius:8px; text-align:center;">
-                <div style="font-size:11px; color:var(--text-secondary); font-weight:600;">TOTAL RECEIVED</div>
-                <div style="font-size:18px; font-weight:700; color:#059669; margin-top:2px;">+${itemMetrics.added}</div>
-              </div>
-              <div style="background:var(--bg-secondary); padding:12px; border-radius:8px; text-align:center;">
-                <div style="font-size:11px; color:var(--text-secondary); font-weight:600;">TOTAL ISSUED</div>
-                <div style="font-size:18px; font-weight:700; color:#7c3aed; margin-top:2px;">${itemMetrics.issued}</div>
-              </div>
-              <div style="background:var(--bg-secondary); padding:12px; border-radius:8px; text-align:center;">
-                <div style="font-size:11px; color:var(--text-secondary); font-weight:600;">ALLOCATED / PENDING</div>
-                <div style="font-size:18px; font-weight:700; color:#d97706; margin-top:2px;">${itemMetrics.allocated}</div>
-              </div>
-              <div style="background:var(--bg-secondary); padding:12px; border-radius:8px; text-align:center;">
-                <div style="font-size:11px; color:var(--text-secondary); font-weight:600;">AVAILABLE STOCK</div>
-                <div style="font-size:18px; font-weight:700; color:var(--brand-primary); margin-top:2px;">${itemMetrics.available}</div>
-                ${isMultiDoseItem(item) ? `<div style="font-size:11px; font-weight:600; color:var(--text-secondary); margin-top:2px;">${itemMetrics.availableDoses} doses${itemMetrics.openDoses > 0 ? ` · ${itemMetrics.openDoses} already open` : ''}</div>` : ''}
-              </div>
-            </div>
+            // Facility rows without move-in / move-out action buttons
+            const facilityStockRow = (label, facilityKey, rowStyle = "") => {
+              const m = getItemStockMetrics(itemId, facilityKey);
+              const incoming = typeof calculateInTransitPerItem === "function" ? calculateInTransitPerItem(itemId, facilityKey) : 0;
+              const outgoing = typeof calculateOutboundInTransitPerItem === "function" ? calculateOutboundInTransitPerItem(itemId, facilityKey) : 0;
+              return `
+                <tr${rowStyle ? ` style="${rowStyle}"` : ""}>
+                  <td style="padding:8px 12px; font-weight:700; color:var(--text-primary);">
+                    <i class="fa-solid fa-hospital" style="color:var(--brand-primary); font-size:11px; margin-right:6px;"></i>${esc(label)}
+                  </td>
+                  <td style="padding:8px 12px; text-align:right; color:#059669; font-weight:600;">+${m.added}</td>
+                  <td style="padding:8px 12px; text-align:right; color:#7c3aed; font-weight:600;">${m.issued}</td>
+                  <td style="padding:8px 12px; text-align:right; color:#d97706; font-weight:600;">${m.allocated}</td>
+                  <td style="padding:8px 12px; text-align:right; color:${incoming ? '#15803d' : 'var(--text-secondary)'}; font-weight:${incoming ? '700' : '400'};">${incoming ? `+${incoming}` : '—'}</td>
+                  <td style="padding:8px 12px; text-align:right; color:${outgoing ? '#be123c' : 'var(--text-secondary)'}; font-weight:${outgoing ? '700' : '400'};">${outgoing ? `−${outgoing}` : '—'}</td>
+                  <td style="padding:8px 12px; text-align:right; font-weight:800; font-size:13px; color:${m.available <= 0 ? '#dc2626' : 'var(--brand-primary)'}; background:rgba(255,104,165,0.04);">${m.available}</td>
+                </tr>
+              `;
+            };
 
-            <h4 style="font-size:14px; margin:0 0 10px; color:var(--text-primary);"><i class="fa-solid fa-hospital" style="color:var(--brand-primary);"></i> Stock Breakdown per Health Facility</h4>
-            <p style="margin:0 0 8px;font-size:11.5px;color:var(--text-secondary);">In-transit units are counted at neither end: they have left the sending shelf and have not yet been confirmed on the receiving one.</p>
-            <div class="table-wrap" style="margin-bottom:24px;">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Facility Location</th>
-                    <th style="text-align:right;">Received</th>
-                    <th style="text-align:right;">Issued</th>
-                    <th style="text-align:right;">Allocated</th>
-                    <th style="text-align:right;" title="Dispatched to this facility, not yet confirmed">In Transit ▸ In</th>
-                    <th style="text-align:right;" title="Dispatched from this facility, not yet confirmed elsewhere">In Transit ▸ Out</th>
-                    <th style="text-align:right;">Available</th>
-                    <th style="text-align:center;">Move Stock</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${centralRow}
-                  ${facilityRows.join('')}
-                </tbody>
-              </table>
-            </div>
+            const facilityRows = (bhcs || []).map(bhc => facilityStockRow(bhc.bhc_name, bhc.bhc_id));
+            const centralRow = facilityStockRow(
+              PortalScope.depotName,
+              "central",
+              "background:rgba(255,104,165,0.06); border-bottom:1.5px solid var(--border-primary);"
+            );
 
-            <h4 style="font-size:14px; margin:0 0 10px; color:var(--text-primary);"><i class="fa-solid fa-boxes-packing" style="color:var(--brand-primary);"></i> Registered Batches (${itemBatches.length})</h4>
-            <div class="table-wrap">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Batch #</th>
-                    <th>Location</th>
-                    <th>Expiration</th>
-                    <th style="text-align:right;">Received</th>
-                    <th style="text-align:right;">Remaining</th>
-                    <th style="text-align:center;">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${batchRows}
-                </tbody>
-              </table>
-            </div>
-          `;
+            const batchRows = itemBatches.length === 0
+              ? '<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);padding:30px;">No registered batches found for this catalogue item.</td></tr>'
+              : itemBatches.map(b => {
+                  const loc = typeof batchLocationName === "function" ? batchLocationName(b) : "—";
+                  const expired = typeof isBatchExpired === "function" ? isBatchExpired(b) : false;
+                  const badge = expired || b.status === 'expired'
+                    ? '<span class="badge-health-danger"><i class="fa-solid fa-circle-exclamation"></i> Expired</span>'
+                    : b.status === 'discarded'
+                      ? '<span class="badge-health-muted"><i class="fa-solid fa-ban"></i> Discarded</span>'
+                      : '<span class="badge-health-success"><i class="fa-solid fa-circle-check"></i> Active</span>';
+                  return `
+                    <tr>
+                      <td style="padding:8px 12px;"><strong style="font-family:monospace; background:#f1f5f9; padding:2px 6px; border-radius:4px; font-size:11.5px; color:#1e293b;">${esc(b.batch_number)}</strong></td>
+                      <td style="padding:8px 12px; font-weight:600; color:var(--text-primary);"><i class="fa-solid fa-location-dot" style="color:var(--brand-primary); font-size:11px; margin-right:4px;"></i>${esc(loc)}</td>
+                      <td style="padding:8px 12px; color:var(--text-secondary); max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(b.manufacturer || 'Standard Supply')}">${esc(b.manufacturer || 'Standard Supply')}</td>
+                      <td style="padding:8px 12px; font-family:monospace; font-size:12px; color:${expired ? '#dc2626' : 'var(--text-primary)'}; font-weight:600;">${b.expiration_date}</td>
+                      <td style="padding:8px 12px; text-align:right; font-weight:600;">${b.quantity_received}</td>
+                      <td style="padding:8px 12px; text-align:right; font-weight:800; font-size:12.5px; color:var(--brand-primary);">${b.quantity_remaining}</td>
+                      <td style="padding:8px 12px; text-align:center;">${badge}</td>
+                    </tr>
+                  `;
+                }).join('');
 
-          document.getElementById("item-details-edit-btn").onclick = () => { closeModal("modal-item-details"); openEditItem(itemId); };
-          document.getElementById("item-details-receive-btn").onclick = () => { closeModal("modal-item-details"); quickReceive(itemId); };
-          document.getElementById("modal-item-details").classList.add("show");
+            const bodyEl = document.getElementById("item-details-body");
+            if (bodyEl) {
+              bodyEl.innerHTML = `
+                <!-- Prominent Item Specifications Card -->
+                <div style="background:#ffffff; border:1.5px solid #fbcfe8; border-radius:14px; padding:16px 20px; margin-bottom:20px; box-shadow:0 2px 10px rgba(255,104,165,0.08);">
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:14px; border-bottom:1px solid #fce7f3; padding-bottom:12px;">
+                    <div>
+                      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <h3 style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">${esc(item.name)}</h3>
+                        <span class="type-pill" style="font-size:11px; padding:3px 10px; background:rgba(255,104,165,0.12); color:var(--brand-text); border:1px solid rgba(255,104,165,0.3);">
+                          <i class="fa-solid ${catIcon}"></i> ${esc(catLabel)}
+                        </span>
+                        ${stockStatusBadge}
+                      </div>
+                      <div style="font-size:13px; color:var(--brand-text); font-style:italic; margin-top:4px; font-weight:700;">
+                        <i class="fa-solid fa-prescription" style="margin-right:4px;"></i> Generic Name: ${esc(genericName)}
+                      </div>
+                    </div>
+                    <div style="text-align:right;">
+                      <span style="font-family:monospace; font-size:11px; font-weight:700; background:#f1f5f9; color:#475569; padding:4px 8px; border-radius:6px; border:1px solid #e2e8f0;">CODE: ITEM-${esc(String(item.item_id).padStart(4, '0'))}</span>
+                    </div>
+                  </div>
+
+                  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:14px 18px; font-size:12.5px;">
+                    <div style="background:#fafbfc; padding:8px 12px; border-radius:8px; border:1px solid #f1f5f9;">
+                      <div style="font-size:10.5px; text-transform:uppercase; font-weight:700; color:var(--text-secondary); letter-spacing:0.4px;"><i class="fa-solid fa-scale-balanced" style="color:var(--brand-primary); margin-right:4px;"></i>Unit of Measure</div>
+                      <div style="font-weight:700; font-size:13px; color:var(--text-primary); margin-top:3px; text-transform:capitalize;">${esc(item.unit_of_measure || 'units')}</div>
+                    </div>
+
+                    <div style="background:#fafbfc; padding:8px 12px; border-radius:8px; border:1px solid #f1f5f9;">
+                      <div style="font-size:10.5px; text-transform:uppercase; font-weight:700; color:var(--text-secondary); letter-spacing:0.4px;"><i class="fa-solid fa-syringe" style="color:var(--brand-primary); margin-right:4px;"></i>Dose Configuration</div>
+                      <div style="font-weight:700; font-size:13px; color:var(--text-primary); margin-top:3px;">${dpu} dose${dpu === 1 ? '' : 's'} per ${esc(item.unit_of_measure || 'unit')}</div>
+                    </div>
+
+                    <div style="background:#fafbfc; padding:8px 12px; border-radius:8px; border:1px solid #f1f5f9;">
+                      <div style="font-size:10.5px; text-transform:uppercase; font-weight:700; color:var(--text-secondary); letter-spacing:0.4px;"><i class="fa-solid fa-bell" style="color:#d97706; margin-right:4px;"></i>Min. Stock Alert Threshold</div>
+                      <div style="font-weight:700; font-size:13px; color:${itemMetrics.available <= threshold ? '#dc2626' : '#d97706'}; margin-top:3px;">${threshold} ${esc(item.unit_of_measure || 'units')}</div>
+                    </div>
+
+                    <div style="background:#fafbfc; padding:8px 12px; border-radius:8px; border:1px solid #f1f5f9;">
+                      <div style="font-size:10.5px; text-transform:uppercase; font-weight:700; color:var(--text-secondary); letter-spacing:0.4px;"><i class="fa-solid fa-industry" style="color:var(--brand-primary); margin-right:4px;"></i>Manufacturer(s)</div>
+                      <div style="font-weight:700; font-size:12.5px; color:var(--text-primary); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(manufacturersStr)}">${esc(manufacturersStr)}</div>
+                    </div>
+
+                    ${item.strength_description || item.dosage_form ? `
+                    <div style="background:#fafbfc; padding:8px 12px; border-radius:8px; border:1px solid #f1f5f9;">
+                      <div style="font-size:10.5px; text-transform:uppercase; font-weight:700; color:var(--text-secondary); letter-spacing:0.4px;"><i class="fa-solid fa-notes-medical" style="color:var(--brand-primary); margin-right:4px;"></i>Strength &amp; Dosage Form</div>
+                      <div style="font-weight:700; font-size:12.5px; color:var(--text-primary); margin-top:3px;">${esc([item.strength_description, item.dosage_form].filter(Boolean).join(' · '))}</div>
+                    </div>` : ''}
+
+                    ${item.open_vial_shelf_hours > 0 ? `
+                    <div style="background:#fafbfc; padding:8px 12px; border-radius:8px; border:1px solid #f1f5f9;">
+                      <div style="font-size:10.5px; text-transform:uppercase; font-weight:700; color:var(--text-secondary); letter-spacing:0.4px;"><i class="fa-solid fa-clock" style="color:#2563eb; margin-right:4px;"></i>Open Vial Shelf Life</div>
+                      <div style="font-weight:700; font-size:12.5px; color:#2563eb; margin-top:3px;">${item.open_vial_shelf_hours} hours after opening</div>
+                    </div>` : ''}
+                  </div>
+                </div>
+
+                <!-- Stock Totals KPI Cards -->
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:12px; margin-bottom:20px;">
+                  <div style="background:#ffffff; border:1px solid var(--border-primary); padding:14px; border-radius:10px; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+                    <div style="font-size:11px; color:var(--text-secondary); font-weight:700; text-transform:uppercase; letter-spacing:0.3px;">Total Received</div>
+                    <div style="font-size:20px; font-weight:800; color:#059669; margin-top:3px;">+${itemMetrics.added}</div>
+                  </div>
+                  <div style="background:#ffffff; border:1px solid var(--border-primary); padding:14px; border-radius:10px; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+                    <div style="font-size:11px; color:var(--text-secondary); font-weight:700; text-transform:uppercase; letter-spacing:0.3px;">Total Issued</div>
+                    <div style="font-size:20px; font-weight:800; color:#7c3aed; margin-top:3px;">${itemMetrics.issued}</div>
+                  </div>
+                  <div style="background:#ffffff; border:1px solid var(--border-primary); padding:14px; border-radius:10px; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+                    <div style="font-size:11px; color:var(--text-secondary); font-weight:700; text-transform:uppercase; letter-spacing:0.3px;">Allocated / Pending</div>
+                    <div style="font-size:20px; font-weight:800; color:#d97706; margin-top:3px;">${itemMetrics.allocated}</div>
+                  </div>
+                  <div style="background:#ffffff; border:1.5px solid rgba(255,104,165,0.4); padding:14px; border-radius:10px; text-align:center; box-shadow:0 2px 8px rgba(255,104,165,0.1);">
+                    <div style="font-size:11px; color:var(--brand-text); font-weight:700; text-transform:uppercase; letter-spacing:0.3px;">Current Available Stock</div>
+                    <div style="font-size:22px; font-weight:800; color:var(--brand-primary); margin-top:3px;">${itemMetrics.available} <span style="font-size:12px; font-weight:600; color:var(--text-secondary);">${esc(item.unit_of_measure || 'units')}</span></div>
+                    ${typeof isMultiDoseItem === "function" && isMultiDoseItem(item) ? `<div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-top:3px;">${itemMetrics.availableDoses} total doses${itemMetrics.openDoses > 0 ? ` &middot; ${itemMetrics.openDoses} open` : ''}</div>` : ''}
+                  </div>
+                </div>
+
+                <!-- Current Stock Breakdown across Facilities -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin:0 0 10px;">
+                  <h4 style="font-size:14px; font-weight:700; margin:0; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+                    <i class="fa-solid fa-hospital" style="color:var(--brand-primary);"></i> Current Available Stock per Facility
+                  </h4>
+                </div>
+                <div class="table-wrap" style="margin-bottom:24px; border-radius:10px; border:1px solid var(--border-primary); overflow:hidden;">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th style="padding:9px 12px;">Facility Location</th>
+                        <th style="padding:9px 12px; text-align:right;">Received</th>
+                        <th style="padding:9px 12px; text-align:right;">Issued</th>
+                        <th style="padding:9px 12px; text-align:right;">Allocated</th>
+                        <th style="padding:9px 12px; text-align:right;" title="Dispatched to this facility, not yet confirmed">In Transit ▸ In</th>
+                        <th style="padding:9px 12px; text-align:right;" title="Dispatched from this facility, not yet confirmed elsewhere">In Transit ▸ Out</th>
+                        <th style="padding:9px 12px; text-align:right; background:rgba(255,104,165,0.08); color:var(--brand-text); font-weight:800;">Available Stock</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${centralRow}
+                      ${facilityRows.join('')}
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Registered Batches List -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin:0 0 10px;">
+                  <h4 style="font-size:14px; font-weight:700; margin:0; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+                    <i class="fa-solid fa-boxes-packing" style="color:var(--brand-primary);"></i> Registered Batches (${itemBatches.length})
+                  </h4>
+                </div>
+                <div class="table-wrap" style="border-radius:10px; border:1px solid var(--border-primary); overflow:hidden;">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th style="padding:9px 12px;">Batch #</th>
+                        <th style="padding:9px 12px;">Location</th>
+                        <th style="padding:9px 12px;">Manufacturer</th>
+                        <th style="padding:9px 12px;">Expiration</th>
+                        <th style="padding:9px 12px; text-align:right;">Received</th>
+                        <th style="padding:9px 12px; text-align:right;">Remaining</th>
+                        <th style="padding:9px 12px; text-align:center;">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${batchRows}
+                    </tbody>
+                  </table>
+                </div>
+              `;
+            }
+
+            const editBtn = document.getElementById("item-details-edit-btn");
+            if (editBtn) editBtn.onclick = () => { closeModal("modal-item-details"); openEditItem(item.item_id); };
+
+            const recvBtn = document.getElementById("item-details-receive-btn");
+            if (recvBtn) recvBtn.onclick = () => { closeModal("modal-item-details"); quickReceive(item.item_id); };
+
+            const modal = document.getElementById("modal-item-details");
+            if (modal) modal.classList.add("show");
+          } catch (err) {
+            console.error("Error in openItemDetails:", err);
+            showToast("Failed to open item details: " + err.message, "error");
+          }
         };
 
         window.calculateItemDoses = function() {

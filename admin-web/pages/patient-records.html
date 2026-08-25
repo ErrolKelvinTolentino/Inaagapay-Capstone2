@@ -131,30 +131,52 @@
         <!-- Mothers Tab -->
         <div id="mothers-tab" class="tab-content-modern active">
           <div class="card">
-            <div class="toolbar" style="border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding-bottom: 18px;">
-              <div class="search-box">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="search" id="search-mothers" class="form-control" placeholder="Search by name, email, or barangay..." />
+            <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding: 18px 20px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                <div class="search-box" style="position: relative; display: flex; align-items: center; width: 100%; max-width: 320px;">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input type="search" id="search-mothers" class="form-control" placeholder="Search by name, email, or barangay..." />
+                </div>
+                <div class="filter-group" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                  <select class="form-select" id="filter-bhc-mothers" style="width: auto; min-width: 170px;">
+                    <option value="">All Health Centers (BHCs)</option>
+                  </select>
+                  <div class="date-range-picker-group" id="mothers-date-picker-wrap">
+                    <i class="fa-solid fa-calendar-days date-icon"></i>
+                    <span class="date-label">Registered:</span>
+                    <input type="date" class="date-input" id="mothers-date-from" title="Filter from registration date" />
+                    <span class="date-sep">to</span>
+                    <input type="date" class="date-input" id="mothers-date-to" title="Filter to registration date" />
+                    <button type="button" class="date-clear-btn" id="mothers-date-clear-btn" title="Clear date range" style="display:none;"><i class="fa-solid fa-xmark"></i></button>
+                  </div>
+                  <button class="btn btn-secondary btn-icon" onclick="location.reload()" title="Refresh" style="flex-shrink: 0;">
+                    <i class="fa-solid fa-rotate-right"></i>
+                  </button>
+                </div>
               </div>
-              <div class="filter-group" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                <select class="form-select" id="filter-bhc-mothers" style="width: auto; min-width: 180px;">
-                  <option value="">All BHCs</option>
-                </select>
-                <button class="btn btn-secondary btn-icon" onclick="location.reload()" title="Refresh" style="flex-shrink: 0;">
-                  <i class="fa-solid fa-rotate-right"></i>
-                </button>
+
+              <!-- Quick Range Presets Bar -->
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px dashed #e2e8f0; padding-top:10px;">
+                <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.3px;">Quick Range:</span>
+                <div class="date-presets-bar" id="mothers-date-presets">
+                  <button type="button" class="date-preset-btn active" data-preset="all">All Time</button>
+                  <button type="button" class="date-preset-btn" data-preset="today">Today</button>
+                  <button type="button" class="date-preset-btn" data-preset="7d">Last 7 Days</button>
+                  <button type="button" class="date-preset-btn" data-preset="30d">Last 30 Days</button>
+                  <button type="button" class="date-preset-btn" data-preset="this_month">This Month</button>
+                </div>
               </div>
             </div>
             <div class="table-wrap" style="border: none; border-radius: 0;">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Mother</th>
-                    <th>Email</th>
-                    <th>Barangay</th>
-                    <th>Assigned BHC</th>
-                    <th>Birthdate</th>
-                    <th>Status</th>
+                    <th class="th-sortable" data-mother-sort="name">Mother <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                    <th class="th-sortable" data-mother-sort="email">Email <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                    <th class="th-sortable" data-mother-sort="barangay">Barangay <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                    <th class="th-sortable" data-mother-sort="bhc">Assigned BHC <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                    <th class="th-sortable" data-mother-sort="birthdate">Birthdate <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                    <th class="th-sortable" data-mother-sort="status">Status <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
                     <th style="text-align: center">Actions</th>
                   </tr>
                 </thead>
@@ -169,35 +191,45 @@
         <!-- Pregnancies Tab -->
         <div id="pregnancies-tab" class="tab-content-modern">
           <div class="card">
-            <div class="toolbar" style="border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding-bottom: 18px;">
-              <div class="search-box">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="search" id="search-pregnancies" class="form-control" placeholder="Search by mother's name..." />
-              </div>
-              <div class="filter-group" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                <select class="form-select" id="filter-risk" style="width: auto; min-width: 150px;">
-                  <option value="">All Risk Levels</option>
-                  <option value="low">🟢 Low Risk</option>
-                  <option value="medium">🟡 Medium Risk</option>
-                  <option value="high">🔴 High Risk</option>
-                </select>
-                <select class="form-select" id="filter-pregnancy-status" style="width: auto; min-width: 150px;">
-                  <option value="">All Status</option>
-                  <option value="ongoing">🔄 Ongoing</option>
-                  <option value="ended">✅ Ended</option>
-                </select>
+            <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding: 18px 20px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                <div class="search-box" style="position: relative; display: flex; align-items: center; width: 100%; max-width: 320px;">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input type="search" id="search-pregnancies" class="form-control" placeholder="Search by mother's name..." />
+                </div>
+                <div class="filter-group" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                  <select class="form-select" id="filter-risk" style="width: auto; min-width: 140px;">
+                    <option value="">All Risk Levels</option>
+                    <option value="low">🟢 Low Risk</option>
+                    <option value="medium">🟡 Medium Risk</option>
+                    <option value="high">🔴 High Risk</option>
+                  </select>
+                  <select class="form-select" id="filter-pregnancy-status" style="width: auto; min-width: 140px;">
+                    <option value="">All Status</option>
+                    <option value="ongoing">🔄 Ongoing</option>
+                    <option value="ended">✅ Ended</option>
+                  </select>
+                  <div class="date-range-picker-group" id="pregnancies-date-picker-wrap">
+                    <i class="fa-solid fa-calendar-days date-icon"></i>
+                    <span class="date-label">Due / Start:</span>
+                    <input type="date" class="date-input" id="pregnancies-date-from" title="Filter from date" />
+                    <span class="date-sep">to</span>
+                    <input type="date" class="date-input" id="pregnancies-date-to" title="Filter to date" />
+                    <button type="button" class="date-clear-btn" id="pregnancies-date-clear-btn" title="Clear date range" style="display:none;"><i class="fa-solid fa-xmark"></i></button>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="table-wrap" style="border: none; border-radius: 0;">
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Mother</th>
-                    <th>LMP</th>
-                    <th>EDD</th>
-                    <th>Risk Level</th>
-                    <th>Fetal Count</th>
-                    <th>Status</th>
+                    <th class="th-sortable" data-preg-sort="mother">Mother <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                    <th class="th-sortable" data-preg-sort="lmp">LMP <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                    <th class="th-sortable" data-preg-sort="edd">EDD <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                    <th class="th-sortable" data-preg-sort="risk">Risk Level <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                    <th class="th-sortable" data-preg-sort="fetal">Fetal Count <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                    <th class="th-sortable" data-preg-sort="status">Status <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
                     <th style="text-align: center">Actions</th>
                   </tr>
                 </thead>
@@ -543,11 +575,190 @@
         let cachedChildren = null;
         let bhcs = [];
 
+        /* ── Date Constraints & Presets Helpers ───────────────────────── */
+        function getPatientTodayStr() {
+          const d = new Date();
+          return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function initPatientDateConstraints() {
+          const pairs = [
+            { from: 'mothers-date-from', to: 'mothers-date-to', clear: 'mothers-date-clear-btn', presetGroup: '#mothers-date-presets', onChange: renderMothers },
+            { from: 'pregnancies-date-from', to: 'pregnancies-date-to', clear: 'pregnancies-date-clear-btn', onChange: renderPregnancies }
+          ];
+
+          const today = getPatientTodayStr();
+
+          pairs.forEach(p => {
+            const fromInput = document.getElementById(p.from);
+            const toInput = document.getElementById(p.to);
+            const clearBtn = document.getElementById(p.clear);
+
+            if (fromInput && toInput) {
+              fromInput.max = today;
+              toInput.max = today;
+
+              const sync = () => {
+                const fVal = fromInput.value;
+                const tVal = toInput.value;
+
+                if (fVal) {
+                  toInput.min = fVal;
+                  if (tVal && tVal < fVal) toInput.value = fVal;
+                } else {
+                  toInput.removeAttribute('min');
+                }
+
+                if (tVal) {
+                  fromInput.max = tVal;
+                  if (fVal && fVal > tVal) fromInput.value = tVal;
+                } else {
+                  fromInput.max = today;
+                }
+
+                if (clearBtn) clearBtn.style.display = (fVal || tVal) ? 'inline-flex' : 'none';
+              };
+
+              fromInput.addEventListener('change', () => {
+                sync();
+                if (p.presetGroup) setActivePatientDatePreset(p.presetGroup, '');
+                p.onChange();
+              });
+
+              toInput.addEventListener('change', () => {
+                sync();
+                if (p.presetGroup) setActivePatientDatePreset(p.presetGroup, '');
+                p.onChange();
+              });
+
+              if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                  fromInput.value = '';
+                  toInput.value = '';
+                  sync();
+                  if (p.presetGroup) setActivePatientDatePreset(p.presetGroup, 'all');
+                  p.onChange();
+                });
+              }
+            }
+          });
+        }
+
+        function setActivePatientDatePreset(groupSel, presetKey) {
+          document.querySelectorAll(`${groupSel} .date-preset-btn`).forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.preset === presetKey);
+          });
+        }
+
+        function applyMothersDatePreset(presetKey) {
+          const fromInput = document.getElementById('mothers-date-from');
+          const toInput = document.getElementById('mothers-date-to');
+          const now = new Date();
+          const today = getPatientTodayStr();
+
+          setActivePatientDatePreset('#mothers-date-presets', presetKey);
+
+          if (presetKey === 'all') {
+            fromInput.value = '';
+            toInput.value = '';
+          } else if (presetKey === 'today') {
+            fromInput.value = today;
+            toInput.value = today;
+          } else if (presetKey === '7d') {
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+            fromInput.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            toInput.value = today;
+          } else if (presetKey === '30d') {
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+            fromInput.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            toInput.value = today;
+          } else if (presetKey === 'this_month') {
+            const d = new Date(now.getFullYear(), now.getMonth(), 1);
+            fromInput.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            toInput.value = today;
+          }
+
+          const clearBtn = document.getElementById('mothers-date-clear-btn');
+          if (clearBtn) clearBtn.style.display = (fromInput.value || toInput.value) ? 'inline-flex' : 'none';
+
+          if (fromInput.value) toInput.min = fromInput.value;
+          if (toInput.value) fromInput.max = toInput.value;
+
+          renderMothers();
+        }
+
+        /* ── Sorting State ──────────────────────────────────────────────── */
+        let motherSortCol = 'name';
+        let motherSortDir = 'asc';
+        let pregSortCol = 'mother';
+        let pregSortDir = 'asc';
+
+        window.toggleMotherSort = function(col) {
+          if (motherSortCol === col) {
+            motherSortDir = motherSortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            motherSortCol = col;
+            motherSortDir = 'asc';
+          }
+          updateMotherSortHeaderUI();
+          renderMothers();
+        };
+
+        function updateMotherSortHeaderUI() {
+          document.querySelectorAll('th[data-mother-sort]').forEach(th => {
+            const col = th.dataset.motherSort;
+            const isCurrent = col === motherSortCol;
+            th.classList.toggle('sort-active', isCurrent);
+            const ind = th.querySelector('.sort-indicator');
+            if (ind) {
+              if (isCurrent) {
+                ind.innerHTML = motherSortDir === 'asc'
+                  ? '<i class="fa-solid fa-arrow-up-long"></i>'
+                  : '<i class="fa-solid fa-arrow-down-long"></i>';
+              } else {
+                ind.innerHTML = '<i class="fa-solid fa-sort"></i>';
+              }
+            }
+          });
+        }
+
+        window.togglePregSort = function(col) {
+          if (pregSortCol === col) {
+            pregSortDir = pregSortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            pregSortCol = col;
+            pregSortDir = 'asc';
+          }
+          updatePregSortHeaderUI();
+          renderPregnancies();
+        };
+
+        function updatePregSortHeaderUI() {
+          document.querySelectorAll('th[data-preg-sort]').forEach(th => {
+            const col = th.dataset.pregSort;
+            const isCurrent = col === pregSortCol;
+            th.classList.toggle('sort-active', isCurrent);
+            const ind = th.querySelector('.sort-indicator');
+            if (ind) {
+              if (isCurrent) {
+                ind.innerHTML = pregSortDir === 'asc'
+                  ? '<i class="fa-solid fa-arrow-up-long"></i>'
+                  : '<i class="fa-solid fa-arrow-down-long"></i>';
+              } else {
+                ind.innerHTML = '<i class="fa-solid fa-sort"></i>';
+              }
+            }
+          });
+        }
+
         // ---------- Render functions (using cached data) ----------
         function renderMothers() {
           const tbody = document.getElementById("mothers-tbody");
           const search = document.getElementById("search-mothers")?.value.toLowerCase() || "";
           const bhcFilter = document.getElementById("filter-bhc-mothers")?.value || "";
+          const fromDate = document.getElementById("mothers-date-from")?.value || "";
+          const toDate = document.getElementById("mothers-date-to")?.value || "";
+
           if (!cachedMothers) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
           
           let filtered = cachedMothers.filter(m => {
@@ -556,13 +767,60 @@
             const barangay = (m.barangay || "").toLowerCase();
             if (search && !name.includes(search) && !email.includes(search) && !barangay.includes(search)) return false;
             if (bhcFilter && String(m.assigned_bhc_id) !== String(bhcFilter)) return false;
+            if (fromDate) {
+              const d = m.created_at || m.birthdate;
+              if (d && new Date(d) < new Date(fromDate + "T00:00:00")) return false;
+            }
+            if (toDate) {
+              const d = m.created_at || m.birthdate;
+              if (d && new Date(d) > new Date(toDate + "T23:59:59")) return false;
+            }
             return true;
           });
+
+          // Sort mothers
+          const mult = motherSortDir === 'asc' ? 1 : -1;
+          filtered.sort((a, b) => {
+            if (motherSortCol === 'name') {
+              const na = [a.accounts?.first_name, a.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
+              const nb = [b.accounts?.first_name, b.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
+              return na.localeCompare(nb) * mult;
+            }
+            if (motherSortCol === 'email') {
+              const ea = (a.accounts?.email_address || "").toLowerCase();
+              const eb = (b.accounts?.email_address || "").toLowerCase();
+              return ea.localeCompare(eb) * mult;
+            }
+            if (motherSortCol === 'barangay') {
+              const ba = (a.barangay || "").toLowerCase();
+              const bb = (b.barangay || "").toLowerCase();
+              return ba.localeCompare(bb) * mult;
+            }
+            if (motherSortCol === 'bhc') {
+              const ha = (a.bhc?.bhc_name || "").toLowerCase();
+              const hb = (b.bhc?.bhc_name || "").toLowerCase();
+              return ha.localeCompare(hb) * mult;
+            }
+            if (motherSortCol === 'birthdate') {
+              const da = a.birthdate ? new Date(a.birthdate).getTime() : 0;
+              const db = b.birthdate ? new Date(b.birthdate).getTime() : 0;
+              return (da - db) * mult;
+            }
+            if (motherSortCol === 'status') {
+              const sa = (a.status || "active").toLowerCase();
+              const sb = (b.status || "active").toLowerCase();
+              return sa.localeCompare(sb) * mult;
+            }
+            return 0;
+          });
+
           document.getElementById("mothers-count").textContent = filtered.length;
           document.getElementById("total-badge").textContent = `${filtered.length} records`;
 
+          updateMotherSortHeaderUI();
+
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-folder-open"></i> No mothers found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-folder-open"></i> No mothers match the current filters.</td></tr>';
             return;
           }
           tbody.innerHTML = filtered.map(m => {
@@ -587,6 +845,9 @@
           const search = document.getElementById("search-pregnancies")?.value.toLowerCase() || "";
           const riskFilter = document.getElementById("filter-risk")?.value || "";
           const statusFilter = document.getElementById("filter-pregnancy-status")?.value || "";
+          const fromDate = document.getElementById("pregnancies-date-from")?.value || "";
+          const toDate = document.getElementById("pregnancies-date-to")?.value || "";
+
           if (!cachedPregnancies) { tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><div class="spinner"></div> Loading...</td></tr>'; return; }
           
           let filtered = cachedPregnancies.filter(p => {
@@ -594,11 +855,56 @@
             if (search && !motherName.includes(search)) return false;
             if (riskFilter && p.pregnancy_risk_level !== riskFilter) return false;
             if (statusFilter && p.status !== statusFilter) return false;
+            if (fromDate) {
+              const d = p.expected_date_of_delivery || p.last_menstrual_period;
+              if (d && new Date(d) < new Date(fromDate + "T00:00:00")) return false;
+            }
+            if (toDate) {
+              const d = p.expected_date_of_delivery || p.last_menstrual_period;
+              if (d && new Date(d) > new Date(toDate + "T23:59:59")) return false;
+            }
             return true;
           });
+
+          // Sort pregnancies
+          const mult = pregSortDir === 'asc' ? 1 : -1;
+          filtered.sort((a, b) => {
+            if (pregSortCol === 'mother') {
+              const na = [a.mothers?.accounts?.first_name, a.mothers?.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
+              const nb = [b.mothers?.accounts?.first_name, b.mothers?.accounts?.last_name].filter(Boolean).join(" ").toLowerCase();
+              return na.localeCompare(nb) * mult;
+            }
+            if (pregSortCol === 'lmp') {
+              const da = a.last_menstrual_period ? new Date(a.last_menstrual_period).getTime() : 0;
+              const db = b.last_menstrual_period ? new Date(b.last_menstrual_period).getTime() : 0;
+              return (da - db) * mult;
+            }
+            if (pregSortCol === 'edd') {
+              const da = a.expected_date_of_delivery ? new Date(a.expected_date_of_delivery).getTime() : 0;
+              const db = b.expected_date_of_delivery ? new Date(b.expected_date_of_delivery).getTime() : 0;
+              return (da - db) * mult;
+            }
+            if (pregSortCol === 'risk') {
+              const rMap = { high: 3, medium: 2, low: 1 };
+              const ra = rMap[a.pregnancy_risk_level] || 0;
+              const rb = rMap[b.pregnancy_risk_level] || 0;
+              return (ra - rb) * mult;
+            }
+            if (pregSortCol === 'fetal') {
+              return ((a.fetal_count || 1) - (b.fetal_count || 1)) * mult;
+            }
+            if (pregSortCol === 'status') {
+              return (a.status || "").localeCompare(b.status || "") * mult;
+            }
+            return 0;
+          });
+
           document.getElementById("pregnancies-count").textContent = filtered.length;
+
+          updatePregSortHeaderUI();
+
           if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-person-pregnant"></i> No pregnancies found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-person-pregnant"></i> No pregnancies match the current filters.</td></tr>';
             return;
           }
           tbody.innerHTML = filtered.map(p => {
@@ -962,6 +1268,28 @@
           const bhcFilter = document.getElementById("filter-bhc-mothers");
           if (mothersSearch) mothersSearch.addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderMothers, 300); });
           if (bhcFilter) bhcFilter.addEventListener("change", renderMothers);
+
+          // Date Presets Wiring
+          document.querySelectorAll("#mothers-date-presets .date-preset-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+              applyMothersDatePreset(btn.dataset.preset);
+            });
+          });
+
+          // Table Header Click Sorting Wiring
+          document.querySelectorAll("th[data-mother-sort]").forEach(th => {
+            th.addEventListener("click", () => {
+              const col = th.dataset.motherSort;
+              if (col) window.toggleMotherSort(col);
+            });
+          });
+
+          document.querySelectorAll("th[data-preg-sort]").forEach(th => {
+            th.addEventListener("click", () => {
+              const col = th.dataset.pregSort;
+              if (col) window.togglePregSort(col);
+            });
+          });
           
           const pregSearch = document.getElementById("search-pregnancies");
           const riskFilter = document.getElementById("filter-risk");
@@ -981,6 +1309,8 @@
           
           const childrenSearch = document.getElementById("search-children");
           if (childrenSearch) childrenSearch.addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderChildren, 300); });
+
+          initPatientDateConstraints();
         }
 
         // ---------- View detail functions (unchanged) ----------
