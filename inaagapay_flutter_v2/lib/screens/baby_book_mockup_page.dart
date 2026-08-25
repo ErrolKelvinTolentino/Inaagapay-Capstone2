@@ -1,9 +1,7 @@
 import 'dart:async';
 
-import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../data/baby_growth_milestone_data.dart';
 import '../data/pregnancy_growth_data.dart';
@@ -13,11 +11,11 @@ import '../models/milestone_template.dart';
 import '../models/pregnancy_growth_stage.dart';
 import '../services/asset_pdf_download_service.dart';
 import '../services/baby_book_repository.dart';
-import 'mother/mother_pregnancy_detail_page.dart';
 import '../theme/app_colors.dart';
 import '../widgets/baby_memory_photo.dart';
 import '../widgets/baby_book/baby_growth_milestones_section.dart';
-import '../widgets/baby_book/baby_book_section_components.dart';
+import '../widgets/baby_book/memory_details_dialog.dart';
+import '../widgets/baby_book/references_panel.dart';
 import '../widgets/secondary_header.dart';
 import '../widgets/pregnancy_growth_journey.dart';
 import 'baby_book_memory_gallery_page.dart';
@@ -45,15 +43,26 @@ class BabyBookMockupPage extends StatefulWidget {
 }
 
 class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
-  static final Uri _dohGuideUri = Uri.parse(
-    'https://www.foi.gov.ph/agencies/doh/mother-and-baby-book/',
-  );
-  static final Uri _whoGuideUri = Uri.parse(
-    'https://www.who.int/publications/i/item/9789241550352',
-  );
-
   final GlobalKey _todayKey = GlobalKey();
   final GlobalKey _memoriesKey = GlobalKey();
+
+  /// Whether the photo memories section is shown.
+  ///
+  /// Off while Supabase Storage is set up. Uploading returned "Bucket not
+  /// found", so every attempt ended in "The photo could not be saved" — a
+  /// feature that cannot succeed is worse on the page than absent, because a
+  /// mother spends time on it and gets nothing back.
+  ///
+  /// Everything behind it is intact and tested: `saveMemory` and
+  /// `loadMemories` in BabyBookRepository, the gallery page, the details
+  /// dialog. Turning this back on is the whole job once a public bucket
+  /// exists — see the bucket candidates in BabyBookRepository.
+  ///
+  /// Deliberately not `const`: a const false would make the block below dead
+  /// code, and the analyzer would start reporting the parts of a working
+  /// feature as unused.
+  // ignore: prefer_final_fields
+  bool _memoriesEnabled = false;
 
   String? _downloadingPdf;
   final ImagePicker _imagePicker = ImagePicker();
@@ -129,10 +138,20 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
             owner: MilestoneOwner.mother,
           );
 
+    // Her own photos, which nothing was reading before: the gallery rendered
+    // the two sample images for every account, and a photo she added lived
+    // only until the page was disposed.
+    final memories = pregnancyId == null
+        ? const <BabyMemory>[]
+        : await _repository.loadMemories(pregnancyId: pregnancyId);
+
     if (!mounted) return;
     setState(() {
       _pregnancy = pregnancy;
       _milestones = milestones;
+      _memories
+        ..clear()
+        ..addAll(memories);
       _isLoadingPregnancy = false;
     });
   }
@@ -145,33 +164,10 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
     if (!_isPreview) _loadPregnancy();
   }
 
-  /// Opens the deeper page about her own body — risk level, warning signs,
-  /// checklists, nutrition. Reached from inside this book rather than from a
-  /// competing card on Home.
-  void _openMyCare() {
-    final p = _effectivePregnancy;
-    if (p == null) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PregnancyDetailPage(
-          week: p.currentWeek,
-          trimester: p.trimester,
-          dueDate: DateFormat('MMMM d, y').format(p.estimatedDueDate),
-          weeksLeft: (40 - p.currentWeek).clamp(0, 40),
-          babySize: '',
-          babyWeight: '',
-          firstName: '',
-          riskLevel: '',
-          fetalCount: p.numberOfBabies,
-          pregnancyId: p.pregnancyId ?? 0,
-          riskFactors: const [],
-          suggestedActions: const [],
-        ),
-      ),
-    );
-  }
-
+  /// Sample photos, shown in preview only.
+  ///
+  /// Replaced wholesale by [_loadPregnancy] for a real account, so a mother
+  /// never sees someone else's ultrasound in her own gallery.
   final List<BabyMemory> _memories = <BabyMemory>[
     BabyMemory(
       id: 'sample-ultrasound',
@@ -188,23 +184,6 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
       assetPath: 'assets/images/pregnant1.png',
     ),
   ];
-
-  Future<void> _openGuide(Uri uri) async {
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _t(
-              'The source link cannot be opened right now.',
-              'Hindi mabuksan ang source link sa ngayon.',
-            ),
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
 
   Future<void> _downloadPdf({
     required String assetPath,
@@ -252,7 +231,19 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
   }
 
 
+  /// Guards against a second run while the first is still open.
+  ///
+  /// "Add photo" appears three times on this flow — the section action, the
+  /// empty-state button and the gallery's own button — and none of them was
+  /// disabled while a pick was in progress. Tapping again while the file
+  /// chooser was up started a second pick and pushed a second dialog, so
+  /// dismissing one left the other's barrier dimming the page with nothing
+  /// visible on top of it.
+  bool _isAddingMemory = false;
+
   Future<void> _addMemory() async {
+    if (_isAddingMemory) return;
+    _isAddingMemory = true;
     try {
       final selectedPhoto = await _imagePicker.pickImage(
         source: ImageSource.gallery,
@@ -264,112 +255,65 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
       final imageBytes = await selectedPhoto.readAsBytes();
       if (!mounted) return;
 
-      final titleController = TextEditingController(text: 'A beautiful memory');
-      final captionController = TextEditingController();
-      final details = await showDialog<_MemoryDetails>(
+      final details = await showDialog<MemoryDetails>(
         context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            backgroundColor: Colors.white,
-            surfaceTintColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            title: const Text(
-              'Add this memory',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            content: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.memory(
-                      imageBytes,
-                      width: double.infinity,
-                      height: 130,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: titleController,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Memory title',
-                      hintText: 'Ultrasound, bump photo…',
-                      prefixIcon: Icon(Icons.favorite_outline_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: captionController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Short story',
-                      hintText: 'What made this moment special?',
-                      alignLabelWithHint: true,
-                      prefixIcon: Icon(Icons.notes_rounded),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop(
-                    _MemoryDetails(
-                      title: titleController.text.trim().isEmpty
-                          ? 'A beautiful memory'
-                          : titleController.text.trim(),
-                      caption: captionController.text.trim().isEmpty
-                          ? 'A special moment in Baby’s growing story.'
-                          : captionController.text.trim(),
-                    ),
-                  );
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.brandPrimary,
-                  foregroundColor: Colors.white,
-                ),
-                icon: const Icon(Icons.add_photo_alternate_rounded, size: 18),
-                label: const Text('Save memory'),
-              ),
-            ],
-          );
-        },
+        builder: (_) => MemoryDetailsDialog(imageBytes: imageBytes),
       );
-      titleController.dispose();
-      captionController.dispose();
 
       if (details == null || !mounted) return;
-      setState(() {
-        _memories.insert(
-          0,
-          BabyMemory(
-            id: DateTime.now().microsecondsSinceEpoch.toString(),
-            title: details.title,
-            caption: details.caption,
-            date: DateTime.now(),
-            imageBytes: imageBytes,
+
+      // Preview has no pregnancy to attach a photo to, so it keeps the old
+      // in-memory behaviour and says so. Everywhere else the photo is saved
+      // before she is told it was.
+      final pregnancyId = _pregnancy?.pregnancyId;
+      if (_isPreview || pregnancyId == null) {
+        setState(() {
+          _memories.insert(
+            0,
+            BabyMemory(
+              id: DateTime.now().microsecondsSinceEpoch.toString(),
+              title: details.title,
+              caption: details.caption,
+              date: DateTime.now(),
+              imageBytes: imageBytes,
+            ),
+          );
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Preview only — this photo is not saved.'),
+            behavior: SnackBarBehavior.floating,
           ),
         );
-      });
+        return;
+      }
+
+      final saved = await _repository.saveMemory(
+        pregnancyId: pregnancyId,
+        title: details.title,
+        caption: details.caption,
+        imageBytes: imageBytes,
+      );
+      if (!mounted) return;
+
+      // Nothing is added to the list unless the write came back. The previous
+      // version inserted first and announced success unconditionally, so a
+      // failed save looked exactly like a good one until she reopened the app
+      // and the photo was gone.
+      if (saved == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('The photo could not be saved. Please try again.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      setState(() => _memories.insert(0, saved));
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Photo added to the Memory Gallery.'),
+          content: Text('Photo saved to your Memory Gallery.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -381,6 +325,11 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+    } finally {
+      // In a finally rather than at each exit: the method returns from five
+      // places, and a flag left true on any of them would disable adding
+      // photos for the rest of the session with no way to recover.
+      _isAddingMemory = false;
     }
   }
 
@@ -471,28 +420,28 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
                       // "my baby" are one experience; the split only becomes
                       // meaningful afterwards, when the baby is a separate
                       // person with a book of their own.
-                      if (_effectivePregnancy != null) ...[
-                        const SizedBox(height: 34),
-                        _MyCareRow(onTap: _openMyCare),
-                      ],
+                      // The "Your body and your care" row is out while its
+                      // destination is reworked. _openMyCare and the page it
+                      // opens are untouched, so putting it back is a matter of
+                      // restoring the row, not rebuilding the route.
 
-                      const SizedBox(height: 34),
-                      _MemoryCard(
-                        key: _memoriesKey,
-                        memories: _memories,
-                        onAddMemory: _addMemory,
-                        onOpenGallery: _openMemoryGallery,
-                      ),
+                      if (_memoriesEnabled) ...[
+                        const SizedBox(height: 34),
+                        _MemoryCard(
+                          key: _memoriesKey,
+                          memories: _memories,
+                          onAddMemory: _addMemory,
+                          onOpenGallery: _openMemoryGallery,
+                        ),
+                      ],
                       // The eight-page care guide used to sit here. It is
                       // almost entirely about a baby who has been born —
                       // first days, feeding through the first year, home
                       // safety, checkups — and this page is read by a mother
                       // who is still pregnant. It now lives in the baby book
                       // of a registered child.
-                      const SizedBox(height: 34),
-                      _GuideReferencesCard(
-                        onOpenDoh: () => _openGuide(_dohGuideUri),
-                        onOpenWho: () => _openGuide(_whoGuideUri),
+                      const SizedBox(height: 28),
+                      ReferencesPanel(
                         onDownloadDoh: () => _downloadPdf(
                           assetPath: 'assets/pdf/DOH.pdf',
                           fileName: 'DOH-Mother-and-Baby-Book.pdf',
@@ -508,8 +457,6 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
                         downloadingWho: _downloadingPdf ==
                             'WHO-Home-Based-Records-Guide.pdf',
                       ),
-                      const SizedBox(height: 18),
-                      const _HealthDisclaimer(),
                     ],
                   ),
                 ),
@@ -575,13 +522,6 @@ class _NoOngoingPregnancyNotice extends StatelessWidget {
   }
 }
 
-class _MemoryDetails {
-  final String title;
-  final String caption;
-
-  const _MemoryDetails({required this.title, required this.caption});
-}
-
 class _SectionHeading extends StatelessWidget {
   final String eyebrow;
   final String title;
@@ -617,7 +557,7 @@ class _SectionHeading extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  color: AppColors.textPrimary,
+                  color: AppColors.headingSoft,
                   fontSize: 20,
                   height: 1.2,
                   fontWeight: FontWeight.w800,
@@ -628,15 +568,19 @@ class _SectionHeading extends StatelessWidget {
           ),
         ),
         if (actionLabel != null)
-          TextButton(
+          TextButton.icon(
             onPressed: onAction,
             style: TextButton.styleFrom(
               foregroundColor: AppColors.brandText,
-              visualDensity: VisualDensity.compact,
+              backgroundColor: const Color(0xFFFFEDF4),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: const StadiumBorder(),
             ),
-            child: Text(
+            icon: const Icon(Icons.add_a_photo_outlined, size: 17),
+            label: Text(
               actionLabel!,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
             ),
           ),
       ],
@@ -689,6 +633,17 @@ class _MemoryCardState extends State<_MemoryCard> {
     if (!_isPlaying || widget.memories.length < 2) return;
     _slideTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!mounted || widget.memories.length < 2) return;
+
+      // Nothing to advance while another page is on top of this one.
+      //
+      // Without this the slideshow keeps ticking behind the gallery and the
+      // photo viewer, rebuilding a card carrying full-size images every four
+      // seconds for as long as the Baby Book stays in the navigator stack.
+      // Push the gallery, open a photo, come back, and that work is still
+      // going on underneath — which is what made the app feel slow after
+      // visiting the gallery rather than while using it.
+      if (ModalRoute.of(context)?.isCurrent != true) return;
+
       setState(() {
         _currentIndex = (_currentIndex + 1) % widget.memories.length;
       });
@@ -821,12 +776,16 @@ class _MemoryCardState extends State<_MemoryCard> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'SLIDESHOW ${_currentIndex + 1}/${widget.memories.length}',
+                                        // "SLIDESHOW 1/2" named the mechanism.
+                                        // "1 of 2" says where she is in her
+                                        // own photos, which is the only part
+                                        // of it she needs.
+                                        '${_currentIndex + 1} of ${widget.memories.length}',
                                         style: const TextStyle(
                                           color: AppColors.brandText,
-                                          fontSize: 8,
+                                          fontSize: 12,
                                           fontWeight: FontWeight.w900,
-                                          letterSpacing: 0.35,
+                                          letterSpacing: 0.2,
                                         ),
                                       ),
                                     ],
@@ -884,8 +843,8 @@ class _MemoryCardState extends State<_MemoryCard> {
                                   Text(
                                     memory.title,
                                     style: const TextStyle(
-                                      color: AppColors.textPrimary,
-                                      fontSize: 15,
+                                      color: AppColors.headingSoft,
+                                      fontSize: 16.5,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
@@ -895,8 +854,8 @@ class _MemoryCardState extends State<_MemoryCard> {
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 11,
+                                      color: AppColors.inputText,
+                                      fontSize: 13,
                                       height: 1.4,
                                     ),
                                   ),
@@ -1026,350 +985,4 @@ class _EmptyMemoryCard extends StatelessWidget {
 }
 
 
-class _GuideReferencesCard extends StatelessWidget {
-  final VoidCallback onOpenDoh;
-  final VoidCallback onOpenWho;
-  final VoidCallback onDownloadDoh;
-  final VoidCallback onDownloadWho;
-  final bool downloadingDoh;
-  final bool downloadingWho;
 
-  const _GuideReferencesCard({
-    required this.onOpenDoh,
-    required this.onOpenWho,
-    required this.onDownloadDoh,
-    required this.onDownloadWho,
-    required this.downloadingDoh,
-    required this.downloadingWho,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionHeading(
-          eyebrow: _t('GUIDE REFERENCES', 'PINAGBATAYANG GABAY'),
-          title: _t(
-            'Read or download the official guides',
-            'Basahin o i-download ang official guides',
-          ),
-        ),
-        const SizedBox(height: 7),
-        Text(
-          _t(
-            'The pregnancy guidance and Baby Book reader were informed by these maternal and child health references.',
-            '',
-          ),
-          style: const TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 12,
-            height: 1.45,
-          ),
-        ),
-        const SizedBox(height: 12),
-        _ReferenceTile(
-          badge: 'DOH',
-          badgeColor: AppColors.brandPrimary,
-          title: 'Mother and Baby Book',
-          organization: _t(
-            'Department of Health • Philippines',
-            'Kagawaran ng Kalusugan • Pilipinas',
-          ),
-          description: _t(
-            'Primary local reference for a mother-and-baby home health record.',
-            'Pangunahing lokal na sanggunian para sa health record ng ina at sanggol sa tahanan.',
-          ),
-          urlLabel: 'foi.gov.ph/agencies/doh/mother-and-baby-book',
-          onOpenSource: onOpenDoh,
-          onDownload: onDownloadDoh,
-          isDownloading: downloadingDoh,
-        ),
-        const SizedBox(height: 10),
-        _ReferenceTile(
-          badge: 'WHO',
-          badgeColor: const Color(0xFF4B8FD8),
-          title: 'Home-based records for maternal, newborn & child health',
-          organization: _t(
-            'World Health Organization',
-            'Pandaigdigang Organisasyon sa Kalusugan',
-          ),
-          description: _t(
-            'Guidance for child health books that complement facility records.',
-            'Gabay para sa child health books na umaakma sa records ng health facility.',
-          ),
-          urlLabel: 'who.int/publications/i/item/9789241550352',
-          onOpenSource: onOpenWho,
-          onDownload: onDownloadWho,
-          isDownloading: downloadingWho,
-        ),
-      ],
-    );
-  }
-}
-
-class _ReferenceTile extends StatelessWidget {
-  final String badge;
-  final Color badgeColor;
-  final String title;
-  final String organization;
-  final String description;
-  final String urlLabel;
-  final VoidCallback onOpenSource;
-  final VoidCallback onDownload;
-  final bool isDownloading;
-
-  const _ReferenceTile({
-    required this.badge,
-    required this.badgeColor,
-    required this.title,
-    required this.organization,
-    required this.description,
-    required this.urlLabel,
-    required this.onOpenSource,
-    required this.onDownload,
-    required this.isDownloading,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.borderPrimary),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: badgeColor.withValues(alpha: 0.11),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Text(
-              badge,
-              style: TextStyle(
-                color: badgeColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.4,
-              ),
-            ),
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 13,
-                    height: 1.25,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  organization,
-                  style: TextStyle(
-                    color: badgeColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  description,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 10,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                InkWell(
-                  onTap: onOpenSource,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 5),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            urlLabel,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.brandText,
-                              fontSize: 9,
-                              decoration: TextDecoration.underline,
-                              decorationColor: AppColors.brandText,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          Icons.open_in_new_rounded,
-                          size: 16,
-                          color: badgeColor,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: isDownloading ? null : onDownload,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: badgeColor,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: badgeColor.withValues(
-                        alpha: 0.45,
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 11),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(13),
-                      ),
-                    ),
-                    icon: isDownloading
-                        ? const SizedBox(
-                            width: 15,
-                            height: 15,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.download_rounded, size: 18),
-                    label: Text(
-                      isDownloading
-                          ? _t('Downloading…', 'Dina-download…')
-                          : _t('Download PDF', 'I-download ang PDF'),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HealthDisclaimer extends StatelessWidget {
-  const _HealthDisclaimer();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8EA),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFFFE3A8)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.info_outline_rounded,
-            color: Color(0xFFD78C28),
-            size: 19,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              _t(
-                'This is a UI mockup. General pregnancy and health information does not replace advice or assessment from your doctor, midwife, or health worker.',
-                '',
-              ),
-              style: const TextStyle(
-                color: Color(0xFF8A632D),
-                fontSize: 10,
-                height: 1.45,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Way into the deeper page about the mother's own care.
-///
-/// Sits inside the pregnancy book rather than as a second banner on Home.
-/// Two doors to "my pregnancy" made a mother choose between them without
-/// knowing what was behind either.
-class _MyCareRow extends StatelessWidget {
-  const _MyCareRow({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return BabyBookPanel(
-      padding: const EdgeInsets.all(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: AppColors.brandPrimary.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.favorite_rounded,
-                  color: AppColors.brandPrimary, size: 23),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _t('Your body and your care', 'Ang iyong katawan at pag-aalaga'),
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.brandText,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    _t('Changes, warning signs, and checklists',
-                        'Mga pagbabago, babala, at checklist'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 1.3,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios_rounded,
-                size: 16, color: AppColors.brandPrimary),
-          ],
-        ),
-      ),
-    );
-  }
-}

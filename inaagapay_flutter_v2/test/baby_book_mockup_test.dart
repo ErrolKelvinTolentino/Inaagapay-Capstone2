@@ -7,6 +7,8 @@ import 'package:inaagapay_flutter_v2/data/pregnancy_growth_data.dart';
 import 'package:inaagapay_flutter_v2/data/pregnancy_health_sample_data.dart';
 import 'package:inaagapay_flutter_v2/models/baby_growth_milestone.dart';
 import 'package:inaagapay_flutter_v2/models/pregnancy_health_record.dart';
+import 'package:inaagapay_flutter_v2/models/baby_memory.dart';
+import 'package:inaagapay_flutter_v2/screens/baby_book_memory_gallery_page.dart';
 import 'package:inaagapay_flutter_v2/screens/baby_book_mockup_page.dart';
 import 'package:inaagapay_flutter_v2/widgets/baby_book/baby_growth_milestones_section.dart';
 import 'package:inaagapay_flutter_v2/widgets/baby_book/pregnancy_health_records_section.dart';
@@ -702,45 +704,106 @@ void main() {
     expect(find.textContaining('Kumusta'), findsNothing);
   });
 
-  testWidgets('shows official baby book reference labels', (tester) async {
+  testWidgets('references are cited, folded away until asked for', (
+    tester,
+  ) async {
     await tester.pumpWidget(const MaterialApp(home: BabyBookMockupPage()));
     await tester.pumpAndSettle();
 
+    // Closed by default: two tall source cards were the largest thing on a
+    // page a mother opens to read about her pregnancy.
+    expect(find.text('References'), findsOneWidget);
+    expect(find.text('Mother and Baby Book'), findsNothing);
+    expect(find.text('World Health Organization'), findsNothing);
+
+    final toggle = find.byKey(const ValueKey('references-toggle'));
+    await tester.ensureVisible(toggle);
+    await tester.pumpAndSettle();
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    // Citing DOH and WHO is what keeps the guidance honest, so opening it must
+    // still name both sources and hand over both booklets.
     expect(find.text('Mother and Baby Book'), findsOneWidget);
     expect(find.text('World Health Organization'), findsOneWidget);
-    expect(find.text('Download PDF'), findsNWidgets(2));
+    expect(
+      find.byKey(const ValueKey('reference-download-DOH')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('reference-download-WHO')),
+      findsOneWidget,
+    );
+
+    // The raw URLs are gone — not something a mother reads or types.
+    expect(find.textContaining('foi.gov.ph'), findsNothing);
+    expect(find.textContaining('who.int'), findsNothing);
+
+    // And the disclaimer no longer opens by calling the page a mockup, which
+    // stopped being true once it started reading a real pregnancy.
+    expect(find.textContaining('This is a UI mockup'), findsNothing);
+    expect(
+      find.textContaining('does not replace advice'),
+      findsOneWidget,
+      reason: 'the guidance must still say what it is not',
+    );
   });
 
-  testWidgets('favorite moment slideshow rotates through gallery memories', (
+  testWidgets('photo memories are off while storage is unconfigured', (
     tester,
   ) async {
+    // Uploading returned "Bucket not found", so every attempt ended in "The
+    // photo could not be saved". The section is hidden behind a flag on the
+    // page rather than deleted — the repository, the gallery and the details
+    // dialog are all intact and covered by their own tests below and in
+    // memory_details_dialog_test.dart.
+    //
+    // This test exists so turning the flag back on is a deliberate act that
+    // shows up as a failing expectation, not something that drifts back in.
     await tester.pumpWidget(const MaterialApp(home: BabyBookMockupPage()));
     await tester.pumpAndSettle();
 
-    expect(find.text('Our first ultrasound ✨'), findsOneWidget);
-    expect(find.text('SLIDESHOW 1/2'), findsOneWidget);
-
-    await tester.pump(const Duration(seconds: 4));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Five-month bump photo'), findsOneWidget);
-    expect(find.text('SLIDESHOW 2/2'), findsOneWidget);
+    expect(find.text('PRECIOUS MEMORIES'), findsNothing);
+    expect(find.text('Our favorite moment'), findsNothing);
+    expect(find.byKey(const ValueKey('view-memory-gallery')), findsNothing);
+    expect(find.text('Add Baby’s first memory'), findsNothing);
   });
 
-  testWidgets('opens the dedicated memory gallery and photo viewer', (
+  testWidgets('the memory gallery still works when it is given photos', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: BabyBookMockupPage()));
+    // Pumped directly rather than reached through the Baby Book, because the
+    // way in is currently hidden. The page itself is unchanged and has to
+    // keep working for the day the bucket exists.
+    final memories = <BabyMemory>[
+      BabyMemory(
+        id: 'sample-ultrasound',
+        title: 'Our first ultrasound ✨',
+        caption: 'The first little glimpse of our growing baby.',
+        date: DateTime(2026, 7, 18),
+        assetPath: 'assets/images/ultrasound.png',
+      ),
+      BabyMemory(
+        id: 'sample-bump',
+        title: 'Five-month bump photo',
+        caption: 'Halfway through our pregnancy journey together.',
+        date: DateTime(2026, 7, 20),
+        assetPath: 'assets/images/pregnant1.png',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BabyBookMemoryGalleryPage(
+          memories: memories,
+          onAddMemory: () async {},
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    final galleryButton = find.byKey(const ValueKey('view-memory-gallery'));
-    await tester.ensureVisible(galleryButton);
-    await tester.pumpAndSettle();
-    await tester.tap(galleryButton);
-    await tester.pumpAndSettle();
-
-    expect(find.text('MEMORY GALLERY'), findsOneWidget);
-    expect(find.text('2 memories • Tap a photo to view it'), findsOneWidget);
+    expect(find.text('Memory Gallery'), findsOneWidget);
+    expect(find.text('2 photos • tap one to see it bigger'), findsOneWidget);
     expect(find.byKey(const ValueKey('gallery-add-photo')), findsOneWidget);
 
     await tester.tap(find.text('Our first ultrasound ✨'));
@@ -831,12 +894,21 @@ void main() {
     // own layout is covered by the _healthRecords() cases above.
     expect(find.text('Vaccinations and Supplements'), findsNothing);
 
-    await tester.ensureVisible(
-      find.text('Read or download the official guides'),
-    );
+    final references = find.byKey(const ValueKey('references-toggle'));
+    await tester.ensureVisible(references);
     await tester.pumpAndSettle();
-
-    expect(find.text('Read or download the official guides'), findsOneWidget);
+    expect(find.text('References'), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+    // Opening it is where the layout risk is — two rows and a paragraph
+    // unfolding inside a card at the bottom of a compact phone.
+    await tester.tap(references);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    final dohButton = tester.getRect(
+      find.byKey(const ValueKey('reference-download-DOH')),
+    );
+    expect(dohButton.right, lessThanOrEqualTo(390));
   });
 }
