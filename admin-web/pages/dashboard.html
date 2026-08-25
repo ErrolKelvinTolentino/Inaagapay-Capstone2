@@ -879,12 +879,14 @@
           const performer = data.account_id ? (await getAccountName(data.account_id)) || 'Administrator' : 'System';
           const actionReadable = getHumanReadableActionName(data.action);
           
+          const isSecret = (k) => /password|passwd|secret|token|otp|pin|auth_key|api_key|verification_code|reset_code/i.test(String(k));
+
           let oldHtml = '';
           if (data.old_data && typeof data.old_data === 'object' && Object.keys(data.old_data).length > 0) {
             oldHtml = `<div style="background:rgba(239,68,68,0.08);padding:14px;border-radius:12px;border-left:4px solid #ef4444;margin-top:16px;">
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#ef4444;margin-bottom:12px;">Previous State</div>`;
             for (const [key, val] of Object.entries(data.old_data)) {
-              oldHtml += `<div style="margin-bottom:8px;"><strong>${formatKey(key)}:</strong> ${formatValue(val)}</div>`;
+              oldHtml += `<div style="margin-bottom:8px;"><strong>${formatKey(key)}:</strong> ${isSecret(key) ? '<span style="color:#ef4444;font-style:italic;">[redacted]</span>' : formatValue(val)}</div>`;
             }
             oldHtml += `</div>`;
           }
@@ -894,7 +896,7 @@
             newHtml = `<div style="background:rgba(16,185,129,0.08);padding:14px;border-radius:12px;border-left:4px solid #10b981;margin-top:16px;">
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#10b981;margin-bottom:12px;">Updated State</div>`;
             for (const [key, val] of Object.entries(data.new_data)) {
-              newHtml += `<div style="margin-bottom:8px;"><strong>${formatKey(key)}:</strong> ${formatValue(val)}</div>`;
+              newHtml += `<div style="margin-bottom:8px;"><strong>${formatKey(key)}:</strong> ${isSecret(key) ? '<span style="color:#10b981;font-style:italic;">[redacted]</span>' : formatValue(val)}</div>`;
             }
             newHtml += `</div>`;
           }

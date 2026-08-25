@@ -229,23 +229,43 @@
         </div>
 
         <!-- ── Filter Control Bar ── -->
-        <div class="reports-controls-bar">
-          <div class="reports-filter-group">
+        <div class="reports-controls-bar" style="background:#ffffff; border:1px solid var(--border-primary); border-radius:14px; padding:16px 20px; box-shadow:0 4px 16px rgba(0,0,0,0.03); margin-bottom:20px; display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div style="font-size:13px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+              <i class="fa-solid fa-filter" style="color:var(--brand-primary);"></i> Filter Reports &amp; Facility Analytics
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" id="refresh-reports-btn" style="height:36px; border-radius:8px;"><i class="fa-solid fa-arrows-rotate"></i> Refresh Data</button>
+            </div>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
             <div class="reports-filter-item">
-              <span class="reports-filter-label"><i class="fa-solid fa-hospital-user"></i> Health Center:</span>
-              <select id="filter-bhc-select" class="form-select" style="min-width: 220px;">
+              <span class="reports-filter-label" style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-secondary);"><i class="fa-solid fa-hospital-user" style="color:var(--brand-primary);"></i> Health Center:</span>
+              <select id="filter-bhc-select" class="form-select" style="min-width: 220px; height:38px; border-radius:8px; font-size:12.5px;">
                 <option value="all">All Health Centers (System-wide)</option>
               </select>
             </div>
-            <div class="reports-filter-item">
-              <span class="reports-filter-label"><i class="fa-solid fa-calendar-day"></i> Date Range:</span>
-              <input type="date" id="filter-start-date" class="form-control" style="width: auto;" />
-              <span style="color: var(--text-secondary);">to</span>
-              <input type="date" id="filter-end-date" class="form-control" style="width: auto;" />
+            <div class="date-range-picker-group" id="reports-date-picker-wrap">
+              <i class="fa-solid fa-calendar-days date-icon"></i>
+              <span class="date-label">From:</span>
+              <input type="date" class="date-input" id="filter-start-date" title="Filter analytics from date" />
+              <span class="date-sep">to</span>
+              <span class="date-label">To:</span>
+              <input type="date" class="date-input" id="filter-end-date" title="Filter analytics up to date" />
+              <button type="button" class="date-clear-btn" id="reports-date-clear-btn" title="Clear date range" style="display:none;"><i class="fa-solid fa-xmark"></i></button>
             </div>
           </div>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-secondary btn-sm" id="refresh-reports-btn"><i class="fa-solid fa-arrows-rotate"></i> Refresh Data</button>
+
+          <!-- Quick Date Presets Bar -->
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px dashed #e2e8f0; padding-top:10px;">
+            <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.3px;">Date Presets:</span>
+            <div class="date-presets-bar" id="reports-date-presets">
+              <button type="button" class="date-preset-btn active" data-preset="all">All Time</button>
+              <button type="button" class="date-preset-btn" data-preset="this_month">This Month</button>
+              <button type="button" class="date-preset-btn" data-preset="30d">Last 30 Days</button>
+              <button type="button" class="date-preset-btn" data-preset="quarter">This Quarter</button>
+              <button type="button" class="date-preset-btn" data-preset="year">This Year</button>
+            </div>
           </div>
         </div>
 
@@ -473,14 +493,14 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Health Center (BHC)</th>
-                  <th>Location / Barangay</th>
-                  <th style="text-align:center;">Assigned Midwives</th>
-                  <th style="text-align:center;">Active Mothers</th>
-                  <th style="text-align:center;">Ongoing Pregnancies</th>
-                  <th style="text-align:center;">High Risk Pregnancies</th>
-                  <th style="text-align:center;">Immunization Rate</th>
-                  <th style="text-align:center;">Inventory Status</th>
+                  <th class="th-sortable sort-active" data-bhc-sort="name">Health Center (BHC) <span class="sort-indicator"><i class="fa-solid fa-arrow-down-long"></i></span></th>
+                  <th class="th-sortable" data-bhc-sort="barangay">Location / Barangay <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                  <th class="th-sortable" data-bhc-sort="midwives" style="text-align:center;">Assigned Midwives <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                  <th class="th-sortable" data-bhc-sort="mothers" style="text-align:center;">Active Mothers <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                  <th class="th-sortable" data-bhc-sort="pregnancies" style="text-align:center;">Ongoing Pregnancies <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                  <th class="th-sortable" data-bhc-sort="highrisk" style="text-align:center;">High Risk Pregnancies <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                  <th class="th-sortable" data-bhc-sort="immunization" style="text-align:center;">Immunization Rate <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                  <th class="th-sortable" data-bhc-sort="stock" style="text-align:center;">Inventory Status <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
                 </tr>
               </thead>
               <tbody id="tbody-bhc-analytics">
@@ -669,6 +689,114 @@
           }
         }
 
+        /* ── Date Constraints & Presets Helpers ───────────────────────── */
+        function getReportsTodayStr() {
+          const d = new Date();
+          return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function initReportsDateConstraints() {
+          const startInput = document.getElementById("filter-start-date");
+          const endInput = document.getElementById("filter-end-date");
+          const clearBtn = document.getElementById("reports-date-clear-btn");
+          const today = getReportsTodayStr();
+
+          if (startInput && endInput) {
+            startInput.max = today;
+            endInput.max = today;
+
+            const syncConstraints = () => {
+              const sVal = startInput.value;
+              const eVal = endInput.value;
+
+              if (sVal) {
+                endInput.min = sVal;
+                if (eVal && eVal < sVal) endInput.value = sVal;
+              } else {
+                endInput.removeAttribute("min");
+              }
+
+              if (eVal) {
+                startInput.max = eVal;
+                if (sVal && sVal > eVal) startInput.value = eVal;
+              } else {
+                startInput.max = today;
+              }
+
+              if (clearBtn) {
+                clearBtn.style.display = (sVal || eVal) ? "inline-flex" : "none";
+              }
+            };
+
+            startInput.addEventListener("change", () => {
+              syncConstraints();
+              setActiveReportsDatePreset("");
+              renderReports();
+            });
+
+            endInput.addEventListener("change", () => {
+              syncConstraints();
+              setActiveReportsDatePreset("");
+              renderReports();
+            });
+
+            if (clearBtn) {
+              clearBtn.addEventListener("click", () => {
+                startInput.value = "";
+                endInput.value = "";
+                syncConstraints();
+                setActiveReportsDatePreset("all");
+                renderReports();
+              });
+            }
+          }
+        }
+
+        function setActiveReportsDatePreset(presetKey) {
+          document.querySelectorAll("#reports-date-presets .date-preset-btn").forEach(btn => {
+            btn.classList.toggle("active", btn.dataset.preset === presetKey);
+          });
+        }
+
+        function applyReportsDatePreset(presetKey) {
+          const startInput = document.getElementById("filter-start-date");
+          const endInput = document.getElementById("filter-end-date");
+          const now = new Date();
+          const today = getReportsTodayStr();
+
+          setActiveReportsDatePreset(presetKey);
+
+          if (presetKey === "all") {
+            startInput.value = "";
+            endInput.value = "";
+          } else if (presetKey === "this_month") {
+            const d = new Date(now.getFullYear(), now.getMonth(), 1);
+            startInput.value = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+            endInput.value = today;
+          } else if (presetKey === "30d") {
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+            startInput.value = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+            endInput.value = today;
+          } else if (presetKey === "quarter") {
+            const qMonth = Math.floor(now.getMonth() / 3) * 3;
+            const d = new Date(now.getFullYear(), qMonth, 1);
+            startInput.value = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+            endInput.value = today;
+          } else if (presetKey === "year") {
+            const d = new Date(now.getFullYear(), 0, 1);
+            startInput.value = d.getFullYear() + "-01-01";
+            endInput.value = today;
+          }
+
+          const clearBtn = document.getElementById("reports-date-clear-btn");
+          if (clearBtn) clearBtn.style.display = (startInput.value || endInput.value) ? "inline-flex" : "none";
+
+          if (startInput.value) endInput.min = startInput.value;
+          if (endInput.value) startInput.max = endInput.value;
+
+          renderReports();
+        }
+
         function populateBhcDropdown() {
           const sel = document.getElementById("filter-bhc-select");
           if (!sel) return;
@@ -676,30 +804,55 @@
             allBhcs.map(b => `<option value="${esc(b.bhc_id)}">${esc(b.bhc_name)}</option>`).join("");
         }
 
-        // Render Reports & Analytics based on Selected BHC filter
+        // Helper to check if a timestamp or date string is within the selected filter window
+        function isWithinReportDate(dateVal, startStr, endStr) {
+          if (!startStr && !endStr) return true;
+          if (!dateVal) return true; // keep if no date recorded
+          const d = new Date(dateVal);
+          if (isNaN(d.getTime())) return true;
+          if (startStr && d < new Date(`${startStr}T00:00:00`)) return false;
+          if (endStr && d > new Date(`${endStr}T23:59:59`)) return false;
+          return true;
+        }
+
+        // Render Reports & Analytics based on Selected BHC filter & Date Range
         function renderReports() {
           const selectedBhcId = document.getElementById("filter-bhc-select").value;
+          const startDate = document.getElementById("filter-start-date")?.value || "";
+          const endDate = document.getElementById("filter-end-date")?.value || "";
 
-          // Filter Data
+          // Filter Data by Facility
           let filteredMothers = allMothers;
           let filteredPregnancies = allPregnancies;
           let filteredMidwives = allMidwives;
           let filteredChildren = allChildren;
-
-          // Stock is filtered by which shelf to read, not by filtering the
-          // catalogue: every item exists everywhere, what differs is the batches
-          // standing at that health centre.
-          const stockFacility = selectedBhcId === "all" ? "all" : selectedBhcId;
-          const stockFacilityCount = allBhcs.length + 1; // BHC shelves + the RHU depot
+          let filteredImmunizations = allImmunizations;
 
           if (selectedBhcId !== "all") {
-            const bhcIdNum = parseInt(selectedBhcId);
+            const bhcIdNum = parseInt(selectedBhcId, 10);
             filteredMothers = allMothers.filter(m => m.assigned_bhc_id === bhcIdNum);
             const motherIds = new Set(filteredMothers.map(m => m.mother_id));
             filteredPregnancies = allPregnancies.filter(p => motherIds.has(p.mother_id));
             filteredMidwives = allMidwives.filter(m => m.assigned_bhc_id === bhcIdNum);
             filteredChildren = allChildren.filter(c => motherIds.has(c.mother_id));
+            const childIds = new Set(filteredChildren.map(c => c.child_id));
+            filteredImmunizations = allImmunizations.filter(v => childIds.has(v.child_id));
           }
+
+          // Filter Data by Date Range (if active)
+          if (startDate || endDate) {
+            filteredMothers = filteredMothers.filter(m => isWithinReportDate(m.created_at, startDate, endDate));
+            filteredPregnancies = filteredPregnancies.filter(p =>
+              isWithinReportDate(p.created_at || p.start_date || p.expected_due_date, startDate, endDate)
+            );
+            filteredImmunizations = filteredImmunizations.filter(v =>
+              isWithinReportDate(v.date_administered || v.created_at, startDate, endDate)
+            );
+          }
+
+          // Stock is filtered by which shelf to read
+          const stockFacility = selectedBhcId === "all" ? "all" : selectedBhcId;
+          const stockFacilityCount = allBhcs.length + 1;
 
           // KPI 1: Mothers
           document.getElementById("kpi-mothers").textContent = filteredMothers.length.toLocaleString();
@@ -713,8 +866,8 @@
           document.getElementById("kpi-high-risk-badge").textContent = `${highRiskCount} High Risk (${highRiskPct}%)`;
 
           // KPI 3: Immunization Compliance
-          const completedVac = allImmunizations.filter(v => (v.status || "").toLowerCase() === "completed").length;
-          const totalVac = allImmunizations.length;
+          const completedVac = filteredImmunizations.filter(v => (v.status || "").toLowerCase() === "completed").length;
+          const totalVac = filteredImmunizations.length;
           const vacRate = totalVac > 0 ? Math.round((completedVac / totalVac) * 100) : null;
           document.getElementById("kpi-immunization-rate").textContent = vacRate === null ? "—" : `${vacRate}%`;
           document.getElementById("kpi-child-count").textContent = `${filteredChildren.length} Infants / Children`;
@@ -1077,6 +1230,38 @@
           }).join("");
         }
 
+        let bhcSortCol = "name";
+        let bhcSortDir = "asc";
+
+        window.toggleBhcSort = function(col) {
+          if (bhcSortCol === col) {
+            bhcSortDir = bhcSortDir === "asc" ? "desc" : "asc";
+          } else {
+            bhcSortCol = col;
+            bhcSortDir = (col === "name" || col === "barangay") ? "asc" : "desc";
+          }
+          updateBhcSortHeaderUI();
+          renderBhcComparativeTable();
+        };
+
+        function updateBhcSortHeaderUI() {
+          document.querySelectorAll("th[data-bhc-sort]").forEach(th => {
+            const col = th.dataset.bhcSort;
+            const isCurrent = col === bhcSortCol;
+            th.classList.toggle("sort-active", isCurrent);
+            const ind = th.querySelector(".sort-indicator");
+            if (ind) {
+              if (isCurrent) {
+                ind.innerHTML = bhcSortDir === "asc"
+                  ? '<i class="fa-solid fa-arrow-up-long"></i>'
+                  : '<i class="fa-solid fa-arrow-down-long"></i>';
+              } else {
+                ind.innerHTML = '<i class="fa-solid fa-sort"></i>';
+              }
+            }
+          });
+        }
+
         function renderBhcComparativeTable() {
           const tbody = document.getElementById("tbody-bhc-analytics");
           if (!tbody) return;
@@ -1087,43 +1272,86 @@
           }
 
           const searchTerm = (document.getElementById("bhc-table-search")?.value || "").toLowerCase();
-          const filteredBhcs = allBhcs.filter(b =>
+          const startDate = document.getElementById("filter-start-date")?.value || "";
+          const endDate = document.getElementById("filter-end-date")?.value || "";
+
+          let filteredBhcs = allBhcs.filter(b =>
             (b.bhc_name || "").toLowerCase().includes(searchTerm) ||
             (b.barangay || "").toLowerCase().includes(searchTerm));
 
-          tbody.innerHTML = filteredBhcs.map(b => {
-            const bMothers = allMothers.filter(m => m.assigned_bhc_id === b.bhc_id);
+          // Calculate aggregated metrics per BHC
+          const rows = filteredBhcs.map(b => {
+            let bMothers = allMothers.filter(m => m.assigned_bhc_id === b.bhc_id);
+            if (startDate || endDate) {
+              bMothers = bMothers.filter(m => isWithinReportDate(m.created_at, startDate, endDate));
+            }
             const motherIds = new Set(bMothers.map(m => m.mother_id));
-            const bPregnancies = allPregnancies.filter(p => motherIds.has(p.mother_id) && (p.status || "ongoing").toLowerCase() === "ongoing");
+
+            let bPregnancies = allPregnancies.filter(p => motherIds.has(p.mother_id) && (p.status || "ongoing").toLowerCase() === "ongoing");
+            if (startDate || endDate) {
+              bPregnancies = bPregnancies.filter(p => isWithinReportDate(p.created_at || p.start_date, startDate, endDate));
+            }
             const bHighRisk = bPregnancies.filter(p => (p.pregnancy_risk_level || "").toLowerCase() === "high").length;
             const bMidwives = allMidwives.filter(m => m.assigned_bhc_id === b.bhc_id);
-            // Read this health centre's own shelf, at its own per-facility
-            // threshold — not the combined one, which is scaled across shelves.
             const bStockShortages = InventoryStock.shortages(String(b.bhc_id), 1).length;
 
-            // Immunization rate is derived from this BHC's own children, not a
-            // fixed placeholder — this column feeds RHU reporting.
             const bChildIds = new Set(allChildren.filter(c => motherIds.has(c.mother_id)).map(c => c.child_id));
-            const bImmun = allImmunizations.filter(v => bChildIds.has(v.child_id));
+            let bImmun = allImmunizations.filter(v => bChildIds.has(v.child_id));
+            if (startDate || endDate) {
+              bImmun = bImmun.filter(v => isWithinReportDate(v.date_administered || v.created_at, startDate, endDate));
+            }
             const bImmunDone = bImmun.filter(v => (v.status || "").toLowerCase() === "completed").length;
-            const immunBadge = bImmun.length > 0
-              ? `<span class="badge badge-admin">${Math.round((bImmunDone / bImmun.length) * 100)}%</span>`
+            const immunPct = bImmun.length > 0 ? Math.round((bImmunDone / bImmun.length) * 100) : -1;
+
+            return {
+              bhc: b,
+              name: b.bhc_name || "",
+              barangay: b.barangay || "",
+              midwivesCount: bMidwives.length,
+              mothersCount: bMothers.length,
+              pregnanciesCount: bPregnancies.length,
+              highRiskCount: bHighRisk,
+              stockShortages: bStockShortages,
+              immunPct: immunPct,
+              immunCount: bImmun.length
+            };
+          });
+
+          // Sort rows
+          const mult = bhcSortDir === "asc" ? 1 : -1;
+          rows.sort((a, b) => {
+            if (bhcSortCol === "name") return a.name.localeCompare(b.name) * mult;
+            if (bhcSortCol === "barangay") return a.barangay.localeCompare(b.barangay) * mult;
+            if (bhcSortCol === "midwives") return (a.midwivesCount - b.midwivesCount) * mult;
+            if (bhcSortCol === "mothers") return (a.mothersCount - b.mothersCount) * mult;
+            if (bhcSortCol === "pregnancies") return (a.pregnanciesCount - b.pregnanciesCount) * mult;
+            if (bhcSortCol === "highrisk") return (a.highRiskCount - b.highRiskCount) * mult;
+            if (bhcSortCol === "immunization") return (a.immunPct - b.immunPct) * mult;
+            if (bhcSortCol === "stock") return (a.stockShortages - b.stockShortages) * mult;
+            return 0;
+          });
+
+          updateBhcSortHeaderUI();
+
+          tbody.innerHTML = rows.map(r => {
+            const immunBadge = r.immunCount > 0
+              ? `<span class="badge badge-admin">${r.immunPct}%</span>`
               : `<span class="badge badge-inactive" title="No immunization records for this health center">—</span>`;
 
-            const stockBadge = bStockShortages > 0
-              ? `<span class="badge badge-low" style="color:var(--error);"><i class="fa-solid fa-triangle-exclamation"></i> ${bStockShortages} Alerts</span>`
+            const stockBadge = r.stockShortages > 0
+              ? `<span class="badge badge-low" style="color:var(--error);"><i class="fa-solid fa-triangle-exclamation"></i> ${r.stockShortages} Alerts</span>`
               : `<span class="badge badge-teal"><i class="fa-solid fa-circle-check"></i> Stock Healthy</span>`;
 
             return `
               <tr>
-                <td style="font-weight:700; color:var(--brand-text);">${esc(b.bhc_name)}</td>
-                <td><i class="fa-solid fa-location-dot" style="color:var(--brand-primary); margin-right:4px;"></i> ${esc(b.barangay || '—')}</td>
-                <td style="text-align:center; font-weight:600;">${bMidwives.length}</td>
-                <td style="text-align:center; font-weight:600;">${bMothers.length}</td>
-                <td style="text-align:center; font-weight:600;">${bPregnancies.length}</td>
+                <td style="font-weight:700; color:var(--brand-text);">${esc(r.name)}</td>
+                <td><i class="fa-solid fa-location-dot" style="color:var(--brand-primary); margin-right:4px;"></i> ${esc(r.barangay || '—')}</td>
+                <td style="text-align:center; font-weight:600;">${r.midwivesCount}</td>
+                <td style="text-align:center; font-weight:600;">${r.mothersCount}</td>
+                <td style="text-align:center; font-weight:600;">${r.pregnanciesCount}</td>
                 <td style="text-align:center;">
-                  ${bHighRisk > 0
-                    ? `<span class="badge badge-high-risk">${bHighRisk} High Risk</span>`
+                  ${r.highRiskCount > 0
+                    ? `<span class="badge badge-high-risk">${r.highRiskCount} High Risk</span>`
                     : `<span class="badge badge-low-risk">0 High Risk</span>`}
                 </td>
                 <td style="text-align:center;">${immunBadge}</td>
@@ -1143,6 +1371,23 @@
         document.getElementById("export-pdf-btn")?.addEventListener("click", () => {
           window.print();
         });
+
+        // Date Presets Wiring
+        document.querySelectorAll("#reports-date-presets .date-preset-btn").forEach(btn => {
+          btn.addEventListener("click", () => {
+            applyReportsDatePreset(btn.dataset.preset);
+          });
+        });
+
+        // Table Header Click Sorting Wiring
+        document.querySelectorAll("th[data-bhc-sort]").forEach(th => {
+          th.addEventListener("click", () => {
+            const col = th.dataset.bhcSort;
+            if (col) window.toggleBhcSort(col);
+          });
+        });
+
+        initReportsDateConstraints();
 
         // Load data on page ready
         initReports();

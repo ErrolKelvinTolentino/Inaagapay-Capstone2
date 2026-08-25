@@ -1198,13 +1198,15 @@
                 }
               }
 
-              /* Audit log */
+              /* Audit log - Protect Patient Privacy under Data Privacy Act (RA 10173) */
               await db.from("audit_trail").insert({
                 account_id: session.account_id,
                 action: "create_account",
                 table_name: "accounts",
-                description: `Created ${type} account for ${first} ${last} (${email})${type === "midwife" ? " assigned to BHC ID: " + bhcId : ""}`,
-                new_data: { email, account_type: type, bhc_id: type === "midwife" ? bhcId : null },
+                description: type === "mother"
+                  ? `Created patient account for Patient #${newAcct?.account_id || 'new'}`
+                  : `Created ${type} account for ${first} ${last} (${email})${type === "midwife" ? " assigned to BHC ID: " + bhcId : ""}`,
+                new_data: { account_type: type, bhc_id: type === "midwife" ? bhcId : null },
               });
 
               /* Send Notifications */

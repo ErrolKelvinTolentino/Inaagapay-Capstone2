@@ -124,38 +124,78 @@
             </div>
 
             <div class="card">
-                <div class="toolbar">
-                    <div class="search-box" style="position: relative; display: flex; align-items: center; width: 100%; max-width: 320px;">
-                        <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; color: var(--text-secondary);"></i>
-                        <input class="form-control" type="search" id="search-input" placeholder="Search by name or email…" style="padding-left: 36px; padding-right: 32px; width: 100%;" />
-                        <button id="search-clear" style="position: absolute; right: 10px; background: transparent; border: none; color: var(--text-secondary); cursor: pointer; display: none; font-size: 14px; padding: 4px;"><i class="fa-solid fa-circle-xmark"></i></button>
+                <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; align-items:stretch; padding:18px 20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                        <div class="search-box" style="position: relative; display: flex; align-items: center; width: 100%; max-width: 320px;">
+                            <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; color: var(--text-secondary);"></i>
+                            <input class="form-control" type="search" id="search-input" placeholder="Search by name or email…" style="padding-left: 36px; padding-right: 32px; width: 100%;" />
+                            <button id="search-clear" style="position: absolute; right: 10px; background: transparent; border: none; color: var(--text-secondary); cursor: pointer; display: none; font-size: 14px; padding: 4px;"><i class="fa-solid fa-circle-xmark"></i></button>
+                        </div>
+                        <div class="filter-group" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <select class="form-select" id="filter-type" style="width: auto; min-width: 140px;">
+                                <option value="">All Types</option>
+                                <option value="mho">Municipal Officer</option>
+                                <option value="admin">RHU Admin</option>
+                                <option value="midwife">Midwife</option>
+                                <option value="mother">Mother</option>
+                            </select>
+                            <select class="form-select" id="filter-status" style="width: auto; min-width: 140px;">
+                                <option value="">All Status</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="suspended">Suspended</option>
+                            </select>
+                            <div class="date-range-picker-group" id="accounts-date-picker-wrap">
+                                <i class="fa-solid fa-calendar-days date-icon"></i>
+                                <span class="date-label">Created:</span>
+                                <input type="date" class="date-input" id="filter-date-from" title="Filter from registration date" />
+                                <span class="date-sep">to</span>
+                                <input type="date" class="date-input" id="filter-date-to" title="Filter to registration date" />
+                                <button type="button" class="date-clear-btn" id="accounts-date-clear-btn" title="Clear date range" style="display:none;"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                            <div class="sort-control-group">
+                                <span class="sort-control-label">Sort:</span>
+                                <select class="sort-select" id="accounts-sort-select">
+                                    <option value="created_at">Registration Date</option>
+                                    <option value="name">Account Name</option>
+                                    <option value="email">Email Address</option>
+                                    <option value="type">Account Type</option>
+                                    <option value="status">Status</option>
+                                </select>
+                                <button type="button" class="sort-direction-btn" id="accounts-sort-dir-btn" title="Toggle Ascending / Descending">
+                                    <i class="fa-solid fa-arrow-down-wide-short" id="accounts-sort-dir-icon"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <!-- Fixed filter group: side by side horizontally -->
-                    <div class="filter-group" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                        <select class="form-select" id="filter-type" style="width: auto; min-width: 140px;">
-                            <option value="">All Types</option>
-                            <option value="mho">Municipal Officer</option>
-                            <option value="admin">RHU Admin</option>
-                            <option value="midwife">Midwife</option>
-                            <option value="mother">Mother</option>
-                        </select>
-                        <select class="form-select" id="filter-status" style="width: auto; min-width: 140px;">
-                            <option value="">All Status</option>
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="suspended">Suspended</option>
-                        </select>
+
+                    <!-- Date Presets & Filter Actions Bar -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px dashed #e2e8f0; padding-top:10px;">
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.3px;">Quick Range:</span>
+                            <div class="date-presets-bar" id="accounts-date-presets">
+                                <button type="button" class="date-preset-btn active" data-preset="all">All Time</button>
+                                <button type="button" class="date-preset-btn" data-preset="today">Today</button>
+                                <button type="button" class="date-preset-btn" data-preset="7d">Last 7 Days</button>
+                                <button type="button" class="date-preset-btn" data-preset="30d">Last 30 Days</button>
+                                <button type="button" class="date-preset-btn" data-preset="this_month">This Month</button>
+                            </div>
+                        </div>
+                        <div id="accounts-active-count"></div>
                     </div>
+
+                    <!-- Active Filter Chips Bar -->
+                    <div class="active-filters-bar" id="accounts-active-filters" style="display:none; margin-top:4px;"></div>
                 </div>
                 <div class="table-wrap">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Type</th>
-                                <th>Status</th>
-                                <th>Created</th>
+                                <th class="th-sortable" data-acc-sort="name">Name <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                                <th class="th-sortable" data-acc-sort="email">Email <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                                <th class="th-sortable" data-acc-sort="type">Type <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                                <th class="th-sortable" data-acc-sort="status">Status <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                                <th class="th-sortable sort-active" data-acc-sort="created_at">Created <span class="sort-indicator"><i class="fa-solid fa-arrow-down-long"></i></span></th>
                                 <th style="text-align:center">Actions</th>
                             </tr>
                         </thead>
@@ -328,6 +368,241 @@
                 document.getElementById("total-count").textContent = allAccounts.length;
             }
 
+            /* ── Date Constraints & Presets Helpers ───────────────────────── */
+            function getAccountsTodayStr() {
+                const d = new Date();
+                return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            }
+
+            function initAccountsDateConstraints() {
+                const fromInput = document.getElementById("filter-date-from");
+                const toInput = document.getElementById("filter-date-to");
+                const clearBtn = document.getElementById("accounts-date-clear-btn");
+                const today = getAccountsTodayStr();
+
+                if (fromInput && toInput) {
+                    fromInput.max = today;
+                    toInput.max = today;
+
+                    const syncConstraints = () => {
+                        const fromVal = fromInput.value;
+                        const toVal = toInput.value;
+
+                        if (fromVal) {
+                            toInput.min = fromVal;
+                            if (toVal && toVal < fromVal) toInput.value = fromVal;
+                        } else {
+                            toInput.removeAttribute("min");
+                        }
+
+                        if (toVal) {
+                            fromInput.max = toVal;
+                            if (fromVal && fromVal > toVal) fromInput.value = toVal;
+                        } else {
+                            fromInput.max = today;
+                        }
+
+                        if (clearBtn) {
+                            clearBtn.style.display = (fromVal || toVal) ? "inline-flex" : "none";
+                        }
+                    };
+
+                    fromInput.addEventListener("change", syncConstraints);
+                    toInput.addEventListener("change", syncConstraints);
+
+                    if (clearBtn) {
+                        clearBtn.addEventListener("click", () => {
+                            fromInput.value = "";
+                            toInput.value = "";
+                            syncConstraints();
+                            setActiveAccountsDatePreset("all");
+                            applyFilters();
+                        });
+                    }
+                }
+            }
+
+            function setActiveAccountsDatePreset(presetKey) {
+                document.querySelectorAll("#accounts-date-presets .date-preset-btn").forEach(btn => {
+                    btn.classList.toggle("active", btn.dataset.preset === presetKey);
+                });
+            }
+
+            function applyAccountsDatePreset(presetKey) {
+                const fromInput = document.getElementById("filter-date-from");
+                const toInput = document.getElementById("filter-date-to");
+                const now = new Date();
+                const today = getAccountsTodayStr();
+
+                setActiveAccountsDatePreset(presetKey);
+
+                if (presetKey === "all") {
+                    fromInput.value = "";
+                    toInput.value = "";
+                } else if (presetKey === "today") {
+                    fromInput.value = today;
+                    toInput.value = today;
+                } else if (presetKey === "7d") {
+                    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+                    fromInput.value = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+                    endInput = today;
+                    toInput.value = today;
+                } else if (presetKey === "30d") {
+                    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+                    fromInput.value = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+                    toInput.value = today;
+                } else if (presetKey === "this_month") {
+                    const d = new Date(now.getFullYear(), now.getMonth(), 1);
+                    fromInput.value = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+                    toInput.value = today;
+                }
+
+                const clearBtn = document.getElementById("accounts-date-clear-btn");
+                if (clearBtn) clearBtn.style.display = (fromInput.value || toInput.value) ? "inline-flex" : "none";
+
+                if (fromInput.value) toInput.min = fromInput.value;
+                if (toInput.value) fromInput.max = toInput.value;
+
+                applyFilters();
+            }
+
+            /* ── Sorting State & Logic ──────────────────────────────────────── */
+            let accSortCol = "created_at";
+            let accSortDir = "desc";
+
+            function sortAccounts(list, col, dir) {
+                const mult = dir === "asc" ? 1 : -1;
+                return [...list].sort((a, b) => {
+                    if (col === "created_at") {
+                        const ta = toUTC(a.created_at)?.getTime() || 0;
+                        const tb = toUTC(b.created_at)?.getTime() || 0;
+                        return (ta - tb) * mult;
+                    }
+                    if (col === "name") {
+                        const na = [a.first_name, a.last_name].filter(Boolean).join(" ").toLowerCase();
+                        const nb = [b.first_name, b.last_name].filter(Boolean).join(" ").toLowerCase();
+                        return na.localeCompare(nb) * mult;
+                    }
+                    if (col === "email") {
+                        const ea = (a.email_address || "").toLowerCase();
+                        const eb = (b.email_address || "").toLowerCase();
+                        return ea.localeCompare(eb) * mult;
+                    }
+                    if (col === "type") {
+                        const ta = (a.account_type || "").toLowerCase();
+                        const tb = (b.account_type || "").toLowerCase();
+                        return ta.localeCompare(tb) * mult;
+                    }
+                    if (col === "status") {
+                        const sa = (a.status || "").toLowerCase();
+                        const sb = (b.status || "").toLowerCase();
+                        return sa.localeCompare(sb) * mult;
+                    }
+                    return 0;
+                });
+            }
+
+            window.toggleAccSort = function(col) {
+                if (accSortCol === col) {
+                    accSortDir = accSortDir === "asc" ? "desc" : "asc";
+                } else {
+                    accSortCol = col;
+                    accSortDir = (col === "created_at") ? "desc" : "asc";
+                }
+                const sel = document.getElementById("accounts-sort-select");
+                if (sel) sel.value = col;
+                updateAccSortUI();
+                renderTable();
+            };
+
+            function updateAccSortUI() {
+                const icon = document.getElementById("accounts-sort-dir-icon");
+                if (icon) {
+                    icon.className = accSortDir === "asc"
+                        ? "fa-solid fa-arrow-up-short-wide"
+                        : "fa-solid fa-arrow-down-wide-short";
+                }
+
+                document.querySelectorAll("th[data-acc-sort]").forEach(th => {
+                    const col = th.dataset.accSort;
+                    const isCurrent = col === accSortCol;
+                    th.classList.toggle("sort-active", isCurrent);
+                    const ind = th.querySelector(".sort-indicator");
+                    if (ind) {
+                        if (isCurrent) {
+                            ind.innerHTML = accSortDir === "asc"
+                                ? '<i class="fa-solid fa-arrow-up-long"></i>'
+                                : '<i class="fa-solid fa-arrow-down-long"></i>';
+                        } else {
+                            ind.innerHTML = '<i class="fa-solid fa-sort"></i>';
+                        }
+                    }
+                });
+            }
+
+            /* ── Active Filter Chips ────────────────────────────────────────── */
+            function renderAccountsActiveFilterChips() {
+                const bar = document.getElementById("accounts-active-filters");
+                if (!bar) return;
+
+                const q      = document.getElementById("search-input").value.trim();
+                const type   = document.getElementById("filter-type").value;
+                const status = document.getElementById("filter-status").value;
+                const from   = document.getElementById("filter-date-from").value;
+                const to     = document.getElementById("filter-date-to").value;
+
+                const chips = [];
+                if (q) chips.push({ label: "Search", val: `"${q}"`, clear: () => { document.getElementById("search-input").value = ""; searchClear.style.display = "none"; applyFilters(); } });
+                if (type) chips.push({ label: "Type", val: type.toUpperCase(), clear: () => { document.getElementById("filter-type").value = ""; applyFilters(); } });
+                if (status) chips.push({ label: "Status", val: status, clear: () => { document.getElementById("filter-status").value = ""; applyFilters(); } });
+                if (from || to) {
+                    chips.push({
+                        label: "Registered",
+                        val: `${from || "Any"} &rarr; ${to || "Today"}`,
+                        clear: () => {
+                            document.getElementById("filter-date-from").value = "";
+                            document.getElementById("filter-date-to").value = "";
+                            setActiveAccountsDatePreset("all");
+                            applyFilters();
+                        }
+                    });
+                }
+
+                if (chips.length === 0) {
+                    bar.innerHTML = "";
+                    bar.style.display = "none";
+                    return;
+                }
+
+                bar.style.display = "flex";
+                bar.innerHTML = `
+                    <span class="active-filters-label"><i class="fa-solid fa-sliders"></i> Active:</span>
+                    ${chips.map((c, i) => `
+                        <span class="filter-chip">
+                            <span><strong>${esc(c.label)}:</strong> ${c.val}</span>
+                            <button type="button" class="filter-chip-remove" data-acc-chip-idx="${i}" title="Remove filter"><i class="fa-solid fa-xmark"></i></button>
+                        </span>
+                    `).join("")}
+                    <button type="button" class="filter-clear-all-link" id="accounts-chips-clear-all"><i class="fa-solid fa-rotate-left"></i> Clear all</button>
+                `;
+
+                bar.querySelectorAll(".filter-chip-remove").forEach(btn => {
+                    const idx = parseInt(btn.dataset.accChipIdx, 10);
+                    btn.addEventListener("click", () => chips[idx].clear());
+                });
+
+                document.getElementById("accounts-chips-clear-all")?.addEventListener("click", () => {
+                    document.getElementById("search-input").value = "";
+                    searchClear.style.display = "none";
+                    document.getElementById("filter-type").value = "";
+                    document.getElementById("filter-status").value = "";
+                    document.getElementById("filter-date-from").value = "";
+                    document.getElementById("filter-date-to").value = "";
+                    setActiveAccountsDatePreset("all");
+                    applyFilters();
+                });
+            }
+
             window.filterByStatus = (status) => {
                 document.getElementById("filter-status").value = status;
                 applyFilters();
@@ -337,11 +612,37 @@
                 const q = document.getElementById("search-input").value.trim().toLowerCase();
                 const type = document.getElementById("filter-type").value;
                 const status = document.getElementById("filter-status").value;
+                const from = document.getElementById("filter-date-from").value;
+                const to = document.getElementById("filter-date-to").value;
+
+                let activeCount = 0;
+                if (q) activeCount++;
+                if (type) activeCount++;
+                if (status) activeCount++;
+                if (from || to) activeCount++;
+
+                const countEl = document.getElementById("accounts-active-count");
+                if (countEl) {
+                    countEl.innerHTML = activeCount > 0
+                        ? `<span style="background:rgba(255,104,165,0.15); color:var(--brand-primary); padding:2px 8px; border-radius:12px; font-weight:700; font-size:11px;"><i class="fa-solid fa-sliders" style="margin-right:4px;"></i>${activeCount} filter${activeCount>1?'s':''} active</span>`
+                        : '';
+                }
+
+                renderAccountsActiveFilterChips();
+
                 filtered = allAccounts.filter(a => {
                     const name = [a.first_name, a.last_name, a.email_address].filter(Boolean).join(" ").toLowerCase();
                     if (q && !name.includes(q)) return false;
                     if (type && a.account_type !== type) return false;
                     if (status && a.status !== status) return false;
+                    if (from) {
+                        const ts = toUTC(a.created_at);
+                        if (!ts || ts < new Date(from + "T00:00:00+08:00")) return false;
+                    }
+                    if (to) {
+                        const ts = toUTC(a.created_at);
+                        if (!ts || ts > new Date(to + "T23:59:59+08:00")) return false;
+                    }
                     return true;
                 });
                 page = 1;
@@ -349,11 +650,15 @@
             }
 
             function renderTable() {
+                const sorted = sortAccounts(filtered, accSortCol, accSortDir);
                 const start = (page - 1) * PAGE_SIZE;
-                const slice = filtered.slice(start, start + PAGE_SIZE);
+                const slice = sorted.slice(start, start + PAGE_SIZE);
                 const tbody = document.getElementById("accounts-tbody");
+
+                updateAccSortUI();
+
                 if (filtered.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-users-slash" style="font-size:32px;margin-bottom:12px;display:block;color:var(--brand-primary);"></i>No accounts found.</div></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-users-slash" style="font-size:32px;margin-bottom:12px;display:block;color:var(--brand-primary);"></i>No accounts match the current filters.</div></tr>`;
                     document.getElementById("page-info").textContent = "Showing 0 of 0";
                     document.getElementById("pagination").innerHTML = "";
                     return;
@@ -416,6 +721,37 @@
             document.getElementById("filter-type").addEventListener("change", applyFilters);
             document.getElementById("filter-status").addEventListener("change", applyFilters);
 
+            // Date Presets Wiring
+            document.querySelectorAll("#accounts-date-presets .date-preset-btn").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    applyAccountsDatePreset(btn.dataset.preset);
+                });
+            });
+
+            // Sort Selector Wiring
+            document.getElementById("accounts-sort-select")?.addEventListener("change", (e) => {
+                accSortCol = e.target.value;
+                updateAccSortUI();
+                renderTable();
+            });
+
+            // Sort Direction Toggle Wiring
+            document.getElementById("accounts-sort-dir-btn")?.addEventListener("click", () => {
+                accSortDir = accSortDir === "asc" ? "desc" : "asc";
+                updateAccSortUI();
+                renderTable();
+            });
+
+            // Table Header Click Sorting Wiring
+            document.querySelectorAll("th[data-acc-sort]").forEach(th => {
+                th.addEventListener("click", () => {
+                    const col = th.dataset.accSort;
+                    if (col) window.toggleAccSort(col);
+                });
+            });
+
+            initAccountsDateConstraints();
+
             // Change Status Function
             window.changeStatus = (accountId, newStatus) => {
                 const account = allAccounts.find(a => a.account_id === accountId);
@@ -460,11 +796,13 @@
                     if (error) throw error;
                     
                     const statusAction = { active: "activated", inactive: "deactivated", suspended: "suspended" };
+                    const isMother = account?.account_type === "mother";
+                    const targetLabel = isMother ? `Patient #${accountId}` : `account #${accountId} (${account.email_address})`;
                     await db.from("audit_trail").insert({
                         account_id: session.account_id,
                         action: "update_account",
                         table_name: "accounts",
-                        description: `${statusAction[newStatus]} account #${accountId} (${account.email_address}) from ${oldStatus} to ${newStatus}`,
+                        description: `${statusAction[newStatus]} ${targetLabel} from ${oldStatus} to ${newStatus}`,
                         old_data: { status: oldStatus },
                         new_data: { status: newStatus }
                     });
@@ -524,11 +862,13 @@
                     const old = { ...editTarget };
                     const { error } = await db.from("accounts").update({ account_type: type, status }).eq("account_id", id);
                     if (error) throw error;
+                    const isMother = type === "mother" || old.account_type === "mother";
+                    const targetLabel = isMother ? `Patient #${id}` : `account #${id}`;
                     await db.from("audit_trail").insert({
                         account_id: session.account_id,
                         action: "update_account",
                         table_name: "accounts",
-                        description: `Updated account #${id} — type: ${type}, status: ${status}`,
+                        description: `Updated ${targetLabel} — type: ${type}, status: ${status}`,
                         old_data: { account_type: old.account_type, status: old.status },
                         new_data: { account_type: type, status }
                     });
@@ -557,7 +897,7 @@
                     showToast("You cannot delete your own account.", "error");
                     return;
                 }
-                const name = [deleteTarget.first_name, deleteTarget.last_name].filter(Boolean).join(" ") || deleteTarget.email_address;
+                const name = deleteTarget.account_type === "mother" ? `Patient #${deleteTarget.account_id}` : ([deleteTarget.first_name, deleteTarget.last_name].filter(Boolean).join(" ") || deleteTarget.email_address);
                 document.getElementById("delete-name").textContent = name;
                 document.getElementById("delete-modal").classList.add("show");
             };
@@ -575,11 +915,13 @@
                 try {
                     const { error } = await db.from("accounts").delete().eq("account_id", deleteTarget.account_id);
                     if (error) throw error;
+                    const isMother = deleteTarget.account_type === "mother";
+                    const targetLabel = isMother ? `Patient #${deleteTarget.account_id}` : `account #${deleteTarget.account_id} (${deleteTarget.email_address})`;
                     await db.from("audit_trail").insert({
                         account_id: session.account_id,
                         action: "delete_account",
                         table_name: "accounts",
-                        description: `Deleted account #${deleteTarget.account_id} (${deleteTarget.email_address})`
+                        description: `Deleted ${targetLabel}`
                     });
                     allAccounts = allAccounts.filter(a => a.account_id !== deleteTarget.account_id);
                     updateStatusCounts();

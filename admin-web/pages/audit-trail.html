@@ -65,16 +65,19 @@
       </aside>
 
       <main class="app-main">
-        <div class="page-header">
+        <div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px; margin-bottom:20px;">
           <div class="page-title-block">
-            <h1 class="page-title">Activity Log</h1>
-            <p class="page-subtitle">Every recorded action, with the full account of what happened</p>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+              <span class="badge" style="background:rgba(255,104,165,0.12); color:var(--brand-primary); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; border-radius:6px; padding:3px 8px;"><i class="fa-solid fa-shield-halved" style="margin-right:4px;"></i> System Security &amp; Compliance</span>
+            </div>
+            <h1 class="page-title" style="font-size:24px; font-weight:700; margin:0 0 4px; color:var(--text-primary);">Audit Trail &amp; Activity Log</h1>
+            <p class="page-subtitle" style="margin:0; font-size:13px; color:var(--text-secondary);">Comprehensive immutable audit trail of clinical, inventory, security, and administrative actions across RHU and BHC facilities.</p>
           </div>
-          <div class="page-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="btn btn-primary btn-sm" id="export-btn"><i class="fa-solid fa-table-list"></i> Summary PDF</button>
-            <button class="btn btn-primary btn-sm" id="export-detail-btn"><i class="fa-solid fa-file-lines"></i> Detailed PDF</button>
-            <button class="btn btn-secondary btn-sm" id="print-list-btn"><i class="fa-solid fa-print"></i> Print Log</button>
-            <button class="btn btn-secondary btn-sm" id="refresh-btn"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+          <div class="page-actions" style="display: flex; gap: 8px; flex-wrap: wrap; align-items:center;">
+            <button class="btn btn-primary btn-sm" id="export-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow: 0 2px 8px rgba(255,104,165,0.25);"><i class="fa-solid fa-table-list"></i> Summary PDF</button>
+            <button class="btn btn-primary btn-sm" id="export-detail-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow: 0 2px 8px rgba(255,104,165,0.25);"><i class="fa-solid fa-file-lines"></i> Detailed PDF</button>
+            <button class="btn btn-secondary btn-sm" id="print-list-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px;"><i class="fa-solid fa-print"></i> Print Log</button>
+            <button class="btn btn-secondary btn-sm" id="refresh-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px;"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
           </div>
         </div>
 
@@ -82,53 +85,116 @@
 
         <div class="audit-stats-grid" id="audit-stats"></div>
 
-        <div class="card">
-          <div class="toolbar" style="border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding-bottom: 18px; flex-wrap: wrap; gap: 10px;">
-            <div class="search-box">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input class="form-control" type="search" id="search-input" placeholder="Search people, items, batches, facilities, notes..." />
+        <div class="card" style="border-radius:14px; border:1px solid var(--border-primary); box-shadow: 0 4px 16px rgba(0,0,0,0.03); overflow:hidden;">
+          <div class="toolbar" style="border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding:16px 20px; background:#fafbfc; display:flex; flex-direction:column; gap:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+              <div style="font-size:13px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+                <i class="fa-solid fa-filter" style="color:var(--brand-primary);"></i> Filter &amp; Sort Activities
+              </div>
+              <div id="filter-active-count" style="font-size:11.5px; color:var(--text-secondary); font-weight:600;"></div>
             </div>
-            <div class="filter-group" style="flex-wrap: wrap; gap: 8px;">
-              <select class="form-select" id="filter-module" style="width: auto">
-                <option value="">All Areas</option>
-              </select>
-              <select class="form-select" id="filter-severity" style="width: auto">
-                <option value="">Any Importance</option>
-                <option value="critical">Critical</option>
-                <option value="warning">Needs Attention</option>
-                <option value="notice">Notable</option>
-                <option value="info">Routine</option>
-              </select>
-              <select class="form-select" id="filter-action" style="width: auto">
-                <option value="">All Activities</option>
-              </select>
-              <select class="form-select" id="filter-actor" style="width: auto">
-                <option value="">Anyone</option>
-              </select>
-              <input type="date" class="form-control" id="filter-date-from" style="width: auto" />
-              <input type="date" class="form-control" id="filter-date-to" style="width: auto" />
-              <button class="btn btn-secondary btn-sm" id="clear-filters-btn"><i class="fa-solid fa-xmark"></i> Clear</button>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+              <div class="search-box" style="flex: 1 1 240px; min-width:220px; position:relative;">
+                <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-secondary); font-size:13px;"></i>
+                <input class="form-control" type="search" id="search-input" placeholder="Search actor, item, facility, action, notes..." style="padding-left:34px; border-radius:8px; border:1px solid #dcdfe4; height:38px; font-size:12.5px;" />
+              </div>
+              <div class="filter-group" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                <select class="form-select" id="filter-module" style="width: auto; border-radius:8px; border:1px solid #dcdfe4; height:38px; font-size:12px; padding:0 10px; font-weight:500;">
+                  <option value="">All Areas / Modules</option>
+                </select>
+                <select class="form-select" id="filter-severity" style="width: auto; border-radius:8px; border:1px solid #dcdfe4; height:38px; font-size:12px; padding:0 10px; font-weight:500;">
+                  <option value="">Any Importance</option>
+                  <option value="critical">Critical</option>
+                  <option value="warning">Needs Attention</option>
+                  <option value="notice">Notable</option>
+                  <option value="info">Routine</option>
+                </select>
+                <select class="form-select" id="filter-action" style="width: auto; border-radius:8px; border:1px solid #dcdfe4; height:38px; font-size:12px; padding:0 10px; font-weight:500;">
+                  <option value="">All Activities</option>
+                </select>
+                <select class="form-select" id="filter-actor" style="width: auto; border-radius:8px; border:1px solid #dcdfe4; height:38px; font-size:12px; padding:0 10px; font-weight:500;">
+                  <option value="">All Personnel</option>
+                </select>
+
+                <!-- Modern Date Range Picker with Built-in Constraints -->
+                <div class="date-range-picker-group" id="audit-date-picker-wrap">
+                  <i class="fa-solid fa-calendar-days date-icon"></i>
+                  <span class="date-label">From:</span>
+                  <input type="date" class="date-input" id="filter-date-from" title="Filter activities from this date" />
+                  <span class="date-sep">to</span>
+                  <span class="date-label">To:</span>
+                  <input type="date" class="date-input" id="filter-date-to" title="Filter activities up to this date" />
+                  <button type="button" class="date-clear-btn" id="audit-date-clear-btn" title="Clear date range" style="display:none;"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <!-- Sort Control Group -->
+                <div class="sort-control-group">
+                  <span class="sort-label"><i class="fa-solid fa-arrow-down-short-wide" style="color:var(--brand-primary);"></i> Sort:</span>
+                  <select class="sort-select" id="sort-column-select">
+                    <option value="timestamp">Date &amp; Time</option>
+                    <option value="severity">Severity / Importance</option>
+                    <option value="actor">Personnel Name</option>
+                    <option value="module">Module Area</option>
+                    <option value="action">Activity Event</option>
+                  </select>
+                  <button type="button" class="sort-direction-btn active" id="sort-direction-toggle" title="Toggle Sort Direction (Ascending / Descending)">
+                    <i class="fa-solid fa-arrow-down-wide-short" id="sort-direction-icon"></i>
+                  </button>
+                </div>
+
+                <button class="btn btn-secondary btn-sm" id="clear-filters-btn" style="height:38px; border-radius:8px; font-size:12px; padding:0 12px; font-weight:600;"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+              </div>
+            </div>
+
+            <!-- Quick Date Presets Bar -->
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px dashed #e2e8f0; padding-top:10px;">
+              <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.3px;">Quick Date Range:</span>
+              <div class="date-presets-bar" id="audit-date-presets">
+                <button type="button" class="date-preset-btn active" data-preset="all">All Time</button>
+                <button type="button" class="date-preset-btn" data-preset="today">Today</button>
+                <button type="button" class="date-preset-btn" data-preset="7d">Last 7 Days</button>
+                <button type="button" class="date-preset-btn" data-preset="30d">Last 30 Days</button>
+                <button type="button" class="date-preset-btn" data-preset="this_month">This Month</button>
+              </div>
             </div>
           </div>
-          <div class="table-wrap" style="border: none; border-radius: 0">
-            <table class="data-table">
+
+          <!-- Dynamic Active Filter Chips Bar -->
+          <div class="active-filters-bar" id="active-filters-bar"></div>
+
+          <div class="table-wrap" style="border: none; border-radius: 0; overflow-x:auto;">
+            <table class="data-table" style="width:100%; border-collapse:collapse;">
               <thead>
                 <tr>
-                  <th>Date &amp; Time</th>
-                  <th>Who</th>
-                  <th>What Happened</th>
-                  <th>Area</th>
-                  <th>Record</th>
-                  <th>Summary</th>
-                  <th style="text-align: center">Full Note</th>
+                  <th class="th-sortable sort-active" data-sort="timestamp" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                    Date &amp; Time <span class="sort-indicator"><i class="fa-solid fa-arrow-down-long"></i></span>
+                  </th>
+                  <th class="th-sortable" data-sort="actor" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                    Who Performed <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span>
+                  </th>
+                  <th class="th-sortable" data-sort="action" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                    Activity Event <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span>
+                  </th>
+                  <th class="th-sortable" data-sort="module" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                    Module Area <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span>
+                  </th>
+                  <th style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                    Target Record
+                  </th>
+                  <th style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                    Summary / Narrative
+                  </th>
+                  <th style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary); text-align: center;">
+                    Full Note
+                  </th>
                 </tr>
               </thead>
               <tbody id="audit-tbody"><tr><td colspan="7" style="text-align:center;padding:48px;"><div class="spinner" style="margin:0 auto 12px"></div>Loading activities...</td></tr></tbody>
             </table>
           </div>
-          <div class="card-footer" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; border-top:1.5px solid var(--border-primary); padding:16px 24px;">
-            <span class="pagination-info" id="page-info">Showing 0 of 0</span>
-            <div class="pagination" id="pagination"></div>
+          <div class="card-footer" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; border-top:1.5px solid var(--border-primary); padding:14px 20px; background:#ffffff;">
+            <span class="pagination-info" id="page-info" style="font-size:12.5px; color:var(--text-secondary); font-weight:500;">Showing 0 of 0</span>
+            <div class="pagination" id="pagination" style="display:flex; align-items:center; gap:4px;"></div>
           </div>
         </div>
       </main>
@@ -136,16 +202,16 @@
     </div>
 
     <div class="modal-overlay" id="detail-modal">
-      <div class="modal" style="max-width: 860px">
-        <div class="modal-header">
-          <h2 class="modal-title"><i class="fa-solid fa-clipboard-list" style="color: var(--brand-primary); margin-right: 8px;"></i>Audit Record</h2>
+      <div class="modal" style="max-width: 860px; border-radius:16px; overflow:hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.2);">
+        <div class="modal-header" style="padding:16px 24px; border-bottom:1px solid var(--border-primary); background:#ffffff; display:flex; justify-content:space-between; align-items:center;">
+          <h2 class="modal-title" style="font-size:16px; font-weight:700; color:var(--brand-text); display:flex; align-items:center; gap:8px; margin:0;"><i class="fa-solid fa-clipboard-list" style="color: var(--brand-primary);"></i> Audit Event Record</h2>
           <button class="modal-close" id="detail-modal-close"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div class="modal-body" id="detail-body"></div>
-        <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end;">
-          <button class="btn btn-primary btn-sm" id="detail-print-btn"><i class="fa-solid fa-print"></i> Print this record</button>
-          <button class="btn btn-primary btn-sm" id="detail-pdf-btn"><i class="fa-solid fa-file-pdf"></i> Save as PDF</button>
-          <button class="btn btn-secondary btn-sm" id="detail-close-btn">Close</button>
+        <div class="modal-body" id="detail-body" style="max-height:72vh; overflow-y:auto; padding:20px 24px;"></div>
+        <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end; padding:14px 24px; border-top:1px solid var(--border-primary); background:#fafafa;">
+          <button class="btn btn-secondary btn-sm" id="detail-print-btn" style="border-radius:8px; font-weight:600;"><i class="fa-solid fa-print"></i> Print this record</button>
+          <button class="btn btn-primary btn-sm" id="detail-pdf-btn" style="border-radius:8px; font-weight:600;"><i class="fa-solid fa-file-pdf"></i> Save as PDF</button>
+          <button class="btn btn-secondary btn-sm" id="detail-close-btn" style="border-radius:8px; font-weight:600;">Close</button>
         </div>
       </div>
     </div>
@@ -158,60 +224,121 @@
     <div id="toast-container"></div>
 
     <style>
-      .audit-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px,1fr)); gap:16px; margin-bottom:24px; }
-      .audit-stat-card { background: var(--card-bg); border:1.5px solid var(--border-primary); border-radius: var(--radius-md); padding:18px 20px; }
-      .audit-stat-val { font-size:24px; font-weight:700; }
-      .audit-stat-lbl { font-size:11px; color:var(--text-secondary); font-weight:600; text-transform:uppercase; letter-spacing:.02em; }
-      .page-btn { width:36px; height:36px; border-radius:50%; border:1.5px solid var(--border-primary); background:var(--card-bg); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; margin:0 2px; }
-      .page-btn.active { background:var(--brand-primary); color:white; border-color:var(--brand-primary); }
+      .audit-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap:14px; margin-bottom:20px; }
+      .audit-stat-card {
+        background: #ffffff;
+        border: 1px solid var(--border-primary);
+        border-radius: 12px;
+        padding: 16px 18px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        transition: all 0.15s ease;
+      }
+      .audit-stat-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.05);
+        border-color: rgba(255,104,165,0.4);
+      }
+      .audit-stat-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        flex-shrink: 0;
+      }
+      .audit-stat-content {
+        flex: 1;
+        min-width: 0;
+      }
+      .audit-stat-val { font-size:22px; font-weight:800; line-height:1.2; }
+      .audit-stat-lbl { font-size:11px; color:var(--text-secondary); font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
+      .page-btn { width:34px; height:34px; border-radius:8px; border:1px solid var(--border-primary); background:#ffffff; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; margin:0 2px; transition:all 0.12s ease; }
+      .page-btn:hover:not([disabled]) { border-color:var(--brand-primary); color:var(--brand-primary); }
+      .page-btn.active { background:var(--brand-primary); color:white; border-color:var(--brand-primary); box-shadow:0 2px 6px rgba(255,104,165,0.3); }
       .page-btn[disabled] { opacity:0.4; cursor:not-allowed; }
 
       .audit-banner { border:1.5px solid var(--warning, #f57c00); background:#fff8e1; color:#8a5300; border-radius:12px; padding:12px 16px; margin-bottom:18px; font-size:13px; line-height:1.5; }
 
       /* Badge colors */
-      .badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-block; }
-      .badge-admin { background: #e3f2fd; color: #1976d2; }
-      .badge-inactive { background: #f5f5f5; color: #666; }
-      .badge-low { background: #fff3e0; color: #f57c00; }
-      .badge-active { background: #e8f5e9; color: #388e3c; }
-      .badge-suspended { background: #ffebee; color: #d32f2f; }
-      .badge-midwife { background: #f3e5f5; color: #7b1fa2; }
-      .badge-mother { background: #fce4ec; color: #c2185b; }
+      .badge { padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; line-height: 1.3; }
+      .badge-admin { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
+      .badge-inactive { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+      .badge-low { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }
+      .badge-active { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+      .badge-suspended { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+      .badge-midwife { background: #faf5ff; color: #9333ea; border: 1px solid #e9d5ff; }
+      .badge-mother { background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8; }
 
       /* Severity */
-      .sev-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:middle; }
-      .sev-critical { background:#d32f2f; }
-      .sev-warning  { background:#f57c00; }
-      .sev-notice   { background:#1976d2; }
-      .sev-info     { background:#9e9e9e; }
-      .sev-chip { font-size:11px; font-weight:700; padding:3px 10px; border-radius:10px; text-transform:uppercase; letter-spacing:.03em; }
-      .sev-chip.sev-critical { background:#ffebee; color:#c62828; }
-      .sev-chip.sev-warning  { background:#fff3e0; color:#ef6c00; }
-      .sev-chip.sev-notice   { background:#e3f2fd; color:#1565c0; }
-      .sev-chip.sev-info     { background:#f5f5f5; color:#616161; }
+      .sev-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:middle; flex-shrink: 0; }
+      .sev-critical { background:#ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2); }
+      .sev-warning  { background:#f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2); }
+      .sev-notice   { background:#3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+      .sev-info     { background:#94a3b8; }
+      .sev-chip { font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:12px; text-transform:uppercase; letter-spacing:.04em; display:inline-flex; align-items:center; gap:4px; }
+      .sev-chip.sev-critical { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+      .sev-chip.sev-warning  { background:#fef3c7; color:#b45309; border:1px solid #fde68a; }
+      .sev-chip.sev-notice   { background:#dbeafe; color:#1d4ed8; border:1px solid #bfdbfe; }
+      .sev-chip.sev-info     { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
 
-      .module-chip { background: var(--brand-secondary); padding:2px 8px; border-radius:5px; font-size:11px; white-space:nowrap; }
+      .module-chip {
+        background: #f8fafc;
+        color: #334155;
+        border: 1px solid #e2e8f0;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .module-chip[data-mod="Inventory"] { background:#fdf2f8; color:var(--brand-text); border-color:#fbcfe8; }
+      .module-chip[data-mod="Patient"] { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+      .module-chip[data-mod="Account"] { background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe; }
+      .module-chip[data-mod="Midwife"] { background:#fdf4ff; color:#a21caf; border-color:#f5d0fe; }
+      .module-chip[data-mod="System"] { background:#f8fafc; color:#475569; border-color:#cbd5e1; }
+
+      .actor-avatar-circle {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: rgba(255,104,165,0.15);
+        color: var(--brand-primary);
+        font-weight: 700;
+        font-size: 11px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
 
       /* The printable record */
       .audit-doc { font-size:13px; line-height:1.6; color: var(--text-primary); }
       .audit-doc-head { border-bottom:2px solid var(--brand-primary); padding-bottom:12px; margin-bottom:16px; }
       .audit-doc-title { font-size:18px; font-weight:700; margin:0 0 6px; }
       .audit-doc-meta { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-      .audit-doc-narrative { background: var(--bg-primary); border:1px solid var(--border-primary); border-left:4px solid var(--brand-primary); border-radius:10px; padding:14px 16px; margin-bottom:18px; white-space:pre-wrap; }
-      .audit-sec { border:1px solid var(--border-primary); border-radius:10px; padding:14px 16px; margin-bottom:14px; }
-      .audit-sec-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary); margin-bottom:10px; }
-      .audit-kv { display:grid; grid-template-columns: minmax(160px, 34%) 1fr; gap:6px 14px; }
+      .audit-doc-narrative { background: #fff5f8; border:1px solid #fbcfe8; border-left:4px solid var(--brand-primary); border-radius:10px; padding:14px 16px; margin-bottom:18px; font-size:13px; line-height:1.6; white-space:pre-wrap; }
+      .audit-sec { background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; margin-bottom:14px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+      .audit-sec-title { font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-secondary); margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+      .audit-kv { display:grid; grid-template-columns: minmax(160px, 34%) 1fr; gap:6px 14px; font-size:12.5px; }
       .audit-kv dt { font-weight:600; color:var(--text-secondary); }
-      .audit-kv dd { margin:0; word-break:break-word; }
+      .audit-kv dd { margin:0; word-break:break-word; font-weight:500; }
       .audit-kv dt.key-strong, .audit-kv dt.key-strong + dd { color:var(--brand-primary); font-weight:700; }
       .audit-diff { width:100%; border-collapse:collapse; font-size:12px; }
-      .audit-diff th, .audit-diff td { border:1px solid var(--border-primary); padding:6px 9px; text-align:left; vertical-align:top; }
-      .audit-diff th { background:var(--bg-primary); font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
-      .audit-diff td.was { color:#c62828; }
-      .audit-diff td.now { color:#2e7d32; }
-      .audit-raw { margin-top:6px; }
+      .audit-diff th, .audit-diff td { border:1px solid #e2e8f0; padding:7px 10px; text-align:left; vertical-align:top; }
+      .audit-diff th { background:#f8fafc; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary); }
+      .audit-diff td.was { color:#dc2626; background:#fff5f5; font-weight:500; }
+      .audit-diff td.now { color:#16a34a; background:#f0fdf4; font-weight:600; }
+      .audit-raw { margin-top:10px; }
       .audit-raw summary { cursor:pointer; font-size:12px; font-weight:600; color:var(--text-secondary); }
-      .audit-raw pre { background:var(--bg-primary); border:1px solid var(--border-primary); border-radius:8px; padding:10px; overflow-x:auto; font-size:11px; margin-top:8px; }
+      .audit-raw pre { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; overflow-x:auto; font-size:11px; margin-top:8px; font-family:monospace; }
 
       #print-root { display:none; }
 
@@ -369,15 +496,32 @@
         function moduleOf(log){ return log.module || 'Activity'; }
 
         function summaryOf(log){
-          return log.description || log.narrative || (actionLabel(log.action) + ' performed');
+          let s = log.description || log.narrative || (actionLabel(log.action) + ' performed');
+          const role = String(log?.actor_role || '').toLowerCase();
+          if (role === 'mother' || role === 'patient') {
+            if (log?.actor_name && log.actor_name !== 'System' && !log.actor_name.startsWith('Patient #')) {
+              const escRegex = log.actor_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              s = s.replace(new RegExp(escRegex, 'gi'), `Patient #${log.account_id || log.row_id || ''}`);
+            }
+          }
+          return s;
         }
 
         function actorOf(log){
+          if (!log) return 'System';
+          const role = String(log.actor_role || '').toLowerCase();
+          if (role === 'mother' || role === 'patient' || log.table_name === 'mothers') {
+            return `Patient #${log.account_id || log.row_id || '—'}`;
+          }
+          if (typeof log.actor_name === 'string' && log.actor_name.startsWith('Patient #')) {
+            return log.actor_name;
+          }
           return log.actor_name || 'System';
         }
+
         function actorRoleLabel(log){
           const r = String(log.actor_role || '').toLowerCase();
-          const map = { admin:'Administrator', mho:'Municipal Health Office', midwife:'Midwife', mother:'Mother', system:'System', unknown:'Unknown' };
+          const map = { admin:'Administrator', mho:'Municipal Health Office', midwife:'Midwife', mother:'Patient (Mother)', patient:'Patient', system:'System', unknown:'Unknown' };
           return map[r] || titleCase(r || 'System');
         }
 
@@ -485,6 +629,26 @@
           if ([...el.options].some(o => o.value === keep)) el.value = keep;
         }
 
+        function moduleIcon(mod){
+          const m = String(mod || '').toLowerCase();
+          if(m.includes('inventory')) return 'fa-boxes-stacked';
+          if(m.includes('patient') || m.includes('mother') || m.includes('child')) return 'fa-folder-open';
+          if(m.includes('account') || m.includes('user')) return 'fa-user-shield';
+          if(m.includes('midwife') || m.includes('assign')) return 'fa-user-nurse';
+          if(m.includes('auth') || m.includes('login')) return 'fa-key';
+          if(m.includes('backup')) return 'fa-database';
+          if(m.includes('ai') || m.includes('insight')) return 'fa-brain';
+          return 'fa-shield-halved';
+        }
+
+        function actorInitials(name){
+          const s = String(name || 'System').trim();
+          if(s.startsWith('Patient #') || s.startsWith('Patient')) return 'PT';
+          const parts = s.split(/\s+/);
+          if(parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+          return (parts[0]?.[0] || 'S').toUpperCase();
+        }
+
         function renderStats(){
           const sev = { critical:0, warning:0, notice:0, info:0 };
           const mods = {};
@@ -494,16 +658,260 @@
             mods[m] = (mods[m] || 0) + 1;
           });
 
-          const topModules = Object.entries(mods).sort((a,b) => b[1]-a[1]).slice(0,3);
+          const topModules = Object.entries(mods).sort((a,b) => b[1]-a[1]).slice(0,2);
           const cards = [
-            { val: allLogs.length, lbl: 'Total Entries', color: 'var(--brand-primary)' },
-            { val: sev.critical,   lbl: 'Critical',      color: '#d32f2f' },
-            { val: sev.warning,    lbl: 'Needs Attention', color: '#f57c00' }
-          ].concat(topModules.map(([m,c]) => ({ val:c, lbl:m, color:'var(--info, #1976d2)' })));
+            { val: allLogs.length, lbl: 'Total Log Entries', color: 'var(--brand-primary)', bg: 'rgba(255,104,165,0.10)', icon: 'fa-solid fa-clipboard-list' },
+            { val: sev.critical,   lbl: 'Critical Security',  color: '#dc2626', bg: 'rgba(239,68,68,0.10)', icon: 'fa-solid fa-triangle-exclamation' },
+            { val: sev.warning,    lbl: 'Needs Attention',   color: '#d97706', bg: 'rgba(245,158,11,0.10)', icon: 'fa-solid fa-circle-exclamation' }
+          ].concat(topModules.map(([m,c]) => ({ val:c, lbl:`${m} Activity`, color:'#2563eb', bg:'rgba(37,99,235,0.10)', icon: `fa-solid ${moduleIcon(m)}` })));
 
-          document.getElementById('audit-stats').innerHTML = cards.map(c =>
-            `<div class="audit-stat-card"><div class="audit-stat-val" style="color:${c.color};">${c.val}</div><div class="audit-stat-lbl">${esc(c.lbl)}</div></div>`
-          ).join('');
+          document.getElementById('audit-stats').innerHTML = cards.map(c => `
+            <div class="audit-stat-card">
+              <div class="audit-stat-icon" style="background:${c.bg}; color:${c.color};">
+                <i class="${c.icon}"></i>
+              </div>
+              <div class="audit-stat-content">
+                <div class="audit-stat-val" style="color:${c.color};">${c.val}</div>
+                <div class="audit-stat-lbl">${esc(c.lbl)}</div>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        /* ── Date Constraints & Helpers ───────────────────────────────── */
+        function getLocalTodayStr() {
+          const d = new Date();
+          return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function initDateConstraints() {
+          const fromInput = document.getElementById('filter-date-from');
+          const toInput = document.getElementById('filter-date-to');
+          const clearBtn = document.getElementById('audit-date-clear-btn');
+          const today = getLocalTodayStr();
+
+          if (fromInput && toInput) {
+            fromInput.max = today;
+            toInput.max = today;
+
+            const syncDateConstraints = () => {
+              const fromVal = fromInput.value;
+              const toVal = toInput.value;
+
+              if (fromVal) {
+                toInput.min = fromVal;
+                if (toVal && toVal < fromVal) toInput.value = fromVal;
+              } else {
+                toInput.removeAttribute('min');
+              }
+
+              if (toVal) {
+                fromInput.max = toVal;
+                if (fromVal && fromVal > toVal) fromInput.value = toVal;
+              } else {
+                fromInput.max = today;
+              }
+
+              if (clearBtn) {
+                clearBtn.style.display = (fromVal || toVal) ? 'inline-flex' : 'none';
+              }
+            };
+
+            fromInput.addEventListener('change', syncDateConstraints);
+            toInput.addEventListener('change', syncDateConstraints);
+
+            if (clearBtn) {
+              clearBtn.addEventListener('click', () => {
+                fromInput.value = '';
+                toInput.value = '';
+                syncDateConstraints();
+                setActiveDatePreset('all');
+                applyFilters();
+              });
+            }
+          }
+        }
+
+        function setActiveDatePreset(presetKey) {
+          document.querySelectorAll('#audit-date-presets .date-preset-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.preset === presetKey);
+          });
+        }
+
+        function applyDatePreset(presetKey) {
+          const fromInput = document.getElementById('filter-date-from');
+          const toInput = document.getElementById('filter-date-to');
+          const now = new Date();
+          const today = getLocalTodayStr();
+
+          setActiveDatePreset(presetKey);
+
+          if (presetKey === 'all') {
+            fromInput.value = '';
+            toInput.value = '';
+          } else if (presetKey === 'today') {
+            fromInput.value = today;
+            toInput.value = today;
+          } else if (presetKey === '7d') {
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+            fromInput.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            toInput.value = today;
+          } else if (presetKey === '30d') {
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+            fromInput.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            toInput.value = today;
+          } else if (presetKey === 'this_month') {
+            const d = new Date(now.getFullYear(), now.getMonth(), 1);
+            fromInput.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            toInput.value = today;
+          }
+
+          const clearBtn = document.getElementById('audit-date-clear-btn');
+          if (clearBtn) clearBtn.style.display = (fromInput.value || toInput.value) ? 'inline-flex' : 'none';
+
+          if (fromInput.value) toInput.min = fromInput.value;
+          if (toInput.value) fromInput.max = toInput.value;
+
+          applyFilters();
+        }
+
+        /* ── Sorting State & Logic ──────────────────────────────────────── */
+        let currentSortCol = 'timestamp';
+        let currentSortDir = 'desc'; // 'asc' or 'desc'
+
+        const SEV_WEIGHT = { critical: 4, warning: 3, notice: 2, info: 1 };
+
+        function sortLogs(list, col, dir) {
+          const mult = dir === 'asc' ? 1 : -1;
+          return [...list].sort((a, b) => {
+            if (col === 'timestamp') {
+              const ta = toUTC(a.action_timestamp)?.getTime() || 0;
+              const tb = toUTC(b.action_timestamp)?.getTime() || 0;
+              return (ta - tb) * mult;
+            }
+            if (col === 'severity') {
+              const sa = SEV_WEIGHT[severityOf(a)] || 0;
+              const sb = SEV_WEIGHT[severityOf(b)] || 0;
+              return (sa - sb) * mult;
+            }
+            if (col === 'actor') {
+              const na = actorOf(a).toLowerCase();
+              const nb = actorOf(b).toLowerCase();
+              return na.localeCompare(nb) * mult;
+            }
+            if (col === 'module') {
+              const ma = moduleOf(a).toLowerCase();
+              const mb = moduleOf(b).toLowerCase();
+              return ma.localeCompare(mb) * mult;
+            }
+            if (col === 'action') {
+              const aa = (a.action || '').toLowerCase();
+              const ab = (b.action || '').toLowerCase();
+              return aa.localeCompare(ab) * mult;
+            }
+            return 0;
+          });
+        }
+
+        window.toggleSort = function(col) {
+          if (currentSortCol === col) {
+            currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            currentSortCol = col;
+            currentSortDir = 'desc';
+          }
+          const sel = document.getElementById('sort-column-select');
+          if (sel) sel.value = col;
+          updateSortUI();
+          renderTable();
+        };
+
+        function updateSortUI() {
+          const icon = document.getElementById('sort-direction-icon');
+          if (icon) {
+            icon.className = currentSortDir === 'asc'
+              ? 'fa-solid fa-arrow-up-short-wide'
+              : 'fa-solid fa-arrow-down-wide-short';
+          }
+
+          document.querySelectorAll('th.th-sortable').forEach(th => {
+            const col = th.dataset.sort;
+            const isCurrent = col === currentSortCol;
+            th.classList.toggle('sort-active', isCurrent);
+            const ind = th.querySelector('.sort-indicator');
+            if (ind) {
+              if (isCurrent) {
+                ind.innerHTML = currentSortDir === 'asc'
+                  ? '<i class="fa-solid fa-arrow-up-long"></i>'
+                  : '<i class="fa-solid fa-arrow-down-long"></i>';
+              } else {
+                ind.innerHTML = '<i class="fa-solid fa-sort"></i>';
+              }
+            }
+          });
+        }
+
+        /* ── Active Filter Chips ────────────────────────────────────────── */
+        function renderActiveFilterChips() {
+          const bar = document.getElementById('active-filters-bar');
+          if (!bar) return;
+
+          const q    = document.getElementById('search-input').value.trim();
+          const mod  = document.getElementById('filter-module').value;
+          const sev  = document.getElementById('filter-severity').value;
+          const act  = document.getElementById('filter-action').value;
+          const who  = document.getElementById('filter-actor').value;
+          const from = document.getElementById('filter-date-from').value;
+          const to   = document.getElementById('filter-date-to').value;
+
+          const chips = [];
+          if (q) chips.push({ label: 'Search', val: `"${q}"`, clear: () => { document.getElementById('search-input').value = ''; applyFilters(); } });
+          if (mod) chips.push({ label: 'Module', val: mod, clear: () => { document.getElementById('filter-module').value = ''; applyFilters(); } });
+          if (sev) chips.push({ label: 'Importance', val: SEVERITY_LABEL[sev] || sev, clear: () => { document.getElementById('filter-severity').value = ''; applyFilters(); } });
+          if (act) chips.push({ label: 'Event', val: actionLabel(act), clear: () => { document.getElementById('filter-action').value = ''; applyFilters(); } });
+          if (who) chips.push({ label: 'Personnel', val: who, clear: () => { document.getElementById('filter-actor').value = ''; applyFilters(); } });
+          if (from || to) {
+            chips.push({
+              label: 'Date Range',
+              val: `${from || 'Any'} &rarr; ${to || 'Today'}`,
+              clear: () => {
+                document.getElementById('filter-date-from').value = '';
+                document.getElementById('filter-date-to').value = '';
+                setActiveDatePreset('all');
+                applyFilters();
+              }
+            });
+          }
+
+          if (chips.length === 0) {
+            bar.innerHTML = '';
+            bar.style.display = 'none';
+            return;
+          }
+
+          bar.style.display = 'flex';
+          bar.innerHTML = `
+            <span class="active-filters-label"><i class="fa-solid fa-sliders"></i> Active:</span>
+            ${chips.map((c, i) => `
+              <span class="filter-chip">
+                <span><strong>${esc(c.label)}:</strong> ${c.val}</span>
+                <button type="button" class="filter-chip-remove" data-chip-idx="${i}" title="Remove this filter"><i class="fa-solid fa-xmark"></i></button>
+              </span>
+            `).join('')}
+            <button type="button" class="filter-clear-all-link" id="chips-clear-all"><i class="fa-solid fa-rotate-left"></i> Clear all</button>
+          `;
+
+          bar.querySelectorAll('.filter-chip-remove').forEach(btn => {
+            const idx = parseInt(btn.dataset.chipIdx, 10);
+            btn.addEventListener('click', () => chips[idx].clear());
+          });
+
+          document.getElementById('chips-clear-all')?.addEventListener('click', () => {
+            ['search-input','filter-module','filter-severity','filter-action','filter-actor','filter-date-from','filter-date-to']
+              .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+            setActiveDatePreset('all');
+            applyFilters();
+          });
         }
 
         /* ── Filtering ──────────────────────────────────────────────────── */
@@ -541,6 +949,23 @@
           const from = document.getElementById('filter-date-from').value;
           const to   = document.getElementById('filter-date-to').value;
 
+          let activeCount = 0;
+          if(q) activeCount++;
+          if(mod) activeCount++;
+          if(sev) activeCount++;
+          if(act) activeCount++;
+          if(who) activeCount++;
+          if(from || to) activeCount++;
+
+          const countEl = document.getElementById('filter-active-count');
+          if(countEl) {
+            countEl.innerHTML = activeCount > 0
+              ? `<span style="background:rgba(255,104,165,0.15); color:var(--brand-primary); padding:2px 8px; border-radius:12px; font-weight:700;"><i class="fa-solid fa-sliders" style="margin-right:4px;"></i>${activeCount} filter${activeCount>1?'s':''} active</span>`
+              : '';
+          }
+
+          renderActiveFilterChips();
+
           filtered = allLogs.filter(l => {
             if(mod && moduleOf(l) !== mod) return false;
             if(sev && severityOf(l) !== sev) return false;
@@ -564,12 +989,23 @@
         /* ── Table ──────────────────────────────────────────────────────── */
 
         function renderTable(){
+          // Apply active column sorting
+          const sorted = sortLogs(filtered, currentSortCol, currentSortDir);
           const start = (page-1)*PAGE_SIZE;
-          const slice = filtered.slice(start, start+PAGE_SIZE);
+          const slice = sorted.slice(start, start+PAGE_SIZE);
           const tbody = document.getElementById('audit-tbody');
 
+          updateSortUI();
+
           if(filtered.length === 0){
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:48px;">No matching activities.</td></tr>';
+            tbody.innerHTML = `
+              <tr>
+                <td colspan="7" style="text-align:center;padding:54px 20px;color:var(--text-secondary);">
+                  <i class="fa-solid fa-folder-open" style="font-size:28px; color:#cbd5e1; display:block; margin-bottom:10px;"></i>
+                  <div style="font-weight:600; font-size:14px; color:var(--text-primary);">No matching activities found</div>
+                  <div style="font-size:12px; margin-top:4px;">Try clearing search keywords or selecting different filter criteria.</div>
+                </td>
+              </tr>`;
             document.getElementById('page-info').textContent = 'Showing 0 of 0';
             document.getElementById('pagination').innerHTML = '';
             return;
@@ -577,24 +1013,54 @@
 
           tbody.innerHTML = slice.map((l, idx) => {
             const sev = severityOf(l);
-            return `<tr>
-              <td style="white-space:nowrap;"><span class="sev-dot sev-${sev}" title="${esc(SEVERITY_LABEL[sev])}"></span>${fmtDT(l.action_timestamp)}</td>
-              <td>
-                <div style="font-weight:600;">${esc(actorOf(l))}</div>
-                <div style="font-size:11px;color:var(--text-secondary);">${esc(actorRoleLabel(l))}${l.actor_facility_name ? ' &middot; ' + esc(l.actor_facility_name) : ''}</div>
+            const actorName = actorOf(l);
+            const initials = actorInitials(actorName);
+            const roleLabel = actorRoleLabel(l);
+            const mod = moduleOf(l);
+            return `<tr style="transition:background 0.12s ease;">
+              <td style="padding:10px 14px; white-space:nowrap; vertical-align:middle;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span class="sev-dot sev-${sev}" title="Severity: ${esc(SEVERITY_LABEL[sev])}"></span>
+                  <span style="font-weight:600; font-size:12px; color:var(--text-primary);">${fmtDT(l.action_timestamp)}</span>
+                </div>
               </td>
-              <td><span class="badge ${actionBadgeClass(l)}">${esc(actionLabel(l.action))}</span></td>
-              <td><span class="module-chip">${esc(moduleOf(l))}</span></td>
-              <td style="max-width:200px;font-size:12px;">${l.entity_label ? esc(l.entity_label) : '<span style="color:var(--text-secondary)">—</span>'}</td>
-              <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(summaryOf(l))}">${esc(summaryOf(l))}</td>
-              <td style="text-align:center;">
-                <button class="btn btn-icon btn-secondary btn-sm" onclick="showDetail(${start+idx})" title="Read the full note" style="width:32px;height:32px;border-radius:50%;"><i class="fa-solid fa-eye"></i></button>
+              <td style="padding:10px 14px; vertical-align:middle;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <div class="actor-avatar-circle" title="${esc(actorName)}">${esc(initials)}</div>
+                  <div>
+                    <div style="font-weight:700; font-size:12.5px; color:var(--text-primary); line-height:1.2;">${esc(actorName)}</div>
+                    <div style="font-size:10.5px; color:var(--text-secondary); margin-top:2px;">
+                      <span style="font-weight:600; color:var(--brand-text);">${esc(roleLabel)}</span>${l.actor_facility_name ? ' &middot; ' + esc(l.actor_facility_name) : ''}
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <td style="padding:10px 14px; vertical-align:middle;">
+                <span class="badge ${actionBadgeClass(l)}">${esc(actionLabel(l.action))}</span>
+              </td>
+              <td style="padding:10px 14px; vertical-align:middle;">
+                <span class="module-chip" data-mod="${esc(mod)}">
+                  <i class="fa-solid ${moduleIcon(mod)}" style="font-size:10px;"></i> ${esc(mod)}
+                </span>
+              </td>
+              <td style="padding:10px 14px; vertical-align:middle; font-size:12px; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                ${l.entity_label ? `<span class="target-record-tag" title="${esc(l.entity_label)}">${esc(l.entity_label)}</span>` : '<span style="color:var(--text-secondary);">—</span>'}
+              </td>
+              <td style="padding:10px 14px; vertical-align:middle; font-size:12.5px; color:var(--text-primary); max-width:280px;">
+                <div style="overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.4;">
+                  ${esc(summaryOf(l))}
+                </div>
+              </td>
+              <td style="padding:10px 14px; text-align:center; vertical-align:middle;">
+                <button class="btn btn-sm btn-secondary" onclick="showDetail(${start+idx})" title="Read full event note" style="height:28px; padding:0 10px; border-radius:6px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; border:1px solid #dcdfe4; background:#ffffff;">
+                  <i class="fa-solid fa-file-lines" style="color:var(--brand-primary);"></i> View Note
+                </button>
               </td>
             </tr>`;
           }).join('');
 
           document.getElementById('page-info').textContent =
-            `Showing ${start+1}–${Math.min(start+PAGE_SIZE, filtered.length)} of ${filtered.length}`;
+            `Showing ${start+1}–${Math.min(start+PAGE_SIZE, filtered.length)} of ${filtered.length} activities`;
           renderPagination();
         }
 
@@ -631,23 +1097,40 @@
           pregnancy_id:'Pregnancy'
         };
 
-        // Fields that must never be reprinted, whatever a snapshot happens to hold.
-        // Mirrors public.audit_redact() in the database.
-        const REDACTED = new Set([
+        // Fields that must never be exposed or reprinted, whatever a snapshot happens to hold.
+        // Strictly adheres to Republic Act No. 10173 (Data Privacy Act of 2012).
+        const REDACTED_KEYS = new Set([
           'password_hash','password','verification_code','reset_code',
-          'last_login_token','temporary_password','pending_password_hash','auth_id'
+          'last_login_token','temporary_password','pending_password_hash','auth_id',
+          'raw_password','pwd','pass','otp','pin','token','secret','access_token','refresh_token'
         ]);
+
+        function isSensitiveKey(key) {
+          if (!key) return false;
+          const k = String(key).toLowerCase().trim();
+          if (REDACTED_KEYS.has(k)) return true;
+          return /password|passwd|secret|token|otp|pin|auth_key|api_key|verification_code|reset_code/i.test(k);
+        }
 
         function redactSnapshot(obj){
           if (!obj || typeof obj !== 'object') return obj;
+          if (Array.isArray(obj)) return obj.map(redactSnapshot);
           const out = {};
-          Object.entries(obj).forEach(([k,v]) => { out[k] = REDACTED.has(k) ? '[redacted]' : v; });
+          Object.entries(obj).forEach(([k,v]) => {
+            if (isSensitiveKey(k)) {
+              out[k] = '[redacted]';
+            } else if (v && typeof v === 'object') {
+              out[k] = redactSnapshot(v);
+            } else {
+              out[k] = v;
+            }
+          });
           return out;
         }
 
         function shortValue(v){
           if (v === null || v === undefined || v === '') return '—';
-          if (typeof v === 'object') return JSON.stringify(v);
+          if (typeof v === 'object') return JSON.stringify(redactSnapshot(v));
           const s = String(v);
           return s.length > 400 ? s.slice(0,400) + '…' : s;
         }
@@ -658,11 +1141,14 @@
           const keys = [...new Set([...Object.keys(oldD), ...Object.keys(newD)])].sort();
           return keys
             .filter(k => JSON.stringify(oldD[k]) !== JSON.stringify(newD[k]))
-            .map(k => ({
-              key: titleCase(k),
-              was: REDACTED.has(k) ? '(not recorded)' : shortValue(oldD[k]),
-              now: REDACTED.has(k) ? '(changed)'      : shortValue(newD[k])
-            }));
+            .map(k => {
+              const sensitive = isSensitiveKey(k);
+              return {
+                key: titleCase(k),
+                was: sensitive ? '(not recorded)' : shortValue(oldD[k]),
+                now: sensitive ? '(changed)'      : shortValue(newD[k])
+              };
+            });
         }
 
         function buildRecordHTML(log, opts){
@@ -740,7 +1226,7 @@
                   <dt>Name</dt><dd>${esc(actorOf(log))}</dd>
                   <dt>Role</dt><dd>${esc(actorRoleLabel(log))}</dd>
                   ${log.actor_facility_name ? `<dt>Acting from</dt><dd>${esc(log.actor_facility_name)}</dd>` : ''}
-                  ${log.actor_email ? `<dt>E-mail on file</dt><dd>${esc(log.actor_email)}</dd>` : ''}
+                  ${(log.actor_email && String(log.actor_role || '').toLowerCase() !== 'mother' && String(log.actor_role || '').toLowerCase() !== 'patient') ? `<dt>E-mail on file</dt><dd>${esc(log.actor_email)}</dd>` : ''}
                   <dt>When</dt><dd>${esc(fmtDTLong(log.action_timestamp))} (Philippine time)</dd>
                   <dt>Recorded from</dt><dd>${esc(sourceLabel(log.source))}</dd>
                   ${log.ip_address ? `<dt>Network address</dt><dd>${esc(log.ip_address)}</dd>` : ''}
@@ -1018,9 +1504,39 @@
         document.getElementById('sidebar-toggle')?.addEventListener('click', () =>
           document.querySelector('.app-sidebar')?.classList.toggle('open'));
 
+        // Date Presets Wiring
+        document.querySelectorAll('#audit-date-presets .date-preset-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            applyDatePreset(btn.dataset.preset);
+          });
+        });
+
+        // Sort Selector Wiring
+        document.getElementById('sort-column-select')?.addEventListener('change', (e) => {
+          currentSortCol = e.target.value;
+          updateSortUI();
+          renderTable();
+        });
+
+        // Sort Direction Toggle Wiring
+        document.getElementById('sort-direction-toggle')?.addEventListener('click', () => {
+          currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+          updateSortUI();
+          renderTable();
+        });
+
+        // Table Header Click Sorting Wiring
+        document.querySelectorAll('th.th-sortable').forEach(th => {
+          th.addEventListener('click', () => {
+            const col = th.dataset.sort;
+            if (col) window.toggleSort(col);
+          });
+        });
+
         document.getElementById('clear-filters-btn')?.addEventListener('click', () => {
           ['search-input','filter-module','filter-severity','filter-action','filter-actor','filter-date-from','filter-date-to']
-            .forEach(id => { document.getElementById(id).value = ''; });
+            .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+          setActiveDatePreset('all');
           applyFilters();
         });
 
@@ -1050,8 +1566,18 @@
             const el = document.getElementById(id);
             if(!el) return;
             if(el.tagName === 'SELECT') el.addEventListener('change', applyFilters);
-            else el.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(applyFilters, 280); });
+            else el.addEventListener('input', () => {
+              clearTimeout(searchTimer);
+              searchTimer = setTimeout(() => {
+                if (id === 'filter-date-from' || id === 'filter-date-to') {
+                  setActiveDatePreset('');
+                }
+                applyFilters();
+              }, 280);
+            });
           });
+
+        initDateConstraints();
 
         function showToast(msg, type){
           const icons = { success:'fa-circle-check', error:'fa-circle-xmark', warning:'fa-triangle-exclamation', info:'fa-circle-info' };

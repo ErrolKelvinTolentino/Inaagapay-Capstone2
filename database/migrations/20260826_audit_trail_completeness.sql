@@ -364,7 +364,10 @@ BEGIN
 
   v_account_id := public.resolve_actor_account_id(p_actor);
 
-  SELECT nullif(btrim(concat_ws(' ', a.first_name, a.last_name)), ''),
+  SELECT CASE
+           WHEN a.account_type = 'mother' THEN 'Patient #' || a.account_id::text
+           ELSE nullif(btrim(concat_ws(' ', a.first_name, a.last_name)), '')
+         END,
          a.account_type
     INTO v_name, v_role
     FROM public.accounts a
@@ -1771,8 +1774,12 @@ BEGIN
     v_row := NEW;
   END IF;
 
-  v_name := COALESCE(nullif(btrim(concat_ws(' ', v_row.first_name, v_row.last_name)), ''),
-                     'Account #' || v_row.account_id);
+  IF v_row.account_type = 'mother' THEN
+    v_name := 'Patient #' || v_row.account_id;
+  ELSE
+    v_name := COALESCE(nullif(btrim(concat_ws(' ', v_row.first_name, v_row.last_name)), ''),
+                       'Account #' || v_row.account_id);
+  END IF;
 
   -- is_temporary_password and created_by are later additions
   -- (add_temporary_password_columns.sql, 20260808_created_by_allows_account_ids).
@@ -1782,26 +1789,43 @@ BEGIN
 
   IF TG_OP = 'INSERT' THEN
     v_action  := 'create_account';
-    v_summary := format('Created %s account for %s', NEW.account_type, v_name);
-    v_narr := format(
-      'A new account was created. %s was registered as a %s account with the e-mail address %s and the status "%s". '
-      'The account was created on %s%s. %s',
-      v_name, NEW.account_type, COALESCE(NEW.email_address, 'none on file'), NEW.status,
-      public.audit_ts(COALESCE(public.audit_utc(NEW.created_at), now())),
-      COALESCE(' by ' || (v_json->>'created_by'), ''),
-      CASE WHEN COALESCE((v_json->>'is_temporary_password')::boolean, false)
-           THEN 'It was issued a temporary password that must be changed at first sign-in.'
-           ELSE 'The account set its own password.' END);
+    IF NEW.account_type = 'mother' THEN
+      v_summary := format('Created patient account for Patient #%s', NEW.account_id);
+      v_narr := format(
+        'A new patient account was registered for Patient #%s with status "%s" on %s%s.',
+        NEW.account_id, NEW.status,
+        public.audit_ts(COALESCE(public.audit_utc(NEW.created_at), now())),
+        COALESCE(' by ' || (v_json->>'created_by'), ''));
+    ELSE
+      v_summary := format('Created %s account for %s', NEW.account_type, v_name);
+      v_narr := format(
+        'A new account was created. %s was registered as a %s account with the e-mail address %s and the status "%s". '
+        'The account was created on %s%s. %s',
+        v_name, NEW.account_type, COALESCE(NEW.email_address, 'none on file'), NEW.status,
+        public.audit_ts(COALESCE(public.audit_utc(NEW.created_at), now())),
+        COALESCE(' by ' || (v_json->>'created_by'), ''),
+        CASE WHEN COALESCE((v_json->>'is_temporary_password')::boolean, false)
+             THEN 'It was issued a temporary password that must be changed at first sign-in.'
+             ELSE 'The account set its own password.' END);
+    END IF;
 
   ELSIF TG_OP = 'DELETE' THEN
     v_action  := 'delete_account';
-    v_summary := format('Deleted the %s account of %s', OLD.account_type, v_name);
-    v_narr := format(
-      'An account was PERMANENTLY DELETED. %s held a %s account (%s) with the status "%s", created %s. '
-      'The account row no longer exists. Audit rows this account produced keep the name recorded here, because '
-      'the actor name is snapshotted at the time of each action rather than joined at read time.',
-      v_name, OLD.account_type, COALESCE(OLD.email_address, 'no e-mail on file'), OLD.status,
-      public.audit_ts(public.audit_utc(OLD.created_at)));
+    IF OLD.account_type = 'mother' THEN
+      v_summary := format('Deleted patient account Patient #%s', OLD.account_id);
+      v_narr := format(
+        'A patient account was PERMANENTLY DELETED. Patient #%s held a patient account with status "%s", created %s.',
+        OLD.account_id, OLD.status,
+        public.audit_ts(public.audit_utc(OLD.created_at)));
+    ELSE
+      v_summary := format('Deleted the %s account of %s', OLD.account_type, v_name);
+      v_narr := format(
+        'An account was PERMANENTLY DELETED. %s held a %s account (%s) with the status "%s", created %s. '
+        'The account row no longer exists. Audit rows this account produced keep the name recorded here, because '
+        'the actor name is snapshotted at the time of each action rather than joined at read time.',
+        v_name, OLD.account_type, COALESCE(OLD.email_address, 'no e-mail on file'), OLD.status,
+        public.audit_ts(public.audit_utc(OLD.created_at)));
+    END IF;
 
   ELSE
     IF to_jsonb(OLD) = to_jsonb(NEW) THEN
@@ -1843,8 +1867,10 @@ BEGIN
     v_summary := format('%s account of %s was updated',
                         initcap(replace(v_action, '_', ' ')), v_name);
     v_narr := format(
-      'An account record changed. %s holds a %s account (%s) whose status is now "%s". %s%s',
-      v_name, NEW.account_type, COALESCE(NEW.email_address, 'no e-mail on file'), NEW.status,
+      'An account record changed. %s holds a %s account%s whose status is now "%s". %s%s',
+      v_name, NEW.account_type,
+      CASE WHEN NEW.account_type = 'mother' THEN '' ELSE COALESCE(' (' || NEW.email_address || ')', '') END,
+      NEW.status,
       CASE WHEN v_changes <> '' THEN 'What changed: ' || v_changes ELSE 'No visible field changed. ' END,
       CASE WHEN v_action = 'change_password'
            THEN 'The password itself is never recorded in the audit trail - only the fact that it changed, and when.'
@@ -1856,8 +1882,8 @@ BEGIN
   v_rows := public.audit_kv('Account holder', v_name)
          || public.audit_kv('Account number', '#' || v_row.account_id)
          || public.audit_kv('Role', v_row.account_type)
-         || public.audit_kv('E-mail', v_row.email_address)
-         || public.audit_kv('Contact number', v_row.phone_number)
+         || CASE WHEN v_row.account_type = 'mother' THEN '{}'::text[] ELSE public.audit_kv('E-mail', v_row.email_address) END
+         || CASE WHEN v_row.account_type = 'mother' THEN '{}'::text[] ELSE public.audit_kv('Contact number', v_row.phone_number) END
          || public.audit_kv('Status', v_row.status)
          || public.audit_kv('Verified', CASE WHEN v_row.is_verified THEN 'Yes' ELSE 'No' END)
          || public.audit_kv('Temporary password in force',
@@ -2149,14 +2175,16 @@ SELECT
   t.new_data,
   t.account_id,
   COALESCE(
-    t.actor_name,
-    nullif(btrim(concat_ws(' ', a.first_name, a.last_name)), ''),
+    CASE WHEN a.account_type = 'mother' OR t.actor_role = 'mother' THEN 'Patient #' || COALESCE(t.account_id::text, t.row_id, '—')
+         ELSE t.actor_name END,
+    CASE WHEN a.account_type = 'mother' THEN 'Patient #' || a.account_id::text
+         ELSE nullif(btrim(concat_ws(' ', a.first_name, a.last_name)), '') END,
     'System'
   )                                            AS actor_name,
   COALESCE(t.actor_role, a.account_type, 'system') AS actor_role,
   COALESCE(t.actor_facility_name,
            public.audit_facility_label(t.actor_facility_id)) AS actor_facility_name,
-  a.email_address                              AS actor_email
+  CASE WHEN a.account_type = 'mother' OR t.actor_role = 'mother' THEN NULL ELSE a.email_address END AS actor_email
 FROM public.audit_trail t
 LEFT JOIN public.accounts a ON a.account_id = t.account_id;
 
@@ -2178,13 +2206,16 @@ UPDATE public.audit_trail t
  WHERE t.module IS NULL OR t.severity IS NULL OR t.source IS NULL;
 
 UPDATE public.audit_trail t
-   SET actor_name = COALESCE(
-         nullif(btrim(concat_ws(' ', a.first_name, a.last_name)), ''),
-         'Account #' || t.account_id),
+   SET actor_name = CASE
+         WHEN a.account_type = 'mother' THEN 'Patient #' || a.account_id
+         ELSE COALESCE(
+           nullif(btrim(concat_ws(' ', a.first_name, a.last_name)), ''),
+           'Account #' || t.account_id)
+       END,
        actor_role = a.account_type
   FROM public.accounts a
  WHERE a.account_id = t.account_id
-   AND t.actor_name IS NULL;
+   AND (t.actor_name IS NULL OR a.account_type = 'mother');
 
 UPDATE public.audit_trail t
    SET actor_name = 'System',
@@ -2199,10 +2230,10 @@ UPDATE public.audit_trail t
        new_data = public.audit_redact(t.new_data)
  WHERE (t.old_data ?| ARRAY['password_hash','password','pending_password_hash',
                             'temporary_password','verification_code','reset_code',
-                            'last_login_token','auth_id'])
+                            'last_login_token','auth_id','raw_password'])
     OR (t.new_data ?| ARRAY['password_hash','password','pending_password_hash',
                             'temporary_password','verification_code','reset_code',
-                            'last_login_token','auth_id']);
+                            'last_login_token','auth_id','raw_password']);
 
 UPDATE public.audit_trail t
    SET narrative = format(
