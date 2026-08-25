@@ -1,22 +1,31 @@
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../models/baby_growth_milestone.dart';
 import '../../models/pregnancy_growth_stage.dart';
 import '../../theme/app_colors.dart';
 import 'baby_book_section_components.dart';
+import '../../services/baby_book_repository.dart';
 import 'baby_growth_timeline.dart';
 
 class BabyGrowthMilestonesSection extends StatefulWidget {
   final List<BabyGrowthMilestone> initialMilestones;
   final CurrentPregnancyState currentPregnancy;
 
+  /// Persists a mark being put on or taken off, returning whether it stuck.
+  ///
+  /// Optional so the preview and the widget tests can run the section with no
+  /// database behind it. Where it is null the mark lives for as long as the
+  /// screen does, which is honest for a preview and wrong for a real account
+  /// — so the pages that have a pregnancy id supply it.
+  final Future<bool> Function(BabyGrowthMilestone milestone, bool markingDone)?
+      onToggleCompleted;
+
   const BabyGrowthMilestonesSection({
     super.key,
     required this.initialMilestones,
     required this.currentPregnancy,
+    this.onToggleCompleted,
   });
 
   @override
@@ -31,11 +40,24 @@ class _BabyGrowthMilestonesSectionState
 
   bool get _isTwin => widget.currentPregnancy.isTwinPregnancy;
 
+  /// The week a milestone belongs at in the timeline.
+  ///
+  /// [expectedEndWeek] is consulted before giving up: a recommendation can
+  /// have a deadline and no start ("at least one ultrasound before 24 weeks").
+  /// Without this it fell through to the sentinel and sorted below the
+  /// third-trimester rows — telling a mother that something due by week 24
+  /// comes after everything due at week 28.
+  int _timelineWeek(BabyGrowthMilestone milestone) =>
+      milestone.expectedStartWeek ??
+      milestone.expectedEndWeek ??
+      milestone.recordedPregnancyWeek ??
+      100;
+
   List<BabyGrowthMilestone> get _sortedMilestones {
     final result = List<BabyGrowthMilestone>.from(_milestones);
     result.sort((a, b) {
-      final aWeek = a.expectedStartWeek ?? a.recordedPregnancyWeek ?? 100;
-      final bWeek = b.expectedStartWeek ?? b.recordedPregnancyWeek ?? 100;
+      final aWeek = _timelineWeek(a);
+      final bWeek = _timelineWeek(b);
       final weekComparison = aWeek.compareTo(bWeek);
       if (weekComparison != 0) return weekComparison;
       return _milestones.indexOf(a).compareTo(_milestones.indexOf(b));
@@ -49,82 +71,70 @@ class _BabyGrowthMilestonesSectionState
     _milestones = List<BabyGrowthMilestone>.from(widget.initialMilestones);
   }
 
-  Future<void> _openForm([BabyGrowthMilestone? existing]) async {
-    final saved = await showModalBottomSheet<BabyGrowthMilestone>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (_) => _MilestoneForm(
-        existing: existing,
-        currentWeek: widget.currentPregnancy.currentWeek,
-        currentMonth: widget.currentPregnancy.currentMonth,
-      ),
-    );
-    if (saved == null || !mounted) return;
+  /// Marks a milestone done, or takes the mark back off.
+  ///
+  /// A mother can have a checkup anywhere — a private clinic, a lying-in, a
+  /// hospital in the next town — and the barangay record will not know. The
+  /// mark is how she says so in her own book. It is hers, which is also why
+  /// it can be taken off again: a tap meant for the row above should not
+  /// leave a permanent claim that something happened.
+  ///
+  /// The screen updates first and the write follows, so the tap feels
+  /// immediate. If the write fails the state is rolled back and she is told,
+  /// rather than being left looking at a checkmark that exists nowhere but on
+  /// this screen.
+  Future<void> _toggleCompleted(BabyGrowthMilestone milestone) async {
+    final index = _milestones.indexWhere((item) => item.id == milestone.id);
+    if (index == -1) return;
+
+    final previous = _milestones[index];
+    final markingDone =
+        previous.status != BabyGrowthMilestoneStatus.completed;
 
     setState(() {
-      final index = _milestones.indexWhere((item) => item.id == saved.id);
-      if (index == -1) {
-        _milestones.add(saved);
-      } else {
-        _milestones[index] = saved;
-      }
+      _milestones[index] = markingDone
+          ? previous.copyWith(
+              status: BabyGrowthMilestoneStatus.completed,
+              completedDate: previous.completedDate ?? DateTime.now(),
+              recordedPregnancyWeek: previous.recordedPregnancyWeek ??
+                  widget.currentPregnancy.currentWeek,
+            )
+          : previous.copyWith(
+              // Back to whatever it would be with nothing recorded —
+              // upcoming, current or not-yet-recorded, depending on the week.
+              // Asking the repository rather than guessing here keeps one
+              // rule for what a status means; a second copy in the widget
+              // would be free to disagree with the one used on load.
+              status: BabyBookRepository.statusFor(
+                observedOn: null,
+                expectedStartWeek: previous.expectedStartWeek,
+                expectedEndWeek: previous.expectedEndWeek,
+                currentWeek: widget.currentPregnancy.currentWeek,
+              ),
+              completedDate: null,
+              recordedPregnancyWeek: null,
+              entryId: null,
+            );
     });
-  }
 
-  void _markCompleted(BabyGrowthMilestone milestone) {
-    setState(() {
-      final index = _milestones.indexWhere((item) => item.id == milestone.id);
-      if (index != -1) {
-        _milestones[index] = milestone.copyWith(
-          status: BabyGrowthMilestoneStatus.completed,
-          completedDate: milestone.completedDate ?? DateTime.now(),
-          recordedPregnancyWeek: milestone.recordedPregnancyWeek ??
-              widget.currentPregnancy.currentWeek,
-          pregnancyMonth:
-              milestone.pregnancyMonth ?? widget.currentPregnancy.currentMonth,
-        );
-      }
-    });
-  }
+    final persist = widget.onToggleCompleted;
+    if (persist == null) return;
 
-  Future<void> _confirmDelete(BabyGrowthMilestone milestone) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Delete this milestone?'),
+    final saved = await persist(previous, markingDone);
+    if (saved || !mounted) return;
+
+    setState(() => _milestones[index] = previous);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
         content: Text(
-          '“${milestone.title}” will be removed from this pregnancy timeline.',
+          markingDone
+              ? 'Could not save that “${previous.title}” is done. Please try again.'
+              : 'Could not remove the mark on “${previous.title}”. Please try again.',
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Keep milestone'),
-          ),
-          FilledButton(
-            key: const ValueKey<String>('milestone-confirm-delete'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB64E62),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
+        behavior: SnackBarBehavior.floating,
       ),
     );
-
-    if (confirmed == true && mounted) {
-      setState(
-          () => _milestones.removeWhere((item) => item.id == milestone.id));
-    }
   }
 
   void _viewDetails(BabyGrowthMilestone milestone) {
@@ -184,8 +194,20 @@ class _BabyGrowthMilestonesSectionState
                 ),
               ),
             ],
+            const SizedBox(height: 14),
+            // The one place the record-state sentence still appears: she has
+            // chosen to open this milestone, so there is room to say what the
+            // app knows and who to ask about it.
+            Text(
+              milestone.recordGuidance,
+              key: ValueKey<String>('milestone-guidance-${milestone.id}'),
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13.5,
+                height: 1.5,
+              ),
+            ),
             const SizedBox(height: 18),
-            _DetailRow(label: 'Category', value: milestone.category.label),
             _DetailRow(label: 'Status', value: milestone.status.label),
             if (milestone.expectedStartWeek != null)
               _DetailRow(
@@ -199,11 +221,6 @@ class _BabyGrowthMilestonesSectionState
                 label: 'Recorded week',
                 value: 'Week ${milestone.recordedPregnancyWeek}',
               ),
-            if (milestone.pregnancyMonth != null)
-              _DetailRow(
-                label: 'Pregnancy month',
-                value: 'Month ${milestone.pregnancyMonth}',
-              ),
             if (milestone.completedDate != null)
               _DetailRow(
                 label: 'Recorded date',
@@ -215,17 +232,32 @@ class _BabyGrowthMilestonesSectionState
               _DetailRow(label: 'Recorded by', value: milestone.recordedBy!),
             const SizedBox(height: 18),
             FilledButton.icon(
+              key: const ValueKey<String>('milestone-detail-toggle'),
               onPressed: () {
                 Navigator.of(sheetContext).pop();
-                _openForm(milestone);
+                _toggleCompleted(milestone);
               },
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.brandPrimary,
+                backgroundColor:
+                    milestone.status == BabyGrowthMilestoneStatus.completed
+                        ? const Color(0xFF4E9D8E)
+                        : AppColors.brandPrimary,
                 foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
               ),
-              icon: const Icon(Icons.edit_outlined),
-              label: const Text('Edit milestone'),
+              icon: Icon(
+                milestone.status == BabyGrowthMilestoneStatus.completed
+                    ? Icons.remove_done_rounded
+                    : Icons.check_circle_outline_rounded,
+              ),
+              label: Text(
+                milestone.status == BabyGrowthMilestoneStatus.completed
+                    ? 'Un-mark as completed'
+                    : 'Mark as completed',
+              ),
             ),
           ],
         ),
@@ -235,9 +267,6 @@ class _BabyGrowthMilestonesSectionState
 
   @override
   Widget build(BuildContext context) {
-    final hasPersonalMilestone = _milestones.any((item) => item.isCustom);
-    final subject = _isTwin ? 'your babies' : 'your baby';
-    final growthVerb = _isTwin ? 'continue' : 'continues';
     final sortedMilestones = _sortedMilestones;
     final visibleMilestones = _showAllMilestones
         ? sortedMilestones
@@ -252,136 +281,58 @@ class _BabyGrowthMilestonesSectionState
         key: const ValueKey<String>('baby-growth-milestones-section'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          BabyBookSectionHeader(
-            eyebrow: 'PREGNANCY TIMELINE',
-            title: _isTwin
-                ? 'Babies’ Growth Milestones'
-                : 'Baby Growth Milestones',
-            description:
-                'Follow recorded pregnancy moments from early pregnancy to birth preparation. The growth viewer above remains your month-by-month development guide.',
-            actionLabel: 'Add Milestone',
-            actionIcon: Icons.add_rounded,
-            onAction: _openForm,
+          // "Pregnancy Milestones", not "Baby Growth Milestones".
+          //
+          // The list underneath is checkups, scans and trimester changes —
+          // pregnancy confirmed, first prenatal checkup, first ultrasound,
+          // anatomy scan, birth preparation. None of it is a description of
+          // how the baby is growing; that is the section above this one. A
+          // mother who opened this expecting her baby's growth found a care
+          // schedule, and a mother looking for her next checkup would not
+          // have thought to look under a heading about her baby's size.
+          //
+          // The twin wording goes with it. These milestones belong to the
+          // pregnancy, not to one baby or two, so there is nothing to
+          // pluralise.
+          // No "Add Milestone". This list is the recommended prenatal care,
+          // and the recommendation comes from the catalogue in the database —
+          // it is not something a mother composes. Letting her add rows put
+          // her own entries among the recommendations, where a later reader
+          // could not tell which ones the app was advising.
+          //
+          // What she still controls is whether each one has happened, which
+          // is the mark, not the row.
+          const BabyBookSectionHeader(
+            eyebrow: 'CHECKUPS & SCANS',
+            title: 'Pregnancy Milestones',
           ),
           if (_isTwin) ...[
             const SizedBox(height: 10),
             const BabyBookTwinPregnancyBadge(light: false),
           ],
           const SizedBox(height: 14),
+          // The banner used to promise a keepsake — "Small moments become
+          // milestones", memories kept together as the journey grows. What
+          // follows it is her checkup schedule, so the banner now says that.
           const BabyBookPictureBanner(
             key: ValueKey<String>('milestone-picture-card'),
             assetPath: 'assets/images/milestone_story_card.png',
             semanticLabel:
                 'Pregnant mother recording moments in her pregnancy journal',
-            eyebrow: 'YOUR PREGNANCY STORY',
-            title: 'Small moments become milestones.',
+            eyebrow: 'YOUR PREGNANCY CARE',
+            title: 'Your checkups, in order.',
             subtitle:
-                'Keep meaningful changes, checkups, and memories together as the journey grows.',
+                'The visits and scans usually done during pregnancy, and which ones you have had.',
           ),
-          const SizedBox(height: 14),
-          BabyBookPanel(
-            key: const ValueKey<String>('current-growth-stage'),
-            color: const Color(0xFFFFE8F1),
-            borderColor: const Color(0xFFFFC5D9),
-            padding: const EdgeInsets.all(17),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.favorite_rounded,
-                        color: AppColors.brandPrimary,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 11),
-                    const Expanded(
-                      child: Text(
-                        'Your Current Growth Stage',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Week ${widget.currentPregnancy.currentWeek} of approximately 40 weeks',
-                  key: const ValueKey<String>('milestone-progress-label'),
-                  style: const TextStyle(
-                    color: AppColors.brandText,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'At this stage, $subject $growthVerb growing and developing. Movement may be noticed, body structures continue becoming more defined, and an ultrasound may be recorded depending on the healthcare plan.',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 10,
-                    height: 1.55,
-                  ),
-                ),
-                const SizedBox(height: 7),
-                const Text(
-                  'This is general educational guidance, not a medical diagnosis.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 9,
-                    height: 1.4,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // "Your Current Growth Stage" stood here and said the week number,
+          // then described the baby's development in the same terms as the
+          // growth journey above — a third telling of what the hero card and
+          // the month card already say, in the smallest type on the page.
           const SizedBox(height: 16),
-          if (!hasPersonalMilestone) ...[
-            BabyBookPanel(
-              color: const Color(0xFFFFFCFD),
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.auto_awesome_outlined,
-                    color: AppColors.brandPrimary,
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
-                      'No personal pregnancy milestone has been recorded yet.',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 10,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Add a personal milestone',
-                    onPressed: _openForm,
-                    icon: const Icon(
-                      Icons.add_circle_rounded,
-                      color: AppColors.brandPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-          ],
+          // The "You have not added a milestone of your own yet" panel went
+          // with the add button: it invited her to fill a gap that is not a
+          // gap. Nothing is missing from a list of recommendations because
+          // she has not written in it.
           AnimatedSize(
             duration: const Duration(milliseconds: 240),
             curve: Curves.easeOutCubic,
@@ -389,9 +340,7 @@ class _BabyGrowthMilestonesSectionState
             child: BabyGrowthTimeline(
               milestones: visibleMilestones,
               onView: _viewDetails,
-              onEdit: _openForm,
-              onComplete: _markCompleted,
-              onDelete: _confirmDelete,
+              onComplete: _toggleCompleted,
             ),
           ),
           if (sortedMilestones.length > 3) ...[
@@ -425,366 +374,14 @@ class _BabyGrowthMilestonesSectionState
           ],
           const SizedBox(height: 12),
           const Text(
-            'Expected weeks are general ranges. Record medical milestones only when confirmed by you or your healthcare provider.',
+            'The weeks shown are the usual times, not fixed dates. Mark a checkup or scan as done only once it has really happened.',
             style: TextStyle(
               color: AppColors.textSecondary,
-              fontSize: 9,
+              fontSize: 12.5,
               height: 1.45,
-              fontStyle: FontStyle.italic,
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _MilestoneForm extends StatefulWidget {
-  final BabyGrowthMilestone? existing;
-  final int currentWeek;
-  final int currentMonth;
-
-  const _MilestoneForm({
-    this.existing,
-    required this.currentWeek,
-    required this.currentMonth,
-  });
-
-  @override
-  State<_MilestoneForm> createState() => _MilestoneFormState();
-}
-
-class _MilestoneFormState extends State<_MilestoneForm> {
-  final _formKey = GlobalKey<FormState>();
-  final _picker = ImagePicker();
-  late final TextEditingController _titleController;
-  late final TextEditingController _weekController;
-  late final TextEditingController _monthController;
-  late final TextEditingController _noteController;
-  late final TextEditingController _recordedByController;
-  late BabyGrowthMilestoneCategory _category;
-  late BabyGrowthMilestoneStatus _status;
-  DateTime? _date;
-  Uint8List? _photoBytes;
-  bool _isPickingPhoto = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final existing = widget.existing;
-    _titleController = TextEditingController(text: existing?.title ?? '');
-    _weekController = TextEditingController(
-      text: (existing?.recordedPregnancyWeek ?? widget.currentWeek).toString(),
-    );
-    _monthController = TextEditingController(
-      text: (existing?.pregnancyMonth ?? widget.currentMonth).toString(),
-    );
-    _noteController = TextEditingController(text: existing?.note ?? '');
-    _recordedByController = TextEditingController(
-      text: existing?.recordedBy ?? 'Mother',
-    );
-    _category =
-        existing?.category ?? BabyGrowthMilestoneCategory.personalMemory;
-    _status = existing?.status ?? BabyGrowthMilestoneStatus.completed;
-    _date = existing?.completedDate ?? DateTime.now();
-    _photoBytes = existing?.photoBytes;
-  }
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _weekController.dispose();
-    _monthController.dispose();
-    _noteController.dispose();
-    _recordedByController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickPhoto() async {
-    if (_isPickingPhoto) return;
-    setState(() => _isPickingPhoto = true);
-    try {
-      final photo = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 88,
-        maxWidth: 1800,
-      );
-      if (photo != null && mounted) {
-        final bytes = await photo.readAsBytes();
-        if (mounted) setState(() => _photoBytes = bytes);
-      }
-    } finally {
-      if (mounted) setState(() => _isPickingPhoto = false);
-    }
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _date ?? DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null && mounted) setState(() => _date = picked);
-  }
-
-  String? _validateNumber(String? value, int min, int max, String label) {
-    if (value == null || value.trim().isEmpty) return null;
-    final number = int.tryParse(value);
-    if (number == null || number < min || number > max) {
-      return '$label must be between $min and $max.';
-    }
-    return null;
-  }
-
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
-    final title = _titleController.text.trim();
-    final note = _noteController.text.trim();
-    final existing = widget.existing;
-    Navigator.of(context).pop(
-      BabyGrowthMilestone(
-        id: existing?.id ?? 'personal-${DateTime.now().microsecondsSinceEpoch}',
-        title: title,
-        description: existing?.description ??
-            (note.isEmpty
-                ? 'A personal pregnancy moment recorded in the Baby Book.'
-                : note),
-        expectedStartWeek: existing?.expectedStartWeek,
-        expectedEndWeek: existing?.expectedEndWeek,
-        recordedPregnancyWeek: int.tryParse(_weekController.text.trim()),
-        pregnancyMonth: int.tryParse(_monthController.text.trim()),
-        completedDate: _date,
-        category: _category,
-        status: _status,
-        note: note.isEmpty ? null : note,
-        photoPath: existing?.photoPath,
-        photoBytes: _photoBytes,
-        recordedBy: _recordedByController.text.trim().isEmpty
-            ? null
-            : _recordedByController.text.trim(),
-        isCustom: existing?.isCustom ?? true,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FractionallySizedBox(
-      heightFactor: 0.92,
-      child: Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE5DADF),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  widget.existing == null ? 'Add Milestone' : 'Edit Milestone',
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Save a personally felt moment or a milestone documented by your healthcare provider.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                    height: 1.45,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                TextFormField(
-                  key: const ValueKey<String>('milestone-title'),
-                  controller: _titleController,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: 'Milestone title *',
-                    prefixIcon: Icon(Icons.auto_awesome_outlined),
-                  ),
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Milestone title is required.'
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<BabyGrowthMilestoneCategory>(
-                  initialValue: _category,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                    prefixIcon: Icon(Icons.category_outlined),
-                  ),
-                  items: BabyGrowthMilestoneCategory.values
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item,
-                          child: Text(item.label),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) setState(() => _category = value);
-                  },
-                ),
-                const SizedBox(height: 12),
-                InkWell(
-                  onTap: _pickDate,
-                  borderRadius: BorderRadius.circular(14),
-                  child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Recorded date (optional)',
-                      prefixIcon: Icon(Icons.event_outlined),
-                    ),
-                    child: Text(
-                      _date == null ? 'Not set' : babyBookFormatDate(_date!),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _weekController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Pregnancy week',
-                          prefixIcon: Icon(Icons.calendar_view_week_outlined),
-                        ),
-                        validator: (value) =>
-                            _validateNumber(value, 1, 42, 'Week'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _monthController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Month',
-                          prefixIcon: Icon(Icons.calendar_month_outlined),
-                        ),
-                        validator: (value) =>
-                            _validateNumber(value, 1, 10, 'Month'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<BabyGrowthMilestoneStatus>(
-                  initialValue: _status,
-                  decoration: const InputDecoration(
-                    labelText: 'Completion status',
-                    prefixIcon: Icon(Icons.task_alt_rounded),
-                  ),
-                  items: BabyGrowthMilestoneStatus.values
-                      .map(
-                        (item) => DropdownMenuItem(
-                          value: item,
-                          child: Text(item.label),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) setState(() => _status = value);
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _recordedByController,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: 'Recorded by (optional)',
-                    hintText: 'Mother or healthcare provider',
-                    prefixIcon: Icon(Icons.person_outline_rounded),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _noteController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Short note (optional)',
-                    hintText: 'Baby A or Baby B only when medically recorded',
-                    alignLabelWithHint: true,
-                    prefixIcon: Icon(Icons.notes_rounded),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                if (_photoBytes != null) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.memory(
-                      _photoBytes!,
-                      height: 150,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () => setState(() => _photoBytes = null),
-                      icon: const Icon(Icons.close_rounded, size: 17),
-                      label: const Text('Remove photo'),
-                    ),
-                  ),
-                ],
-                OutlinedButton.icon(
-                  onPressed: _isPickingPhoto ? null : _pickPhoto,
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    foregroundColor: AppColors.brandText,
-                    side: const BorderSide(color: Color(0xFFFFBCD2)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  icon: _isPickingPhoto
-                      ? const SizedBox(
-                          width: 17,
-                          height: 17,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.add_photo_alternate_outlined),
-                  label: Text(
-                    _photoBytes == null ? 'Attach a photo' : 'Replace photo',
-                  ),
-                ),
-                const SizedBox(height: 18),
-                FilledButton.icon(
-                  key: const ValueKey<String>('milestone-save'),
-                  onPressed: _save,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.brandPrimary,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                  ),
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('Save milestone'),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

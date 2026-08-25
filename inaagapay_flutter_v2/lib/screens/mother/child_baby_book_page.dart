@@ -9,6 +9,7 @@ import '../../services/baby_book_repository.dart';
 import '../../services/language_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/baby_book/baby_book_section_components.dart';
+import '../../widgets/baby_book/baby_care_guide_book.dart';
 import '../../widgets/secondary_header.dart';
 
 /// One child's Baby Book — the postnatal half.
@@ -222,6 +223,14 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
                           ],
                           ..._ageSections(),
                           if (_milestones.isEmpty) _emptyState(),
+
+                          // The DOH/UNICEF care guide, moved here from the
+                          // pregnancy baby book. Its eight pages are about
+                          // feeding, first days, safety and checkups — a baby
+                          // who has been born — so they belong in the book of
+                          // a child who has been.
+                          const SizedBox(height: 30),
+                          const BabyCareGuideBook(),
                         ],
                       ),
                     ),

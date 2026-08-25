@@ -6,17 +6,13 @@ import 'baby_growth_milestone_card.dart';
 class BabyGrowthTimeline extends StatelessWidget {
   final List<BabyGrowthMilestone> milestones;
   final ValueChanged<BabyGrowthMilestone> onView;
-  final ValueChanged<BabyGrowthMilestone> onEdit;
   final ValueChanged<BabyGrowthMilestone> onComplete;
-  final ValueChanged<BabyGrowthMilestone> onDelete;
 
   const BabyGrowthTimeline({
     super.key,
     required this.milestones,
     required this.onView,
-    required this.onEdit,
     required this.onComplete,
-    required this.onDelete,
   });
 
   @override
@@ -29,9 +25,7 @@ class BabyGrowthTimeline extends StatelessWidget {
             isFirst: index == 0,
             isLast: index == milestones.length - 1,
             onView: () => onView(milestones[index]),
-            onEdit: () => onEdit(milestones[index]),
             onComplete: () => onComplete(milestones[index]),
-            onDelete: () => onDelete(milestones[index]),
           ),
       ],
     );
@@ -43,18 +37,14 @@ class _TimelineEntry extends StatelessWidget {
   final bool isFirst;
   final bool isLast;
   final VoidCallback onView;
-  final VoidCallback onEdit;
   final VoidCallback onComplete;
-  final VoidCallback onDelete;
 
   const _TimelineEntry({
     required this.milestone,
     required this.isFirst,
     required this.isLast,
     required this.onView,
-    required this.onEdit,
     required this.onComplete,
-    required this.onDelete,
   });
 
   @override
@@ -130,9 +120,7 @@ class _TimelineEntry extends StatelessWidget {
                 statusColor: visual.color,
                 statusIcon: visual.icon,
                 onView: onView,
-                onEdit: onEdit,
                 onComplete: onComplete,
-                onDelete: onDelete,
               ),
             ),
           ],

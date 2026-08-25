@@ -38,7 +38,7 @@ class BabyBookSectionHeader extends StatelessWidget {
         Text(
           title,
           style: const TextStyle(
-            color: AppColors.textPrimary,
+            color: AppColors.headingSoft,
             fontSize: 21,
             height: 1.2,
             fontWeight: FontWeight.w800,
@@ -64,7 +64,7 @@ class BabyBookSectionHeader extends StatelessWidget {
               label: Text(
                 actionLabel!,
                 style: const TextStyle(
-                  fontSize: 10,
+                  fontSize: 13,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -76,8 +76,8 @@ class BabyBookSectionHeader extends StatelessWidget {
           Text(
             description!,
             style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 11,
+              color: AppColors.inputText,
+              fontSize: 13.5,
               height: 1.5,
             ),
           ),

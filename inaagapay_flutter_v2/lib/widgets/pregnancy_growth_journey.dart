@@ -66,29 +66,57 @@ class _PregnancyGrowthJourneyState extends State<PregnancyGrowthJourney> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'PREGNANCY GROWTH',
-          style: const TextStyle(
-            color: AppColors.brandText,
-            fontSize: 10,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.25,
-          ),
+        // Badge and title, nothing else. The eyebrow said "PREGNANCY GROWTH"
+        // directly above a title that says the same thing in her own words,
+        // and the line beneath explained a row of numbered circles that is
+        // plainer to look at than to read about.
+        Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: <Color>[Color(0xFFFF8FBC), AppColors.brandPrimary],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: AppColors.brandPrimary.withValues(alpha: 0.28),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Icon(
+                plural ? Icons.child_care_rounded : Icons.spa_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                plural
+                    ? 'Your Babies’ Growth Journey'
+                    : 'Your Baby’s Growth Journey',
+                style: const TextStyle(
+                  color: AppColors.headingSoft,
+                  fontSize: 22,
+                  height: 1.2,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.45,
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          plural ? 'Your Babies’ Growth Journey' : 'Your Baby’s Growth Journey',
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 22,
-            height: 1.2,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.45,
-          ),
-        ),
+        // The pregnancy card moved to the top of the Baby Book, where it is
+        // now the cover. Drawn here as well, a mother scrolling this page met
+        // the same photograph, the same due date and the same 28% twice.
         const SizedBox(height: 12),
-        _CurrentPregnancySummary(pregnancy: pregnancy),
-        const SizedBox(height: 16),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 320),
           switchInCurve: Curves.easeOutCubic,
@@ -123,45 +151,119 @@ class _PregnancyGrowthJourneyState extends State<PregnancyGrowthJourney> {
               : _showNextMonth,
           onSelect: _selectMonth,
         ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF8EA),
-            borderRadius: BorderRadius.circular(17),
-            border: Border.all(color: const Color(0xFFFFE1A3)),
-          ),
-          child: const Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.info_outline_rounded,
-                color: Color(0xFFD78C28),
-                size: 18,
-              ),
-              SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  'Every pregnancy develops differently. The information shown is a general guide and does not replace advice from your doctor or midwife.',
-                  style: TextStyle(
-                    color: Color(0xFF8A632D),
-                    fontSize: 10,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        // The disclaimer used to sit here as an amber block of 10pt text at
+        // the very bottom of the section. It is now behind the (i) in the
+        // corner of the stage card, where it is one tap away and legible when
+        // it is read, instead of being permanently on screen at a size that
+        // discouraged reading it at all.
       ],
     );
   }
 }
 
-class _CurrentPregnancySummary extends StatelessWidget {
+/// The wording behind the (i) on the stage card.
+///
+/// Kept as one constant so the sheet and any future placement cannot drift
+/// apart — this is the sentence that keeps the guide a guide.
+const String pregnancyGuideDisclaimer =
+    'Every pregnancy is different. What you read here is a general guide for '
+    'most pregnancies, not a description of yours. It does not take the place '
+    'of your doctor or midwife — they know your record and can answer for '
+    'your pregnancy.';
+
+/// Opens the guide disclaimer as a bottom sheet.
+Future<void> showPregnancyGuideDisclaimer(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.white,
+    showDragHandle: true,
+    // Scroll-controlled and scrollable. The default sheet is capped at a
+    // fraction of the screen, which clipped the last lines of the disclaimer
+    // on a small phone — and a disclaimer that is cut off is worse than one
+    // that is merely small. It now sizes to its text and scrolls if a mother
+    // has her system font enlarged.
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+    ),
+    builder: (context) => SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        22,
+        4,
+        22,
+        30 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3DC),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.info_outline_rounded,
+                  color: Color(0xFFD78C28),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'About this guide',
+                  style: TextStyle(
+                    color: AppColors.headingSoft,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            pregnancyGuideDisclaimer,
+            style: TextStyle(
+              color: AppColors.inputText,
+              fontSize: 15,
+              height: 1.55,
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.brandPrimary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: const Text(
+                'Got it',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class PregnancyCoverCard extends StatelessWidget {
   final CurrentPregnancyState pregnancy;
 
-  const _CurrentPregnancySummary({required this.pregnancy});
+  const PregnancyCoverCard({super.key, required this.pregnancy});
 
   @override
   Widget build(BuildContext context) {
@@ -171,7 +273,7 @@ class _CurrentPregnancySummary extends StatelessWidget {
       key: const ValueKey<String>('current-pregnancy-picture-card'),
       assetPath: 'assets/images/current_pregnancy_card.png',
       semanticLabel: 'Pregnant mother holding her growing belly',
-      height: 196,
+      height: 250,
       imageKey: const ValueKey('current-pregnancy-card-artwork'),
       child: Padding(
         padding: const EdgeInsets.all(17),
@@ -184,7 +286,7 @@ class _CurrentPregnancySummary extends StatelessWidget {
                   'CURRENT PREGNANCY',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.86),
-                    fontSize: 8,
+                    fontSize: 10,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 1.05,
                   ),
@@ -194,17 +296,29 @@ class _CurrentPregnancySummary extends StatelessWidget {
                   const BabyBookTwinPregnancyBadge(light: true),
               ],
             ),
-            // The week and the trimester used to be restated here, directly
-            // under a cover card already showing both. Six statements of one
-            // fact across this screen is noise, not emphasis — the page says
-            // how far along she is once, at the top, and this section gets on
-            // with what it is actually for: browsing the months.
-            const SizedBox(height: 9),
+            // This card is now the top of the Baby Book, so it carries the
+            // headline it used to sit beneath. The page previously said
+            // "11 Weeks Pregnant", "Month 3 • First Trimester", the due date
+            // and "28%" across three separate cards; all of it is here once.
+            const SizedBox(height: 8),
+            Text(
+              pregnancy.currentWeek <= 0
+                  ? 'Your pregnancy'
+                  : '${pregnancy.currentWeek} Weeks Pregnant',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 25,
+                height: 1.1,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+              ),
+            ),
+            const SizedBox(height: 3),
             Text(
               'Month ${pregnancy.currentMonth} • ${pregnancy.trimester}',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.9),
-                fontSize: 10,
+                color: Colors.white.withValues(alpha: 0.92),
+                fontSize: 13.5,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -214,8 +328,8 @@ class _CurrentPregnancySummary extends StatelessWidget {
                 Text(
                   'Pregnancy progress',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.88),
-                    fontSize: 9,
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -224,7 +338,7 @@ class _CurrentPregnancySummary extends StatelessWidget {
                   '$percentage%',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 10,
+                    fontSize: 13.5,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -234,7 +348,7 @@ class _CurrentPregnancySummary extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: LinearProgressIndicator(
-                minHeight: 6,
+                minHeight: 8,
                 value: pregnancy.pregnancyProgress,
                 backgroundColor: Colors.white.withValues(alpha: 0.24),
                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
@@ -246,15 +360,15 @@ class _CurrentPregnancySummary extends StatelessWidget {
                 const Icon(
                   Icons.event_available_outlined,
                   color: Colors.white,
-                  size: 15,
+                  size: 17,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     'Estimated due date: ${babyBookFormatDate(pregnancy.estimatedDueDate)}',
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.94),
-                      fontSize: 9,
+                      color: Colors.white.withValues(alpha: 0.95),
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -302,92 +416,98 @@ class _PregnancyStageCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+              Expanded(
+                child: Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    // The pill is the heading now. The weeks used to be said
+                    // twice — once in a pill labelled "YOUR CURRENT STAGE"
+                    // and again underneath in large dark type — so the pill
+                    // took the room without carrying the information.
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 13,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isCurrentStage
+                            ? AppColors.brandPrimary
+                            : const Color(0xFFFFEDF4),
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: Semantics(
+                        // Nothing on the card now says in words whether this
+                        // is her own month or one she is reading ahead to —
+                        // that is left to the pill's colour and to the ringed
+                        // circle in the navigator. Colour reaches neither a
+                        // screen reader nor a colourblind mother, so the
+                        // spoken label still carries it.
+                        label: isCurrentStage
+                            ? '${stage.weekRange}, ${stage.trimester}, your current month'
+                            : '${stage.weekRange}, ${stage.trimester}, previewing this month',
+                        child: Text(
+                          stage.weekRange.toUpperCase(),
+                          key:
+                              ValueKey<String>('pregnancy-month-${stage.month}'),
+                          style: TextStyle(
+                            color: isCurrentStage
+                                ? Colors.white
+                                : AppColors.brandText,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      stage.trimester,
+                      style: const TextStyle(
+                        color: AppColors.brandText,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
-                decoration: BoxDecoration(
-                  color: isCurrentStage
-                      ? AppColors.brandPrimary
-                      : const Color(0xFFFFEDF4),
-                  borderRadius: BorderRadius.circular(30),
+              ),
+              if (pregnancy.isTwinPregnancy)
+                const Padding(
+                  padding: EdgeInsets.only(left: 6, top: 4),
+                  child: BabyBookTwinPregnancyBadge(light: false),
                 ),
-                child: Text(
-                  isCurrentStage
-                      ? 'YOUR CURRENT STAGE'
-                      : 'PREGNANCY GUIDE PREVIEW',
-                  style: TextStyle(
-                    color: isCurrentStage ? Colors.white : AppColors.brandText,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.65,
+              Semantics(
+                button: true,
+                label: 'About this guide',
+                child: IconButton(
+                  key: const ValueKey('pregnancy-guide-disclaimer'),
+                  tooltip: 'About this guide',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => showPregnancyGuideDisclaimer(context),
+                  icon: const Icon(
+                    Icons.info_outline_rounded,
+                    color: Color(0xFFD78C28),
+                    size: 22,
                   ),
                 ),
               ),
-              const Spacer(),
-              if (pregnancy.isTwinPregnancy)
-                const BabyBookTwinPregnancyBadge(light: false),
             ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Month ${stage.month} — ${stage.weekRange}',
-            key: ValueKey<String>('pregnancy-month-${stage.month}'),
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 21,
-              height: 1.2,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            stage.trimester,
-            style: const TextStyle(
-              color: AppColors.brandText,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
           ),
           const SizedBox(height: 14),
           _FetalGrowthVisual(
             stage: stage,
             numberOfBabies: pregnancy.numberOfBabies,
           ),
-          const SizedBox(height: 13),
-          Row(
-            children: [
-              Expanded(
-                child: _GrowthMetric(
-                  icon: Icons.straighten_rounded,
-                  value: stage.approximateLength,
-                  label: 'Approx. length',
-                  color: const Color(0xFF5AAE9F),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _GrowthMetric(
-                  icon: Icons.monitor_weight_outlined,
-                  value: stage.approximateWeight,
-                  label: 'Approx. weight',
-                  color: const Color(0xFFF09B57),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _GrowthMetric(
-                  icon: Icons.eco_outlined,
-                  value: stage.sizeComparison,
-                  label: 'About the size of',
-                  color: AppColors.brandPrimary,
-                ),
-              ),
-            ],
-          ),
+          // The approximate length, weight and fruit comparison used to sit
+          // here as three tinted tiles. They are averages for a month, not
+          // measurements of her baby, and presented as three hard figures
+          // beside her own record they read as though someone had measured.
+          // The month's description below says what is developing, which is
+          // what the section is for.
           const SizedBox(height: 17),
           _GrowthTextSection(
             icon: plural ? Icons.groups_2_outlined : Icons.favorite_outline,
@@ -395,8 +515,8 @@ class _PregnancyStageCard extends StatelessWidget {
             child: Text(
               stage.developmentFor(pregnancy.numberOfBabies),
               style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 11,
+                color: AppColors.inputText,
+                fontSize: 14.5,
                 height: 1.55,
               ),
             ),
@@ -437,17 +557,17 @@ class _PregnancyStageCard extends StatelessWidget {
                       const Text(
                         'A gentle reminder',
                         style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 11,
+                          color: AppColors.headingSoft,
+                          fontSize: 15,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 5),
                       Text(
                         stage.healthReminder,
                         style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 10,
+                          color: AppColors.inputText,
+                          fontSize: 14,
                           height: 1.5,
                         ),
                       ),
@@ -508,10 +628,10 @@ class _FetalGrowthVisual extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  'Educational month ${stage.month} illustration',
+                  'Month ${stage.month} illustration',
                   style: const TextStyle(
                     color: AppColors.brandText,
-                    fontSize: 8,
+                    fontSize: 12,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -591,62 +711,6 @@ class _FetalVisualFallback extends StatelessWidget {
   }
 }
 
-class _GrowthMetric extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-  final Color color;
-
-  const _GrowthMetric({
-    required this.icon,
-    required this.value,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 92),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 10,
-              height: 1.15,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 8,
-              height: 1.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _GrowthTextSection extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -673,21 +737,21 @@ class _GrowthTextSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: AppColors.brandPrimary, size: 18),
-              const SizedBox(width: 8),
+              Icon(icon, color: AppColors.brandPrimary, size: 21),
+              const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   title,
                   style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 12,
+                    color: AppColors.headingSoft,
+                    fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 10),
           child,
         ],
       ),
@@ -706,27 +770,31 @@ class _DotList extends StatelessWidget {
       children: [
         for (final item in items)
           Padding(
-            padding: const EdgeInsets.only(bottom: 7),
+            padding: const EdgeInsets.only(bottom: 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 6,
-                  height: 6,
-                  margin: const EdgeInsets.only(top: 5),
+                  width: 7,
+                  height: 7,
+                  margin: const EdgeInsets.only(top: 7),
                   decoration: const BoxDecoration(
                     color: AppColors.brandPrimary,
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 9),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     item,
                     style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 10,
-                      height: 1.45,
+                      // inputText, not textSecondary. At 14pt the old light
+                      // grey sat near 3.5:1 against this near-white card,
+                      // under the readable minimum — thin contrast is the
+                      // first thing to fail on a cheap screen in daylight.
+                      color: AppColors.inputText,
+                      fontSize: 14,
+                      height: 1.5,
                     ),
                   ),
                 ),
@@ -764,94 +832,147 @@ class _MonthNavigation extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFF3E4EA)),
       ),
-      child: Column(
+      // One line: back arrow, three months, forward arrow.
+      //
+      // All nine numbers used to sit in their own row beneath a "Month 3 of 9"
+      // caption, which made three separate things to read before she could
+      // move. Nine choices is also more than the control is for — she moves
+      // one month at a time, and the two neighbours are the only ones she can
+      // reach in a single tap anyway. Showing the neighbours instead of the
+      // caption says "there is a month either side of this one" by making
+      // them tappable, rather than by asking her to count.
+      child: Row(
         children: [
-          Row(
-            children: [
-              IconButton(
-                key: const ValueKey('pregnancy-previous'),
-                tooltip: 'Previous pregnancy month',
-                onPressed: onPrevious,
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFEDF4),
-                  foregroundColor: AppColors.brandText,
-                  disabledForegroundColor: const Color(0xFFC7BFC2),
-                ),
-                icon: const Icon(Icons.arrow_back_rounded, size: 19),
-              ),
-              Expanded(
-                child: Text(
-                  'Month ${currentIndex + 1} of $totalMonths',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              IconButton(
-                key: const ValueKey('pregnancy-next'),
-                tooltip: 'Next pregnancy month',
-                onPressed: onNext,
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.brandPrimary,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: const Color(0xFFFFD5E5),
-                ),
-                icon: const Icon(Icons.arrow_forward_rounded, size: 19),
-              ),
-            ],
+          IconButton(
+            key: const ValueKey('pregnancy-previous'),
+            tooltip: 'Previous pregnancy month',
+            onPressed: onPrevious,
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFFFFEDF4),
+              foregroundColor: AppColors.brandText,
+              disabledForegroundColor: const Color(0xFFC7BFC2),
+            ),
+            icon: const Icon(Icons.arrow_back_rounded, size: 19),
           ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(totalMonths, (index) {
-              final selected = index == currentIndex;
-              final actual = index + 1 == currentPregnancyMonth;
-              return Semantics(
-                button: true,
-                selected: selected,
-                label: 'View pregnancy month ${index + 1}',
-                child: InkWell(
-                  key: ValueKey<String>('pregnancy-month-dot-${index + 1}'),
-                  onTap: () => onSelect(index),
-                  borderRadius: BorderRadius.circular(20),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    width: selected ? 26 : 22,
-                    height: 22,
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? AppColors.brandPrimary
-                          : actual
-                              ? const Color(0xFFFFD6E6)
-                              : const Color(0xFFF7F1F4),
-                      shape: BoxShape.circle,
-                      border: actual && !selected
-                          ? Border.all(color: AppColors.brandPrimary)
-                          : null,
-                    ),
-                    child: Text(
-                      '${index + 1}',
-                      style: TextStyle(
-                        color: selected
-                            ? Colors.white
-                            : actual
-                                ? AppColors.brandText
-                                : AppColors.textSecondary,
-                        fontSize: 8,
-                        fontWeight: FontWeight.w900,
+          Expanded(
+            child: Semantics(
+              // The visible "Month 3 of 9" is gone, so the position it carried
+              // is handed to the screen reader here instead of being lost.
+              label:
+                  'Month ${currentIndex + 1} of $totalMonths, showing three months',
+              container: true,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (final month in _visibleMonths)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      child: _MonthCircle(
+                        month: month,
+                        selected: month == currentIndex + 1,
+                        isCurrentPregnancyMonth:
+                            month == currentPregnancyMonth,
+                        onTap: () => onSelect(month - 1),
                       ),
                     ),
-                  ),
-                ),
-              );
-            }),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('pregnancy-next'),
+            tooltip: 'Next pregnancy month',
+            onPressed: onNext,
+            style: IconButton.styleFrom(
+              backgroundColor: AppColors.brandPrimary,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: const Color(0xFFFFD5E5),
+            ),
+            icon: const Icon(Icons.arrow_forward_rounded, size: 19),
           ),
         ],
+      ),
+    );
+  }
+
+  /// The selected month and its two neighbours, as 1-based month numbers.
+  ///
+  /// Clamped at both ends so the row always holds three: month 1 shows 1-2-3
+  /// and month 9 shows 7-8-9. Sliding the window instead of dropping a circle
+  /// keeps the arrows in the same place as she pages through, so the control
+  /// does not resize under her thumb.
+  List<int> get _visibleMonths {
+    if (totalMonths <= 3) {
+      return <int>[for (var m = 1; m <= totalMonths; m++) m];
+    }
+    final start = (currentIndex - 1).clamp(0, totalMonths - 3);
+    return <int>[start + 1, start + 2, start + 3];
+  }
+}
+
+class _MonthCircle extends StatelessWidget {
+  final int month;
+  final bool selected;
+  final bool isCurrentPregnancyMonth;
+  final VoidCallback onTap;
+
+  const _MonthCircle({
+    required this.month,
+    required this.selected,
+    required this.isCurrentPregnancyMonth,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // The month she is actually in keeps a ring of its own, so that after
+    // browsing ahead she can still see which circle is her own month and
+    // which one she is only reading about.
+    final ringed = isCurrentPregnancyMonth && !selected;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'View pregnancy month $month',
+      child: InkWell(
+        key: ValueKey<String>('pregnancy-month-dot-$month'),
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          width: selected ? 44 : 38,
+          height: selected ? 44 : 38,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.brandPrimary : const Color(0xFFFBF4F7),
+            shape: BoxShape.circle,
+            border: ringed
+                ? Border.all(color: AppColors.brandPrimary, width: 1.5)
+                : null,
+            boxShadow: selected
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.32),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            '$month',
+            style: TextStyle(
+              color: selected
+                  ? Colors.white
+                  : ringed
+                      ? AppColors.brandText
+                      : AppColors.textSecondary,
+              fontSize: selected ? 16 : 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
       ),
     );
   }

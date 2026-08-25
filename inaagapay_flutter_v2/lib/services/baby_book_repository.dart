@@ -350,10 +350,17 @@ class BabyBookRepository {
       // Everything is in the past by now, so the window is closed: 42 weeks
       // means no entry is left reading "upcoming" in a book about someone
       // already born.
+      // Mother-owned, because after 20260827_pregnancy_care_milestones that
+      // is the whole active prenatal catalogue. Left on 'baby' this chapter
+      // would render empty: the templates it used to draw — first movement,
+      // anatomy scan, heart activity — are retired, and a child's book would
+      // silently lose the pregnancy it inherited. What it shows now is the
+      // care that pregnancy received, which is the honest version of the
+      // same chapter.
       return loadPrenatalMilestones(
         pregnancyId: pregnancyId,
         currentWeek: 42,
-        owner: MilestoneOwner.baby,
+        owner: MilestoneOwner.mother,
       );
     } catch (e) {
       if (kDebugMode) debugPrint('loadChildPrenatalChapter failed: $e');
@@ -450,6 +457,7 @@ class BabyBookRepository {
         currentWeek: currentWeek,
       ),
       note: row?['note']?.toString(),
+      entryId: (row?['entry_id'] as num?)?.toInt(),
     );
   }
 
@@ -469,13 +477,39 @@ class BabyBookRepository {
           : BabyGrowthMilestoneStatus.completed,
       note: row['note']?.toString(),
       isCustom: true,
+      entryId: (row['entry_id'] as num?)?.toInt(),
     );
+  }
+
+  /// Removes a mother's own record that a prenatal milestone happened.
+  ///
+  /// This deletes only the `baby_book_milestones` row, which is the Baby
+  /// Book's own table. No midwife screen reads it — the clinical record lives
+  /// in the prenatal visit and lab tables — so un-marking here cannot alter
+  /// what a midwife sees. That separation is the point: a mother who had her
+  /// checkup at a private clinic can say so in her book without it ever
+  /// reading as a barangay record.
+  Future<bool> unrecordPrenatalMilestone(int entryId) async {
+    try {
+      await SupabaseService.client
+          .from('baby_book_milestones')
+          .delete()
+          .eq('entry_id', entryId);
+      return true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('unrecordPrenatalMilestone failed: $e');
+      return false;
+    }
   }
 
   /// Where a milestone stands right now.
   ///
   /// Derived on every read. See the class note on why this is not a column.
-  @visibleForTesting
+  ///
+  /// Public rather than test-only: the Baby Book calls it again when a mother
+  /// un-marks a milestone, to work out what the row falls back to. A second
+  /// copy of the rule in the widget would be free to disagree with the one
+  /// used on load, and the two would drift the first time a window changed.
   static BabyGrowthMilestoneStatus statusFor({
     required DateTime? observedOn,
     required int? expectedStartWeek,

@@ -763,15 +763,41 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
 
   Future<void> _loadBabyMilestones() async {
     if (widget.pregnancyId == 0) return;
-    // The baby's own moments only — her checkups and birth plan belong to
-    // this page's other sections, not to a timeline about him.
+    // The recommended prenatal care, which is what the milestone catalogue
+    // now holds — see 20260827_pregnancy_care_milestones.
     final list = await const BabyBookRepository().loadPrenatalMilestones(
       pregnancyId: widget.pregnancyId,
       currentWeek: widget.week,
-      owner: MilestoneOwner.baby,
+      owner: MilestoneOwner.mother,
     );
     if (!mounted) return;
     setState(() => _babyMilestones = list);
+  }
+
+  /// Saves a mark going on or coming off a recommended milestone.
+  ///
+  /// Writes only to the Baby Book's own table. No midwife screen reads it, so
+  /// a mother recording a checkup she had at a private clinic never appears
+  /// as a barangay record.
+  Future<bool> _persistMilestoneMark(
+    BabyGrowthMilestone milestone,
+    bool markingDone,
+  ) async {
+    if (widget.pregnancyId == 0) return false;
+    const repository = BabyBookRepository();
+
+    if (!markingDone) {
+      final entryId = milestone.entryId;
+      if (entryId == null) return true;
+      return repository.unrecordPrenatalMilestone(entryId);
+    }
+
+    return repository.recordPrenatalMilestone(
+      pregnancyId: widget.pregnancyId,
+      templateKey: milestone.id,
+      observedOn: DateTime.now(),
+      recordedPregnancyWeek: widget.week,
+    );
   }
 
   Future<void> _loadPersonalizedData() async {
@@ -1329,6 +1355,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
         BabyGrowthMilestonesSection(
           currentPregnancy: _pregnancyState,
           initialMilestones: _babyMilestones,
+          onToggleCompleted: _persistMilestoneMark,
         ),
 
         const SizedBox(height: 20),

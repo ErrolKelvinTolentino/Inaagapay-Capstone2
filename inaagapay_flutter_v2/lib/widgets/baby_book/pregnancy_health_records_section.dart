@@ -488,18 +488,22 @@ class _PregnancyHealthRecordCard extends StatelessWidget {
                     Text(
                       record.name,
                       style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 14,
+                        color: AppColors.headingSoft,
+                        fontSize: 15,
                         height: 1.25,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 4),
+                    // The date, without the record type in front of it. The
+                    // type was already the title of the row it labelled, so
+                    // the line spent its first half repeating and its second
+                    // half saying the only thing it knew.
                     Text(
-                      '${record.type.label} • ${babyBookFormatDate(record.recordDate)}',
+                      babyBookFormatDate(record.recordDate),
                       style: const TextStyle(
                         color: AppColors.textSecondary,
-                        fontSize: 9,
+                        fontSize: 12.5,
                         height: 1.35,
                       ),
                     ),

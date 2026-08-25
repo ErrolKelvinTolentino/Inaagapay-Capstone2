@@ -195,6 +195,12 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
     return child.ageText;
   }
 
+  /// Whether the free-vaccine-schedule shortcut appears on this screen.
+  ///
+  /// Off at the mother's request. Nothing behind it was removed: the poster
+  /// page, its route and its data all still exist.
+  static const bool _showVaccinePosterRow = false;
+
   String _childrenCountLabel() {
     final count = _filteredChildren.length;
     if (LanguageService.isFilipino) {
@@ -247,13 +253,29 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
             // Stats Card - Pink background with baby image
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 20),
-              height: 110,
+              // The midwife's Children banner, exactly: a soft brand gradient
+              // behind a hairline border, brand-pink text, same baby artwork.
+              //
+              // This was a saturated `pinkbg.png` photograph with white text on
+              // top — the only full-bleed image used as a background anywhere
+              // in her app, and loud enough that it outweighed the children
+              // listed beneath it. A banner naming a count should sit behind
+              // the names, not in front of them.
+              height: 100,
               decoration: BoxDecoration(
-                image: const DecorationImage(
-                  image: AssetImage('assets/images/pinkbg.png'),
-                  fit: BoxFit.cover,
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.brandPrimary.withValues(alpha: 0.08),
+                    AppColors.brandPrimary.withValues(alpha: 0.02),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppColors.brandPrimary.withValues(alpha: 0.15),
+                  width: 1.5,
+                ),
               ),
               child: Stack(
                 children: [
@@ -274,24 +296,28 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
                     left: 24,
                     top: 0,
                     bottom: 0,
+                    right: 110,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _t('You have', 'Mayroon kang'),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white,
-                          ),
-                        ),
-                        Text(
                           _childrenCountLabel(),
                           style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.brandText,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _t('Tap a child to see their health records',
+                              'Pindutin ang anak para makita ang kanyang tala'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            height: 1.3,
+                            color: AppColors.brandText.withValues(alpha: 0.7),
                           ),
                         ),
                       ],
@@ -314,23 +340,9 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
               ),
             ),
 
-            const SizedBox(height: 16),
-
-            // Helper Text
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-              child: Text(
-                _t('Tap a child to view health records',
-                    'Pindutin ang anak para makita ang health records'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-
+            // The "tap a child" hint moved into the banner, where it explains
+            // the list before she reaches it. Kept here as well it would have
+            // been the same sentence twice on one screen.
             const SizedBox(height: 8),
 
             // Children List
@@ -437,15 +449,18 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
                                     const SizedBox(height: 12),
                                   ],
 
-                                  // Moved off the mother's Home tab. It is
-                                  // about childhood vaccines, so it belongs
-                                  // beside her children rather than among the
-                                  // cards about her pregnancy.
-                                  const SizedBox(height: 4),
-                                  _VaccinePosterRow(
-                                    onTap: () => Navigator.pushNamed(
-                                        context, '/immunization-poster'),
-                                  ),
+                                  // Hidden for now, not deleted. The poster
+                                  // page and its `/immunization-poster` route
+                                  // are untouched — flip
+                                  // [_showVaccinePosterRow] to bring the entry
+                                  // point back.
+                                  if (_showVaccinePosterRow) ...[
+                                    const SizedBox(height: 4),
+                                    _VaccinePosterRow(
+                                      onTap: () => Navigator.pushNamed(
+                                          context, '/immunization-poster'),
+                                    ),
+                                  ],
                                 ],
                               ),
               ),

@@ -18,7 +18,7 @@ import '../theme/app_colors.dart';
 import '../widgets/baby_memory_photo.dart';
 import '../widgets/baby_book/baby_growth_milestones_section.dart';
 import '../widgets/baby_book/baby_book_section_components.dart';
-import '../widgets/main_header.dart';
+import '../widgets/secondary_header.dart';
 import '../widgets/pregnancy_growth_journey.dart';
 import 'baby_book_memory_gallery_page.dart';
 
@@ -54,7 +54,6 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
 
   final GlobalKey _todayKey = GlobalKey();
   final GlobalKey _memoriesKey = GlobalKey();
-  final GlobalKey _guideKey = GlobalKey();
 
   String? _downloadingPdf;
   final ImagePicker _imagePicker = ImagePicker();
@@ -78,6 +77,38 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
   List<BabyGrowthMilestone> get _effectiveMilestones =>
       _isPreview ? babyGrowthMilestoneSampleData : _milestones;
 
+  /// Saves a mother marking a recommended milestone done, or un-marking it.
+  ///
+  /// Returns false rather than throwing, so the section can put the row back
+  /// the way it was and tell her — the alternative is a checkmark that exists
+  /// only until she reopens the page.
+  ///
+  /// In preview there is no pregnancy to attach anything to, so this reports
+  /// success without writing: the preview is a picture of the screen, and
+  /// failing a tap there would be a lie in the other direction.
+  Future<bool> _persistMilestoneMark(
+    BabyGrowthMilestone milestone,
+    bool markingDone,
+  ) async {
+    final pregnancyId = _pregnancy?.pregnancyId;
+    if (_isPreview || pregnancyId == null) return true;
+
+    if (!markingDone) {
+      final entryId = milestone.entryId;
+      // Nothing was ever written, so there is nothing to remove. This happens
+      // when she marks and un-marks without the first write landing.
+      if (entryId == null) return true;
+      return _repository.unrecordPrenatalMilestone(entryId);
+    }
+
+    return _repository.recordPrenatalMilestone(
+      pregnancyId: pregnancyId,
+      templateKey: milestone.id,
+      observedOn: DateTime.now(),
+      recordedPregnancyWeek: _effectivePregnancy?.currentWeek,
+    );
+  }
+
   Future<void> _loadPregnancy() async {
     setState(() => _isLoadingPregnancy = true);
 
@@ -91,10 +122,11 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
         : await _repository.loadPrenatalMilestones(
             pregnancyId: pregnancyId,
             currentWeek: pregnancy!.currentWeek,
-            // The baby's story only. Her checkups and birth plan are the
-            // Mother Book's, and showing them here is what made this page
-            // duplicate the Records tab.
-            owner: MilestoneOwner.baby,
+            // Her care. This section is titled "Pregnancy Milestones" and
+            // lists the checkups, tests and scans a pregnancy is generally
+            // expected to receive, so the mother-owned catalogue is the one
+            // it wants — see 20260827_pregnancy_care_milestones.
+            owner: MilestoneOwner.mother,
           );
 
     if (!mounted) return;
@@ -219,20 +251,6 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
     }
   }
 
-  void _showMockupMessage(String englishFeature, String filipinoFeature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _t(
-            '$englishFeature — mockup preview only for now.',
-            '$filipinoFeature — mockup preview lamang muna.',
-          ),
-        ),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
 
   Future<void> _addMemory() async {
     try {
@@ -384,9 +402,16 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
       backgroundColor: const Color(0xFFFFFAFC),
       body: Column(
         children: [
-          MainHeader(
+          // A pushed page, so it gets a back arrow.
+          //
+          // This used MainHeader — the shell's top bar, built for the tabs a
+          // mother lands on, which by design has no way back. The baby book is
+          // only ever pushed from the Children page, so a mother who opened it
+          // had no route out but the system gesture, and the bell and avatar
+          // it carried were duplicates of the ones on the tab behind it.
+          SecondaryHeader(
             title: 'Baby Book',
-            onNotificationTap: () => _showMockupMessage('Notifications', ''),
+            onBack: () => Navigator.pop(context),
           ),
           Expanded(
             child: SingleChildScrollView(
@@ -398,21 +423,22 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _BabyCoverCard(
-                          key: _todayKey, pregnancy: _effectivePregnancy),
+                      // One card carrying every fact about where she is:
+                      // weeks, month, trimester, progress and due date.
+                      //
+                      // Those five were spread across three cards — a cover
+                      // card, a "Your pregnancy today" stat row, and the
+                      // pregnancy card inside the growth journey — so the due
+                      // date appeared twice, the progress twice and the month
+                      // three times before she reached anything new.
+                      if (_effectivePregnancy != null)
+                        Padding(
+                          key: _todayKey,
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: PregnancyCoverCard(
+                              pregnancy: _effectivePregnancy!),
+                        ),
                       const SizedBox(height: 24),
-                      const _SectionHeading(
-                        eyebrow: 'TODAY',
-                        title: 'Your pregnancy today',
-                      ),
-                      const SizedBox(height: 12),
-                      _BabyStatsCard(pregnancy: _effectivePregnancy),
-                      const SizedBox(height: 14),
-                      _AppointmentCard(
-                        onTap: () =>
-                            _showMockupMessage('Appointment details', ''),
-                      ),
-                      const SizedBox(height: 32),
                       if (_isLoadingPregnancy)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 48),
@@ -432,6 +458,7 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
                         BabyGrowthMilestonesSection(
                           currentPregnancy: _effectivePregnancy!,
                           initialMilestones: _effectiveMilestones,
+                          onToggleCompleted: _persistMilestoneMark,
                         ),
                       ],
                       // Her vaccines and supplements used to sit here. They
@@ -456,8 +483,12 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
                         onAddMemory: _addMemory,
                         onOpenGallery: _openMemoryGallery,
                       ),
-                      const SizedBox(height: 34),
-                      _BabyCareGuideBook(key: _guideKey),
+                      // The eight-page care guide used to sit here. It is
+                      // almost entirely about a baby who has been born —
+                      // first days, feeding through the first year, home
+                      // safety, checkups — and this page is read by a mother
+                      // who is still pregnant. It now lives in the baby book
+                      // of a registered child.
                       const SizedBox(height: 34),
                       _GuideReferencesCard(
                         onOpenDoh: () => _openGuide(_dohGuideUri),
@@ -551,111 +582,6 @@ class _MemoryDetails {
   const _MemoryDetails({required this.title, required this.caption});
 }
 
-class _BabyCoverCard extends StatelessWidget {
-  const _BabyCoverCard({super.key, this.pregnancy});
-
-  /// Null when there is no ongoing pregnancy. The card then shows the book's
-  /// title without a gestational age, rather than a number belonging to
-  /// nobody.
-  final CurrentPregnancyState? pregnancy;
-
-  @override
-  Widget build(BuildContext context) {
-    return BabyBookPictureCardShell(
-      key: const ValueKey<String>('pregnancy-cover-picture-card'),
-      assetPath: 'assets/images/mother_baby_hero.png',
-      semanticLabel: 'Mother holding her baby in the pregnancy story cover',
-      height: 196,
-      imageKey: const ValueKey<String>('pregnancy-cover-artwork'),
-      child: Padding(
-        padding: const EdgeInsets.all(17),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 235),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'YOUR PREGNANCY',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.86),
-                    fontSize: 8,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.05,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                if (pregnancy != null)
-                  const Text(
-                    'Currently',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                const SizedBox(height: 2),
-                Text(
-                  pregnancy == null
-                      ? 'Your Baby Book'
-                      : '${pregnancy!.currentWeek} Weeks Pregnant',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 21,
-                    height: 1.1,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.45,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (pregnancy != null)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.pregnant_woman_rounded,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        'Month ${pregnancy!.currentMonth} • ${pregnancy!.trimester}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.94),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 9),
-                Text(
-                  'Your baby is still growing inside the womb.',
-                  maxLines: 2,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    height: 1.35,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _SectionHeading extends StatelessWidget {
   final String eyebrow;
   final String title;
@@ -714,195 +640,6 @@ class _SectionHeading extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _BabyStatsCard extends StatelessWidget {
-  const _BabyStatsCard({this.pregnancy});
-
-  final CurrentPregnancyState? pregnancy;
-
-  @override
-  Widget build(BuildContext context) {
-    return _WhiteCard(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 18),
-      child: Row(
-        children: [
-          // All three were hardcoded: 'Dec 8, 2026' and '50%' never touched
-          // the pregnancy at all, so a real mother was shown a fabricated due
-          // date beside her own week. Same failure as the sample "20 Weeks
-          // Pregnant" that leaked earlier — a page half-migrated to real data
-          // is worse than one honestly full of samples.
-          Expanded(
-            child: _StatItem(
-              icon: Icons.calendar_month_rounded,
-              value: pregnancy == null
-                  ? '—'
-                  : DateFormat('MMM d, y').format(pregnancy!.estimatedDueDate),
-              label: 'Estimated due date',
-              color: const Color(0xFFFF68A5),
-            ),
-          ),
-          const _VerticalDivider(),
-          Expanded(
-            child: _StatItem(
-              icon: Icons.timelapse_rounded,
-              // Was "Current month", which the cover card already states.
-              // Weeks remaining is the one thing on this card she cannot read
-              // anywhere else on the page.
-              value: pregnancy == null
-                  ? '—'
-                  : '${(40 - pregnancy!.currentWeek).clamp(0, 40)}',
-              label: 'Weeks to go',
-              color: const Color(0xFF68CBB8),
-            ),
-          ),
-          const _VerticalDivider(),
-          Expanded(
-            child: _StatItem(
-              icon: Icons.donut_large_rounded,
-              value: pregnancy == null
-                  ? '—'
-                  : '${(pregnancy!.pregnancyProgress * 100).round()}%',
-              label: 'Pregnancy progress',
-              color: const Color(0xFFFFA85A),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatItem extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-  final Color color;
-
-  const _StatItem({
-    required this.icon,
-    required this.value,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, size: 18, color: color),
-        ),
-        const SizedBox(height: 9),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
-        ),
-      ],
-    );
-  }
-}
-
-class _VerticalDivider extends StatelessWidget {
-  const _VerticalDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(width: 1, height: 58, color: AppColors.borderPrimary);
-  }
-}
-
-class _AppointmentCard extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _AppointmentCard({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFFFFF0F6),
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.event_available_rounded,
-                  color: AppColors.brandPrimary,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Next prenatal checkup',
-                      style: const TextStyle(
-                        color: AppColors.brandText,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      _t('July 28 • 9:30 AM', 'Hulyo 28 • 9:30 AM'),
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'Barangay Health Center',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.brandText,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1288,598 +1025,6 @@ class _EmptyMemoryCard extends StatelessWidget {
   }
 }
 
-class _BabyCareGuideBook extends StatefulWidget {
-  const _BabyCareGuideBook({super.key});
-
-  static const List<_GuidePageData> _pages = [
-    _GuidePageData(
-      number: 1,
-      icon: Icons.auto_stories_rounded,
-      imagePath: 'assets/images/baby_guide_page_1.png',
-      title: 'How to use this baby book',
-      takeaway: 'Bring this book to every visit.',
-      paragraphs: [
-        'Keep this Baby Book where every caregiver can find it. Read it together, write down your baby’s growth, vaccines, checkups and special moments, and bring it to every visit so you can discuss each entry with a doctor, nurse, midwife or barangay health worker.',
-        'The record belongs with your family, but it works alongside the clinic’s records—not as a replacement for them. Use the questions and notes pages to prepare for appointments, and ask a health worker whenever an instruction is unclear.',
-      ],
-      source: 'DOH/UNICEF Baby Book: PDF p. 4 • WHO guideline: pp. 9, 21–22',
-      accent: Color(0xFFFF68A5),
-    ),
-    _GuidePageData(
-      number: 2,
-      icon: Icons.child_friendly_rounded,
-      imagePath: 'assets/images/baby_guide_page_2.png',
-      title: 'Baby’s first days',
-      takeaway: 'Hold baby skin-to-skin and feed early.',
-      paragraphs: [
-        'After birth, keep baby warm with immediate skin-to-skin contact when possible and begin breastfeeding early. Colostrum is baby’s important first milk. The DOH guide also recommends delaying the first bath for about 24 hours while keeping baby clean, warm and close.',
-        'Before going home, ask about the newborn examination, newborn screening, vitamin K, eye care, BCG and hepatitis B vaccination. Register the birth certificate within 30 days, then keep the official details and health results together in this book.',
-      ],
-      source: 'DOH/UNICEF Baby Book: PDF pp. 5, 34–37',
-      accent: Color(0xFF8E7CC3),
-    ),
-    _GuidePageData(
-      number: 3,
-      icon: Icons.restaurant_rounded,
-      imagePath: 'assets/images/baby_guide_page_3.png',
-      title: 'Feeding through the first year',
-      takeaway: 'Only breast milk until six months.',
-      paragraphs: [
-        'From birth through six months, give only breast milk—no other food or water—unless a qualified health professional gives different advice for your baby. Feed responsively by noticing early hunger and fullness cues. If feeding is painful or difficult, ask the health center for support.',
-        'At about six months, begin safe and nutritious complementary food while continuing breastfeeding. Start with soft mashed food in small amounts, then gradually offer thicker textures, finger foods and varied family foods as baby develops. Use fresh ingredients, sit with baby during meals and never force-feed.',
-      ],
-      source: 'DOH/UNICEF Baby Book: PDF pp. 21–23, 51, 57–60, 68',
-      accent: Color(0xFFF29B61),
-    ),
-    _GuidePageData(
-      number: 4,
-      icon: Icons.health_and_safety_rounded,
-      imagePath: 'assets/images/baby_guide_page_4.png',
-      title: 'Make every space safer',
-      takeaway: 'Keep baby within reach, always.',
-      paragraphs: [
-        'A baby needs an attentive adult nearby. For sleep, place baby on a safe, firm sleep surface and keep pillows, loose blankets and soft objects away. Prevent falls, and keep hot liquids, medicines, cleaning products, matches, plastic bags, cords and small choking hazards locked away or out of reach.',
-        'Choose age-appropriate toys and supervise all play. Use an appropriate child restraint when travelling, never leave a child alone in a vehicle, and stay within reach around a bath, pool, river or any open water—even for a moment. Keep baby away from tobacco smoke.',
-      ],
-      source: 'DOH/UNICEF Baby Book: PDF pp. 13–17',
-      accent: Color(0xFF4B8FD8),
-    ),
-    _GuidePageData(
-      number: 5,
-      icon: Icons.soap_rounded,
-      imagePath: 'assets/images/baby_guide_page_5.png',
-      title: 'Clean hands, food and surroundings',
-      takeaway: 'Wash hands before every feed.',
-      paragraphs: [
-        'Wash hands with soap and safe water for at least 20 seconds before preparing food or feeding baby, and after using the toilet or changing a diaper. Let hands air-dry or use a clean towel. Dispose of stool safely, clean reusable diaper materials carefully and wash the child’s hands too.',
-        'Prepare food with clean tools and safe water, keep raw and cooked food separate, cook food thoroughly and protect it from pests. A clean feeding area and safely grown or selected food help make everyday nutrition safer.',
-      ],
-      source: 'DOH/UNICEF Baby Book: PDF pp. 24–29',
-      accent: Color(0xFF54B6A5),
-    ),
-    _GuidePageData(
-      number: 6,
-      icon: Icons.show_chart_rounded,
-      imagePath: 'assets/images/baby_guide_page_6.png',
-      title: 'Follow growth and development',
-      takeaway: 'Every child grows at their own pace.',
-      paragraphs: [
-        'Record weight and length during checkups and review the growth chart with a health worker. Development includes movement, hand skills, self-help, language, thinking, and social-emotional skills. The examples in this book are guides, not strict deadlines, because every child develops at an individual pace.',
-        'Help development every day through warm, responsive care. Talk, sing, smile, read and play using clean, safe objects. Notice what interests your child, praise new attempts and write down new skills or concerns so they can be discussed early.',
-      ],
-      source: 'DOH/UNICEF Baby Book: PDF pp. 32–33, 38, 41, 58, 74, 88',
-      accent: Color(0xFFEE7E9D),
-    ),
-    _GuidePageData(
-      number: 7,
-      icon: Icons.medical_services_rounded,
-      imagePath: 'assets/images/baby_guide_page_7.png',
-      title: 'Checkups, vaccines and warning signs',
-      takeaway: 'Do not wait if baby seems unwell.',
-      paragraphs: [
-        'The DOH booklet lists routine visits for the newborn period, 3–5 days, and months 1, 2, 4, 6, 9 and 12; then months 15, 18, 24 and 30, followed by annual visits from ages 3 to 10. Bring this book each time and ask the health worker to update growth, findings, vaccines and the return date.',
-        'Do not wait for a scheduled visit if baby has trouble breathing, blue or gray skin, fever, seizures, signs of dehydration, poor feeding, unusual sleepiness or another sudden worrying change. Seek prompt care from a health facility. Follow the current national vaccine schedule given by your health center because schedules may be updated.',
-      ],
-      source: 'DOH/UNICEF Baby Book: PDF pp. 6, 30–31, 126',
-      accent: Color(0xFFE06B65),
-    ),
-    _GuidePageData(
-      number: 8,
-      icon: Icons.diversity_1_rounded,
-      imagePath: 'assets/images/baby_guide_page_8.png',
-      title: 'Care is a team effort',
-      takeaway: 'You do not have to do this alone.',
-      paragraphs: [
-        'Caring for a child takes a village. List the relatives, friends, neighbors and community workers who can offer practical or emotional support. Share the baby’s routines and important instructions with trusted caregivers, and encourage them to record useful observations in the same place.',
-        'WHO recommends home-based records to improve communication, care-seeking and support at home. Keep personal health information private, allow only trusted people to view it, and remember that written education works best when it is paired with continuing care and conversation with trained health workers.',
-      ],
-      source:
-          'DOH/UNICEF Baby Book: PDF pp. 4, 10 • WHO guideline: pp. 9, 21–22',
-      accent: Color(0xFF9A76B9),
-    ),
-  ];
-
-  @override
-  State<_BabyCareGuideBook> createState() => _BabyCareGuideBookState();
-}
-
-class _BabyCareGuideBookState extends State<_BabyCareGuideBook> {
-  int _currentPageIndex = 0;
-
-  void _showPreviousPage() {
-    if (_currentPageIndex == 0) return;
-    setState(() => _currentPageIndex--);
-  }
-
-  void _showNextPage() {
-    if (_currentPageIndex == _BabyCareGuideBook._pages.length - 1) return;
-    setState(() => _currentPageIndex++);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final currentPage = _BabyCareGuideBook._pages[_currentPageIndex];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionHeading(
-          eyebrow: 'BABY CARE GUIDE',
-          title: 'Read the book, page by page',
-        ),
-        const SizedBox(height: 9),
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFFEFF5), Color(0xFFFFF9F1)],
-            ),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFFFDCE9)),
-          ),
-          child: const Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _GuideBookIcon(),
-              SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'ONE CONTINUOUS BOOK',
-                      style: TextStyle(
-                        color: AppColors.brandText,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    SizedBox(height: 5),
-                    Text(
-                      'Use the Back and Next arrows to read all eight pages. Each page turns official DOH and WHO guidance into a short, readable family instruction.',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 12,
-                        height: 1.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 280),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) {
-            return FadeTransition(
-              opacity: animation,
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.985, end: 1).animate(animation),
-                child: child,
-              ),
-            );
-          },
-          child: _GuidePaperPage(
-            key: ValueKey<int>(currentPage.number),
-            data: currentPage,
-          ),
-        ),
-        const SizedBox(height: 16),
-        _GuidePageNavigation(
-          currentPage: _currentPageIndex + 1,
-          totalPages: _BabyCareGuideBook._pages.length,
-          onPrevious: _currentPageIndex == 0 ? null : _showPreviousPage,
-          onNext: _currentPageIndex == _BabyCareGuideBook._pages.length - 1
-              ? null
-              : _showNextPage,
-        ),
-      ],
-    );
-  }
-}
-
-class _GuidePageNavigation extends StatelessWidget {
-  final int currentPage;
-  final int totalPages;
-  final VoidCallback? onPrevious;
-  final VoidCallback? onNext;
-
-  const _GuidePageNavigation({
-    required this.currentPage,
-    required this.totalPages,
-    required this.onPrevious,
-    required this.onNext,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF3E4EA)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF69243F).withValues(alpha: 0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          OutlinedButton.icon(
-            onPressed: onPrevious,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.brandText,
-              disabledForegroundColor: AppColors.textSecondary,
-              side: BorderSide(
-                color: onPrevious == null
-                    ? const Color(0xFFEAEAEA)
-                    : const Color(0xFFFFC5DC),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(13),
-              ),
-            ),
-            icon: const Icon(Icons.arrow_back_rounded, size: 18),
-            label: const Text(
-              'Back',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
-            ),
-          ),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Page $currentPage of $totalPages',
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: List.generate(totalPages, (index) {
-                    final isCurrent = index == currentPage - 1;
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 220),
-                      width: isCurrent ? 13 : 5,
-                      height: 5,
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      decoration: BoxDecoration(
-                        color: isCurrent
-                            ? AppColors.brandPrimary
-                            : const Color(0xFFFFD8E7),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    );
-                  }),
-                ),
-              ],
-            ),
-          ),
-          FilledButton(
-            onPressed: onNext,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.brandPrimary,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: const Color(0xFFFFD5E5),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(13),
-              ),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Next',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
-                ),
-                SizedBox(width: 5),
-                Icon(Icons.arrow_forward_rounded, size: 18),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GuidePageData {
-  final int number;
-  final IconData icon;
-  final String imagePath;
-  final String title;
-
-  /// The one line to take away, for a mother who reads no further.
-  ///
-  /// Every page is two paragraphs of 45–55 words — around 1,100 words across
-  /// the book — written in the register of a public-health booklet. That is a
-  /// lot to ask of someone reading on a phone, in a second language, possibly
-  /// with a baby in the other arm. Each takeaway is drawn from the paragraphs
-  /// beneath it and adds nothing to them; it is a way in, not a replacement.
-  final String takeaway;
-
-  final List<String> paragraphs;
-  final String source;
-  final Color accent;
-
-  const _GuidePageData({
-    required this.number,
-    required this.icon,
-    required this.imagePath,
-    required this.title,
-    required this.takeaway,
-    required this.paragraphs,
-    required this.source,
-    required this.accent,
-  });
-}
-
-class _GuideBookIcon extends StatelessWidget {
-  const _GuideBookIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 50,
-      height: 58,
-      decoration: BoxDecoration(
-        color: AppColors.brandPrimary,
-        borderRadius: const BorderRadius.horizontal(
-          left: Radius.circular(7),
-          right: Radius.circular(13),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.brandPrimary.withValues(alpha: 0.25),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: const Icon(Icons.menu_book_rounded, color: Colors.white, size: 27),
-    );
-  }
-}
-
-class _GuidePaperPage extends StatelessWidget {
-  final _GuidePageData data;
-
-  const _GuidePaperPage({super.key, required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFEFA),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFEDE4D7)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF5B4632).withValues(alpha: 0.10),
-            blurRadius: 18,
-            offset: const Offset(0, 9),
-          ),
-        ],
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(width: 6, color: data.accent),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 17),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: data.accent.withValues(alpha: 0.11),
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child: Text(
-                            'PAGE ${data.number}',
-                            style: TextStyle(
-                              color: data.accent,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(data.icon, color: data.accent, size: 23),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      data.title,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontFamily: 'Georgia',
-                        fontSize: 21,
-                        height: 1.2,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 13),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(15),
-                      child: AspectRatio(
-                        aspectRatio: 2,
-                        child: Image.asset(
-                          data.imagePath,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: data.accent.withValues(alpha: 0.08),
-                              alignment: Alignment.center,
-                              child: Icon(
-                                data.icon,
-                                color: data.accent,
-                                size: 40,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    // The takeaway, before the prose.
-                    //
-                    // A mother who reads only this has still got the page.
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: data.accent.withValues(alpha: 0.09),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.push_pin_rounded,
-                              size: 15, color: data.accent),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: Text(
-                              data.takeaway,
-                              style: TextStyle(
-                                color: data.accent,
-                                fontSize: 14.5,
-                                height: 1.35,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    for (var index = 0;
-                        index < data.paragraphs.length;
-                        index++) ...[
-                      Text(
-                        data.paragraphs[index],
-                        // Ragged right, not justified.
-                        //
-                        // Justifying a narrow column stretches the spaces to
-                        // force each line flush, which opens rivers of white
-                        // down the paragraph and gives the eye nothing to track
-                        // — it is measurably harder to read, and hardest for
-                        // people who already read slowly. On a phone-width
-                        // column of 50-word paragraphs it was the worst
-                        // possible setting.
-                        textAlign: TextAlign.start,
-                        style: const TextStyle(
-                          color: Color(0xFF544C45),
-                          fontFamily: 'Georgia',
-                          // 13pt serif on a low-density screen is small. The
-                          // book feel is worth keeping; the strain is not.
-                          fontSize: 14.5,
-                          height: 1.7,
-                        ),
-                      ),
-                      if (index != data.paragraphs.length - 1)
-                        const SizedBox(height: 14),
-                    ],
-                    const SizedBox(height: 17),
-                    Container(height: 1, color: const Color(0xFFEDE4D7)),
-                    const SizedBox(height: 4),
-                    // The citation, folded away.
-                    //
-                    // "SOURCE NOTES • DOH/UNICEF Baby Book: PDF pp. 32–33, 38,
-                    // 41, 58, 74, 88" sat open at the foot of all eight pages.
-                    // A source should be available — a mother is entitled to
-                    // know where advice about her baby comes from — but page
-                    // numbers into a PDF she has never seen are apparatus, not
-                    // information, and they closed every page on a line she
-                    // could not use.
-                    Theme(
-                      data: Theme.of(context)
-                          .copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        title: Text(
-                          'Where this comes from',
-                          style: TextStyle(
-                            color: data.accent,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        tilePadding: EdgeInsets.zero,
-                        childrenPadding:
-                            const EdgeInsets.only(bottom: 6),
-                        dense: true,
-                        children: [
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              data.source,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 10,
-                                height: 1.45,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _GuideReferencesCard extends StatelessWidget {
   final VoidCallback onOpenDoh;
@@ -2161,33 +1306,6 @@ class _HealthDisclaimer extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _WhiteCard extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-
-  const _WhiteCard({required this.child, required this.padding});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF8EEF2)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF69243F).withValues(alpha: 0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: child,
     );
   }
 }

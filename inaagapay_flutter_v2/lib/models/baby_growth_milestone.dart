@@ -55,6 +55,14 @@ class BabyGrowthMilestone {
   final String? recordedBy;
   final bool isCustom;
 
+  /// The `baby_book_milestones.entry_id` backing this, when one exists.
+  ///
+  /// Null for a template that has never been recorded. Un-marking needs it:
+  /// without the row's own id there is nothing to delete, and the only other
+  /// way to find the row again is to re-derive it from the template, which
+  /// would delete the wrong entry as soon as two rows share a template.
+  final int? entryId;
+
   const BabyGrowthMilestone({
     required this.id,
     required this.title,
@@ -71,7 +79,35 @@ class BabyGrowthMilestone {
     this.photoBytes,
     this.recordedBy,
     this.isCustom = false,
+    this.entryId,
   });
+
+  /// What the record says about this milestone, and what she can do about it.
+  ///
+  /// This sentence is derived from [status] rather than written into
+  /// [description] because it is a claim about the record, and a claim about
+  /// the record goes stale the moment the record changes. "No checkup is
+  /// currently recorded in InaAgapay" stored as fixed text would keep saying
+  /// so after her midwife entered one — telling a mother to chase something
+  /// she has already done, in the app that holds the proof she did it.
+  ///
+  /// It stops at what the app can see. Whether the milestone was done
+  /// elsewhere, is due, or should be scheduled is not something a record of
+  /// absence can answer, so the wording asks her midwife rather than deciding.
+  String get recordGuidance => switch (status) {
+        BabyGrowthMilestoneStatus.completed =>
+          'This is recorded in InaAgapay.',
+        BabyGrowthMilestoneStatus.current =>
+          'This is not yet recorded in InaAgapay. You may ask your midwife '
+              'whether it has been done, needs to be scheduled, or needs to be '
+              'added to your record.',
+        BabyGrowthMilestoneStatus.notRecorded =>
+          'This is not yet recorded in InaAgapay. You may ask your midwife '
+              'whether it has been done, needs to be scheduled, or needs to be '
+              'added to your record.',
+        BabyGrowthMilestoneStatus.upcoming =>
+          'This is not due yet. Your midwife will tell you when it is time.',
+      };
 
   BabyGrowthMilestone copyWith({
     String? id,
@@ -89,6 +125,7 @@ class BabyGrowthMilestone {
     Object? photoBytes = _unset,
     Object? recordedBy = _unset,
     bool? isCustom,
+    Object? entryId = _unset,
   }) {
     return BabyGrowthMilestone(
       id: id ?? this.id,
@@ -121,6 +158,7 @@ class BabyGrowthMilestone {
           ? this.recordedBy
           : recordedBy as String?,
       isCustom: isCustom ?? this.isCustom,
+      entryId: identical(entryId, _unset) ? this.entryId : entryId as int?,
     );
   }
 }

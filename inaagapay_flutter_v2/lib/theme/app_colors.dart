@@ -24,6 +24,14 @@ class AppColors {
   static const bgSecondary = Color(0xFFFFF5F8);
 
   static const textPrimary = Color(0xFF2D2D2D);
+
+  /// Large headings that should not read as solid black.
+  ///
+  /// At 20pt and up, `textPrimary` starts to look like ink on a form. This is
+  /// a warmer, softer dark grey for page and section headings — still about
+  /// 9:1 against white, so nothing is lost on a dim screen.
+  static const headingSoft = Color(0xFF4A4248);
+
   static const inputText = Color(0xFF5A5A5A);
   static const textSecondary = Color(0xFF8A8A8A);
   static const textOnColor = Color(0xFFFFFFFF);

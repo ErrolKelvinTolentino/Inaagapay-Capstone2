@@ -1,109 +1,139 @@
 import '../models/baby_growth_milestone.dart';
 
+/// The prenatal care a pregnancy is generally expected to receive, in order.
+///
+/// This list replaced a mix of care events and developmental moments — "heart
+/// activity documented", "baby's first movement", "entered second trimester".
+/// Those are things that happen to a pregnancy, not things anyone schedules,
+/// and putting them in the same list as a checkup made the list impossible to
+/// act on: a mother could not tell which rows she was supposed to do something
+/// about. Fetal development is covered by the growth journey above this
+/// section. What is left here is only care she can actually attend.
+///
+/// Two rules hold for every entry.
+///
+/// First, no entry states whether it has happened. That sentence comes from
+/// [BabyGrowthMilestone.recordGuidance], which reads the status, so it cannot
+/// contradict the record. Written into `description` it would keep saying
+/// "not yet recorded" after her midwife recorded it.
+///
+/// Second, no entry decides anything clinical. The week ranges are the usual
+/// ones and are labelled as usual, not as her due dates, and every entry ends
+/// by pointing at her midwife. Whether a test is appropriate for a particular
+/// pregnancy is not a question this list is in a position to answer.
+///
+/// The week ranges and the tests named here still need an adviser's sign-off
+/// against the DOH prenatal schedule before defense.
 final List<BabyGrowthMilestone> babyGrowthMilestoneSampleData = [
-  BabyGrowthMilestone(
-    id: 'pregnancy-confirmed',
-    title: 'Pregnancy confirmed',
-    description: 'Recorded after confirmation by a healthcare provider.',
-    expectedStartWeek: 4,
-    expectedEndWeek: 6,
-    recordedPregnancyWeek: 5,
-    pregnancyMonth: 1,
-    completedDate: DateTime(2026, 4, 1),
-    category: BabyGrowthMilestoneCategory.checkup,
-    status: BabyGrowthMilestoneStatus.completed,
-    recordedBy: 'Healthcare Provider',
-  ),
   BabyGrowthMilestone(
     id: 'first-prenatal-checkup',
     title: 'First prenatal checkup',
-    description: 'A prenatal visit was added to this pregnancy record.',
-    expectedStartWeek: 6,
-    expectedEndWeek: 10,
-    recordedPregnancyWeek: 8,
-    pregnancyMonth: 2,
-    completedDate: DateTime(2026, 4, 22),
+    description:
+        'A first prenatal checkup is recommended within the first 12 weeks of '
+        'pregnancy.',
+    expectedStartWeek: 1,
+    expectedEndWeek: 12,
+    recordedPregnancyWeek: 9,
+    completedDate: DateTime(2026, 5, 4),
     category: BabyGrowthMilestoneCategory.checkup,
     status: BabyGrowthMilestoneStatus.completed,
     recordedBy: 'Midwife',
   ),
-  BabyGrowthMilestone(
-    id: 'first-ultrasound',
-    title: 'First ultrasound recorded',
-    description: 'An ultrasound record was added by the healthcare team.',
-    expectedStartWeek: 6,
-    expectedEndWeek: 12,
-    recordedPregnancyWeek: 10,
-    pregnancyMonth: 3,
-    completedDate: DateTime(2026, 5, 6),
-    category: BabyGrowthMilestoneCategory.ultrasound,
-    status: BabyGrowthMilestoneStatus.completed,
-    recordedBy: 'Healthcare Provider',
-  ),
+  // Four rows, not one "Early-pregnancy laboratory tests".
+  //
+  // Bundled together they could only ever be marked as a set, so a mother who
+  // had her blood typed but no HIV screening had no way to say so — she was
+  // left choosing between claiming all four and recording none. They are
+  // separately ordered, separately reported and separately outstanding, so
+  // they are separately markable here.
   const BabyGrowthMilestone(
-    id: 'heart-activity',
-    title: 'Heart activity documented',
+    id: 'haemoglobin-test',
+    title: 'Haemoglobin test',
     description:
-        'Mark this milestone only when it is documented by a healthcare provider.',
-    expectedStartWeek: 6,
+        'A haemoglobin test checks for anaemia, which is common in pregnancy '
+        'and treatable. It is commonly done during early prenatal care.',
+    expectedStartWeek: 1,
     expectedEndWeek: 12,
-    pregnancyMonth: 3,
-    category: BabyGrowthMilestoneCategory.development,
+    category: BabyGrowthMilestoneCategory.checkup,
     status: BabyGrowthMilestoneStatus.notRecorded,
   ),
-  BabyGrowthMilestone(
-    id: 'second-trimester',
-    title: 'Entered second trimester',
-    description: 'The pregnancy record reached the second-trimester range.',
-    expectedStartWeek: 14,
-    expectedEndWeek: 14,
-    recordedPregnancyWeek: 14,
-    pregnancyMonth: 4,
-    completedDate: DateTime(2026, 6, 3),
-    category: BabyGrowthMilestoneCategory.trimester,
-    status: BabyGrowthMilestoneStatus.completed,
-    recordedBy: 'Pregnancy timeline',
+  const BabyGrowthMilestone(
+    id: 'blood-typing',
+    title: 'Blood group and Rh typing',
+    description:
+        'This finds your blood type and whether you are Rh positive or '
+        'negative. It is commonly done once during early prenatal care.',
+    expectedStartWeek: 1,
+    expectedEndWeek: 12,
+    category: BabyGrowthMilestoneCategory.checkup,
+    status: BabyGrowthMilestoneStatus.notRecorded,
   ),
   const BabyGrowthMilestone(
-    id: 'first-movement',
-    title: 'Baby’s first movement',
+    id: 'hiv-screening',
+    title: 'HIV screening',
     description:
-        'Movement may be noticed during this period. Record it when personally felt.',
-    expectedStartWeek: 16,
+        'HIV screening is commonly offered during early prenatal care. Your '
+        'midwife can explain what the test involves and what happens next.',
+    expectedStartWeek: 1,
+    expectedEndWeek: 12,
+    category: BabyGrowthMilestoneCategory.checkup,
+    status: BabyGrowthMilestoneStatus.notRecorded,
+  ),
+  const BabyGrowthMilestone(
+    id: 'urinalysis',
+    title: 'Urinalysis',
+    description:
+        'A urine test checks for infection and for protein in the urine. It '
+        'is commonly done during early prenatal care.',
+    expectedStartWeek: 1,
+    expectedEndWeek: 12,
+    category: BabyGrowthMilestoneCategory.checkup,
+    status: BabyGrowthMilestoneStatus.notRecorded,
+  ),
+  const BabyGrowthMilestone(
+    id: 'ultrasound-record',
+    title: 'Ultrasound record',
+    description:
+        'At least one ultrasound is recommended before 24 weeks of pregnancy.',
+    // Weeks 1-24, not a bare deadline of 24. The window is what she can act
+    // in; a milestone carrying only its deadline sorts to where it is due
+    // rather than to where it becomes possible, which would file an
+    // ultrasound she can have now below her third-trimester checkups.
+    expectedStartWeek: 1,
     expectedEndWeek: 24,
-    pregnancyMonth: 5,
-    category: BabyGrowthMilestoneCategory.movement,
+    category: BabyGrowthMilestoneCategory.ultrasound,
+    status: BabyGrowthMilestoneStatus.notRecorded,
+  ),
+  const BabyGrowthMilestone(
+    id: 'second-trimester-checkups',
+    title: 'Second-trimester prenatal checkups',
+    description:
+        'Prenatal checkups continue through the second trimester. Follow the '
+        'schedule your midwife gives you.',
+    expectedStartWeek: 13,
+    expectedEndWeek: 27,
+    category: BabyGrowthMilestoneCategory.checkup,
     status: BabyGrowthMilestoneStatus.current,
   ),
   const BabyGrowthMilestone(
-    id: 'anatomy-scan',
-    title: 'Anatomy scan recorded',
+    id: 'gestational-diabetes-screening',
+    title: 'Gestational-diabetes screening',
     description:
-        'An ultrasound may be recorded around this stage depending on the healthcare plan.',
-    expectedStartWeek: 18,
-    expectedEndWeek: 22,
-    pregnancyMonth: 5,
-    category: BabyGrowthMilestoneCategory.ultrasound,
-    status: BabyGrowthMilestoneStatus.notRecorded,
-  ),
-  const BabyGrowthMilestone(
-    id: 'third-trimester',
-    title: 'Entered third trimester',
-    description: 'This stage is commonly reached around week 28.',
-    expectedStartWeek: 28,
+        'Screening for gestational diabetes is generally recommended between '
+        '24 and 28 weeks of pregnancy. Ask your midwife whether it is right '
+        'for your pregnancy.',
+    expectedStartWeek: 24,
     expectedEndWeek: 28,
-    pregnancyMonth: 7,
-    category: BabyGrowthMilestoneCategory.trimester,
+    category: BabyGrowthMilestoneCategory.checkup,
     status: BabyGrowthMilestoneStatus.upcoming,
   ),
   const BabyGrowthMilestone(
-    id: 'birth-preparation',
-    title: 'Birth preparation stage',
+    id: 'third-trimester-checkups',
+    title: 'Third-trimester prenatal checkups',
     description:
-        'Birth planning may happen during this period with the healthcare team.',
-    expectedStartWeek: 32,
-    expectedEndWeek: 40,
-    pregnancyMonth: 8,
+        'Prenatal checkups continue from 28 weeks and may become more frequent. '
+        'Follow the schedule your midwife gives you.',
+    expectedStartWeek: 28,
     category: BabyGrowthMilestoneCategory.checkup,
     status: BabyGrowthMilestoneStatus.upcoming,
   ),
