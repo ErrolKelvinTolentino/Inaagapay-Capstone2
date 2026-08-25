@@ -468,36 +468,73 @@ class InventoryNotificationRecord {
   }
 }
 
+/// Which way stock travelled between two facilities.
+///
+/// A health centre is not only a destination. It sends stock to a neighbour
+/// that has run out, and it sends stock back up to the RHU when it cannot keep
+/// it safely — a brownout, a failed freezer, anything that would otherwise let
+/// the vaccines spoil where they sit. Naming the direction is what lets the
+/// screen say "you sent this" rather than showing a transfer with no explanation
+/// for why the shelf is emptier.
+enum TransferDirection { allocation, lateral, returnUpward, external }
+
+TransferDirection _directionFromString(String? raw) {
+  switch ((raw ?? '').toLowerCase()) {
+    case 'lateral':
+      return TransferDirection.lateral;
+    case 'return':
+      return TransferDirection.returnUpward;
+    case 'external':
+      return TransferDirection.external;
+    default:
+      return TransferDirection.allocation;
+  }
+}
+
 class InventoryTransferRecord {
   const InventoryTransferRecord({
     required this.transferId,
     required this.requestId,
     required this.sourceBatchId,
+    required this.sourceFacilityId,
     required this.targetFacilityId,
     required this.itemId,
     required this.batchNumber,
     required this.quantityIssued,
     required this.quantityReceived,
     required this.status,
+    required this.direction,
     required this.remarks,
+    required this.cancelReason,
     required this.issuedAt,
     required this.receivedAt,
     required this.issuedByName,
+    this.sourceFacilityName,
+    this.targetFacilityName,
   });
 
   factory InventoryTransferRecord.fromJson(
     Map<String, dynamic> json, {
     InventoryBatchRecord? sourceBatch,
+    String? sourceFacilityName,
+    String? targetFacilityName,
   }) {
     final nestedBatch = _asMap(
       json['source_batch'] ?? json['inventory_batches'],
     );
+    // source_facility_id arrives with 20260829. Before it, the sending facility
+    // was only knowable from the source batch, so that stays as the fallback.
+    final rawSourceFacility =
+        json['source_facility_id'] ?? nestedBatch?['facility_id'];
     return InventoryTransferRecord(
       transferId: _asInt(json['transfer_id']),
       requestId: json['request_id'] == null ? null : _asInt(json['request_id']),
       sourceBatchId: _asInt(
         json['source_batch_id'] ?? json['batch_id'],
       ),
+      sourceFacilityId: rawSourceFacility == null
+          ? sourceBatch?.facilityId
+          : _asInt(rawSourceFacility),
       targetFacilityId: _asInt(
         json['destination_facility_id'] ??
             json['target_facility_id'] ??
@@ -522,7 +559,9 @@ class InventoryTransferRecord {
                   json['quantity_received'] ?? json['received_quantity'],
                 ),
       status: _asString(json['status'], fallback: 'pending_acceptance'),
+      direction: _directionFromString(_asString(json['transfer_direction'])),
       remarks: _asString(json['remarks']),
+      cancelReason: _asString(json['cancel_reason']),
       issuedAt: _asTimestamp(json['issued_at'] ?? json['created_at']) ??
           DateTime.now(),
       receivedAt: _asTimestamp(json['received_at']),
@@ -530,22 +569,29 @@ class InventoryTransferRecord {
         json['issued_by_name'],
         fallback: 'RHU Main',
       ),
+      sourceFacilityName: sourceFacilityName,
+      targetFacilityName: targetFacilityName,
     );
   }
 
   final int transferId;
   final int? requestId;
   final int sourceBatchId;
+  final int? sourceFacilityId;
   final int targetFacilityId;
   final int itemId;
   final String batchNumber;
   final int quantityIssued;
   final int? quantityReceived;
   final String status;
+  final TransferDirection direction;
   final String remarks;
+  final String cancelReason;
   final DateTime issuedAt;
   final DateTime? receivedAt;
   final String issuedByName;
+  final String? sourceFacilityName;
+  final String? targetFacilityName;
 
   bool get isPending {
     final normalized = status.toLowerCase();
@@ -553,6 +599,41 @@ class InventoryTransferRecord {
         normalized != 'received' &&
         normalized != 'completed' &&
         normalized != 'cancelled';
+  }
+
+  bool get isCancelled => status.toLowerCase() == 'cancelled';
+
+  /// True when this facility is the one that gave the stock up.
+  bool isOutboundFor(int facilityId) =>
+      sourceFacilityId != null && sourceFacilityId == facilityId;
+
+  /// True when this facility is the one that has to confirm receipt.
+  bool isInboundFor(int facilityId) => targetFacilityId == facilityId;
+
+  InventoryTransferRecord copyWithFacilityNames({
+    String? sourceName,
+    String? targetName,
+  }) {
+    return InventoryTransferRecord(
+      transferId: transferId,
+      requestId: requestId,
+      sourceBatchId: sourceBatchId,
+      sourceFacilityId: sourceFacilityId,
+      targetFacilityId: targetFacilityId,
+      itemId: itemId,
+      batchNumber: batchNumber,
+      quantityIssued: quantityIssued,
+      quantityReceived: quantityReceived,
+      status: status,
+      direction: direction,
+      remarks: remarks,
+      cancelReason: cancelReason,
+      issuedAt: issuedAt,
+      receivedAt: receivedAt,
+      issuedByName: issuedByName,
+      sourceFacilityName: sourceName ?? sourceFacilityName,
+      targetFacilityName: targetName ?? targetFacilityName,
+    );
   }
 }
 

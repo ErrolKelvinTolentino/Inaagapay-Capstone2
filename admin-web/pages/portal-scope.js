@@ -62,6 +62,9 @@
       child_facilities: [],
       bhc_facilities: [],
       scope_facility_ids: [],
+      parent_facility_id: null,
+      parent_facility_name: null,
+      parent_facility_type: null,
     };
   }
 
@@ -151,6 +154,21 @@
     /** Facilities this portal allocates stock to. */
     get childFacilities() { return scope.child_facilities || []; },
 
+    /**
+     * The office one rung above this one: the Municipal Health Office for an
+     * RHU, nothing for the MHO itself.
+     *
+     * Stock moves upward as well as downward — a health centre with no power
+     * sends its vaccines back up rather than watching them spoil — so the tier
+     * above has to be nameable, not just the tiers below.
+     */
+    get parentFacilityId() { return scope.parent_facility_id; },
+    get parentFacilityName() { return scope.parent_facility_name; },
+    get parentFacilityType() { return scope.parent_facility_type; },
+    get hasParent() {
+      return scope.parent_facility_id !== null && scope.parent_facility_id !== undefined;
+    },
+
     /** Every facility this account may read, itself included. */
     get scopeFacilityIds() { return scope.scope_facility_ids || []; },
 
@@ -231,6 +249,19 @@
       if (facilityId === undefined || facilityId === null || facilityId === 0) {
         return scope.depot_name;
       }
+      // This office itself, and the office above it. Neither is in the child
+      // lists, and both are now reachable as transfer endpoints.
+      if (scope.depot_facility_id !== null &&
+          String(facilityId) === String(scope.depot_facility_id)) {
+        return scope.depot_name;
+      }
+      if (String(facilityId) === String(scope.facility_id)) {
+        return scope.facility_name || scope.depot_name;
+      }
+      if (scope.parent_facility_id !== null &&
+          String(facilityId) === String(scope.parent_facility_id)) {
+        return scope.parent_facility_name || `Facility #${facilityId}`;
+      }
       // The municipal office holds stock two levels down, so a batch can be
       // filed against a BHC that is not one of its own children. Searching the
       // leaves as well is what stops those rows reading "Facility #3".
@@ -307,6 +338,9 @@
         Object.assign(scope, data, { ready: true });
         childIndexCache = null;
         subtreeCache = null;
+
+        await loadParentFacility(dbInstance);
+
         localStorage.setItem(SCOPE_KEY, JSON.stringify(scope));
       } catch (e) {
         // PGRST202 / 42883 simply mean the MHO migration has not been run here.
@@ -360,6 +394,63 @@
       injectFacilitiesNav();
     },
   };
+
+  /**
+   * Fill in the office above this one.
+   *
+   * admin_portal_context predates upward stock movement and returns only the
+   * facility and everything below it, so the parent is read separately rather
+   * than by re-issuing that whole function in a later migration. v_facility_tree
+   * already carries the parent's name; a database without it falls back to two
+   * reads of health_facilities, and one without either simply leaves the parent
+   * null — which reads as "this office has nothing above it", the correct answer
+   * for the MHO and a harmless one for an un-migrated RHU.
+   */
+  async function loadParentFacility(dbInstance) {
+    if (!scope.facility_id) return;
+
+    try {
+      const { data, error } = await dbInstance
+        .from("v_facility_tree")
+        .select("parent_facility_id, parent_name, parent_type")
+        .eq("facility_id", scope.facility_id)
+        .maybeSingle();
+      if (error) throw error;
+      if (data) {
+        scope.parent_facility_id = data.parent_facility_id ?? null;
+        scope.parent_facility_name = data.parent_name || null;
+        scope.parent_facility_type = data.parent_type || null;
+        return;
+      }
+    } catch (e) {
+      // View absent (pre-20260821) or unreadable. Try the base table.
+    }
+
+    try {
+      const { data: self } = await dbInstance
+        .from("health_facilities")
+        .select("parent_facility_id")
+        .eq("facility_id", scope.facility_id)
+        .maybeSingle();
+      const parentId = self && self.parent_facility_id;
+      if (!parentId) {
+        scope.parent_facility_id = null;
+        scope.parent_facility_name = null;
+        scope.parent_facility_type = null;
+        return;
+      }
+      const { data: parent } = await dbInstance
+        .from("health_facilities")
+        .select("facility_id, name, facility_type")
+        .eq("facility_id", parentId)
+        .maybeSingle();
+      scope.parent_facility_id = parentId;
+      scope.parent_facility_name = (parent && parent.name) || null;
+      scope.parent_facility_type = (parent && parent.facility_type) || null;
+    } catch (e) {
+      console.warn("Parent facility lookup failed:", e.message || e);
+    }
+  }
 
   // The Facilities page only makes sense for the municipal office, and adding it
   // here keeps the eight page sidebars identical.

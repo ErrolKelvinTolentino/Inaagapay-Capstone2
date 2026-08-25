@@ -175,8 +175,14 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         );
       }).toList();
 
+      final facilityId = snapshot.context.facilityId;
       final shipments = snapshot.transfers.map((transfer) {
         final item = itemsById[transfer.itemId];
+        final outbound = transfer.isOutboundFor(facilityId) &&
+            !transfer.isInboundFor(facilityId);
+        final counterpart = outbound
+            ? transfer.targetFacilityName
+            : transfer.sourceFacilityName;
         return IncomingShipment(
           transferId: transfer.transferId,
           id: _transferCode(transfer.transferId),
@@ -187,11 +193,17 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
           issuedAt: transfer.issuedAt,
           issuedBy: transfer.issuedByName,
           status: transfer.status,
+          isOutbound: outbound,
+          direction: transfer.direction,
+          counterpartName: counterpart,
+          cancelReason: transfer.cancelReason,
           requestId: transfer.requestId == null
               ? null
               : _requestCode(transfer.requestId!),
           remarks: transfer.remarks.isEmpty
-              ? 'Issued by RHU Main for this health center.'
+              ? (outbound
+                  ? 'Sent from this health center to ${counterpart ?? 'another facility'}.'
+                  : 'Issued to this health center by ${counterpart ?? 'RHU Main'}.')
               : transfer.remarks,
           receivedQuantity: transfer.quantityReceived,
           receivedAt: transfer.receivedAt,
@@ -202,26 +214,53 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         ...snapshot.transactions.map(_eventFromTransaction),
         ...snapshot.transfers.map((transfer) {
           final item = itemsById[transfer.itemId];
-          final isCancelled = transfer.status.toLowerCase() == 'cancelled';
+          final isCancelled = transfer.isCancelled;
+          final outbound = transfer.isOutboundFor(facilityId) &&
+              !transfer.isInboundFor(facilityId);
+          final counterpart = (outbound
+                  ? transfer.targetFacilityName
+                  : transfer.sourceFacilityName) ??
+              'another facility';
+
+          // The timeline says which way the stock went and who the other end
+          // is. It used to say "RHU Main" for everything, which was true while
+          // that was the only place stock could come from.
+          final String title;
+          if (isCancelled) {
+            title = outbound
+                ? 'Your dispatch was cancelled'
+                : 'Incoming transfer cancelled';
+          } else if (outbound) {
+            title = transfer.isPending
+                ? 'Stock sent to $counterpart'
+                : '$counterpart confirmed your transfer';
+          } else if (transfer.isPending) {
+            title = transfer.direction == live.TransferDirection.returnUpward
+                ? 'Stock returned to you by $counterpart'
+                : 'Stock issued by $counterpart';
+          } else {
+            title = 'Stocks received from $counterpart';
+          }
+
           return InventoryEvent(
-            title: transfer.isPending
-                ? 'Stock issued by RHU Main'
-                : isCancelled
-                    ? 'Stock transfer cancelled'
-                    : 'Stocks received from RHU Main',
+            title: title,
             details:
                 '${transfer.quantityIssued} ${item?.unit.toLowerCase() ?? 'units'} of ${item?.name ?? 'Inventory item'} • ${transfer.batchNumber}',
             occurredAt: transfer.receivedAt ?? transfer.issuedAt,
-            icon: transfer.isPending
-                ? Icons.local_shipping_outlined
-                : isCancelled
-                    ? Icons.cancel_outlined
-                    : Icons.inventory_2_rounded,
-            color: transfer.isPending
-                ? AppColors.brandPrimary
-                : isCancelled
-                    ? AppColors.error
-                    : AppColors.success,
+            icon: isCancelled
+                ? Icons.cancel_outlined
+                : outbound
+                    ? Icons.outbound_rounded
+                    : transfer.isPending
+                        ? Icons.local_shipping_outlined
+                        : Icons.inventory_2_rounded,
+            color: isCancelled
+                ? AppColors.error
+                : outbound
+                    ? AppColors.warning
+                    : transfer.isPending
+                        ? AppColors.brandPrimary
+                        : AppColors.success,
           );
         }),
         ...snapshot.requests.map((request) {
@@ -371,8 +410,12 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
   String _transferCode(int transferId) =>
       'TRF-${transferId.toString().padLeft(5, '0')}';
 
-  int get _pendingShipmentCount =>
-      _shipments.where((shipment) => shipment.isPending).length;
+  /// The "Incoming stocks" tile counts what this centre has to CONFIRM.
+  /// An outbound shipment is pending too, but pending on somebody else, and
+  /// counting it here would inflate a number people act on.
+  int get _pendingShipmentCount => _shipments
+      .where((shipment) => shipment.isPending && !shipment.isOutbound)
+      .length;
 
   int get _unreadNotificationCount => _inventoryNotifications
       .where((notification) => !notification.isRead)
@@ -907,8 +950,14 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
   }
 
   Widget _buildOverviewTab() {
-    final pendingShipments =
-        _shipments.where((shipment) => shipment.isPending).toList();
+    // Split the two legs. They read completely differently: one is a job to do
+    // now, the other is a receipt this centre is waiting on somebody else for.
+    final pendingShipments = _shipments
+        .where((shipment) => shipment.isPending && !shipment.isOutbound)
+        .toList();
+    final outboundShipments = _shipments
+        .where((shipment) => shipment.isPending && shipment.isOutbound)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -949,7 +998,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         const SizedBox(height: 12),
         _buildStockActionsCard(),
         const SizedBox(height: 26),
-        _sectionHeading('INCOMING FROM RHU MAIN'),
+        _sectionHeading('INCOMING STOCKS'),
         const SizedBox(height: 12),
         if (pendingShipments.isEmpty)
           _buildAllCaughtUpCard()
@@ -960,6 +1009,20 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               child: _buildIncomingShipmentCard(shipment),
             ),
           ),
+        // Stock this centre has given up and that nobody has confirmed yet.
+        // It is already gone from every figure above, so it needs somewhere on
+        // this screen to exist — otherwise the count simply drops overnight.
+        if (outboundShipments.isNotEmpty) ...[
+          const SizedBox(height: 26),
+          _sectionHeading('SENT FROM THIS HEALTH CENTER'),
+          const SizedBox(height: 12),
+          ...outboundShipments.map(
+            (shipment) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildIncomingShipmentCard(shipment),
+            ),
+          ),
+        ],
         if (_openVialItems.isNotEmpty) ...[
           const SizedBox(height: 26),
           _sectionHeading(
@@ -1604,7 +1667,61 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     );
   }
 
+  /// One line of plain language for which way the stock went and why.
+  ///
+  /// A midwife looking at a transfer needs to know two things before anything
+  /// else: is this arriving or leaving, and is it mine to act on. Both used to
+  /// be assumed — everything arrived, and everything was hers to confirm.
+  String _shipmentDirectionCopy(IncomingShipment shipment) {
+    final other = shipment.counterpartName ?? 'another facility';
+    if (shipment.isOutbound) {
+      switch (shipment.direction) {
+        case live.TransferDirection.returnUpward:
+          return 'Returned by you to $other';
+        case live.TransferDirection.lateral:
+          return 'Sent by you to $other';
+        default:
+          return 'Sent from this health center to $other';
+      }
+    }
+    switch (shipment.direction) {
+      case live.TransferDirection.returnUpward:
+        return 'Returned to you by $other';
+      case live.TransferDirection.lateral:
+        return 'Shared with you by $other';
+      default:
+        return 'From $other';
+    }
+  }
+
   Widget _buildIncomingShipmentCard(IncomingShipment shipment) {
+    final outbound = shipment.isOutbound;
+    final accent = shipment.isCancelled
+        ? AppColors.error
+        : outbound
+            ? AppColors.warning
+            : AppColors.brandPrimary;
+
+    final String statusLabel;
+    final Color statusColor;
+    final IconData statusIcon;
+    if (shipment.isCancelled) {
+      statusLabel = 'Cancelled';
+      statusColor = AppColors.error;
+      statusIcon = Icons.cancel_rounded;
+    } else if (shipment.isPending) {
+      // A pending outbound shipment is not "pending YOU" — the other end has to
+      // confirm it. Saying so is what stops a midwife hunting for a button that
+      // is deliberately not there.
+      statusLabel = outbound ? 'Awaiting their receipt' : 'Pending';
+      statusColor = AppColors.warning;
+      statusIcon = Icons.schedule_rounded;
+    } else {
+      statusLabel = outbound ? 'Delivered' : 'Received';
+      statusColor = AppColors.success;
+      statusIcon = Icons.check_circle_rounded;
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -1619,12 +1736,14 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: AppColors.brandPrimary.withValues(alpha: 0.12),
+                  color: accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(
-                  Icons.inventory_2_rounded,
-                  color: AppColors.brandPrimary,
+                child: Icon(
+                  outbound
+                      ? Icons.outbound_rounded
+                      : Icons.inventory_2_rounded,
+                  color: accent,
                 ),
               ),
               const SizedBox(width: 12),
@@ -1642,7 +1761,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'From ${shipment.issuedBy}',
+                      _shipmentDirectionCopy(shipment),
                       style: const TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 12,
@@ -1652,12 +1771,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                 ),
               ),
               _StatusChip(
-                label: shipment.isPending ? 'Pending' : 'Received',
-                color:
-                    shipment.isPending ? AppColors.warning : AppColors.success,
-                icon: shipment.isPending
-                    ? Icons.schedule_rounded
-                    : Icons.check_circle_rounded,
+                label: statusLabel,
+                color: statusColor,
+                icon: statusIcon,
               ),
             ],
           ),
@@ -1681,7 +1797,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               ),
               Expanded(
                 child: _DetailValue(
-                  label: 'ISSUED',
+                  label: outbound ? 'SENT' : 'ISSUED',
                   value: _shortDate(shipment.issuedAt),
                 ),
               ),
@@ -1706,7 +1822,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    shipment.remarks,
+                    shipment.isCancelled && shipment.cancelReason.isNotEmpty
+                        ? '${shipment.remarks}\nCancelled: ${shipment.cancelReason}'
+                        : shipment.remarks,
                     style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 12,
@@ -1718,16 +1836,52 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
             ),
           ),
           const SizedBox(height: 16),
-          MainButton(
-            label: _receivingTransferIds.contains(shipment.transferId)
-                ? 'Receiving stock...'
-                : 'Receive ${shipment.issuedQuantity} ${shipment.unit}',
-            leftIcon: Icons.check_circle_outline_rounded,
-            onPressed: !_workflowAvailable ||
-                    _receivingTransferIds.contains(shipment.transferId)
-                ? null
-                : () => _confirmReceive(shipment),
-          ),
+          if (shipment.canConfirmReceipt)
+            MainButton(
+              label: _receivingTransferIds.contains(shipment.transferId)
+                  ? 'Receiving stock...'
+                  : 'Receive ${shipment.issuedQuantity} ${shipment.unit}',
+              leftIcon: Icons.check_circle_outline_rounded,
+              onPressed: !_workflowAvailable ||
+                      _receivingTransferIds.contains(shipment.transferId)
+                  ? null
+                  : () => _confirmReceive(shipment),
+            )
+          else if (outbound && shipment.isPending)
+            // Nothing to press. What the sending centre needs instead is a
+            // straight answer about where its stock currently is, because the
+            // units have already left its own count.
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.local_shipping_outlined,
+                    size: 18,
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'These ${shipment.issuedQuantity} ${shipment.unit} have already left your shelf and are not counted here or at '
+                      '${shipment.counterpartName ?? 'the receiving facility'} until they confirm receipt. '
+                      'Contact your RHU if this stays unconfirmed.',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -4342,7 +4496,10 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
   }
 
   void _confirmReceive(IncomingShipment shipment) {
-    if (!shipment.isPending ||
+    // canConfirmReceipt, not isPending: an outbound shipment is pending on the
+    // facility at the other end, and receiving it here would credit the stock
+    // straight back to the shelf it just left.
+    if (!shipment.canConfirmReceipt ||
         !_workflowAvailable ||
         _receivingTransferIds.contains(shipment.transferId)) {
       return;
@@ -4505,19 +4662,24 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
   }
 
   String _requestStatusMessage(String status) {
+    // "RHU Main" is not the name of anything. Pinagbarilan BHC reports to
+    // Baliwag RHU III, and supplierLabel already resolves that through
+    // health_facilities.parent_facility_id — it just was not used here.
+    final rhu = _liveContext?.supplierLabel ?? 'Your RHU';
+    final rhuLead = rhu.isEmpty ? rhu : rhu[0].toUpperCase() + rhu.substring(1);
     switch (status) {
       case 'Pending':
-        return 'RHU Main is reviewing the requested quantity and available batches.';
+        return '$rhuLead is reviewing the requested quantity and available batches.';
       case 'Approved':
-        return 'RHU Main approved this request and will prepare an issue.';
+        return '$rhuLead approved this request and will prepare an issue.';
       case 'Issued':
-        return 'RHU Main has issued the stocks. Confirm the incoming delivery to update BHC stock.';
+        return '$rhuLead has issued the stocks. Confirm the incoming delivery to update your stock.';
       case 'Received':
-        return 'Receipt was confirmed and the BHC stock was updated.';
+        return 'Receipt was confirmed and your stock was updated.';
       case 'Completed':
         return 'This request is complete and remains available in your history.';
       case 'Rejected':
-        return 'RHU Main did not approve this request. Review the RHU remarks before requesting again.';
+        return '$rhuLead did not approve this request. Review the remarks before requesting again.';
       case 'Cancelled':
         return 'This request was cancelled and no stock movement was completed.';
       default:
@@ -4735,6 +4897,10 @@ class IncomingShipment {
     this.requestId,
     this.receivedQuantity,
     this.receivedAt,
+    this.isOutbound = false,
+    this.direction = live.TransferDirection.allocation,
+    this.counterpartName,
+    this.cancelReason = '',
   });
 
   final int transferId;
@@ -4751,8 +4917,25 @@ class IncomingShipment {
   int? receivedQuantity;
   DateTime? receivedAt;
 
+  /// True when this health centre is the one that GAVE the stock up.
+  ///
+  /// An outbound shipment is not actionable here — the other end confirms it —
+  /// but it is the only record the sending centre has of why its own count
+  /// dropped, so it belongs on this screen just as much as an arrival does.
+  final bool isOutbound;
+  final live.TransferDirection direction;
+
+  /// The facility at the other end: where it came from, or where it went.
+  final String? counterpartName;
+  final String cancelReason;
+
+  bool get isCancelled => status.toLowerCase() == 'cancelled';
+
   bool get isPending =>
       status.toLowerCase() == 'pending_receipt' && receivedAt == null;
+
+  /// Only an arrival can be confirmed here.
+  bool get canConfirmReceipt => isPending && !isOutbound;
 }
 
 class StockRequest {

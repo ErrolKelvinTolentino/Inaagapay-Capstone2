@@ -315,7 +315,10 @@
         transform: translateY(-0.5px);
       }
       
-      /* Primary 4-Hub Navigation Bar */
+      /* Primary 4-Hub Navigation Bar.
+         Sticky, because the tables below it run to hundreds of rows: an officer
+         forty rows into the ledger used to have to scroll all the way back up
+         to reach another hub. */
       .inventory-main-tabs {
         display: flex;
         gap: 3px;
@@ -326,6 +329,9 @@
         margin-bottom: 12px;
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
         flex-wrap: wrap;
+        position: sticky;
+        top: 0;
+        z-index: 30;
       }
       .inventory-tab-btn {
         background: transparent;
@@ -353,6 +359,73 @@
         background: var(--brand-primary);
         box-shadow: 0 2px 8px rgba(255, 104, 165, 0.28);
       }
+
+      /* ── Transfer direction ──────────────────────────────────────────────
+         Stock moves three ways now: down to a facility below, sideways to a
+         peer, and back up when a health centre cannot keep it safely. Colour
+         carries the direction so a route is readable at a glance in a dense
+         table, and the arrow repeats it for anyone who cannot use the colour. */
+      .transfer-dir-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 7px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        white-space: nowrap;
+        border: 1px solid transparent;
+      }
+      .transfer-dir-chip.dir-allocation { background:#eef2ff; color:#4338ca; border-color:#c7d2fe; }
+      .transfer-dir-chip.dir-lateral    { background:#ecfeff; color:#0e7490; border-color:#a5f3fc; }
+      .transfer-dir-chip.dir-return     { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+      .transfer-dir-chip.dir-external   { background:#f1f5f9; color:#475569; border-color:#cbd5e1; }
+
+      .transfer-route {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        font-size: 11.5px;
+      }
+      .transfer-route .route-node { font-weight: 700; color: var(--text-primary); }
+      .transfer-route .route-arrow { color: var(--brand-primary); font-size: 10px; }
+      .transfer-route .route-node.is-mine {
+        background: rgba(255, 104, 165, 0.10);
+        border-radius: 4px;
+        padding: 0 4px;
+      }
+
+      .transfer-direction-banner {
+        margin-bottom: 14px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        border-left-width: 4px;
+        background: #f8fafc;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .transfer-direction-banner strong { display: block; font-size: 12.5px; margin-bottom: 2px; }
+      .transfer-direction-banner.dir-allocation { border-left-color:#4338ca; background:#eef2ff; }
+      .transfer-direction-banner.dir-lateral    { border-left-color:#0e7490; background:#ecfeff; }
+      .transfer-direction-banner.dir-return     { border-left-color:#c2410c; background:#fff7ed; }
+      .transfer-direction-banner.dir-invalid    { border-left-color:#dc2626; background:#fef2f2; color:#991b1b; }
+
+      /* In-transit markers on a facility's stock figure. Stock that has left
+         one shelf and not yet landed on another is counted at neither end, and
+         a column that shows only the on-hand number hides that entirely. */
+      .transit-flags { display:flex; gap:4px; justify-content:flex-end; margin-top:2px; }
+      .transit-flag {
+        font-size: 9.5px;
+        font-weight: 700;
+        padding: 0 4px;
+        border-radius: 4px;
+        white-space: nowrap;
+      }
+      .transit-flag.inbound  { background:#dcfce7; color:#15803d; }
+      .transit-flag.outbound { background:#ffe4e6; color:#be123c; }
 
       /* Segment Switcher (Inside Hubs) */
       .segment-switch-wrap {
@@ -383,6 +456,33 @@
         color: #0f172a;
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
       }
+
+      /* The segment strip is sticky too, just below the hub bar, so the pane
+         switcher stays reachable from anywhere in a long table. */
+      .segment-switch-wrap {
+        position: sticky;
+        top: 44px;
+        z-index: 25;
+      }
+
+      /* How many rows behind a pane still need a decision. A tab that hides its
+         contents has to say what is behind it, or hiding them just moves the
+         "I forgot that screen existed" problem one level in. */
+      .segment-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        border-radius: 999px;
+        background: var(--brand-primary);
+        color: #ffffff;
+        font-size: 9.5px;
+        font-weight: 800;
+        line-height: 1;
+      }
+      .segment-btn.active .segment-count { background: #0f172a; }
 
       /* High-Density Ultra-Compact Medical Tables */
       .table-wrap {
@@ -1128,14 +1228,14 @@
               <div class="stat-label">Low &amp; Out-of-Stock Alerts</div>
             </div>
           </div>
-          <div class="stat-card stat-card-interactive" style="cursor: pointer;" onclick="switchTab('catalog'); switchCatalogSubview('batches');">
+          <div class="stat-card stat-card-interactive" style="cursor: pointer;" onclick="switchTab('catalog', 'batches')">
             <div class="stat-icon pink"><i class="fa-solid fa-clock-rotate-left"></i></div>
             <div class="stat-info">
               <div class="stat-value" id="kpi-expiring-batches">—</div>
               <div class="stat-label">Expiring / Expired Batches</div>
             </div>
           </div>
-          <div class="stat-card stat-card-interactive" style="cursor: pointer;" onclick="switchTab('requests')">
+          <div class="stat-card stat-card-interactive" style="cursor: pointer;" onclick="switchTab('requests', 'transfers')">
             <div class="stat-icon pink"><i class="fa-solid fa-truck-ramp-box"></i></div>
             <div class="stat-info">
               <div class="stat-value" id="kpi-total-movements">—</div>
@@ -1326,8 +1426,20 @@
              HUB 2: Distribution & BHC Requests
              ===================================================== -->
         <div id="tab-requests" class="tab-content" style="display: none;">
+          <div class="segment-switch-wrap">
+            <button class="segment-btn active" id="dist-btn-requests" onclick="switchDistributionSubview('requests')">
+              <i class="fa-solid fa-clipboard-list"></i> Stock Requests <span id="dist-requests-count" class="segment-count" style="display:none;"></span>
+            </button>
+            <button class="segment-btn" id="dist-btn-transfers" onclick="switchDistributionSubview('transfers')">
+              <i class="fa-solid fa-truck-ramp-box"></i> Transfers In Transit <span id="dist-transfers-count" class="segment-count" style="display:none;"></span>
+            </button>
+            <button class="segment-btn" id="dist-btn-allocation" onclick="switchDistributionSubview('allocation')">
+              <i class="fa-solid fa-chart-pie"></i> Allocation &amp; Coverage
+            </button>
+          </div>
+
           <!-- Section A: Pending BHC Stock Requests -->
-          <div class="card" style="margin-bottom:20px;">
+          <div class="card" id="dist-subview-requests" style="margin-bottom:20px;">
             <div class="toolbar">
               <div>
                 <h3 style="margin:0;font-size:15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-clipboard-list" style="color:var(--brand-primary);margin-right:7px;"></i> Midwife Stock Requests from Barangay Health Centers</h3>
@@ -1399,29 +1511,44 @@
             <div id="requests-pagination"></div>
           </div>
 
-          <!-- Section B: Issued Transfers Tracker -->
-          <div class="card is-collapsible" id="section-transfers" style="margin-bottom:20px;">
-            <div class="card-header" style="padding:16px 20px;border-bottom:1px solid var(--border-primary);display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          <!-- Section B: Issued Transfers Tracker.
+               No longer collapsible: it is a segment of its own now, and a
+               collapse control on the only card in view collapses the page to
+               nothing. -->
+          <div class="card" id="dist-subview-transfers" style="display:none; margin-bottom:20px;">
+            <div class="card-header" style="padding:16px 20px;border-bottom:1px solid var(--border-primary);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
               <div>
-                <h3 style="margin:0;font-size:15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-truck-ramp-box" style="color:var(--brand-primary);margin-right:7px;"></i> Issued Stock Transfers (In-Transit Tracker)</h3>
-                <p style="margin:4px 0 0;color:var(--text-secondary);font-size:12.5px;">Monitor dispatched transfers awaiting receipt confirmation by destination BHC midwives.</p>
+                <h3 style="margin:0;font-size:15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-truck-ramp-box" style="color:var(--brand-primary);margin-right:7px;"></i> Stock Transfers (In-Transit Tracker)</h3>
+                <p style="margin:4px 0 0;color:var(--text-secondary);font-size:12.5px;" data-scope-copy>Every movement between two facilities in this office — allocations down, transfers between neighbours, and stock returned upward — with both ends named and its receipt status.</p>
               </div>
-              <button class="section-toggle" onclick="toggleSection('section-transfers')" aria-expanded="true" aria-controls="section-transfers-body" title="Collapse or expand this section">
-                <i class="fa-solid fa-chevron-down chev"></i>
-              </button>
+              <button class="btn btn-primary btn-sm" onclick="openGeneralIssueModal()"><i class="fa-solid fa-truck-ramp-box"></i> New Transfer</button>
             </div>
-            <div class="collapsible-body" id="section-transfers-body">
+            <div>
             <div class="table-controls">
               <div class="table-controls-fields">
                 <div class="search-box">
                   <i class="fa-solid fa-magnifying-glass"></i>
-                  <input class="form-control" type="search" id="transfers-search" placeholder="Search transfer no., destination, batch or item..." />
+                  <input class="form-control" type="search" id="transfers-search" placeholder="Search transfer no., either facility, batch or item..." />
                 </div>
                 <select class="form-select" id="transfers-filter-status" style="width:auto;" aria-label="Filter by receipt status">
                   <option value="">All Receipt Statuses</option>
                   <option value="pending_receipt">Pending Receipt</option>
                   <option value="received">Received</option>
                   <option value="cancelled">Cancelled</option>
+                </select>
+                <select class="form-select" id="transfers-filter-direction" style="width:auto;" aria-label="Filter by direction of movement">
+                  <option value="">Every Direction</option>
+                  <option value="allocation">Allocations (downward)</option>
+                  <option value="lateral">Between neighbours</option>
+                  <option value="return">Returns (upward)</option>
+                </select>
+                <select class="form-select" id="transfers-filter-facility" style="width:auto;" aria-label="Filter by facility at either end">
+                  <option value="">Any Facility</option>
+                </select>
+                <select class="form-select" id="transfers-filter-leg" style="width:auto;" aria-label="Filter by whether stock is arriving or leaving" title="Which leg to match. With no facility chosen this is relative to your own depot.">
+                  <option value="">Arriving and Leaving</option>
+                  <option value="in">Arriving only</option>
+                  <option value="out">Leaving only</option>
                 </select>
                 <select class="form-select" id="transfers-filter-date" style="width:auto;" aria-label="Filter by date issued">
                   <option value="all">Issued: Any Date</option>
@@ -1444,7 +1571,7 @@
                 <thead>
                   <tr>
                     <th class="th-sort" data-sort="transfers:issued" tabindex="0">Issued Date<i class="fa-solid fa-sort sort-ind"></i></th>
-                    <th class="th-sort" data-sort="transfers:destination" tabindex="0">Destination BHC<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="transfers:route" tabindex="0">Route<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="transfers:item" tabindex="0">Item Details<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="transfers:quantity" tabindex="0" style="text-align:right;">Qty Issued<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="transfers:status" tabindex="0" style="text-align:center;">Receipt Status<i class="fa-solid fa-sort sort-ind"></i></th>
@@ -1452,16 +1579,16 @@
                   </tr>
                 </thead>
                 <tbody id="transfers-tbody">
-                  <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);">Loading issued transfers...</td></tr>
+                  <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary);">Loading stock transfers...</td></tr>
                 </tbody>
               </table>
             </div>
             <div id="transfers-pagination"></div>
-            </div><!-- /#section-transfers-body -->
+            </div>
           </div>
 
           <!-- Section C: Barangay Stock Allocation & Coverage Matrix -->
-          <div class="card is-collapsible" id="section-allocation">
+          <div class="card" id="dist-subview-allocation" style="display:none;">
             <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
               <div>
                 <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-chart-pie" style="color: var(--brand-primary); margin-right: 8px;"></i> Barangay Stock Allocation &amp; Coverage Quota Matrix</h3>
@@ -1472,12 +1599,9 @@
                   <option value="">— All Items Overview —</option>
                 </select>
                 <button class="btn btn-primary btn-sm" onclick="openGeneralIssueModal()" style="background:#8b5cf6; border-color:#8b5cf6;"><i class="fa-solid fa-paper-plane"></i> Issue Stock Transfer</button>
-                <button class="section-toggle" onclick="toggleSection('section-allocation')" aria-expanded="true" aria-controls="section-allocation-body" title="Collapse or expand this section">
-                  <i class="fa-solid fa-chevron-down chev"></i>
-                </button>
               </div>
             </div>
-            <div class="collapsible-body" id="section-allocation-body">
+            <div>
             <div class="table-wrap" style="border: none; border-radius: 0;">
               <table class="data-table">
                 <thead>
@@ -1497,7 +1621,7 @@
                 </tbody>
               </table>
             </div>
-            </div><!-- /#section-allocation-body -->
+            </div>
           </div>
         </div>
 
@@ -1505,12 +1629,24 @@
              HUB 3: Audit & Disposal Log
              ===================================================== -->
         <div id="tab-transactions" class="tab-content" style="display: none;">
+          <div class="segment-switch-wrap">
+            <button class="segment-btn active" id="audit-btn-ledger" onclick="switchAuditSubview('ledger')">
+              <i class="fa-solid fa-clock-rotate-left"></i> Stock Movement Ledger
+            </button>
+            <button class="segment-btn" id="audit-btn-activity" onclick="switchAuditSubview('activity')">
+              <i class="fa-solid fa-file-signature"></i> Inventory Activity Log
+            </button>
+            <button class="segment-btn" id="audit-btn-disposal" onclick="switchAuditSubview('disposal')">
+              <i class="fa-solid fa-trash-can"></i> Expiry &amp; Disposal
+            </button>
+          </div>
+
           <!-- Section A: Movement History Ledger -->
-          <div class="card" style="margin-bottom: 24px;">
+          <div class="card" id="audit-subview-ledger" style="margin-bottom: 24px;">
             <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
               <div>
                 <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-clock-rotate-left" style="color: var(--brand-primary); margin-right: 8px;"></i> Stock Movement History Ledger</h3>
-                <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 12.5px;">Complete audit trail of receipts, dispenses, adjustments, transfers, and disposals.</p>
+                <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 12.5px;">Every unit that entered or left a shelf: receipts, dispenses, adjustments, transfers in both directions, and disposals. Each row shows the balance it left behind.</p>
               </div>
               <button class="btn btn-outline-pink btn-sm" id="export-tx-csv-btn" onclick="exportTransactionsCSV()"><i class="fa-solid fa-file-csv"></i> Export Ledger CSV</button>
             </div>
@@ -1526,7 +1662,7 @@
                   <option value="dispense">Dispensed (-)</option>
                   <option value="adjustment">Stock Adjustment</option>
                   <option value="expiry_disposal">Expiry Disposal (-)</option>
-                  <option value="transfer">RHU / BHC Transfer</option>
+                  <option value="transfer">Facility Transfer</option>
                 </select>
                 <select class="form-select" id="tx-filter-direction" style="width: auto" aria-label="Filter by stock direction">
                   <option value="">In and Out</option>
@@ -1555,24 +1691,102 @@
                 <thead>
                   <tr>
                     <th class="th-sort" data-sort="tx:date" tabindex="0">Date &amp; Time<i class="fa-solid fa-sort sort-ind"></i></th>
-                    <th class="th-sort" data-sort="tx:location" tabindex="0">Location<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="tx:location" tabindex="0">Location &amp; Route<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="tx:type" tabindex="0">Movement Type<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="tx:item" tabindex="0">Item Details<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="tx:qty" tabindex="0" style="text-align: right">Qty<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="tx:balance" tabindex="0" style="text-align: right">Balance After<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="tx:user" tabindex="0">Performed By<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th>Reference / Notes</th>
                   </tr>
                 </thead>
                 <tbody id="tx-tbody">
-                  <tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px"></div>Loading transaction history...</td></tr>
+                  <tr><td colspan="8" style="text-align:center;padding:48px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px"></div>Loading transaction history...</td></tr>
                 </tbody>
               </table>
             </div>
             <div id="tx-pagination"></div>
           </div>
 
-          <!-- Section B: Expired Stock & Disposal Management -->
-          <div class="card">
+          <!-- Section B: Inventory Activity Log
+               ─────────────────────────────────────────────────────────────
+               The ledger above answers "what moved". This answers "what
+               happened, who decided it, and why" — the request that was
+               approved for less than was asked for, the dispatch that was
+               called back, the vial that was discarded half-used. Those events
+               have always been recorded; they were recorded on the general
+               Activity Log page, a click and a filter away from the inventory
+               officer who needed them. This is the same record, already
+               narrowed to Inventory and to this office's facilities. -->
+          <div class="card" id="audit-subview-activity" style="display:none; margin-bottom: 24px;">
+            <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-file-signature" style="color: var(--brand-primary); margin-right: 8px;"></i> Inventory Activity Log</h3>
+                <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 12.5px;">Every inventory decision with the reasoning attached — requests, approvals, dispatches, receipts, cancellations, adjustments and disposals. Open a row for the full written account.</p>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-secondary btn-sm" onclick="loadInventoryAuditLog(true)"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+                <button class="btn btn-outline-pink btn-sm" onclick="exportInventoryAuditCSV()"><i class="fa-solid fa-file-csv"></i> Export Activity CSV</button>
+              </div>
+            </div>
+            <div class="table-controls">
+              <div class="table-controls-fields">
+                <div class="search-box">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input class="form-control" type="search" id="invaudit-search" placeholder="Search narrative, item, batch, facility or officer..." />
+                </div>
+                <select class="form-select" id="invaudit-filter-action" style="width: auto" aria-label="Filter by event">
+                  <option value="">All Inventory Events</option>
+                </select>
+                <select class="form-select" id="invaudit-filter-severity" style="width: auto" aria-label="Filter by severity">
+                  <option value="">Any Severity</option>
+                  <option value="critical">Critical</option>
+                  <option value="warning">Warning</option>
+                  <option value="notice">Notice</option>
+                  <option value="info">Info</option>
+                </select>
+                <select class="form-select" id="invaudit-filter-actor" style="width: auto" aria-label="Filter by who did it">
+                  <option value="">Anyone</option>
+                </select>
+                <select class="form-select" id="invaudit-filter-date" style="width: auto" aria-label="Filter by date">
+                  <option value="all">All Dates</option>
+                  <option value="today">Today</option>
+                  <option value="7d">Last 7 Days</option>
+                  <option value="30d">Last 30 Days</option>
+                  <option value="this_month">This Month</option>
+                  <option value="custom">Custom Date Range…</option>
+                </select>
+                <div class="date-range-wrap" id="invaudit-custom-date-wrap">
+                  <input type="date" id="invaudit-date-start" class="form-control" aria-label="From date" />
+                  <span class="date-range-sep">to</span>
+                  <input type="date" id="invaudit-date-end" class="form-control" aria-label="To date" />
+                </div>
+              </div>
+            </div>
+            <div class="table-meta" id="invaudit-meta"></div>
+            <div class="table-wrap" style="border: none; border-radius: 0">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width:28px;"></th>
+                    <th class="th-sort" data-sort="invaudit:date" tabindex="0">When<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="invaudit:severity" tabindex="0" style="text-align:center;">Severity<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="invaudit:action" tabindex="0">Event<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="invaudit:entity" tabindex="0">What It Touched<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="invaudit:actor" tabindex="0">Who<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th>Summary</th>
+                  </tr>
+                </thead>
+                <tbody id="invaudit-tbody">
+                  <tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);">Open this view to load the inventory activity log.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div id="invaudit-pagination"></div>
+          </div>
+
+          <!-- Section C: Expired Stock & Disposal Management -->
+          <div class="card" id="audit-subview-disposal" style="display:none;">
             <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
               <div>
                 <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-trash-can" style="color: var(--brand-primary); margin-right: 8px;"></i> Expired &amp; Damaged Stock Disposal Management</h3>
@@ -1652,8 +1866,23 @@
             </div>
           </div>
 
+          <div class="segment-switch-wrap">
+            <button class="segment-btn active" id="ana-btn-insights" onclick="switchAnalyticsSubview('insights')">
+              <i class="fa-solid fa-lightbulb"></i> Monthly Insights
+            </button>
+            <button class="segment-btn" id="ana-btn-wastage" onclick="switchAnalyticsSubview('wastage')">
+              <i class="fa-solid fa-droplet-slash"></i> Wastage &amp; Open Vials
+            </button>
+            <button class="segment-btn" id="ana-btn-demographics" onclick="switchAnalyticsSubview('demographics')">
+              <i class="fa-solid fa-child-reaching"></i> Patient Demographics
+            </button>
+            <button class="segment-btn" id="ana-btn-reconciliation" onclick="switchAnalyticsSubview('reconciliation')">
+              <i class="fa-solid fa-table"></i> Reconciliation &amp; Charts
+            </button>
+          </div>
+
           <!-- 4-Quadrant Monthly Insights Panel -->
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px;">
+          <div id="ana-subview-insights" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px;">
             <div class="card" style="padding: 18px; border-top: 4px solid var(--brand-primary);">
               <h4 style="margin:0 0 8px; font-size:14px; color:var(--brand-text);"><i class="fa-solid fa-rectangle-list"></i> 1. Descriptive Analytics</h4>
               <p style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">Historical consumption &amp; inventory summary</p>
@@ -1680,7 +1909,7 @@
           </div>
 
           <!-- DOH Wastage Rate & Multi-Dose Open Vial Monitor -->
-          <div class="card" style="margin-bottom: 24px; padding: 20px; border-left: 4px solid #f59e0b;">
+          <div class="card" id="ana-subview-wastage" style="display:none; margin-bottom: 24px; padding: 20px; border-left: 4px solid #f59e0b;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
               <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--brand-text); display: flex; align-items: center; gap: 8px;">
                 <i class="fa-solid fa-hourglass-half" style="color: #f59e0b;"></i> DOH Vaccine Wastage Rate &amp; Open Multi-Dose Vial Monitor
@@ -1729,7 +1958,7 @@
           </div>
 
           <!-- Pediatric & Child Demographics Card -->
-          <div class="card" style="margin-bottom: 24px; padding: 20px;">
+          <div class="card" id="ana-subview-demographics" style="display:none; margin-bottom: 24px; padding: 20px;">
             <h4 style="margin: 0 0 16px; font-size: 15px; font-weight: 700; color: var(--brand-text); display: flex; align-items: center; gap: 8px;">
               <i class="fa-solid fa-child-reaching" style="color: var(--brand-primary);"></i> Pediatric &amp; Children Demographic Statistics (WHO Growth Standards)
             </h4>
@@ -1760,7 +1989,7 @@
           </div>
 
           <!-- Reconciliation Table & Charts -->
-          <div style="display: grid; grid-template-columns: 3fr 2fr; gap: 20px; margin-bottom: 24px;">
+          <div id="ana-subview-reconciliation" style="display: none; grid-template-columns: 3fr 2fr; gap: 20px; margin-bottom: 24px;">
             <!-- Left Side: Table View -->
             <div class="card" style="padding: 0;">
               <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
@@ -2152,24 +2381,46 @@
             <input type="hidden" id="issue-request-id" />
             <div id="issue-request-context" style="display:none; margin-bottom:14px; padding:10px 14px; border-radius:8px; background:#f8fafc; border:1px solid #e2e8f0; font-size:12.5px; color:#1e293b;"></div>
             
-            <div class="form-row" style="display:grid; grid-template-columns:1.1fr 1fr; gap:12px; margin-bottom: 14px;">
+            <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom: 10px;">
               <div class="form-group">
                 <div style="display:flex; align-items:center; min-height:22px; margin-bottom:4px;">
-                  <label class="form-label" for="issue-source-facility" style="font-weight: 600; font-size: 12.5px; margin:0;">Transfer Source <span class="req" style="color:#dc2626;">*</span></label>
+                  <label class="form-label" for="issue-source-facility" style="font-weight: 600; font-size: 12.5px; margin:0;">Move stock out of <span class="req" style="color:#dc2626;">*</span></label>
                 </div>
-                <select class="form-select" id="issue-source-facility" required style="width:100%; border-radius: 8px;" onchange="populateIssueBatchDropdown(); updateIssueSafetyCheck();">
+                <select class="form-select" id="issue-source-facility" required style="width:100%; border-radius: 8px;" onchange="onTransferEndpointChanged('source');">
                   <option value="central" selected>Central Warehouse</option>
                 </select>
               </div>
               <div class="form-group">
                 <div style="display:flex; justify-content:space-between; align-items:center; min-height:22px; margin-bottom:4px;">
-                  <label class="form-label" for="issue-target-bhc" style="font-weight: 600; font-size: 12.5px; margin:0;">Destination BHC <span class="req" style="color:#dc2626;">*</span></label>
+                  <label class="form-label" for="issue-target-bhc" style="font-weight: 600; font-size: 12.5px; margin:0;">Deliver it to <span class="req" style="color:#dc2626;">*</span></label>
                   <button type="button" class="action-pill-btn pill-purple" id="btn-autofill-forecast" onclick="autoFillForecastForDestination()" title="Auto-calculate quota from due patients"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Forecast</button>
                 </div>
-                <select class="form-select" id="issue-target-bhc" required style="width:100%; border-radius: 8px;" onchange="applySuggestedDeliveryEstimate(true); updateIssueSafetyCheck();">
-                  <option value="">— Select Target BHC —</option>
+                <select class="form-select" id="issue-target-bhc" required style="width:100%; border-radius: 8px;" onchange="onTransferEndpointChanged('destination');">
+                  <option value="">— Select destination —</option>
                 </select>
               </div>
+            </div>
+
+            <!-- Which way the stock is travelling, named before it moves.
+                 A return is not a mistake to be blocked — it is how a health
+                 centre without power keeps its vaccines usable — so the banner
+                 explains the move rather than warning about it. -->
+            <div id="issue-direction-banner" class="transfer-direction-banner" style="display:none;"></div>
+
+            <div class="form-group" id="issue-reason-group" style="display:none; margin-bottom: 14px;">
+              <label class="form-label" for="issue-move-reason" style="font-weight: 600; font-size: 12.5px; margin: 0 0 4px;">Why is this stock being moved? <span class="req" style="color:#dc2626;">*</span></label>
+              <select class="form-select" id="issue-move-reason" style="width:100%; border-radius: 8px;" onchange="updateIssueSafetyCheck();">
+                <option value="">— Select a reason —</option>
+                <option value="Power interruption">Power interruption / brownout</option>
+                <option value="Cold chain or equipment failure">Cold chain or equipment failure</option>
+                <option value="Technical difficulty at the facility">Technical difficulty at the facility</option>
+                <option value="Facility temporarily closed">Facility temporarily closed</option>
+                <option value="Nearing expiry — redistributing for use">Nearing expiry — redistributing for use</option>
+                <option value="Shortage at the receiving facility">Shortage at the receiving facility</option>
+                <option value="Excess stock being consolidated">Excess stock being consolidated</option>
+                <option value="Other operational reason">Other operational reason</option>
+              </select>
+              <small style="display:block;margin-top:4px;font-size:11px;color:var(--text-secondary);">Recorded on the transfer, in the audit trail, and in the notification both facilities receive.</small>
             </div>
 
             <div class="form-group" style="margin-bottom: 14px;">
@@ -2178,7 +2429,7 @@
                 <option value="">— Select Available Source Batch —</option>
               </select>
             </div>
-            
+
             <div class="form-row" style="display:grid; grid-template-columns:1fr 1.2fr; gap:12px; margin-bottom: 14px;">
               <div class="form-group">
                 <label class="form-label" for="issue-qty" style="font-weight: 600; font-size: 12.5px;">Quantity to Transfer <span class="req" style="color:#dc2626;">*</span></label>
@@ -2356,6 +2607,28 @@
       </div>
     </div>
 
+    <!-- Modal: One inventory event, in full.
+         The audit triggers write a narrative meant to be read on its own and
+         printed — a paragraph that says what moved, from where to where, against
+         which request and who decided it. Until now the inventory page had
+         nowhere to show it. -->
+    <div class="modal-overlay" id="modal-invaudit-detail">
+      <div class="modal" style="max-width: 720px; width: 90%; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
+        <div class="modal-header" style="padding: 18px 24px 14px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h2 class="modal-title" id="invaudit-detail-title" style="font-size: 16px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-file-signature" style="color:var(--brand-primary);"></i> Inventory Event</h2>
+            <div id="invaudit-detail-subtitle" style="font-size:12px; color:var(--text-secondary); margin-top:2px;"></div>
+          </div>
+          <button class="modal-close" onclick="closeModal('modal-invaudit-detail')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" id="invaudit-detail-body" style="max-height: 70vh; overflow-y: auto; padding: 20px 24px;"></div>
+        <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #fafafa; display: flex; justify-content: flex-end; gap: 10px;">
+          <button class="btn btn-secondary" onclick="closeModal('modal-invaudit-detail')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px;">Close</button>
+          <button class="btn btn-primary" onclick="window.print()" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px;"><i class="fa-solid fa-print"></i> Print Record</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal 10: Alert Hub Center Modal -->
     <div class="modal-overlay" id="modal-alerts-hub">
       <div class="modal" style="max-width: 760px; width: 90%; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
@@ -2370,6 +2643,7 @@
             <button class="btn btn-sm btn-secondary" id="alert-tab-expiry" onclick="filterAlerts('expiry')" style="height: 30px; font-size: 12px; border-radius: 6px;"><i class="fa-solid fa-clock-rotate-left" style="color:#dc2626;"></i> Expiry</button>
             <button class="btn btn-sm btn-secondary" id="alert-tab-vials" onclick="filterAlerts('vials')" style="height: 30px; font-size: 12px; border-radius: 6px;"><i class="fa-solid fa-syringe" style="color:#b45309;"></i> Open Vials</button>
             <button class="btn btn-sm btn-secondary" id="alert-tab-requests" onclick="filterAlerts('requests')" style="height: 30px; font-size: 12px; border-radius: 6px;"><i class="fa-solid fa-clipboard-list" style="color:#2563eb;"></i> Pending Requests</button>
+            <button class="btn btn-sm btn-secondary" id="alert-tab-transit" onclick="filterAlerts('transit')" style="height: 30px; font-size: 12px; border-radius: 6px;"><i class="fa-solid fa-truck-fast" style="color:#7c3aed;"></i> Stuck In Transit</button>
           </div>
           <div id="alerts-hub-content">
             <div class="spinner" style="margin: 40px auto;"></div>
@@ -2437,7 +2711,8 @@
           batches: { currentPage: 1, pageSize: 10 },
           requests: { currentPage: 1, pageSize: 10 },
           transfers: { currentPage: 1, pageSize: 10 },
-          tx: { currentPage: 1, pageSize: 10 }
+          tx: { currentPage: 1, pageSize: 10 },
+          invaudit: { currentPage: 1, pageSize: 10 }
         };
 
         /* ═══════════════════════════════════════════════════════════════════
@@ -2487,6 +2762,8 @@
             render: () => renderInventoryTransfers(),
             defaults: {
               "transfers-search": "", "transfers-filter-status": "",
+              "transfers-filter-direction": "", "transfers-filter-facility": "",
+              "transfers-filter-leg": "",
               "transfers-filter-date": "all", "transfers-date-start": "", "transfers-date-end": ""
             }
           },
@@ -2496,6 +2773,16 @@
             defaults: {
               "tx-search": "", "tx-filter-type": "", "tx-filter-direction": "",
               "tx-filter-date": "all", "tx-date-start": "", "tx-date-end": ""
+            }
+          },
+          invaudit: {
+            // Newest first: an activity log is read from the top down.
+            sortField: "date", sortAsc: false,
+            render: () => renderInventoryAuditLog(),
+            defaults: {
+              "invaudit-search": "", "invaudit-filter-action": "",
+              "invaudit-filter-severity": "", "invaudit-filter-actor": "",
+              "invaudit-filter-date": "all", "invaudit-date-start": "", "invaudit-date-end": ""
             }
           },
           disposal: {
@@ -2962,7 +3249,7 @@
         });
 
         // Hub Navigation Switcher
-        window.switchTab = function(targetHub) {
+        window.switchTab = function(targetHub, subview = null) {
           const hubs = ['catalog', 'requests', 'transactions', 'analytics'];
           hubs.forEach(h => {
             const btn = document.querySelector(`.inventory-tab-btn[data-tab="${h}"]`);
@@ -2971,9 +3258,24 @@
             if (content) content.style.display = (h === targetHub) ? "block" : "none";
           });
 
+          // Every hub now has panes inside it. Land on the one the officer left
+          // open, or on the one the caller asked for — a KPI card that means
+          // "show me the in-transit transfers" should not dump them on the
+          // request table and let them find it.
+          if (subview) {
+            HUB_SUBVIEW_SWITCH[targetHub]?.(subview);
+          } else {
+            restoreSubview(targetHub);
+          }
+
           if (targetHub === 'analytics') {
             loadAnalyticsReport();
           }
+
+          // Switching hubs scrolls back to the tab bar rather than leaving the
+          // reader halfway down the page they just left.
+          document.querySelector(".inventory-main-tabs")
+            ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
         };
 
         // Hub 1 Subview Switcher
@@ -2989,7 +3291,150 @@
           if (targetView === 'matrix') {
             renderBarangayStockMatrix();
           }
+          rememberSubview("catalog", targetView);
         };
+
+        /* ── Sub-views inside the other three hubs ──────────────────────────
+           Hub 1 has had a segment switcher since it was built. The other three
+           stacked their sections vertically, so the transfer tracker sat below
+           a full-height request table, the allocation matrix below that, and the
+           disposal register below a thousand ledger rows. Anything past the
+           first card was reachable only by scrolling, which is a poor way to
+           learn that a screen exists at all — most people never did.
+
+           Same mechanism as Hub 1's, generalised: one list of view keys, one
+           pair of id conventions, one place that remembers which pane was open.
+           ─────────────────────────────────────────────────────────────────── */
+
+        const SUBVIEW_STATE_KEY = "inaagapay_inventory_subviews";
+
+        function readSubviewState() {
+          try { return JSON.parse(localStorage.getItem(SUBVIEW_STATE_KEY)) || {}; }
+          catch (e) { return {}; }
+        }
+
+        // Which pane the officer had open, kept per hub across reloads — the
+        // same courtesy the collapsible sections already had.
+        function rememberSubview(hub, view) {
+          const state = readSubviewState();
+          state[hub] = view;
+          try { localStorage.setItem(SUBVIEW_STATE_KEY, JSON.stringify(state)); } catch (e) {}
+        }
+
+        /**
+         * True until the first data load finishes.
+         *
+         * Restoring the remembered pane happens before loadInventoryData, so the
+         * layout is right on first paint rather than flicking over a moment
+         * later. But the renderers a switcher calls would then run against empty
+         * arrays and write things that are not true — the allocation matrix says
+         * "No barangay health centers registered" — for the second or two before
+         * the real data lands. Panes are positioned during boot; drawing them is
+         * left to the load that is already about to redraw everything.
+         */
+        let inventoryBooting = true;
+
+        function applySubview(views, targetView, btnPrefix, panePrefix, displayOverrides = {}) {
+          views.forEach(v => {
+            const btn = document.getElementById(`${btnPrefix}${v}`);
+            const pane = document.getElementById(`${panePrefix}${v}`);
+            if (btn) btn.classList.toggle("active", v === targetView);
+            if (pane) {
+              pane.style.display = (v === targetView) ? (displayOverrides[v] || "block") : "none";
+            }
+          });
+        }
+
+        window.switchDistributionSubview = function(targetView) {
+          applySubview(['requests', 'transfers', 'allocation'], targetView,
+                       "dist-btn-", "dist-subview-");
+          if (!inventoryBooting) {
+            if (targetView === 'allocation') renderBarangayAllocation();
+            if (targetView === 'transfers') renderInventoryTransfers();
+          }
+          rememberSubview("requests", targetView);
+        };
+
+        window.switchAuditSubview = function(targetView) {
+          applySubview(['ledger', 'activity', 'disposal'], targetView,
+                       "audit-btn-", "audit-subview-");
+          if (!inventoryBooting) {
+            // The activity log is a separate query against audit_trail, so it is
+            // fetched the first time somebody actually asks for it rather than on
+            // every page load.
+            if (targetView === 'activity') loadInventoryAuditLog();
+            if (targetView === 'disposal') renderDisposalTable();
+          }
+          rememberSubview("transactions", targetView);
+        };
+
+        window.switchAnalyticsSubview = function(targetView) {
+          // The reconciliation pane is a CSS grid; restoring it to "block" would
+          // stack its two columns.
+          applySubview(['insights', 'wastage', 'demographics', 'reconciliation'], targetView,
+                       "ana-btn-", "ana-subview-",
+                       { insights: "grid", reconciliation: "grid" });
+
+          // Both charts live in the reconciliation pane, and loadAnalyticsReport
+          // builds them whenever the hub opens — which, now that the pane starts
+          // hidden, is usually while its container measures 0x0. Chart.js sizes
+          // itself at construction, so the canvas would come out collapsed and
+          // stay that way. Resizing on reveal is what makes them draw.
+          if (targetView === 'reconciliation') {
+            requestAnimationFrame(() => {
+              dailyChartInstance?.resize();
+              hourlyChartInstance?.resize();
+            });
+          }
+          rememberSubview("analytics", targetView);
+        };
+
+        // Defaults for a first visit; anything remembered wins.
+        const HUB_DEFAULT_SUBVIEW = {
+          catalog: "summary",
+          requests: "requests",
+          transactions: "ledger",
+          analytics: "insights"
+        };
+        const HUB_SUBVIEW_SWITCH = {
+          catalog: v => window.switchCatalogSubview(v),
+          requests: v => window.switchDistributionSubview(v),
+          transactions: v => window.switchAuditSubview(v),
+          analytics: v => window.switchAnalyticsSubview(v)
+        };
+
+        function restoreSubview(hub) {
+          const saved = readSubviewState()[hub];
+          const view = saved || HUB_DEFAULT_SUBVIEW[hub];
+          HUB_SUBVIEW_SWITCH[hub]?.(view);
+        }
+
+        /**
+         * Live counts on the segment buttons.
+         *
+         * A tab that hides its contents has to say what is behind it, or it has
+         * simply moved the "I forgot that existed" problem one level in. The
+         * numbers are the ones that need a decision — requests still pending,
+         * transfers still in transit — not the total row count, which nobody
+         * acts on.
+         */
+        function renderSubviewCounts() {
+          const pendingRequests = (stockRequests || [])
+            .filter(r => r.status === "pending" && !r.is_archived).length;
+          const inTransit = (inventoryTransfers || [])
+            .filter(t => t.status === "pending_receipt").length;
+
+          const setCount = (id, value, title) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = value > 0 ? String(value) : "";
+            el.style.display = value > 0 ? "" : "none";
+            if (title) el.title = title;
+          };
+
+          setCount("dist-requests-count", pendingRequests, `${pendingRequests} request(s) awaiting a decision`);
+          setCount("dist-transfers-count", inTransit, `${inTransit} transfer(s) awaiting receipt confirmation`);
+        }
 
         // Batch Expiry Check
         function isBatchExpired(b) {
@@ -3085,6 +3530,172 @@
           return !["received", "cancelled", "returned"].includes(String(transfer?.status || "").toLowerCase());
         }
 
+        /* ═══════════════════════════════════════════════════════════════════
+           TRANSFER ROUTES
+
+           A transfer used to be described by where it was going. It is now
+           described by both ends and the direction between them, because the
+           direction is what changes the meaning:
+
+             allocation  down the hierarchy — the routine monthly distribution
+             lateral     between peers — one health centre helping another
+             return      back up — a brownout, a broken freezer, stock that
+                         would otherwise spoil where it sits
+
+           source_facility_id arrives with 20260829. On a database without it
+           the source is still recoverable from the batch, so every helper here
+           reads the column and falls back rather than assuming either.
+           ═══════════════════════════════════════════════════════════════════ */
+
+        /**
+         * The municipal office's facility id, from whichever side we are on.
+         *
+         * The MHO portal runs it; an RHU portal reports to it. Both need to
+         * name it, because a batch filed at facility_id NULL and a transfer
+         * addressed to that row are the same shelf — the municipal warehouse.
+         */
+        function municipalFacilityId() {
+          if (PortalScope.isMho) return PortalScope.facilityId ?? null;
+          return PortalScope.hasParent ? PortalScope.parentFacilityId : null;
+        }
+
+        /**
+         * Canonical key for a shelf.
+         *
+         * "warehouse" is the municipal warehouse — facility_id NULL on a batch,
+         * and the MHO's own health_facilities row on a transfer. Every other
+         * facility is its own id.
+         *
+         * This deliberately does NOT collapse to "this portal's depot". An
+         * earlier version did, and it silently told an RHU that a dispatch out
+         * of the municipal warehouse had come from its own shelf: the route read
+         * "RHU I Depot -> RHU I Depot" and the RHU was offered a Cancel button
+         * for a transfer the municipal office had issued. Ask isOwnDepot() when
+         * the question is "is this mine", which is a different question.
+         */
+        function placeKey(facilityId) {
+          // The UI sentinel for whatever depot this portal draws from.
+          if (String(facilityId) === "central") {
+            return PortalScope.depotFacilityId === null
+              ? "warehouse"
+              : String(PortalScope.depotFacilityId);
+          }
+          if (facilityId === undefined || facilityId === null || facilityId === "" ||
+              facilityId === 0 || String(facilityId) === "null") {
+            return "warehouse";
+          }
+          const mho = municipalFacilityId();
+          if (mho !== null && String(facilityId) === String(mho)) return "warehouse";
+          return String(facilityId);
+        }
+
+        /** True when a facility id is this portal's own depot — the shelf whose
+         *  stock it issues and whose deliveries it confirms. */
+        function isOwnDepot(facilityId) {
+          return placeKey(facilityId) === placeKey("central");
+        }
+
+        function samePlace(a, b) {
+          return placeKey(a) === placeKey(b);
+        }
+
+        /** Facility the stock left. Falls back to the source batch on a database
+         *  that has not gained inventory_transfers.source_facility_id yet. */
+        function transferSourceFacilityId(transfer) {
+          if (!transfer) return null;
+          // An explicit null on the column means the municipal warehouse, not
+          // "unknown" — so the presence of the key is what decides, never its
+          // value. Only a database without the column falls through.
+          if ("source_facility_id" in transfer) return transfer.source_facility_id ?? null;
+          const batch = batches.find(b => String(b.batch_id) === String(transfer.source_batch_id));
+          return batch ? batch.facility_id ?? null : null;
+        }
+
+        const DIRECTION_META = {
+          allocation: { label: "Allocation", arrow: "fa-arrow-down-long", icon: "fa-arrow-turn-down",
+                        blurb: "Stock going down the hierarchy — the routine distribution." },
+          lateral:    { label: "Lateral",    arrow: "fa-arrow-right-long", icon: "fa-right-left",
+                        blurb: "A direct move between two facilities that report to the same office." },
+          return:     { label: "Return",     arrow: "fa-arrow-up-long", icon: "fa-arrow-turn-up",
+                        blurb: "Stock travelling back up so it can be used elsewhere instead of spoiling." },
+          external:   { label: "Cross-branch", arrow: "fa-arrow-right-long", icon: "fa-shuffle",
+                        blurb: "Neither facility sits inside the other's branch." },
+          internal:   { label: "Same facility", arrow: "fa-rotate", icon: "fa-ban",
+                        blurb: "Both ends are the same shelf, which is not a transfer at all." }
+        };
+
+        /**
+         * Direction between two facility ids, worked out from the hierarchy the
+         * portal already knows.
+         *
+         * PortalScope.subtreeIds walks the tree the login RPC returned, so an
+         * MHO account can tell an RHU from a BHC below it and an RHU account can
+         * tell its own depot from the centres beneath it. Above this office —
+         * the municipal warehouse seen from an RHU — is resolved through
+         * PortalScope.parentFacilityId rather than the subtree, which by
+         * definition never reaches upward.
+         */
+        function transferDirection(sourceFacilityId, destinationFacilityId) {
+          const src = placeKey(sourceFacilityId);
+          const dst = placeKey(destinationFacilityId);
+          if (!src || !dst) return "external";
+          if (src === dst) return "internal";
+
+          // The municipal warehouse sits above everything, so anything sent to
+          // it travels up and anything sent from it travels down — whichever
+          // tier is reading. This is checked before the depot test because for
+          // an RHU the two are different shelves.
+          if (dst === "warehouse") return "return";
+          if (src === "warehouse") return "allocation";
+
+          // This office's own depot sits above every facility it lists.
+          const ownDepot = placeKey("central");
+          if (src === ownDepot) return "allocation";
+          if (dst === ownDepot) return "return";
+
+          // Two named facilities. Below-ness decides; equal depth is lateral.
+          if (PortalScope.subtreeIds(src).includes(dst)) return "allocation";
+          if (PortalScope.subtreeIds(dst).includes(src)) return "return";
+          return "lateral";
+        }
+
+        function transferDirectionOf(transfer) {
+          if (transfer && transfer.transfer_direction) return transfer.transfer_direction;
+          return transferDirection(transferSourceFacilityId(transfer), transfer?.destination_facility_id);
+        }
+
+        function directionChip(direction) {
+          const meta = DIRECTION_META[direction] || DIRECTION_META.external;
+          return `<span class="transfer-dir-chip dir-${esc(direction)}"><i class="fa-solid ${meta.icon}"></i> ${esc(meta.label)}</span>`;
+        }
+
+        /** "Sto. Nino BHC → RHU I Depot", with this office's own shelf highlighted. */
+        function routeHtml(sourceFacilityId, destinationFacilityId) {
+          const node = (facilityId) => {
+            const mine = isOwnDepot(facilityId);
+            return `<span class="route-node${mine ? " is-mine" : ""}">${esc(transferEndpointName(facilityId))}</span>`;
+          };
+          return `<span class="transfer-route">${node(sourceFacilityId)}<i class="fa-solid fa-arrow-right-long route-arrow"></i>${node(destinationFacilityId)}</span>`;
+        }
+
+        /**
+         * Display name for either end of a transfer.
+         *
+         * Order matters: this portal's own depot first, then the municipal
+         * warehouse above it, then the facilities below. An RHU seeing a
+         * municipal dispatch must read "Municipal Warehouse", not its own depot
+         * name — those are different shelves and only the MHO's are the same.
+         */
+        function transferEndpointName(facilityId) {
+          if (isOwnDepot(facilityId)) return PortalScope.depotName;
+          if (placeKey(facilityId) === "warehouse") {
+            return PortalScope.parentFacilityName || "Municipal Warehouse";
+          }
+          const bhc = (bhcs || []).find(b => String(b.bhc_id) === String(facilityId));
+          if (bhc) return bhc.bhc_name;
+          return unknownFacilityLabel(facilityId);
+        }
+
         function calculateInTransitPerItem(itemId, facilityId) {
           // An RHU depot can itself have stock in transit from the municipal
           // warehouse, so resolve the sentinel before giving up on it.
@@ -3098,6 +3709,40 @@
               return source?.item_id === itemId;
             })
             .reduce((sum, transfer) => sum + Number(transfer.quantity_issued || 0), 0);
+        }
+
+        /**
+         * Units of an item that have LEFT this facility and not yet been
+         * confirmed anywhere.
+         *
+         * The counterpart to calculateInTransitPerItem, and the number the
+         * sending facility never had. Its batch was debited the moment the
+         * transfer was issued, so its on-hand figure dropped with nothing on
+         * screen to say where the units went — which is exactly the complaint
+         * a BHC-to-BHC move surfaced.
+         */
+        function calculateOutboundInTransitPerItem(itemId, facilityId) {
+          const target = placeKey(facilityId);
+          if (!target) return 0;
+          return (inventoryTransfers || [])
+            .filter(transfer => {
+              if (!isTransferInTransit(transfer)) return false;
+              if (placeKey(transferSourceFacilityId(transfer)) !== target) return false;
+              const source = batches.find(batch => batch.batch_id === transfer.source_batch_id);
+              return source?.item_id === itemId;
+            })
+            .reduce((sum, transfer) => sum + Number(transfer.quantity_issued || 0), 0);
+        }
+
+        /** Both legs at once, for the places that render a facility's position. */
+        function transitFlagsHtml(itemId, facilityId) {
+          const incoming = calculateInTransitPerItem(itemId, facilityId);
+          const outgoing = calculateOutboundInTransitPerItem(itemId, facilityId);
+          if (!incoming && !outgoing) return "";
+          const parts = [];
+          if (incoming) parts.push(`<span class="transit-flag inbound" title="Awaiting this facility's receipt confirmation">+${incoming} in</span>`);
+          if (outgoing) parts.push(`<span class="transit-flag outbound" title="Dispatched from here, not yet confirmed at the other end">−${outgoing} out</span>`);
+          return `<div class="transit-flags">${parts.join("")}</div>`;
         }
 
         function getHistoricalDeliveryEstimate(facilityId) {
@@ -3120,7 +3765,8 @@
         }
 
         function applySuggestedDeliveryEstimate(force = false) {
-          const facilityId = document.getElementById("issue-target-bhc")?.value;
+          const facilityId = resolveEndpointFacilityId(
+            document.getElementById("issue-target-bhc")?.value);
           const input = document.getElementById("issue-expected-date");
           const hint = document.getElementById("issue-delivery-duration-copy");
           if (!input) return;
@@ -3141,9 +3787,9 @@
           }
           
           if (hint) {
-            hint.textContent = municipalWording((estimate && estimate.available)
-              ? `Suggested arrival from ${estimate.samples} completed deliveries (${estimate.days} days avg).`
-              : `Standard BHC transit estimate (${defaultDays} days).`);
+            hint.textContent = (estimate && estimate.available)
+              ? `Suggested arrival from ${estimate.samples} completed deliveries to ${transferEndpointName(facilityId)} (${estimate.days} days avg).`
+              : `No delivery history to ${transferEndpointName(facilityId)} yet — using the standard ${defaultDays}-day estimate.`;
           }
           updateIssueSafetyCheck();
         }
@@ -3170,7 +3816,8 @@
         function updateIssueSafetyCheck() {
           try {
             const batchId = document.getElementById("issue-source-batch")?.value;
-            const facilityId = document.getElementById("issue-target-bhc")?.value;
+            const facilityId = resolveEndpointFacilityId(
+              document.getElementById("issue-target-bhc")?.value);
             const quantity = Number(document.getElementById("issue-qty")?.value);
             const expectedDateVal = document.getElementById("issue-expected-date")?.value;
             const selectedArrival = asLocalDate(expectedDateVal);
@@ -3204,11 +3851,12 @@
             // Shelf life of transferring batch at the expected arrival date
             const shelfLifeAtArrival = calendarDaysBetween(selectedArrival, sourceBatch.expiration_date);
 
-            // Batches currently stored at destination BHC
-            const destBatches = (batches || []).filter(b => 
-              String(b.item_id) === String(sourceBatch.item_id) && 
-              isUsableBatch(b) && 
-              String(b.facility_id) === String(facilityId)
+            // Batches already sitting at the destination. Matched by PLACE, so
+            // the depot's own shelf is found when stock is being sent back up.
+            const destBatches = (batches || []).filter(b =>
+              String(b.item_id) === String(sourceBatch.item_id) &&
+              isUsableBatch(b) &&
+              samePlace(b.facility_id, facilityId)
             ).sort((a, b) => new Date(a.expiration_date) - new Date(b.expiration_date));
 
             const destinationStock = destBatches.reduce((sum, b) => sum + Number(b.quantity_remaining || 0), 0);
@@ -3245,20 +3893,49 @@
             const destStockExpired = destinationStock > 0 && destUsableStockAtArrival === 0;
             const warnings = [];
 
+            // Both ends are named rather than described. "Destination BHC" was
+            // fine while a BHC was the only possible destination; it is wrong
+            // for an RHU depot and actively misleading for a return upward.
+            const destName = transferEndpointName(facilityId);
+            const sourceName = transferEndpointName(sourceBatch.facility_id);
+            const direction = transferDirection(sourceBatch.facility_id, facilityId);
+            const unitWord = item?.unit_of_measure || 'units';
+
             if (!transferBatchExpired && shelfLifeAtArrival <= 30) {
               warnings.push(`Transfer batch will have only ${shelfLifeAtArrival} days of shelf life remaining upon arrival. Consider selecting a later-expiring batch.`);
             }
 
             if (destExpiredQtyByArrival > 0) {
               if (destStockExpired) {
-                warnings.push(`Destination BHC's existing stock (${destinationStock} ${item?.unit_of_measure || 'units'}) will be expired by the time this delivery arrives (${formatShortDate(nearestDestBatch.expiration_date)}).`);
+                warnings.push(`${destName}'s existing stock (${destinationStock} ${unitWord}) will be expired by the time this delivery arrives (${formatShortDate(nearestDestBatch.expiration_date)}).`);
               } else {
-                warnings.push(`${destExpiredQtyByArrival} of ${destinationStock} existing ${item?.unit_of_measure || 'units'} at destination BHC will expire before delivery arrival.`);
+                warnings.push(`${destExpiredQtyByArrival} of ${destinationStock} existing ${unitWord} at ${destName} will expire before delivery arrival.`);
               }
             }
 
             if (destUsableStockAtArrival === 0 && deliveryDays > 0 && destinationStock === 0) {
-              warnings.push(`Destination BHC currently has 0 usable stock. Confirm whether transit time should be expedited.`);
+              warnings.push(`${destName} currently has 0 usable stock. Confirm whether transit time should be expedited.`);
+            }
+
+            /* What this leaves BEHIND.
+               The sending facility's batch is debited the instant the transfer
+               is issued, and until now nothing on this screen said what that
+               did to the sender. For a downward allocation out of a large depot
+               that rarely matters. For a lateral move between two health
+               centres it is the whole question: helping a neighbour must not
+               empty your own shelf below the point where you can run a clinic. */
+            const sourceMetricsNow = getItemStockMetrics(sourceBatch.item_id,
+              isOwnDepot(sourceBatch.facility_id) ? "central" : sourceBatch.facility_id);
+            const sourceThreshold = item ? (item.minimum_stock_threshold || 50) : 50;
+            const sourceAfter = Math.max(0, (sourceMetricsNow.available || 0) - quantity);
+            const sourceIsDepot = isOwnDepot(sourceBatch.facility_id);
+
+            if (!sourceIsDepot) {
+              if (sourceAfter === 0) {
+                warnings.push(`${sourceName} will be left with no ${item?.name || 'stock'} at all once these ${quantity} ${unitWord} leave.`);
+              } else if (sourceAfter <= sourceThreshold) {
+                warnings.push(`${sourceName} drops to ${sourceAfter} ${unitWord} after this move, at or below its minimum of ${sourceThreshold}.`);
+              }
             }
 
             const card = document.getElementById("issue-safety-check");
@@ -3280,12 +3957,20 @@
                 : `Stock request #${requestId} was for ${item?.name || 'requested item'}. Selected batch item must match request.`;
               saveBtn.disabled = true;
               saveBtn.dataset.safetyBlocked = "true";
+            } else if (direction === "internal") {
+              card.className = "inventory-safety-card is-critical";
+              status.className = "inventory-status critical";
+              status.innerHTML = '<i class="fa-solid fa-ban"></i> Same facility';
+              title.textContent = "Source and destination are the same place";
+              message.textContent = `${sourceName} cannot transfer stock to itself. Pick a different facility at one end.`;
+              saveBtn.disabled = true;
+              saveBtn.dataset.safetyBlocked = "true";
             } else if (transferBatchExpired && destStockExpired) {
               card.className = "inventory-safety-card is-critical";
               status.className = "inventory-status critical";
               status.innerHTML = '<i class="fa-solid fa-ban"></i> Expiry Warning';
-              title.textContent = "Transfer batch & BHC stock will both be expired upon arrival";
-              message.textContent = `Expected arrival is ${formatShortDate(selectedArrival)}. Transfer batch expires ${formatShortDate(sourceBatch.expiration_date)}, and BHC existing stock (${destinationStock} ${item?.unit_of_measure || 'units'}) expires ${formatShortDate(nearestDestBatch.expiration_date)}. Zero usable stock will remain upon arrival.`;
+              title.textContent = `Transfer batch and ${destName} stock will both be expired upon arrival`;
+              message.textContent = `Expected arrival is ${formatShortDate(selectedArrival)}. Transfer batch expires ${formatShortDate(sourceBatch.expiration_date)}, and existing stock at ${destName} (${destinationStock} ${unitWord}) expires ${formatShortDate(nearestDestBatch.expiration_date)}. Zero usable stock will remain upon arrival.`;
               saveBtn.disabled = true;
               saveBtn.dataset.safetyBlocked = "true";
             } else if (transferBatchExpired) {
@@ -3313,17 +3998,20 @@
               let msgText = `Transfer batch will arrive with ${shelfLifeAtArrival} days of shelf-life remaining. `;
               if (destBatches.length > 0) {
                 if (destUsableStockAtArrival > 0) {
-                  msgText += `Destination BHC will have ${destUsableStockAtArrival} usable ${item?.unit_of_measure || 'units'} (nearest expiry: ${destShelfLifeAtArrival} days left at arrival). `;
+                  msgText += `${destName} will have ${destUsableStockAtArrival} usable ${unitWord} (nearest expiry: ${destShelfLifeAtArrival} days left at arrival). `;
                   if (shelfLifeAtArrival < destShelfLifeAtArrival) {
                     msgText += `FEFO Note: Incoming batch expires sooner (${shelfLifeAtArrival}d vs ${destShelfLifeAtArrival}d) — dispense incoming batch first.`;
                   } else {
-                    msgText += `FEFO Note: Existing BHC stock expires first (${destShelfLifeAtArrival}d vs ${shelfLifeAtArrival}d) — dispense existing stock first.`;
+                    msgText += `FEFO Note: Existing stock at ${destName} expires first (${destShelfLifeAtArrival}d vs ${shelfLifeAtArrival}d) — dispense existing stock first.`;
                   }
                 } else {
-                  msgText += `Destination BHC existing stock will be expired upon receipt — dispose expired stock and start using incoming fresh batch.`;
+                  msgText += `Existing stock at ${destName} will be expired upon receipt — dispose of it and start on the incoming fresh batch.`;
                 }
               } else {
-                msgText += `Destination BHC currently has 0 stock. Destination stock will increase to ${expectedStockAfterReceipt} ${item?.unit_of_measure || 'units'}.`;
+                msgText += `${destName} currently has 0 stock. It will hold ${expectedStockAfterReceipt} ${unitWord} once this is confirmed.`;
+              }
+              if (!sourceIsDepot) {
+                msgText += ` ${sourceName} is left with ${sourceAfter} ${unitWord}.`;
               }
               message.textContent = msgText;
 
@@ -3332,14 +4020,15 @@
             }
 
 
-            // One place instead of nine: every branch above names the receiving
-            // tier, and under the municipal office that tier is an RHU. The card
-            // holds fixed copy and numbers only, never a facility's own name.
-            title.textContent = municipalWording(title.textContent);
-            message.textContent = municipalWording(message.textContent);
+            // The card used to be run through municipalWording on the way out,
+            // because every branch above said "Destination BHC" and the
+            // municipal office needed to read "RHU". Both ends are now named
+            // outright, so that swap is not only unnecessary — it would rewrite
+            // a real facility's name, turning "Sto. Nino BHC" into "Sto. Nino
+            // RHU" on the municipal portal.
             if (metricsEl) {
               metricsEl.style.display = "grid";
-              metricsEl.innerHTML = municipalWording(`
+              metricsEl.innerHTML = `
                 <div class="inventory-safety-metric">
                   <span>Transit Time</span>
                   <strong>${durationLabel(deliveryDays)}</strong>
@@ -3349,32 +4038,55 @@
                   <strong style="color:${shelfLifeAtArrival <= 0 ? '#dc2626' : (shelfLifeAtArrival <= 30 ? '#d97706' : '#059669')}">${shelfLifeAtArrival !== null ? (shelfLifeAtArrival > 0 ? `${shelfLifeAtArrival} days` : 'Expired by arrival') : '—'}</strong>
                 </div>
                 <div class="inventory-safety-metric">
-                  <span>BHC Shelf-Life @ Arrival</span>
+                  <span>Destination Shelf-Life @ Arrival</span>
                   <strong style="color:${destShelfLifeColor}">${destShelfLifeText}</strong>
                 </div>
                 <div class="inventory-safety-metric">
-                  <span>BHC Usable @ Arrival</span>
-                  <strong>${destUsableStockAtArrival} ${item?.unit_of_measure || ''} ${destExpiredQtyByArrival > 0 ? `<small style="color:#dc2626;font-size:9.5px;">(${destExpiredQtyByArrival} exp)</small>` : ''}</strong>
+                  <span>Destination Usable @ Arrival</span>
+                  <strong>${destUsableStockAtArrival} ${esc(item?.unit_of_measure || '')} ${destExpiredQtyByArrival > 0 ? `<small style="color:#dc2626;font-size:9.5px;">(${destExpiredQtyByArrival} exp)</small>` : ''}</strong>
                 </div>
                 <div class="inventory-safety-metric">
                   <span>Expected Usable Total</span>
-                  <strong>${expectedStockAfterReceipt} ${item?.unit_of_measure || ''}</strong>
+                  <strong>${expectedStockAfterReceipt} ${esc(item?.unit_of_measure || '')}</strong>
                 </div>
-              `);
+                <div class="inventory-safety-metric">
+                  <span>${esc(sourceName)} Left With</span>
+                  <strong style="color:${sourceIsDepot ? 'var(--text-primary)' : (sourceAfter === 0 ? '#dc2626' : (sourceAfter <= sourceThreshold ? '#d97706' : '#059669'))}">${sourceAfter} ${esc(item?.unit_of_measure || '')}</strong>
+                </div>
+              `;
             }
           } catch (err) {
             console.error("updateIssueSafetyCheck error:", err);
           }
         }
 
+        /**
+         * When a transfer is currently expected to arrive.
+         *
+         * There are two dates in `remarks` and they are written by different
+         * things. The portal writes "Expected delivery: YYYY-MM-DD" when the
+         * stock is issued; update_inventory_transfer_delivery() writes
+         * "Delivery plan: expected YYYY-MM-DD (N-day estimate)" when an officer
+         * re-plans it, and its regex only strips its OWN previous line — so the
+         * original stays in the text underneath.
+         *
+         * Reading the original first, which is what every call site used to do,
+         * meant a re-planned delivery still showed and was judged against the
+         * date it was originally promised for. The re-plan is the later
+         * statement of intent, so it wins.
+         */
+        function transferExpectedDate(transfer) {
+          const remarks = String(transfer?.remarks || "");
+          if (!remarks) return null;
+          const replanned = remarks.match(/Delivery plan:\s*expected\s*(\d{4}-\d{2}-\d{2})/i);
+          if (replanned) return replanned[1];
+          const original = remarks.match(/Expected delivery:\s*(\d{4}-\d{2}-\d{2})/i);
+          return original ? original[1] : null;
+        }
+
         function buildTransferTiming(transfer, sourceBatch) {
           const expirationDate = sourceBatch?.expiration_date || null;
-          let planExpectedDate = null;
-
-          if (transfer.remarks && transfer.remarks.includes("Expected delivery:")) {
-            const match = transfer.remarks.match(/Expected delivery:\s*([\d]{4}-[\d]{2}-[\d]{2})/);
-            if (match) planExpectedDate = match[1];
-          }
+          const planExpectedDate = transferExpectedDate(transfer);
 
           if (transfer.status === "received" && transfer.issued_at && transfer.received_at) {
             const actualDays = calendarDaysBetween(transfer.issued_at, transfer.received_at);
@@ -3479,14 +4191,36 @@
           const issued = inventoryTransfers.filter(t => batchIds.has(t.source_batch_id) && t.status === "received")
             .reduce((sum, t) => sum + (t.quantity_issued || 0), 0);
 
+          /* Stock spoken for but not yet on a shelf.
+             ───────────────────────────────────────────────────────────────
+             Both halves used to ignore facilityFilter entirely, so every row
+             of a per-facility table showed the same municipality-wide figure —
+             harmless while the number only appeared in one combined view, and
+             plainly wrong now that it sits in a column beside each facility's
+             own on-hand count.
+
+             Scoped by facility, "allocated" means the commitments attached to
+             THIS location: what it has been approved to receive but has not
+             been sent yet, plus what has left its shelf and is still in the
+             air. The combined view keeps its old meaning by matching
+             everything. */
+          // facilityMatches already treats "all"/blank as matching everything,
+          // so the combined view keeps exactly its old totals.
+
           // Reserve the approved amount, not the originally requested one.
-          const allocatedRequests = stockRequests.filter(r => r.item_id === itemId && r.status === "approved")
-            .reduce((sum, r) => sum + (r.approved_quantity ?? r.requested_quantity ?? 0), 0);
+          const allocatedRequests = stockRequests.filter(r =>
+            r.item_id === itemId && r.status === "approved" &&
+            facilityMatches(r.facility_id, facilityFilter)
+          ).reduce((sum, r) => sum + (r.approved_quantity ?? r.requested_quantity ?? 0), 0);
 
           const allocatedTransfers = inventoryTransfers.filter(t => {
             if (t.status !== "pending_receipt") return false;
             const source = batches.find(b => b.batch_id === t.source_batch_id);
-            return source && source.item_id === itemId;
+            if (!source || source.item_id !== itemId) return false;
+            // Counted against the facility it LEFT: those units are already
+            // gone from that shelf's on-hand figure and belong to nobody else
+            // until receipt is confirmed.
+            return facilityMatches(transferSourceFacilityId(t), facilityFilter);
           }).reduce((sum, t) => sum + (t.quantity_issued || 0), 0);
 
           return {
@@ -3583,23 +4317,21 @@
           `;
         }
 
+        // Both of these used to carry a hand-written if-chain naming five of the
+        // seven tables. tableViews already knows how to redraw each one, so the
+        // registry is asked instead — which is why adding the activity log took
+        // no edit here.
         window.changePaginationPage = function(key, page) {
+          if (!paginationState[key]) return;
           paginationState[key].currentPage = page;
-          if (key === 'catalog') renderCatalog();
-          if (key === 'batches') renderBatches();
-          if (key === 'requests') renderStockRequests();
-          if (key === 'transfers') renderInventoryTransfers();
-          if (key === 'tx') renderTransactions();
+          tableViews[key]?.render();
         };
 
         window.changePaginationSize = function(key, size) {
+          if (!paginationState[key]) return;
           paginationState[key].pageSize = parseInt(size);
           paginationState[key].currentPage = 1;
-          if (key === 'catalog') renderCatalog();
-          if (key === 'batches') renderBatches();
-          if (key === 'requests') renderStockRequests();
-          if (key === 'transfers') renderInventoryTransfers();
-          if (key === 'tx') renderTransactions();
+          tableViews[key]?.render();
         };
 
         // Main Data Fetcher
@@ -3653,10 +4385,19 @@
 
             stockRequests = (reqRes.data || []).filter(r => inScope(r.facility_id));
 
-            inventoryTransfers = (transRes.data || []).filter(tr =>
-              inScope(tr.destination_facility_id) ||
-              batchInScope.get(tr.source_batch_id) === true
-            );
+            // A transfer belongs to this office if EITHER end does. The source
+            // used to be reachable only through the batch, which fails the
+            // moment that batch is emptied or archived — and it is exactly the
+            // sending facility whose view of a lateral move was missing. The
+            // column is preferred and the batch is the fallback.
+            inventoryTransfers = (transRes.data || []).filter(tr => {
+              if (inScope(tr.destination_facility_id)) return true;
+              if ("source_facility_id" in tr) {
+                if (tr.source_facility_id === null) return PortalScope.depotFacilityId === null;
+                if (inScope(tr.source_facility_id)) return true;
+              }
+              return batchInScope.get(tr.source_batch_id) === true;
+            });
 
             // Registered patient load per BHC — drives the allocation quota share.
             try {
@@ -3701,9 +4442,14 @@
             renderTransactions();
             renderDisposalTable();
             renderOpenVialsTracker();
+            renderSubviewCounts();
             populateDropdowns();
             setupCatalogSearchDropdown();
             openPendingIssueModal();
+
+            // Only redraw the activity log if somebody has already opened it;
+            // it is a separate query and most visits never look at it.
+            if (inventoryAuditLoaded) loadInventoryAuditLog(true);
 
             if (syncInd) syncInd.innerHTML = '<i class="fa-solid fa-circle-check" style="font-size: 10px; color:#059669;"></i> Live Sync Active';
           } catch (err) {
@@ -3754,7 +4500,11 @@
           document.getElementById("kpi-total-movements").textContent = todayMovements;
 
           // Badges & Alert Banner
-          const pendingCount = stockRequests.filter(r => r.status === "pending").length;
+          // Archived requests are hidden from the table by default, so counting
+          // them here produced a badge and an alert banner that pointed at rows
+          // the officer could not see without changing a filter first.
+          const pendingCount = stockRequests
+            .filter(r => r.status === "pending" && !r.is_archived).length;
           const reqBadge = document.getElementById("requests-pending-badge");
           if (reqBadge) {
             reqBadge.textContent = pendingCount;
@@ -3765,7 +4515,23 @@
           // they are noticed, so they belong in the same count as the stock
           // problems an officer is expected to act on today.
           const staleVialCount = expiredOpenVials(bhcFilter).length;
-          const alertCount = lowCount + expiringCount + pendingCount + staleVialCount;
+
+          // A transfer nobody has confirmed is stock counted at neither end. It
+          // belongs in the same count as everything else somebody has to act on
+          // today — see the transit alerts in filterAlerts() for the same rule.
+          const stuckTransferCount = (inventoryTransfers || []).filter(t => {
+            if (t.status !== "pending_receipt") return false;
+            const source = batches.find(b => b.batch_id === t.source_batch_id);
+            const shelfLeft = source?.expiration_date
+              ? calendarDaysBetween(new Date(), source.expiration_date) : null;
+            if (shelfLeft !== null && shelfLeft <= 0) return true;
+            const planned = transferExpectedDate(t);
+            if (planned) return calendarDaysBetween(planned, new Date()) > 0;
+            const waiting = calendarDaysBetween(t.issued_at, new Date());
+            return waiting !== null && waiting >= 7;
+          }).length;
+
+          const alertCount = lowCount + expiringCount + pendingCount + staleVialCount + stuckTransferCount;
           // Two badges: one on the "More" trigger so an outstanding alert is
           // still visible with the menu shut, one on the item inside it.
           ["alerts-hub-count", "alerts-hub-count-menu"].forEach(id => {
@@ -3783,6 +4549,7 @@
               if (expiringCount > 0) details.push(`${expiringCount} batch(es) expiring soon or expired`);
               if (pendingCount > 0) details.push(`${pendingCount} pending midwife request(s) awaiting approval`);
               if (staleVialCount > 0) details.push(`${staleVialCount} open vial(s) past shelf life`);
+              if (stuckTransferCount > 0) details.push(`${stuckTransferCount} transfer(s) stuck in transit`);
               document.getElementById("alerts-banner-desc").textContent = details.join(" • ");
               banner.style.display = "block";
             } else {
@@ -3959,9 +4726,10 @@
           // rather than letting the officer read it as the RHU's own shelf.
           const subtitle = document.getElementById("matrix-subtitle");
           if (subtitle) {
-            subtitle.textContent = PortalScope.isMho
+            subtitle.textContent = (PortalScope.isMho
               ? "Each Rural Health Unit column totals its own depot plus the barangay health centres reporting to it."
-              : "Real-time inventory stock balance breakdown for every health facility";
+              : "Real-time inventory stock balance breakdown for every health facility") +
+              " Units in transit are shown under the figure: +N arriving, −N already dispatched and not yet confirmed.";
           }
 
           // Build Headers
@@ -3994,7 +4762,7 @@
                   <div style="font-size:10.5px;color:var(--brand-text);font-style:italic;">${esc(item.generic_name || '')}</div>
                   <div style="font-size:10px;color:var(--text-secondary);"><span class="type-pill" style="font-size:9px;padding:0 4px;">${esc(item.item_type.replace('_',' '))}</span></div>
                 </td>
-                <td style="text-align:right;font-weight:700;color:var(--brand-primary);">${centralMetrics.available} ${esc(item.unit_of_measure)}</td>
+                <td style="text-align:right;font-weight:700;color:var(--brand-primary);">${centralMetrics.available} ${esc(item.unit_of_measure)}${transitFlagsHtml(item.item_id, "central")}</td>
             `;
 
             let totalCombined = centralMetrics.available;
@@ -4003,7 +4771,10 @@
               const bhcMetrics = getItemStockMetrics(item.item_id, b.bhc_id);
               totalCombined += bhcMetrics.available;
               const isLow = bhcMetrics.available <= 10;
-              rowHtml += `<td style="text-align:right;font-weight:600;color:${isLow ? '#dc2626' : 'var(--text-primary)'};">${bhcMetrics.available}</td>`;
+              // The on-hand figure alone hides a dispatch that has already left
+              // this shelf, which is precisely what makes a facility's number
+              // drop with no visible explanation.
+              rowHtml += `<td style="text-align:right;font-weight:600;color:${isLow ? '#dc2626' : 'var(--text-primary)'};">${bhcMetrics.available}${transitFlagsHtml(item.item_id, b.bhc_id)}</td>`;
             });
 
             rowHtml += `<td style="text-align:right;font-weight:700;font-size:13.5px;background:#fff5f8;color:var(--brand-text);">${totalCombined}</td></tr>`;
@@ -4022,10 +4793,10 @@
           return Math.round((exp - today) / 86400000);
         }
 
+        // One naming rule for every shelf on this page, so a batch, a ledger row
+        // and a transfer leg all call the same place the same thing.
         function batchLocationName(b) {
-          if (!b.facility_id) return PortalScope.depotName;
-          const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-          return bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
+          return transferEndpointName(b.facility_id);
         }
 
         function renderBatches() {
@@ -4088,13 +4859,11 @@
             const item = items.find(i => i.item_id === b.item_id);
             const countdownBadge = getExpiryCountdownBadge(b.expiration_date, b.status);
 
-            let locName = PortalScope.depotName;
-            let locFilter = "central";
-            if (b.facility_id) {
-              const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-              locName = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
-              locFilter = String(b.facility_id);
-            }
+            // One rule for naming a shelf, five call sites — this used to be
+            // five copies, each of which called the municipal warehouse by
+            // whatever the reading portal's own depot happened to be named.
+            const locName = batchLocationName(b);
+            const locFilter = isOwnDepot(b.facility_id) ? "central" : String(b.facility_id);
 
             const nearestUsable = getNearestUsableBatch(b.item_id, locFilter);
             const isFefoFirst = nearestUsable && b.batch_id === nearestUsable.batch_id;
@@ -4258,7 +5027,10 @@
                 <td style="text-align:right;font-weight:700;color:var(--brand-primary);">${suggestiveQuota === null ? "—" : suggestiveQuota.toLocaleString() + " units"}</td>
                 <td style="text-align:center;"><span class="badge-health-muted">${totalLoad > 0 ? (loadShare * 100).toFixed(1) + "% Share" : "—"}</span></td>
                 <td style="text-align:center;">
-                  <button class="btn btn-sm btn-primary" onclick="openGeneralIssueModal(); document.getElementById('issue-target-bhc').value='${bhc.bhc_id}';"><i class="fa-solid fa-truck-ramp-box"></i> Allocate Stock</button>
+                  <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
+                    <button class="btn btn-sm btn-primary" onclick="openGeneralIssueModal('${bhc.bhc_id}')" title="Send stock down to this facility"><i class="fa-solid fa-truck-ramp-box"></i> Allocate Stock</button>
+                    <button class="btn btn-sm btn-secondary" onclick="openGeneralIssueModal(null, '${bhc.bhc_id}')" title="Move stock out of this facility — to a neighbour, or back up to this office"><i class="fa-solid fa-arrow-right-from-bracket"></i> Move Out</button>
+                  </div>
                 </td>
               </tr>
             `).join('');
@@ -4404,12 +5176,13 @@
 
           const q = ctlVal("transfers-search").trim().toLowerCase();
           const statusFilter = ctlVal("transfers-filter-status");
+          const directionFilter = ctlVal("transfers-filter-direction");
+          const facilityFilter = ctlVal("transfers-filter-facility");
+          const legFilter = ctlVal("transfers-filter-leg");
           const win = dateWindow("transfers");
 
-          const destName = t => {
-            const bhc = bhcs.find(b => String(b.bhc_id) === String(t.destination_facility_id));
-            return bhc?.bhc_name || unknownFacilityLabel(t.destination_facility_id);
-          };
+          const destName = t => transferEndpointName(t.destination_facility_id);
+          const srcName = t => transferEndpointName(transferSourceFacilityId(t));
           const transferItem = t => {
             const source = batches.find(b => b.batch_id === t.source_batch_id);
             return source ? items.find(i => i.item_id === source.item_id) : null;
@@ -4417,13 +5190,36 @@
 
           const filtered = inventoryTransfers.filter(t => {
             if (statusFilter && t.status !== statusFilter) return false;
+            if (directionFilter && transferDirectionOf(t) !== directionFilter) return false;
             if (!inDateWindow(t.issued_at, win)) return false;
+
+            // The facility filter matches EITHER end, because a transfer belongs
+            // to both. Narrowing it to one leg is what the arriving/leaving
+            // control is for.
+            if (facilityFilter) {
+              const wanted = placeKey(facilityFilter);
+              const atSource = placeKey(transferSourceFacilityId(t)) === wanted;
+              const atDest = placeKey(t.destination_facility_id) === wanted;
+              if (legFilter === "in" && !atDest) return false;
+              if (legFilter === "out" && !atSource) return false;
+              if (!legFilter && !atSource && !atDest) return false;
+            } else if (legFilter) {
+              // "Arriving" / "Leaving" with no facility chosen has no anchor to
+              // be relative to. Rather than silently doing nothing — which is
+              // what it did, and which reads as a broken control — take it to
+              // mean this office's own depot, the one end always present.
+              if (legFilter === "in" && !isOwnDepot(t.destination_facility_id)) return false;
+              if (legFilter === "out" && !isOwnDepot(transferSourceFacilityId(t))) return false;
+            }
+
             if (q) {
               const source = batches.find(b => b.batch_id === t.source_batch_id);
               const item = transferItem(t);
               const hay = [
-                `#${t.transfer_id}`, t.transfer_id, destName(t), source?.batch_number,
-                item?.name, item?.generic_name, t.remarks, t.status
+                `#${t.transfer_id}`, t.transfer_id, srcName(t), destName(t),
+                source?.batch_number, item?.name, item?.generic_name,
+                t.remarks, t.cancel_reason, t.status,
+                DIRECTION_META[transferDirectionOf(t)]?.label
               ].filter(Boolean).join(" ").toLowerCase();
               if (!hay.includes(q)) return false;
             }
@@ -4432,7 +5228,7 @@
 
           const sorted = sortRows("transfers", filtered, {
             issued: t => t.issued_at || "",
-            destination: t => destName(t),
+            route: t => `${srcName(t)} ${destName(t)}`,
             item: t => transferItem(t)?.name || "",
             quantity: t => t.quantity_issued ?? 0,
             status: t => TRANSFER_STATUS_RANK[t.status] ?? 9
@@ -4442,8 +5238,8 @@
 
           if (sorted.length === 0) {
             tbody.innerHTML = emptyStateRow("transfers", 6, "fa-truck-ramp-box",
-              "No stock has been issued yet",
-              "Dispatches appear here the moment you issue stock to a health centre.");
+              "No stock has moved between facilities yet",
+              "Every dispatch appears here the moment it is issued — down to a health centre, across to a neighbour, or back up to this office.");
             renderPaginationControls("transfers-pagination", 0, "transfers");
             return;
           }
@@ -4455,7 +5251,8 @@
           tbody.innerHTML = paginatedTransfers.map(transfer => {
             const source = batches.find(b => b.batch_id === transfer.source_batch_id);
             const item = source ? items.find(i => i.item_id === source.item_id) : null;
-            const bhc = bhcs.find(b => String(b.bhc_id) === String(transfer.destination_facility_id));
+            const sourceFacilityId = transferSourceFacilityId(transfer);
+            const direction = transferDirectionOf(transfer);
             const issued = transfer.issued_at ? new Date(transfer.issued_at).toLocaleString("en-PH") : "—";
             const received = transfer.received_at ? new Date(transfer.received_at).toLocaleString("en-PH") : null;
             const timingBadge = buildTransferTiming(transfer, source);
@@ -4466,27 +5263,44 @@
                 ? '<span class="badge-health-danger"><i class="fa-solid fa-ban"></i> Cancelled</span>'
                 : '<span class="badge-health-warning"><i class="fa-solid fa-clock"></i> Pending Receipt</span>';
 
-            // A transfer whose destination is this office's own depot is an
-            // allocation coming *down* to us — from the municipal warehouse to an
-            // RHU. That one we confirm receipt of; the rest we issued ourselves
-            // and may still cancel.
-            const isIncoming = PortalScope.isDepot(transfer.destination_facility_id);
+            // Which end of this movement is us decides what we may do about it.
+            // A transfer landing in this office's own depot is ours to confirm;
+            // one leaving a facility we administer is ours to call back. A
+            // lateral move between two health centres below us is neither — we
+            // watch it, and we may still call it off, because the stock is
+            // ultimately this office's responsibility.
+            const isIncoming = isOwnDepot(transfer.destination_facility_id);
+            const weSentIt = PortalScope.inScope(sourceFacilityId) ||
+                             isOwnDepot(sourceFacilityId);
 
-            let actionBtn = "—";
+            const actions = [];
             if (transfer.status === "pending_receipt") {
-              actionBtn = isIncoming
-                ? `<button class="btn btn-sm btn-primary" onclick="receiveTransfer(${transfer.transfer_id})"><i class="fa-solid fa-inbox"></i> Confirm Receipt</button>`
-                : `<button class="btn btn-sm btn-secondary" onclick="cancelTransfer(${transfer.transfer_id})" style="color:#dc2626;border-color:#fca5a5;"><i class="fa-solid fa-ban"></i> Cancel Transfer</button>`;
+              if (isIncoming) {
+                actions.push(`<button class="btn btn-sm btn-primary" onclick="receiveTransfer(${transfer.transfer_id})"><i class="fa-solid fa-inbox"></i> Confirm Receipt</button>`);
+              }
+              if (weSentIt) {
+                actions.push(`<button class="btn btn-sm btn-secondary" onclick="cancelTransfer(${transfer.transfer_id})" style="color:#dc2626;border-color:#fca5a5;"><i class="fa-solid fa-ban"></i> Cancel &amp; Return</button>`);
+              }
+              if (actions.length === 0) {
+                actions.push(`<span style="font-size:10.5px;color:var(--text-secondary);"><i class="fa-solid fa-hourglass-half"></i> Awaiting ${esc(destName(transfer))}</span>`);
+              }
             }
 
-            const destinationLabel = isIncoming
-              ? `${esc(PortalScope.depotName)} <span class="badge-health-info" style="margin-left:6px;"><i class="fa-solid fa-arrow-down"></i> Incoming</span>`
-              : esc(bhc?.bhc_name || PortalScope.facilityLabel(transfer.destination_facility_id, bhcs));
+            // Whichever end is a facility this office does not run gets a small
+            // "who has to act" line, so a pending row never leaves the reader
+            // wondering whose move it is.
+            const waitingOn = transfer.status === "pending_receipt"
+              ? `<div style="font-size:10.5px;color:var(--text-secondary);margin-top:3px;"><i class="fa-solid fa-user-clock"></i> ${esc(destName(transfer))} confirms receipt</div>`
+              : "";
 
             return `
               <tr>
                 <td><strong>#${transfer.transfer_id}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:3px;">${issued}</div></td>
-                <td>${destinationLabel}</td>
+                <td>
+                  ${routeHtml(sourceFacilityId, transfer.destination_facility_id)}
+                  <div style="margin-top:4px;">${directionChip(direction)}${isIncoming ? ' <span class="badge-health-info" style="margin-left:4px;"><i class="fa-solid fa-arrow-down"></i> For you</span>' : ''}</div>
+                  ${waitingOn}
+                </td>
                 <td class="col-item-details">
                   <div style="display:flex;align-items:center;gap:4px;">
                     <strong style="color:var(--text-primary);cursor:pointer;" onclick="openItemDetails(${item?.item_id || 0})">${esc(item ? item.name : 'Inventory item')}</strong>
@@ -4497,7 +5311,11 @@
                 </td>
                 <td style="text-align:right;font-weight:700;">${transfer.quantity_issued}</td>
                 <td style="text-align:center;">${status}<div style="margin-top:4px;">${timingBadge}</div></td>
-                <td><div>${esc(transfer.remarks || '—')}</div>${actionBtn !== '—' ? `<div style="margin-top:6px;">${actionBtn}</div>` : ''}</td>
+                <td>
+                  <div>${esc(transfer.remarks || '—')}</div>
+                  ${transfer.cancel_reason ? `<div style="font-size:10.5px;color:#b91c1c;margin-top:3px;"><i class="fa-solid fa-circle-info"></i> Cancelled: ${esc(transfer.cancel_reason)}</div>` : ''}
+                  ${actions.length ? `<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">${actions.join("")}</div>` : ''}
+                </td>
               </tr>`;
           }).join("");
 
@@ -4516,14 +5334,25 @@
           const win = dateWindow("tx");
           const bhcFilter = document.getElementById("global-bhc-filter")?.value || "all";
 
-          const txLocation = t => {
-            if (!t.facility_id) return PortalScope.depotName;
-            const bh = bhcs.find(x => String(x.bhc_id) === String(t.facility_id));
-            return bh ? bh.bhc_name : unknownFacilityLabel(t.facility_id);
-          };
+          // Ledger rows written before inventory_transactions gained facility_id
+          // carry NULL, which now reads as the municipal warehouse. loadInventoryData
+          // already scopes those rows by their BATCH rather than by that NULL, so
+          // the label follows the same rule — otherwise an old BHC dispense would
+          // be listed at the warehouse it never went near.
+          const txLocation = t => transferEndpointName(
+            t.facility_id ?? batches.find(b => b.batch_id === t.batch_id)?.facility_id ?? null);
           const txItem = t => {
             const batch = batches.find(b => b.batch_id === t.batch_id);
             return batch ? items.find(i => i.item_id === batch.item_id) : null;
+          };
+
+          // The transfer a ledger row belongs to, when it belongs to one. This
+          // is what turns "Transfer −20 at Sto. Nino BHC" into "Sto. Nino BHC →
+          // Tibag BHC", the single most-asked question of this table.
+          const txTransfer = t => {
+            if (t.transaction_type !== "transfer" || !t.reference_id) return null;
+            return (inventoryTransfers || []).find(
+              tr => String(tr.transfer_id) === String(t.reference_id)) || null;
           };
 
           const inScope = transactions.filter(t => facilityMatches(t.facility_id, bhcFilter));
@@ -4537,7 +5366,11 @@
             const batch = batches.find(b => b.batch_id === t.batch_id);
             const item = txItem(t);
             const user = accountMap[t.performed_by] || "";
-            const searchStr = `${batch?.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""} ${user} ${t.reference_type || ""} ${t.activity_reason || ""} ${t.activity_notes || ""}`.toLowerCase();
+            const transfer = txTransfer(t);
+            const route = transfer
+              ? `${transferEndpointName(transferSourceFacilityId(transfer))} ${transferEndpointName(transfer.destination_facility_id)}`
+              : "";
+            const searchStr = `${batch?.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""} ${user} ${t.reference_type || ""} ${t.activity_reason || ""} ${t.activity_notes || ""} ${t.notes || ""} ${route}`.toLowerCase();
             if (q && !searchStr.includes(q)) return false;
             return true;
           });
@@ -4548,6 +5381,7 @@
             type: t => t.transaction_type || "",
             item: t => txItem(t)?.name || "",
             qty: t => t.quantity ?? 0,
+            balance: t => (t.resulting_quantity_remaining ?? null),
             user: t => accountMap[t.performed_by] || ""
           });
           syncSortIndicators("tx");
@@ -4557,7 +5391,7 @@
           if (!tbody) return;
 
           if (sorted.length === 0) {
-            tbody.innerHTML = emptyStateRow("tx", 7, "fa-clock-rotate-left",
+            tbody.innerHTML = emptyStateRow("tx", 8, "fa-clock-rotate-left",
               "No stock has moved here yet",
               "Receipts, dispenses, transfers and disposals are recorded here automatically.");
             renderPaginationControls("tx-pagination", 0, "tx");
@@ -4581,28 +5415,49 @@
             const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
             const dateStr = t.logged_at ? new Date(t.logged_at).toLocaleString("en-PH") : "—";
             const qtyStr = t.quantity > 0 ? `+${t.quantity}` : `${t.quantity}`;
+            const transfer = txTransfer(t);
             const isBhcUnusableRecord = t.transaction_type === "expiry_disposal" &&
               !!t.client_operation_key &&
               String(t.reference_type || "").startsWith("BHC unusable report");
-            const movementBadge = isBhcUnusableRecord
-              ? `<span class="badge-health-danger"><i class="fa-solid fa-triangle-exclamation"></i> BHC Unusable</span>`
-              : (typeBadges[t.transaction_type] || t.transaction_type);
-            const activityDetails = isBhcUnusableRecord
-              ? `<div>${esc(t.reference_type || "BHC unusable stock")}</div>
-                 <div style="font-size:10.5px;color:var(--text-primary);margin-top:3px;"><strong>Reason:</strong> ${esc(String(t.activity_reason || "not recorded").replaceAll("_", " "))}</div>
-                 ${t.activity_notes ? `<div style="font-size:10.5px;margin-top:2px;"><strong>Midwife note:</strong> ${esc(t.activity_notes)}</div>` : ""}`
-              : `${esc(t.reference_type || "")} ${esc(t.reference_id ? '#' + t.reference_id : '')}`;
 
-            let locName = PortalScope.depotName;
-            if (t.facility_id) {
-              const bh = bhcs.find(x => String(x.bhc_id) === String(t.facility_id));
-              locName = bh ? bh.bhc_name : unknownFacilityLabel(t.facility_id);
+            let movementBadge = isBhcUnusableRecord
+              ? `<span class="badge-health-danger"><i class="fa-solid fa-triangle-exclamation"></i> Reported Unusable</span>`
+              : (typeBadges[t.transaction_type] || t.transaction_type);
+            if (transfer) {
+              movementBadge += `<div style="margin-top:3px;">${directionChip(transferDirectionOf(transfer))}</div>`;
+              movementBadge += `<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">${t.quantity < 0 ? "Left this shelf" : "Landed here"}</div>`;
             }
+
+            // Doses, not just units: a vial that leaves the shelf is one unit
+            // and ten doses, and an officer reconciling a clinic day needs the
+            // second number as much as the first.
+            const doseNote = (t.dose_quantity != null && Number(t.dose_quantity) !== Number(t.quantity))
+              ? `<div style="font-size:10px;color:var(--text-secondary);">${Number(t.dose_quantity) > 0 ? "+" : ""}${t.dose_quantity} dose(s)</div>`
+              : "";
+
+            const balanceCell = t.resulting_quantity_remaining != null
+              ? `<strong>${t.resulting_quantity_remaining}</strong>`
+              : `<span style="color:var(--text-secondary);">—</span>`;
+
+            const notes = [t.notes, t.activity_notes].filter(Boolean);
+            const activityDetails = isBhcUnusableRecord
+              ? `<div>${esc(t.reference_type || "Stock reported unusable")}</div>
+                 <div style="font-size:10.5px;color:var(--text-primary);margin-top:3px;"><strong>Reason:</strong> ${esc(String(t.activity_reason || "not recorded").replaceAll("_", " "))}</div>
+                 ${notes.length ? `<div style="font-size:10.5px;margin-top:2px;"><strong>Note:</strong> ${esc(notes.join(" · "))}</div>` : ""}`
+              : `<div>${esc(t.reference_type || "—")}${t.reference_id ? ` <span style="font-family:monospace;">#${esc(String(t.reference_id))}</span>` : ""}</div>
+                 ${t.activity_reason ? `<div style="font-size:10.5px;margin-top:2px;"><strong>Reason:</strong> ${esc(String(t.activity_reason).replaceAll("_", " "))}</div>` : ""}
+                 ${notes.length ? `<div style="font-size:10.5px;margin-top:2px;">${esc(notes.join(" · "))}</div>` : ""}`;
+
+            const locName = txLocation(t);
+            const routeCell = transfer
+              ? `<div style="font-size:12.5px;font-weight:600;color:var(--text-primary);">${esc(locName)}</div>
+                 <div style="margin-top:3px;">${routeHtml(transferSourceFacilityId(transfer), transfer.destination_facility_id)}</div>`
+              : `<div style="font-size:12.5px;font-weight:600;color:var(--text-primary);">${esc(locName)}</div>`;
 
             return `
               <tr>
                 <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap;">${dateStr}</td>
-                <td style="font-size:12.5px;font-weight:600;color:var(--text-primary);">${esc(locName)}</td>
+                <td>${routeCell}</td>
                 <td>${movementBadge}</td>
                 <td class="col-item-details">
                   <div style="display:flex;align-items:center;gap:4px;">
@@ -4610,17 +5465,53 @@
                     <button class="btn-xs" onclick="openItemDetails(${item?.item_id || 0})" title="View Details" style="padding:1px 4px;font-size:10px;border:none;background:rgba(255,104,165,0.12);color:var(--brand-primary);border-radius:4px;cursor:pointer;"><i class="fa-solid fa-eye"></i></button>
                   </div>
                   <div style="font-size:10.5px;color:var(--brand-text);font-style:italic;">${esc(item?.generic_name || item?.name || "—")}</div>
-                  <div style="font-size:10px;color:var(--text-secondary);font-family:monospace;">Batch: ${esc(batch?.batch_number || "Batch")}</div>
+                  <div style="font-size:10px;color:var(--text-secondary);font-family:monospace;">Batch: ${esc(batch?.batch_number || "Batch")}${batch?.expiration_date ? ` · exp ${esc(batch.expiration_date)}` : ""}</div>
                 </td>
-                <td style="text-align:right;font-weight:700;color:${t.quantity < 0 ? '#dc2626' : '#059669'};">${qtyStr}</td>
+                <td style="text-align:right;font-weight:700;color:${t.quantity < 0 ? '#dc2626' : '#059669'};">${qtyStr}${doseNote}</td>
+                <td style="text-align:right;">${balanceCell}</td>
                 <td>${esc(accountMap[t.performed_by] || "System / Admin")}</td>
-                <td style="font-size:12px;color:var(--text-secondary);">${activityDetails}</td>
+                <td style="font-size:12px;color:var(--text-secondary);">
+                  ${activityDetails}
+                  <div style="margin-top:5px;">
+                    <button class="btn-xs" onclick="openMovementNarrative(${Number(t.transaction_id)})"
+                            title="Read the full written account of this movement"
+                            style="padding:1px 6px;font-size:10px;border:none;background:rgba(255,104,165,0.12);color:var(--brand-primary);border-radius:4px;cursor:pointer;">
+                      <i class="fa-solid fa-book-open"></i> Why
+                    </button>
+                  </div>
+                </td>
               </tr>
             `;
           }).join('');
 
           renderPaginationControls("tx-pagination", sorted.length, "tx");
         }
+
+        /**
+         * The written account behind one ledger row.
+         *
+         * The ledger says a quantity changed. The audit trigger on
+         * inventory_transactions wrote a paragraph at the same moment saying
+         * what it was for, which end of a transfer it is, and what the batch
+         * held afterwards. Those two records have always described the same
+         * event from different tables; this is the link between them.
+         */
+        window.openMovementNarrative = async function(transactionId) {
+          await loadInventoryAuditLog();
+
+          const row = inventoryAuditRows.find(r =>
+            r.table_name === "inventory_transactions" &&
+            String(r.row_id) === String(transactionId));
+
+          if (!row) {
+            showToast(inventoryAuditError
+              ? inventoryAuditError
+              : "No written account was recorded for this movement. Movements from before the audit migration only have the ledger line.",
+              "warning");
+            return;
+          }
+          window.openInventoryAuditDetail(row.audit_id);
+        };
 
         // Export Transactions CSV
         window.exportTransactionsCSV = function() {
@@ -4647,28 +5538,42 @@
             return true;
           });
 
-          const headers = ["Timestamp", "Facility / Location", "Movement Type", "Item Name", "Generic Name", "Batch Number", "Quantity", "Performed By", "Reference / Notes"];
+          // The export carries what the table now shows: both ends of a
+          // transfer, the direction, the dose figure and the resulting balance.
+          // A CSV that omits them is not the ledger anybody was reading.
+          const headers = [
+            "Timestamp", "Facility / Location", "Movement Type", "Direction",
+            "Moved From", "Moved To", "Item Name", "Generic Name", "Batch Number",
+            "Batch Expiry", "Quantity", "Doses", "Balance After", "Performed By",
+            "Reference", "Reason", "Notes"
+          ];
           const rows = filtered.map(t => {
             const batch = batches.find(b => b.batch_id === t.batch_id);
             const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
-            let locName = PortalScope.depotName;
-            if (t.facility_id) {
-              const bh = bhcs.find(x => String(x.bhc_id) === String(t.facility_id));
-              locName = bh ? bh.bhc_name : unknownFacilityLabel(t.facility_id);
-            }
+            const locName = transferEndpointName(t.facility_id);
+            const transfer = (t.transaction_type === "transfer" && t.reference_id)
+              ? (inventoryTransfers || []).find(tr => String(tr.transfer_id) === String(t.reference_id))
+              : null;
             const dateStr = t.logged_at ? new Date(t.logged_at).toLocaleString("en-PH") : "";
-            const refNote = `${t.reference_type || ""} ${t.activity_reason ? '(' + t.activity_reason + ')' : ''} ${t.activity_notes || ""}`.trim();
             const formatCell = (val) => '"' + String(val ?? "").replace(/"/g, '""') + '"';
             return [
               formatCell(dateStr),
               formatCell(locName),
               formatCell(t.transaction_type),
+              formatCell(transfer ? (DIRECTION_META[transferDirectionOf(transfer)]?.label || "") : ""),
+              formatCell(transfer ? transferEndpointName(transferSourceFacilityId(transfer)) : ""),
+              formatCell(transfer ? transferEndpointName(transfer.destination_facility_id) : ""),
               formatCell(item?.name || "Item"),
               formatCell(item?.generic_name || ""),
               formatCell(batch?.batch_number || ""),
+              formatCell(batch?.expiration_date || ""),
               formatCell(t.quantity),
+              formatCell(t.dose_quantity ?? ""),
+              formatCell(t.resulting_quantity_remaining ?? ""),
               formatCell(accountMap[t.performed_by] || "System / Admin"),
-              formatCell(refNote)
+              formatCell(`${t.reference_type || ""}${t.reference_id ? ` #${t.reference_id}` : ""}`.trim()),
+              formatCell(t.activity_reason || ""),
+              formatCell([t.notes, t.activity_notes].filter(Boolean).join(" · "))
             ];
           });
 
@@ -4676,6 +5581,356 @@
           const link = document.createElement("a");
           link.setAttribute("href", encodeURI(csvContent));
           link.setAttribute("download", `stock_movement_ledger_${localDateKey()}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        };
+
+        /* ═══════════════════════════════════════════════════════════════════
+           INVENTORY ACTIVITY LOG
+
+           The movement ledger above records QUANTITIES. This records DECISIONS:
+           the request approved for less than was asked, the dispatch called
+           back and why, the half-used vial discarded, the batch adjusted by
+           hand. Those rows have existed since 20260826 — written by triggers,
+           complete with a narrative and a structured breakdown — but only on
+           the general Activity Log page, behind a module filter, on the other
+           side of the sidebar from the officer who needs them.
+
+           Read straight from audit_trail_detailed, narrowed to module
+           'Inventory' and to the facilities this office is responsible for. A
+           database without that view falls back to the base audit_trail table,
+           and one without either simply says so rather than showing an empty
+           table that looks like "nothing ever happened".
+           ═══════════════════════════════════════════════════════════════════ */
+        let inventoryAuditRows = [];
+        let inventoryAuditLoaded = false;
+        let inventoryAuditError = null;
+        let inventoryAuditLoading = false;
+
+        const AUDIT_SEVERITY_RANK = { critical: 0, warning: 1, notice: 2, info: 3 };
+        const AUDIT_SEVERITY_BADGE = {
+          critical: `<span class="badge-health-danger"><i class="fa-solid fa-circle-exclamation"></i> Critical</span>`,
+          warning:  `<span class="badge-health-warning"><i class="fa-solid fa-triangle-exclamation"></i> Warning</span>`,
+          notice:   `<span class="badge-health-info"><i class="fa-solid fa-circle-info"></i> Notice</span>`,
+          info:     `<span class="badge-health-muted"><i class="fa-solid fa-circle-dot"></i> Info</span>`
+        };
+
+        function auditSeverityOf(row) {
+          const s = String(row?.severity || "").toLowerCase();
+          return AUDIT_SEVERITY_RANK[s] !== undefined ? s : "info";
+        }
+
+        /**
+         * audit_trail.action_timestamp is TIMESTAMP WITHOUT TIME ZONE holding
+         * UTC — the convention 20260826 spells out and the general Activity Log
+         * already reads it with. Left as-is, `new Date(...)` would read it as
+         * Manila local and shift every row eight hours, which is enough to put
+         * an evening action into the wrong day for a "Today" filter.
+         */
+        function auditDate(value) {
+          if (!value) return null;
+          const text = String(value);
+          const d = new Date(/Z|[+-]\d{2}:?\d{2}$/.test(text) ? text : text + "Z");
+          return isNaN(d.getTime()) ? null : d;
+        }
+
+        // "issue_inventory_transfer" -> "Issue Inventory Transfer".
+        function auditActionLabel(action) {
+          if (!action) return "Activity";
+          return String(action)
+            .replace(/_/g, " ")
+            .replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        /**
+         * Does this audit row concern a facility this office is responsible for?
+         *
+         * related_ids is where the triggers put every identifier the event
+         * touched, so it is the only reliable place to ask. A row that names no
+         * facility at all — a catalogue item edit, say — is municipality-wide
+         * and belongs to everyone.
+         */
+        function auditRowInScope(row) {
+          const related = row.related_ids;
+          if (!related || typeof related !== "object") return true;
+
+          const facilityKeys = ["facility_id", "source_facility_id",
+                                "destination_facility_id", "actor_facility_id"];
+          const named = facilityKeys
+            .map(k => related[k])
+            .filter(v => v !== null && v !== undefined && v !== "");
+
+          if (named.length === 0) return true;
+          return named.some(id => PortalScope.inScope(id) || isOwnDepot(id));
+        }
+
+        async function loadInventoryAuditLog(force = false) {
+          if (inventoryAuditLoading) return;
+          if (inventoryAuditLoaded && !force) return;
+          inventoryAuditLoading = true;
+          inventoryAuditError = null;
+
+          const tbody = document.getElementById("invaudit-tbody");
+          if (tbody && !inventoryAuditLoaded) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px"></div>Loading inventory activity…</td></tr>`;
+          }
+
+          const columns = "audit_id, action_timestamp, action, table_name, row_id, description, " +
+                          "narrative, details, related_ids, entity_label, module, severity, source, " +
+                          "actor_name, actor_role, actor_facility_name";
+
+          try {
+            let { data, error } = await db
+              .from("audit_trail_detailed")
+              .select(columns)
+              .eq("module", "Inventory")
+              .order("audit_id", { ascending: false })
+              .limit(1000);
+
+            // Pre-20260826 database: no view, no module column. Fall back to the
+            // base table and pick out inventory rows by the table they touched.
+            if (error) {
+              const legacy = await db
+                .from("audit_trail")
+                .select("audit_id, action_timestamp, action, table_name, row_id, description, account_id, old_data, new_data")
+                .like("table_name", "inventory%")
+                .order("audit_id", { ascending: false })
+                .limit(1000);
+              if (legacy.error) throw legacy.error;
+              data = (legacy.data || []).map(r => ({
+                ...r,
+                module: "Inventory",
+                severity: "info",
+                narrative: null,
+                details: null,
+                related_ids: null,
+                entity_label: null,
+                actor_name: accountMap[r.account_id] || "System",
+                actor_role: null,
+                actor_facility_name: null,
+                _legacy: true
+              }));
+            }
+
+            inventoryAuditRows = (data || []).filter(auditRowInScope);
+            inventoryAuditLoaded = true;
+            populateInventoryAuditFilters();
+          } catch (err) {
+            console.warn("Inventory activity log unavailable:", err);
+            inventoryAuditError = isMissingSchemaError(err)
+              ? "The activity log needs database/migrations/20260826_audit_trail_completeness.sql. Run it in Supabase to see inventory decisions here."
+              : (err.message || "The inventory activity log could not be loaded.");
+            inventoryAuditRows = [];
+            inventoryAuditLoaded = true;
+          } finally {
+            inventoryAuditLoading = false;
+            renderInventoryAuditLog();
+          }
+        }
+        window.loadInventoryAuditLog = loadInventoryAuditLog;
+
+        function populateInventoryAuditFilters() {
+          const actionSel = document.getElementById("invaudit-filter-action");
+          if (actionSel) {
+            const prev = actionSel.value;
+            const actions = [...new Set(inventoryAuditRows.map(r => r.action).filter(Boolean))].sort();
+            actionSel.innerHTML = `<option value="">All Inventory Events</option>` +
+              actions.map(a => `<option value="${esc(a)}">${esc(auditActionLabel(a))}</option>`).join("");
+            if (prev && actions.includes(prev)) actionSel.value = prev;
+          }
+
+          const actorSel = document.getElementById("invaudit-filter-actor");
+          if (actorSel) {
+            const prev = actorSel.value;
+            const actors = [...new Set(inventoryAuditRows.map(r => r.actor_name).filter(Boolean))].sort();
+            actorSel.innerHTML = `<option value="">Anyone</option>` +
+              actors.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+            if (prev && actors.includes(prev)) actorSel.value = prev;
+          }
+        }
+
+        // Everything a reader might type: the prose, the structured rows, the
+        // ids. A narrative nobody can search is a narrative nobody reads.
+        function auditHaystack(row) {
+          const parts = [
+            row.description, row.narrative, row.entity_label, row.action,
+            auditActionLabel(row.action), row.actor_name, row.actor_role,
+            row.actor_facility_name, row.severity
+          ];
+          const sections = row.details && row.details.sections;
+          if (Array.isArray(sections)) {
+            sections.forEach(section => {
+              parts.push(section.title);
+              (section.rows || []).forEach(kv => { parts.push(kv.label); parts.push(kv.value); });
+            });
+          }
+          if (row.related_ids && typeof row.related_ids === "object") {
+            Object.entries(row.related_ids).forEach(([k, v]) => { parts.push(k); parts.push(v); });
+          }
+          return parts.filter(Boolean).join(" ").toLowerCase();
+        }
+
+        function filteredInventoryAuditRows() {
+          const q = ctlVal("invaudit-search").trim().toLowerCase();
+          const action = ctlVal("invaudit-filter-action");
+          const severity = ctlVal("invaudit-filter-severity");
+          const actor = ctlVal("invaudit-filter-actor");
+          const win = dateWindow("invaudit");
+
+          return inventoryAuditRows.filter(row => {
+            if (action && row.action !== action) return false;
+            if (severity && auditSeverityOf(row) !== severity) return false;
+            if (actor && row.actor_name !== actor) return false;
+            if (!inDateWindow(auditDate(row.action_timestamp), win)) return false;
+            if (q && !auditHaystack(row).includes(q)) return false;
+            return true;
+          });
+        }
+
+        function renderInventoryAuditLog() {
+          const tbody = document.getElementById("invaudit-tbody");
+          if (!tbody) return;
+
+          if (inventoryAuditError) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-secondary);">
+              <i class="fa-solid fa-database" style="font-size:22px;display:block;margin-bottom:10px;color:#cbd5e1;"></i>
+              ${esc(inventoryAuditError)}</td></tr>`;
+            renderTableMeta("invaudit", 0, 0);
+            renderPaginationControls("invaudit-pagination", 0, "invaudit");
+            return;
+          }
+
+          const filtered = filteredInventoryAuditRows();
+          const sorted = sortRows("invaudit", filtered, {
+            date: r => (auditDate(r.action_timestamp)?.getTime() ?? 0),
+            severity: r => AUDIT_SEVERITY_RANK[auditSeverityOf(r)] ?? 9,
+            action: r => auditActionLabel(r.action),
+            entity: r => r.entity_label || "",
+            actor: r => r.actor_name || ""
+          });
+          syncSortIndicators("invaudit");
+          renderTableMeta("invaudit", sorted.length, inventoryAuditRows.length);
+
+          if (sorted.length === 0) {
+            tbody.innerHTML = emptyStateRow("invaudit", 7, "fa-file-signature",
+              "No inventory activity recorded yet",
+              "Requests, approvals, dispatches, receipts, cancellations and disposals are written here automatically as they happen.");
+            renderPaginationControls("invaudit-pagination", 0, "invaudit");
+            return;
+          }
+
+          const state = paginationState.invaudit;
+          const startIdx = (state.currentPage - 1) * state.pageSize;
+          const page = sorted.slice(startIdx, startIdx + state.pageSize);
+
+          tbody.innerHTML = page.map(row => {
+            const sev = auditSeverityOf(row);
+            const when = auditDate(row.action_timestamp)?.toLocaleString("en-PH") ?? "—";
+            const summary = row.description || row.narrative || auditActionLabel(row.action);
+            return `
+              <tr>
+                <td style="text-align:center;">
+                  <button class="btn-xs" title="Read the full account"
+                          onclick="openInventoryAuditDetail(${Number(row.audit_id)})"
+                          style="padding:2px 5px;font-size:10px;border:none;background:rgba(255,104,165,0.12);color:var(--brand-primary);border-radius:4px;cursor:pointer;">
+                    <i class="fa-solid fa-book-open"></i>
+                  </button>
+                </td>
+                <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap;">${esc(when)}</td>
+                <td style="text-align:center;">${AUDIT_SEVERITY_BADGE[sev]}</td>
+                <td style="font-size:12px;font-weight:600;color:var(--text-primary);">${esc(auditActionLabel(row.action))}</td>
+                <td style="font-size:11.5px;max-width:230px;">${row.entity_label ? esc(row.entity_label) : '<span style="color:var(--text-secondary);">—</span>'}</td>
+                <td style="font-size:11.5px;">
+                  <div style="font-weight:600;">${esc(row.actor_name || "System")}</div>
+                  ${row.actor_facility_name ? `<div style="font-size:10px;color:var(--text-secondary);">${esc(row.actor_facility_name)}</div>` : ""}
+                </td>
+                <td style="font-size:11.5px;color:var(--text-secondary);">${esc(String(summary).slice(0, 220))}${String(summary).length > 220 ? "…" : ""}</td>
+              </tr>`;
+          }).join("");
+
+          renderPaginationControls("invaudit-pagination", sorted.length, "invaudit");
+        }
+
+        /** Full written account of one event, rendered into the shared drawer. */
+        window.openInventoryAuditDetail = function(auditId) {
+          const row = inventoryAuditRows.find(r => Number(r.audit_id) === Number(auditId));
+          if (!row) return;
+
+          const sev = auditSeverityOf(row);
+          const when = auditDate(row.action_timestamp)?.toLocaleString("en-PH") ?? "—";
+
+          const sections = (row.details && Array.isArray(row.details.sections)) ? row.details.sections : [];
+          const sectionsHtml = sections.map(section => `
+            <h4 style="font-size:13px;margin:16px 0 8px;color:var(--text-primary);">${esc(section.title || "Details")}</h4>
+            <div class="table-wrap">
+              <table class="data-table">
+                <tbody>
+                  ${(section.rows || []).map(kv => `
+                    <tr>
+                      <td style="width:38%;font-weight:600;color:var(--text-secondary);">${esc(kv.label)}</td>
+                      <td>${esc(kv.value)}</td>
+                    </tr>`).join("")}
+                </tbody>
+              </table>
+            </div>`).join("");
+
+          const related = (row.related_ids && typeof row.related_ids === "object")
+            ? Object.entries(row.related_ids).filter(([, v]) => v !== null && v !== undefined && v !== "")
+            : [];
+          const relatedHtml = related.length === 0 ? "" : `
+            <h4 style="font-size:13px;margin:16px 0 8px;color:var(--text-primary);">Traces Back To</h4>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              ${related.map(([k, v]) => `<span class="select-chip chip-batch" style="font-size:10.5px;">${esc(k.replace(/_/g, " "))}: ${esc(String(v))}</span>`).join("")}
+            </div>`;
+
+          document.getElementById("invaudit-detail-title").innerHTML =
+            `<i class="fa-solid fa-file-signature" style="color:var(--brand-primary);margin-right:8px;"></i> ${esc(auditActionLabel(row.action))}`;
+          document.getElementById("invaudit-detail-subtitle").textContent =
+            `${row.entity_label || "Inventory event"} · Record #${row.audit_id} · ${when}`;
+
+          document.getElementById("invaudit-detail-body").innerHTML = `
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
+              ${AUDIT_SEVERITY_BADGE[sev]}
+              <span class="select-chip chip-location" style="font-size:10.5px;"><i class="fa-solid fa-user"></i> ${esc(row.actor_name || "System")}${row.actor_role ? ` (${esc(row.actor_role)})` : ""}</span>
+              ${row.actor_facility_name ? `<span class="select-chip chip-location" style="font-size:10.5px;"><i class="fa-solid fa-hospital"></i> ${esc(row.actor_facility_name)}</span>` : ""}
+              ${row.source ? `<span class="select-chip chip-qty" style="font-size:10.5px;"><i class="fa-solid fa-plug"></i> ${esc(String(row.source).replace(/_/g, " "))}</span>` : ""}
+            </div>
+            <div style="background:var(--bg-secondary);border-left:4px solid var(--brand-primary);border-radius:8px;padding:14px 16px;font-size:12.5px;line-height:1.6;white-space:pre-wrap;">
+              ${esc(row.narrative || row.description || "No written account was recorded for this event.")}
+            </div>
+            ${sectionsHtml}
+            ${relatedHtml}
+          `;
+          openModal("modal-invaudit-detail");
+        };
+
+        window.exportInventoryAuditCSV = function() {
+          const rows = filteredInventoryAuditRows();
+          if (rows.length === 0) {
+            showToast("Nothing to export with the current filters.", "warning");
+            return;
+          }
+          const headers = ["Record", "Timestamp", "Severity", "Event", "Entity",
+                           "Performed By", "Role", "Facility", "Summary", "Full Account"];
+          const cell = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+          const body = rows.map(r => [
+            cell(r.audit_id),
+            cell(auditDate(r.action_timestamp)?.toLocaleString("en-PH") ?? ""),
+            cell(auditSeverityOf(r)),
+            cell(auditActionLabel(r.action)),
+            cell(r.entity_label || ""),
+            cell(r.actor_name || "System"),
+            cell(r.actor_role || ""),
+            cell(r.actor_facility_name || ""),
+            cell(r.description || ""),
+            cell((r.narrative || "").replace(/\s+/g, " "))
+          ]);
+          const csv = "data:text/csv;charset=utf-8," +
+            [headers.join(","), ...body.map(r => r.join(","))].join("\n");
+          const link = document.createElement("a");
+          link.setAttribute("href", encodeURI(csv));
+          link.setAttribute("download", `inventory_activity_log_${localDateKey()}.csv`);
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -4732,11 +5987,7 @@
               !!t.client_operation_key &&
               String(t.reference_type || "").startsWith("BHC unusable report")
             );
-            let locName = PortalScope.depotName;
-            if (b.facility_id) {
-              const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-              locName = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
-            }
+            const locName = batchLocationName(b);
 
             let statusBadge = `<span class="badge-health-danger"><i class="fa-solid fa-ban"></i> Expired</span>`;
             if (b.status === 'discarded') {
@@ -4773,7 +6024,7 @@
 
         window.openBhcUnusableRecord = function(batchId) {
           const batch = batches.find(row => row.batch_id === Number(batchId));
-          switchTab('transactions');
+          switchTab('transactions', 'ledger');
           const search = document.getElementById("tx-search");
           const type = document.getElementById("tx-filter-type");
           if (search) search.value = batch?.batch_number || "";
@@ -4790,11 +6041,7 @@
           const expiredBatches = batches.filter(b => b.status === 'discarded' || b.status === 'expired' || isBatchExpired(b));
           const rows = expiredBatches.map(b => {
             const item = items.find(i => i.item_id === b.item_id);
-            let locName = PortalScope.depotName;
-            if (b.facility_id) {
-              const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-              locName = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
-            }
+            const locName = batchLocationName(b);
             return [
               b.batch_number,
               item ? item.name : "Unknown Item",
@@ -5619,15 +6866,22 @@
           }
         };
 
-        // Cancel Transfer
-        // Confirming an allocation sent down to this office's own depot. Until
-        // the MHO tier existed only a midwife could do this, because a BHC was
-        // the only possible destination; receive_inventory_transfer now accepts
-        // a portal account whose assigned facility is the destination.
+        // Confirming stock that has arrived at this office's own depot —
+        // an allocation coming down from the municipal warehouse, or stock a
+        // health centre below has sent back up because it could not keep it.
+        // receive_inventory_transfer accepts either a midwife at the destination
+        // or a portal account whose assigned facility it is.
         window.receiveTransfer = async function(transferId) {
           const transfer = inventoryTransfers.find(t => String(t.transfer_id) === String(transferId));
           if (!transfer) return;
-          if (!confirm(`Confirm receipt of transfer #${transferId} (${transfer.quantity_issued} units) into ${PortalScope.depotName}?`)) return;
+
+          const from = transferEndpointName(transferSourceFacilityId(transfer));
+          const direction = transferDirectionOf(transfer);
+          const preamble = direction === "return"
+            ? `${from} is returning stock to you.`
+            : `${from} sent this to you.`;
+
+          if (!confirm(`${preamble}\n\nConfirm receipt of transfer #${transferId} — ${transfer.quantity_issued} unit(s) — into ${PortalScope.depotName}?\n\nThis puts the stock on your shelf and is what makes it usable.`)) return;
 
           try {
             const { error } = await db.rpc("receive_inventory_transfer", {
@@ -5636,7 +6890,7 @@
             });
             if (error) throw error;
 
-            showToast(`Transfer #${transferId} received into ${PortalScope.depotName}.`, "success");
+            showToast(`Transfer #${transferId} from ${from} received into ${PortalScope.depotName}.`, "success");
             loadInventoryData();
           } catch (err) {
             const msg = isMissingSchemaError(err)
@@ -5646,97 +6900,315 @@
           }
         };
 
+        /**
+         * Call a dispatch back before anybody has confirmed it.
+         *
+         * Prefers cancel_inventory_transfer(), which does the whole thing in one
+         * transaction: flip the status, put the units back on the source batch,
+         * post the reversing ledger row, and tell both facilities. The two-step
+         * path below it is the pre-20260829 behaviour, kept because the portal
+         * and the migrations deploy separately — but it is genuinely worse, and
+         * the difference is why the RPC exists: a failure between its two writes
+         * destroys the stock, and it never wrote a ledger row at all, so the
+         * movement history showed the units leaving and never coming back.
+         */
         window.cancelTransfer = async function(transferId) {
-          if (!confirm(`Cancel pending transfer #${transferId}? ${PortalScope.depotName} stock will be restored.`)) return;
+          const transfer = inventoryTransfers.find(t => String(t.transfer_id) === String(transferId));
+          if (!transfer) {
+            showToast("Transfer record not found.", "error");
+            return;
+          }
+
+          const from = transferEndpointName(transferSourceFacilityId(transfer));
+          const to = transferEndpointName(transfer.destination_facility_id);
+
+          const reason = prompt(
+            `Cancel transfer #${transferId}?\n\n${transfer.quantity_issued} unit(s) on their way from ${from} to ${to} will go back onto the shelf at ${from}, and both facilities are notified.\n\nWhy is it being cancelled?`,
+            ""
+          );
+          // prompt() returns null on Cancel and "" when the officer clears the
+          // box and presses OK. Only the first of those means "don't do it".
+          if (reason === null) return;
+          const cancelReason = reason.trim();
 
           try {
-            const transfer = inventoryTransfers.find(t => t.transfer_id === transferId);
-            if (!transfer) throw new Error("Transfer record not found.");
+            const parsedActorId = parseInt(actorId) || actorId;
 
-            // Only cancel a transfer that is still pending. Guarding on status here
-            // stops two admins from both cancelling and restoring the stock twice.
-            //
-            // cancelled_by / cancelled_at carry the actor into the row, because the
-            // audit trigger fires on this update and a bare status change tells it
-            // nothing about who called the dispatch off.
-            const cancelPatch = {
-              status: "cancelled",
-              cancelled_by: actorId,
-              cancelled_at: new Date().toISOString()
-            };
+            const rpc = await db.rpc("cancel_inventory_transfer", {
+              p_transfer_id: transferId,
+              p_cancelled_by: parsedActorId,
+              p_reason: cancelReason || null
+            });
 
-            let { data: cancelled, error: tErr } = await db.from("inventory_transfers")
-              .update(cancelPatch)
-              .eq("transfer_id", transferId)
-              .eq("status", "pending_receipt")
-              .select();
-
-            if (tErr && isMissingSchemaError(tErr)) {
-              ({ data: cancelled, error: tErr } = await db.from("inventory_transfers")
-                .update({ status: "cancelled" })
-                .eq("transfer_id", transferId)
-                .eq("status", "pending_receipt")
-                .select());
-            }
-
-            if (tErr) throw tErr;
-            if (!cancelled || cancelled.length === 0) {
-              showToast("This transfer is no longer pending — it may have already been received or cancelled.", "warning");
+            if (!rpc.error) {
+              showToast(`Transfer #${transferId} cancelled; ${transfer.quantity_issued} unit(s) are back at ${from}.`, "success");
               await loadInventoryData();
               return;
             }
 
-            // Re-read the batch immediately before restoring, so the restore is based
-            // on the current quantity rather than a possibly stale cached value.
-            const { data: freshBatch, error: bErr } = await db.from("inventory_batches")
-              .select("quantity_remaining")
-              .eq("batch_id", transfer.source_batch_id)
-              .single();
-            if (bErr) throw new Error(`Transfer cancelled but the source batch could not be read: ${bErr.message}`);
+            // Anything other than "that function does not exist here" is a real
+            // refusal from the database and must not be worked around.
+            if (rpc.error.code !== "PGRST202" && !isMissingSchemaError(rpc.error)) {
+              throw rpc.error;
+            }
 
-            const restored = (freshBatch.quantity_remaining || 0) + transfer.quantity_issued;
-            const { error: rErr } = await db.from("inventory_batches")
-              .update({ quantity_remaining: restored })
-              .eq("batch_id", transfer.source_batch_id);
-            if (rErr) throw new Error(`Transfer cancelled but stock was not restored: ${rErr.message}`);
-
-            await logInventoryAudit("cancel_inventory_transfer", `Cancelled transfer #${transferId}; restored ${transfer.quantity_issued} unit(s)`, { status: "pending_receipt" }, { status: "cancelled", restored_quantity: transfer.quantity_issued }, "inventory_transfers");
-
-            showToast(`Transfer #${transferId} cancelled and stock restored.`, "success");
-            await loadInventoryData();
+            await cancelTransferWithoutRpc(transfer, cancelReason);
           } catch (err) {
-            showToast("Failed to cancel transfer: " + err.message, "error");
+            showToast("Failed to cancel transfer: " + (err.message || err), "error");
             await loadInventoryData();
           }
         };
 
-        // Helper to ensure the downstream-facility dropdowns have options loaded
-        function ensureBhcDropdownPopulated() {
-          const issueDropdown = document.getElementById("issue-target-bhc");
-          if (issueDropdown && (issueDropdown.options.length <= 1 || issueDropdown.querySelectorAll("option").length <= 1)) {
-            issueDropdown.innerHTML = `<option value="">— Select Target ${childTerm()} —</option>`;
-            (bhcs || []).forEach(b => {
-              const opt = document.createElement("option");
-              opt.value = b.bhc_id;
-              opt.textContent = b.bhc_name;
-              issueDropdown.appendChild(opt);
+        // Pre-20260829 fallback. Two writes, no ledger reversal; see above.
+        async function cancelTransferWithoutRpc(transfer, cancelReason) {
+          const transferId = transfer.transfer_id;
+
+          // Only cancel a transfer that is still pending. Guarding on status here
+          // stops two admins from both cancelling and restoring the stock twice.
+          //
+          // cancelled_by / cancelled_at carry the actor into the row, because the
+          // audit trigger fires on this update and a bare status change tells it
+          // nothing about who called the dispatch off.
+          const cancelPatch = {
+            status: "cancelled",
+            cancelled_by: actorId,
+            cancelled_at: new Date().toISOString()
+          };
+          if (cancelReason) cancelPatch.cancel_reason = cancelReason;
+
+          let { data: cancelled, error: tErr } = await db.from("inventory_transfers")
+            .update(cancelPatch)
+            .eq("transfer_id", transferId)
+            .eq("status", "pending_receipt")
+            .select();
+
+          if (tErr && isMissingSchemaError(tErr)) {
+            ({ data: cancelled, error: tErr } = await db.from("inventory_transfers")
+              .update({ status: "cancelled" })
+              .eq("transfer_id", transferId)
+              .eq("status", "pending_receipt")
+              .select());
+          }
+
+          if (tErr) throw tErr;
+          if (!cancelled || cancelled.length === 0) {
+            showToast("This transfer is no longer pending — it may have already been received or cancelled.", "warning");
+            await loadInventoryData();
+            return;
+          }
+
+          // Re-read the batch immediately before restoring, so the restore is based
+          // on the current quantity rather than a possibly stale cached value.
+          const { data: freshBatch, error: bErr } = await db.from("inventory_batches")
+            .select("quantity_remaining")
+            .eq("batch_id", transfer.source_batch_id)
+            .single();
+          if (bErr) throw new Error(`Transfer cancelled but the source batch could not be read: ${bErr.message}`);
+
+          const restored = (freshBatch.quantity_remaining || 0) + transfer.quantity_issued;
+          const { error: rErr } = await db.from("inventory_batches")
+            .update({ quantity_remaining: restored })
+            .eq("batch_id", transfer.source_batch_id);
+          if (rErr) throw new Error(`Transfer cancelled but stock was not restored: ${rErr.message}`);
+
+          await logInventoryAudit("cancel_inventory_transfer",
+            `Cancelled transfer #${transferId}; restored ${transfer.quantity_issued} unit(s)${cancelReason ? ` — ${cancelReason}` : ""}`,
+            { status: "pending_receipt" },
+            { status: "cancelled", restored_quantity: transfer.quantity_issued, cancel_reason: cancelReason || null },
+            "inventory_transfers");
+
+          showToast(`Transfer #${transferId} cancelled and stock restored.`, "success");
+          await loadInventoryData();
+        }
+
+        /* ── Transfer endpoints ──────────────────────────────────────────────
+           Both ends of a transfer are drawn from the same list, because both
+           ends are the same kind of thing: a place this office is responsible
+           for. What differs is only that the office ABOVE this one can receive
+           stock but never sends it from here — an RHU officer can push stock up
+           to the municipal warehouse, but the municipal warehouse's own shelves
+           are not theirs to empty.
+
+           This is also where "BHC 1 to BHC 1" stops being selectable: the list
+           is filtered against whatever the other end currently holds, so the
+           same place can never appear on both sides at once.
+           ──────────────────────────────────────────────────────────────────── */
+
+        // { value, label, group } — `value` is what the <select> carries;
+        // "central" keeps its historic meaning of "this portal's own depot".
+        function transferEndpoints(role) {
+          const list = [
+            { value: "central", label: PortalScope.depotName, group: "This office" }
+          ];
+
+          (bhcs || []).forEach(b => {
+            list.push({
+              value: String(b.bhc_id),
+              label: b.bhc_name,
+              group: PortalScope.childTypeLabelPlural
+            });
+          });
+
+          // Upward. Only a destination: this portal cannot reach into the
+          // municipal warehouse's batches, and offering it as a source would
+          // produce a picker with nothing behind it.
+          if (role === "destination" && PortalScope.hasParent) {
+            list.push({
+              value: String(PortalScope.parentFacilityId),
+              label: PortalScope.parentFacilityName || "Municipal Health Office",
+              group: "Return upward"
             });
           }
 
-          const sourceFacilitySel = document.getElementById("issue-source-facility");
-          if (sourceFacilitySel && (sourceFacilitySel.options.length <= 1 || sourceFacilitySel.querySelectorAll("option").length <= 1)) {
-            sourceFacilitySel.innerHTML = `<option value="central" selected>${esc(PortalScope.depotName)}</option>`;
-            (bhcs || []).forEach(b => {
-              const opt = document.createElement("option");
-              opt.value = b.bhc_id;
-              opt.textContent = `${childTerm()}: ${b.bhc_name}`;
-              sourceFacilitySel.appendChild(opt);
-            });
+          return list;
+        }
+
+        /** The facility_id a dropdown value stands for. "central" is this
+         *  portal's own depot, which for the municipal office is its own
+         *  facility row — the warehouse the receive path maps back to NULL. */
+        function resolveEndpointFacilityId(value) {
+          if (value === "" || value === null || value === undefined) return null;
+          if (value === "central") {
+            return PortalScope.depotFacilityId ?? PortalScope.facilityId ?? null;
+          }
+          const parsed = parseInt(value, 10);
+          return Number.isFinite(parsed) ? parsed : null;
+        }
+
+        function fillEndpointSelect(select, role, excludeValue, placeholder) {
+          if (!select) return;
+          const previous = select.value;
+          const groups = new Map();
+          transferEndpoints(role).forEach(opt => {
+            // The other end of this same transfer. Removing it outright rather
+            // than disabling it is deliberate: a disabled option a user can see
+            // but not choose invites the "why not?" the old bug already raised.
+            if (excludeValue && samePlace(resolveEndpointFacilityId(opt.value),
+                                          resolveEndpointFacilityId(excludeValue))) return;
+            if (!groups.has(opt.group)) groups.set(opt.group, []);
+            groups.get(opt.group).push(opt);
+          });
+
+          let html = placeholder ? `<option value="">${esc(placeholder)}</option>` : "";
+          groups.forEach((opts, group) => {
+            html += `<optgroup label="${esc(group)}">`;
+            opts.forEach(o => { html += `<option value="${esc(o.value)}">${esc(o.label)}</option>`; });
+            html += `</optgroup>`;
+          });
+          select.innerHTML = html;
+
+          // Keep the operator's choice when it survived the filter.
+          if (previous && select.querySelector(`option[value="${CSS.escape(previous)}"]`)) {
+            select.value = previous;
+          } else if (!placeholder) {
+            select.value = "central";
           }
         }
 
+        // Rebuild both ends against each other. Called on boot and on every
+        // change of either side.
+        function ensureBhcDropdownPopulated() {
+          const sourceSel = document.getElementById("issue-source-facility");
+          const destSel = document.getElementById("issue-target-bhc");
+          if (!sourceSel || !destSel) return;
+
+          fillEndpointSelect(sourceSel, "source", destSel.value, null);
+          fillEndpointSelect(destSel, "destination", sourceSel.value, "— Select destination —");
+        }
+
+        /**
+         * React to either end changing: re-filter the other side, re-scope the
+         * batch picker, name the direction, and ask for a reason when the move
+         * is not a routine allocation.
+         */
+        window.onTransferEndpointChanged = function(which) {
+          const sourceSel = document.getElementById("issue-source-facility");
+          const destSel = document.getElementById("issue-target-bhc");
+          if (!sourceSel || !destSel) return;
+
+          // Re-filter only the side the operator did not just touch, so their
+          // selection is never yanked out from under them.
+          if (which === "source") {
+            fillEndpointSelect(destSel, "destination", sourceSel.value, "— Select destination —");
+            populateIssueBatchDropdown();
+          } else {
+            if (!destSel.disabled) fillEndpointSelect(sourceSel, "source", destSel.value, null);
+            applySuggestedDeliveryEstimate(true);
+          }
+
+          updateTransferDirectionBanner();
+          updateIssueSafetyCheck();
+        };
+
+        /** Direction of the transfer currently described by the modal. */
+        function currentTransferDirection() {
+          const sourceVal = document.getElementById("issue-source-facility")?.value || "central";
+          const destVal = document.getElementById("issue-target-bhc")?.value || "";
+          if (!destVal) return null;
+          return transferDirection(resolveEndpointFacilityId(sourceVal),
+                                   resolveEndpointFacilityId(destVal));
+        }
+
+        /** True when the move needs an operational reason on the record.
+         *  A routine allocation does not; anything sideways or upward does,
+         *  because those only happen for a reason worth writing down. */
+        function transferNeedsReason(direction) {
+          return direction === "lateral" || direction === "return" || direction === "external";
+        }
+
+        function updateTransferDirectionBanner() {
+          const banner = document.getElementById("issue-direction-banner");
+          const reasonGroup = document.getElementById("issue-reason-group");
+          if (!banner) return;
+
+          const direction = currentTransferDirection();
+          if (!direction) {
+            banner.style.display = "none";
+            if (reasonGroup) reasonGroup.style.display = "none";
+            return;
+          }
+
+          const sourceVal = document.getElementById("issue-source-facility").value;
+          const destVal = document.getElementById("issue-target-bhc").value;
+          const from = transferEndpointName(resolveEndpointFacilityId(sourceVal));
+          const to = transferEndpointName(resolveEndpointFacilityId(destVal));
+
+          banner.style.display = "block";
+          banner.className = `transfer-direction-banner dir-${direction === "external" ? "lateral" : direction}`;
+
+          if (direction === "internal") {
+            banner.className = "transfer-direction-banner dir-invalid";
+            banner.innerHTML =
+              `<strong><i class="fa-solid fa-circle-exclamation"></i> ${esc(from)} cannot transfer to itself</strong>
+               Pick a different facility at one end. Stock only moves when it changes hands.`;
+            if (reasonGroup) reasonGroup.style.display = "none";
+            return;
+          }
+
+          const meta = DIRECTION_META[direction];
+          const extra = direction === "return"
+            ? ` ${esc(from)} will lose these units immediately; they come back into use once ${esc(to)} confirms receipt.`
+            : direction === "lateral"
+              ? ` ${esc(PortalScope.facilityName || "The supervising office")} is notified of the move; no approval is required.`
+              : "";
+
+          banner.innerHTML =
+            `<strong>${directionChip(direction)} ${esc(from)} → ${esc(to)}</strong>
+             ${esc(meta.blurb)}${extra}`;
+
+          if (reasonGroup) {
+            reasonGroup.style.display = transferNeedsReason(direction) ? "block" : "none";
+          }
+        }
+        window.updateTransferDirectionBanner = updateTransferDirectionBanner;
+
         // Open General Issue Modal (No specific request)
-        window.openGeneralIssueModal = function(targetBhcId = null) {
+        //
+        // `sourceFacilityId` lets a caller open the dialog already pointed at
+        // the shelf being emptied — which is what a "Move this stock out" action
+        // on a facility's own row needs, and what makes a lateral or upward move
+        // one click rather than four.
+        window.openGeneralIssueModal = function(targetBhcId = null, sourceFacilityId = null) {
           openModal("modal-issue");
           try {
             const form = document.getElementById("form-issue");
@@ -5747,21 +7219,40 @@
             if (ctx) ctx.style.display = "none";
             const alertEl = document.getElementById("issue-form-alert");
             if (alertEl) alertEl.style.display = "none";
+            const reasonSel = document.getElementById("issue-move-reason");
+            if (reasonSel) reasonSel.value = "";
 
-            ensureBhcDropdownPopulated();
             const sourceSel = document.getElementById("issue-source-facility");
-            if (sourceSel) {
-              sourceSel.value = "central";
-              sourceSel.disabled = false;
-            }
             const bhcSel = document.getElementById("issue-target-bhc");
+            if (sourceSel) sourceSel.disabled = false;
             if (bhcSel) {
               bhcSel.disabled = false;
               bhcSel.style.background = "";
-              if (targetBhcId) bhcSel.value = targetBhcId;
             }
+
+            // Fill both ends unfiltered first, then set the requested values,
+            // then re-filter — otherwise a preselected destination can be
+            // filtered out of the list before it is ever applied.
+            fillEndpointSelect(sourceSel, "source", null, null);
+            fillEndpointSelect(bhcSel, "destination", null, "— Select destination —");
+            if (sourceSel) {
+              sourceSel.value = sourceFacilityId != null ? String(sourceFacilityId) : "central";
+              if (!sourceSel.value) sourceSel.value = "central";
+            }
+            if (bhcSel && targetBhcId != null) bhcSel.value = String(targetBhcId);
+
+            // A caller that names the same place at both ends gets the
+            // destination cleared rather than an impossible pre-filled form.
+            if (bhcSel && sourceSel && bhcSel.value &&
+                samePlace(resolveEndpointFacilityId(sourceSel.value),
+                          resolveEndpointFacilityId(bhcSel.value))) {
+              bhcSel.value = "";
+            }
+            ensureBhcDropdownPopulated();
+
             populateIssueBatchDropdown(null);
             applySuggestedDeliveryEstimate(true);
+            updateTransferDirectionBanner();
             resetIssueSafetyCheck();
           } catch (err) {
             console.error("Error setting up general issue modal:", err);
@@ -5785,13 +7276,24 @@
             const reqId = document.getElementById("issue-request-id");
             if (reqId) reqId.value = requestId;
 
-            ensureBhcDropdownPopulated();
+            // A request names its own destination, so this end is fixed. The
+            // source stays the depot: a request is answered out of this office's
+            // stock, not by asking a neighbouring facility to give some up.
+            const sourceSel = document.getElementById("issue-source-facility");
             const bhcSel = document.getElementById("issue-target-bhc");
+            fillEndpointSelect(sourceSel, "source", null, null);
+            fillEndpointSelect(bhcSel, "destination", null, "— Select destination —");
+            if (sourceSel) {
+              sourceSel.value = "central";
+              sourceSel.disabled = false;
+            }
             if (bhcSel) {
               bhcSel.value = request.facility_id;
               bhcSel.disabled = true;
               bhcSel.style.background = "#f8fafc";
             }
+            const reasonSel = document.getElementById("issue-move-reason");
+            if (reasonSel) reasonSel.value = "";
 
             // Filter issue batch dropdown strictly to ONLY batches matching the requested item
             populateIssueBatchDropdown(request.item_id);
@@ -5838,6 +7340,7 @@
             if (alertEl) alertEl.style.display = "none";
 
             applySuggestedDeliveryEstimate(true);
+            updateTransferDirectionBanner();
             updateIssueSafetyCheck();
           } catch (err) {
             console.error("Error setting up issue request modal:", err);
@@ -5856,38 +7359,47 @@
           const itemMetrics = getItemStockMetrics(itemId, "all");
           const itemBatches = batches.filter(b => b.item_id === itemId);
 
-          const facilityRows = bhcs.map(bhc => {
-            const fMetrics = getItemStockMetrics(itemId, bhc.bhc_id);
+          // Per-facility rows now carry both transit legs and a way to act on
+          // them, because "why did this centre's count drop?" is answered by
+          // the outbound column and nothing else on the page.
+          const facilityStockRow = (label, facilityKey, actionsHtml, rowStyle = "") => {
+            const m = getItemStockMetrics(itemId, facilityKey);
+            const incoming = calculateInTransitPerItem(itemId, facilityKey);
+            const outgoing = calculateOutboundInTransitPerItem(itemId, facilityKey);
             return `
-              <tr>
-                <td><strong>${esc(bhc.bhc_name)}</strong></td>
-                <td style="text-align:right;">+${fMetrics.added}</td>
-                <td style="text-align:right;">${fMetrics.issued}</td>
-                <td style="text-align:right;color:#d97706;">${fMetrics.allocated}</td>
-                <td style="text-align:right;font-weight:700;color:var(--brand-primary);">${fMetrics.available}</td>
+              <tr${rowStyle ? ` style="${rowStyle}"` : ""}>
+                <td><strong>${esc(label)}</strong></td>
+                <td style="text-align:right;">+${m.added}</td>
+                <td style="text-align:right;">${m.issued}</td>
+                <td style="text-align:right;color:#d97706;">${m.allocated}</td>
+                <td style="text-align:right;color:${incoming ? '#15803d' : 'var(--text-secondary)'};">${incoming ? `+${incoming}` : '—'}</td>
+                <td style="text-align:right;color:${outgoing ? '#be123c' : 'var(--text-secondary)'};">${outgoing ? `−${outgoing}` : '—'}</td>
+                <td style="text-align:right;font-weight:700;color:var(--brand-primary);">${m.available}</td>
+                <td style="text-align:center;">${actionsHtml}</td>
               </tr>
             `;
-          });
+          };
+
+          const facilityRows = bhcs.map(bhc =>
+            facilityStockRow(bhc.bhc_name, bhc.bhc_id, `
+              <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">
+                <button class="btn-xs" style="padding:2px 6px;font-size:10px;border:1px solid var(--border-primary);background:#fff;border-radius:5px;cursor:pointer;" onclick="closeModal('modal-item-details'); openGeneralIssueModal('${bhc.bhc_id}')" title="Send stock to this facility"><i class="fa-solid fa-arrow-down"></i> Send to</button>
+                <button class="btn-xs" style="padding:2px 6px;font-size:10px;border:1px solid var(--border-primary);background:#fff;border-radius:5px;cursor:pointer;" onclick="closeModal('modal-item-details'); openGeneralIssueModal(null, '${bhc.bhc_id}')" title="Move stock out of this facility"><i class="fa-solid fa-arrow-up-right-from-square"></i> Move out</button>
+              </div>`)
+          );
 
           const centralMetrics = getItemStockMetrics(itemId, "central");
-          const centralRow = `
-            <tr style="background:rgba(255,104,165,0.05);">
-              <td><strong>${PortalScope.depotName}</strong></td>
-              <td style="text-align:right;">+${centralMetrics.added}</td>
-              <td style="text-align:right;">${centralMetrics.issued}</td>
-              <td style="text-align:right;color:#d97706;">${centralMetrics.allocated}</td>
-              <td style="text-align:right;font-weight:700;color:var(--brand-primary);">${centralMetrics.available}</td>
-            </tr>
-          `;
+          const centralRow = facilityStockRow(
+            PortalScope.depotName,
+            "central",
+            `<button class="btn-xs" style="padding:2px 6px;font-size:10px;border:1px solid var(--border-primary);background:#fff;border-radius:5px;cursor:pointer;" onclick="closeModal('modal-item-details'); openGeneralIssueModal()" title="Issue from this depot"><i class="fa-solid fa-truck-ramp-box"></i> Issue</button>`,
+            "background:rgba(255,104,165,0.05);"
+          );
 
           const batchRows = itemBatches.length === 0
             ? '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:20px;">No batches recorded for this item yet.</td></tr>'
             : itemBatches.map(b => {
-                let loc = PortalScope.depotName;
-                if (b.facility_id) {
-                  const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-                  loc = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
-                }
+                const loc = batchLocationName(b);
                 const expired = isBatchExpired(b);
                 const badge = expired || b.status === 'expired'
                   ? '<span class="badge-health-danger">Expired</span>'
@@ -5928,6 +7440,7 @@
             </div>
 
             <h4 style="font-size:14px; margin:0 0 10px; color:var(--text-primary);"><i class="fa-solid fa-hospital" style="color:var(--brand-primary);"></i> Stock Breakdown per Health Facility</h4>
+            <p style="margin:0 0 8px;font-size:11.5px;color:var(--text-secondary);">In-transit units are counted at neither end: they have left the sending shelf and have not yet been confirmed on the receiving one.</p>
             <div class="table-wrap" style="margin-bottom:24px;">
               <table class="data-table">
                 <thead>
@@ -5936,7 +7449,10 @@
                     <th style="text-align:right;">Received</th>
                     <th style="text-align:right;">Issued</th>
                     <th style="text-align:right;">Allocated</th>
+                    <th style="text-align:right;" title="Dispatched to this facility, not yet confirmed">In Transit ▸ In</th>
+                    <th style="text-align:right;" title="Dispatched from this facility, not yet confirmed elsewhere">In Transit ▸ Out</th>
                     <th style="text-align:right;">Available</th>
+                    <th style="text-align:center;">Move Stock</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -6165,7 +7681,7 @@
         };
 
         window.filterAlerts = function(type) {
-          ["all", "low", "expiry", "vials", "requests"].forEach(t => {
+          ["all", "low", "expiry", "vials", "requests", "transit"].forEach(t => {
             const btn = document.getElementById(`alert-tab-${t}`);
             if (btn) btn.classList.toggle("active", t === type);
           });
@@ -6218,7 +7734,8 @@
             };
           });
 
-          const requestAlerts = stockRequests.filter(r => r.status === "pending").map(r => {
+          const requestAlerts = stockRequests
+            .filter(r => r.status === "pending" && !r.is_archived).map(r => {
             const item = items.find(i => i.item_id === r.item_id);
             const bhc = bhcs.find(b => String(b.bhc_id) === String(r.facility_id));
             return {
@@ -6250,12 +7767,68 @@
             };
           });
 
+          /* Stock stuck in transit.
+             ─────────────────────────────────────────────────────────────────
+             In-transit units are counted at neither end: debited from the
+             sender the moment the transfer is issued, credited to the receiver
+             only when somebody confirms it. A transfer nobody confirms is
+             therefore stock that has quietly vanished from every total on this
+             page, and nothing anywhere said so. It is worse for a lateral or
+             upward move, where the facility that gave the stock up has no
+             reason to be watching the receiving end.
+
+             Two things are worth waking somebody for: a dispatch sitting
+             unconfirmed past the day it was expected, and one whose batch will
+             expire before it is confirmed. */
+          const transitAlerts = (inventoryTransfers || [])
+            .filter(t => t.status === "pending_receipt")
+            .map(t => {
+              const source = batches.find(b => b.batch_id === t.source_batch_id);
+              const item = source ? items.find(i => i.item_id === source.item_id) : null;
+              const from = transferEndpointName(transferSourceFacilityId(t));
+              const to = transferEndpointName(t.destination_facility_id);
+              const direction = transferDirectionOf(t);
+
+              const daysWaiting = calendarDaysBetween(t.issued_at, new Date());
+              const expectedDate = transferExpectedDate(t);
+              const daysLate = expectedDate ? calendarDaysBetween(expectedDate, new Date()) : null;
+              const shelfLeft = source?.expiration_date
+                ? calendarDaysBetween(new Date(), source.expiration_date) : null;
+
+              const willExpire = shelfLeft !== null && shelfLeft <= 0;
+              const overdue = daysLate !== null && daysLate > 0;
+              // No plan on file: a week with nobody confirming is long enough.
+              const stale = daysLate === null && daysWaiting !== null && daysWaiting >= 7;
+
+              if (!willExpire && !overdue && !stale) return null;
+
+              const why = willExpire
+                ? `The batch expired on ${formatShortDate(source.expiration_date)} and can no longer be received — it has to be cancelled and disposed of.`
+                : overdue
+                  ? `Expected at ${to} on ${formatShortDate(expectedDate)}, ${durationLabel(daysLate).toLowerCase()} ago, and still unconfirmed.`
+                  : `Issued ${durationLabel(daysWaiting).toLowerCase()} ago with no receipt confirmation and no delivery plan recorded.`;
+
+              return {
+                kind: "transit",
+                sortWeight: willExpire ? 0 : 1,
+                title: `${willExpire ? "Transfer will arrive expired" : "Transfer awaiting receipt"}: #${t.transfer_id} ${esc(from)} → ${esc(to)}`,
+                desc: `${t.quantity_issued} unit(s) of ${esc(item?.name || "stock")} · ${DIRECTION_META[direction]?.label || "Transfer"} · ${esc(why)} These units are counted at neither facility until this is resolved.`,
+                action: `<div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <button class="btn btn-sm btn-secondary" onclick="closeModal('modal-alerts-hub'); focusTransfer(${t.transfer_id});"><i class="fa-solid fa-magnifying-glass"></i> Open</button>
+                    <button class="btn btn-sm btn-secondary" style="color:#dc2626;border-color:#fca5a5;" onclick="closeModal('modal-alerts-hub'); cancelTransfer(${t.transfer_id});"><i class="fa-solid fa-ban"></i> Cancel &amp; Return</button>
+                  </div>`
+              };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.sortWeight - b.sortWeight);
+
           let alertList = [];
           if (type === "low") alertList = lowAlerts;
           else if (type === "expiry") alertList = expiryAlerts;
           else if (type === "vials") alertList = vialAlerts;
           else if (type === "requests") alertList = requestAlerts;
-          else alertList = [...requestAlerts, ...vialAlerts, ...lowAlerts, ...expiryAlerts];
+          else if (type === "transit") alertList = transitAlerts;
+          else alertList = [...transitAlerts, ...requestAlerts, ...vialAlerts, ...lowAlerts, ...expiryAlerts];
 
           const container = document.getElementById("alerts-hub-content");
           if (alertList.length === 0) {
@@ -6263,8 +7836,13 @@
             return;
           }
 
+          const ALERT_ACCENT = {
+            low: "#d97706", expiry: "#dc2626", vials: "#b45309",
+            requests: "#2563eb", transit: "#7c3aed"
+          };
+
           container.innerHTML = alertList.map(a => `
-            <div class="card" style="margin-bottom:12px; padding:14px 18px; border-left:4px solid ${a.kind==='low'?'#d97706':a.kind==='expiry'?'#dc2626':'#2563eb'};">
+            <div class="card" style="margin-bottom:12px; padding:14px 18px; border-left:4px solid ${ALERT_ACCENT[a.kind] || '#2563eb'};">
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                 <div>
                   <strong style="font-size:14px; color:var(--text-primary);">${a.title}</strong>
@@ -6298,11 +7876,7 @@
           const headers = ["Batch Number", "Item Trade Name", "Generic Name", "Location", "Received Date", "Expiration Date", "Quantity Received", "Quantity Remaining", "Manufacturer", "Status"];
           const rows = batches.map(b => {
             const item = items.find(i => i.item_id === b.item_id);
-            let locName = PortalScope.depotName;
-            if (b.facility_id) {
-              const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
-              locName = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
-            }
+            const locName = batchLocationName(b);
             return [b.batch_number, item ? item.name : "Unknown", item ? item.generic_name || "" : "", locName, b.received_date || "", b.expiration_date || "", b.quantity_received, b.quantity_remaining, b.manufacturer || "", isBatchExpired(b) ? "Expired" : b.status];
           });
           const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.map(val => window.csvCell(val)).join(","))].join("\n");
@@ -6569,22 +8143,21 @@
           const curVal = issueBatchSel.value;
           const sourceFacilityVal = document.getElementById("issue-source-facility")?.value || "central";
 
+          // Which shelf the picker is standing on. placeKey folds the depot
+          // sentinel, a NULL facility_id and the municipal office row into the
+          // one place they are, so "central" no longer needs its own branch.
+          const sourcePlace = placeKey(resolveEndpointFacilityId(sourceFacilityVal));
+
           const availableBatches = batches.filter(b => {
             if (b.status !== 'active' || isBatchExpired(b) || b.quantity_remaining <= 0) return false;
-            if (sourceFacilityVal === "central") {
-              if (b.facility_id !== null && b.facility_id !== 0 && b.facility_id !== undefined && String(b.facility_id) !== "null") return false;
-            } else {
-              if (String(b.facility_id) !== String(sourceFacilityVal)) return false;
-            }
+            if (placeKey(b.facility_id) !== sourcePlace) return false;
             const parentItem = items.find(i => String(i.item_id) === String(b.item_id));
             if (!parentItem || parentItem.is_archived) return false;
             if (targetItemId != null && String(b.item_id) !== String(targetItemId)) return false;
             return true;
           });
 
-          const sourceLocName = sourceFacilityVal === "central" 
-            ? PortalScope.depotName 
-            : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || `Source ${childTerm()}`);
+          const sourceLocName = transferEndpointName(resolveEndpointFacilityId(sourceFacilityVal));
 
           issueBatchSel.innerHTML = `<option value="">— Select Available Source Batch —</option>` + availableBatches.map(b => {
             const item = items.find(i => String(i.item_id) === String(b.item_id));
@@ -6625,7 +8198,7 @@
         async function autoFillForecastForDestination() {
           const targetBhcVal = document.getElementById("issue-target-bhc")?.value;
           if (!targetBhcVal) {
-            showToast(`Please select a Destination ${childTerm()} first to calculate demand.`, "warning");
+            showToast("Choose the destination facility first — the forecast is calculated from its own patient load.", "warning");
             return;
           }
 
@@ -6639,7 +8212,7 @@
             let forecastData = null;
             try {
               const { data, error } = await db.rpc("get_bhc_monthly_demand_forecast", {
-                p_facility_id: parseInt(targetBhcVal)
+                p_facility_id: resolveEndpointFacilityId(targetBhcVal)
               });
               if (!error && Array.isArray(data) && data.length > 0) {
                 forecastData = data;
@@ -6655,13 +8228,10 @@
 
               if (topItem) {
                 const sourceFacilityVal = document.getElementById("issue-source-facility")?.value || "central";
+                const sourceShelf = placeKey(resolveEndpointFacilityId(sourceFacilityVal));
                 const matchingBatches = batches.filter(b => {
                   if (b.status !== 'active' || isBatchExpired(b) || b.quantity_remaining <= 0) return false;
-                  if (sourceFacilityVal === "central") {
-                    if (b.facility_id !== null && b.facility_id !== 0 && String(b.facility_id) !== "null") return false;
-                  } else {
-                    if (String(b.facility_id) !== String(sourceFacilityVal)) return false;
-                  }
+                  if (placeKey(b.facility_id) !== sourceShelf) return false;
                   return String(b.item_id) === String(topItem.item_id);
                 });
 
@@ -6669,9 +8239,7 @@
                   matchingBatches.sort((a, b) => new Date(a.expiration_date) - new Date(b.expiration_date));
                   const chosenBatch = matchingBatches[0];
                   const issueBatchSel = document.getElementById("issue-source-batch");
-                  const sourceLocName = sourceFacilityVal === "central" 
-                    ? PortalScope.depotName 
-                    : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || `Source ${childTerm()}`);
+                  const sourceLocName = transferEndpointName(resolveEndpointFacilityId(sourceFacilityVal));
 
                   if (issueBatchSel) {
                     issueBatchSel.value = chosenBatch.batch_id;
@@ -6710,13 +8278,10 @@
 
             // Intelligent Client-Side Fallback: evaluate available source batches vs destination stock
             const sourceFacilityVal = document.getElementById("issue-source-facility")?.value || "central";
+            const fallbackShelf = placeKey(resolveEndpointFacilityId(sourceFacilityVal));
             const availableSourceBatches = batches.filter(b => {
               if (b.status !== 'active' || isBatchExpired(b) || b.quantity_remaining <= 0) return false;
-              if (sourceFacilityVal === "central") {
-                return (b.facility_id === null || b.facility_id === 0 || String(b.facility_id) === "null");
-              } else {
-                return String(b.facility_id) === String(sourceFacilityVal);
-              }
+              return placeKey(b.facility_id) === fallbackShelf;
             });
 
             if (availableSourceBatches.length === 0) {
@@ -6728,9 +8293,7 @@
             availableSourceBatches.sort((a, b) => new Date(a.expiration_date) - new Date(b.expiration_date));
             const topBatch = availableSourceBatches[0];
             const topItem = items.find(i => String(i.item_id) === String(topBatch.item_id));
-            const sourceLocName = sourceFacilityVal === "central" 
-              ? PortalScope.depotName 
-              : (bhcs.find(x => String(x.bhc_id) === String(sourceFacilityVal))?.bhc_name || `Source ${childTerm()}`);
+            const sourceLocName = transferEndpointName(resolveEndpointFacilityId(sourceFacilityVal));
 
             const issueBatchSel = document.getElementById("issue-source-batch");
             if (issueBatchSel) {
@@ -6773,25 +8336,53 @@
         }
         window.autoFillForecastForDestination = autoFillForecastForDestination;
 
-        // Printable dispatch slip that travels with the delivery.
+        /**
+         * Printable dispatch slip that travels with the delivery.
+         *
+         * It used to carry a transfer number, two facility names and a bare unit
+         * count — a piece of paper accompanying a physical box that did not say
+         * what was in the box. Whoever receives it has to check the contents
+         * against something, so the item, the batch and its expiry are the whole
+         * point, and the direction and the operational reason matter on a return
+         * that somebody upstream has to make sense of.
+         */
         window.showTransferDispatchSlip = function(transfer) {
           if (!transfer) return;
           const detailsEl = document.getElementById("transfer-qr-details");
+          if (!detailsEl) return;
 
-          const sourceName = transfer.source_facility_id
-            ? (bhcs.find(b => String(b.bhc_id) === String(transfer.source_facility_id))?.bhc_name || unknownFacilityLabel(transfer.source_facility_id)) 
-            : PortalScope.depotName;
-          const destName = bhcs.find(b => String(b.bhc_id) === String(transfer.destination_facility_id))?.bhc_name || unknownFacilityLabel(transfer.destination_facility_id);
+          const sourceFacilityId = transferSourceFacilityId(transfer);
+          const sourceName = transferEndpointName(sourceFacilityId);
+          const destName = transferEndpointName(transfer.destination_facility_id);
+          const direction = transferDirectionOf(transfer);
+          const batch = batches.find(b => String(b.batch_id) === String(transfer.source_batch_id));
+          const item = batch ? items.find(i => String(i.item_id) === String(batch.item_id)) : null;
+          const expected = transferExpectedDate(transfer);
+          const reason = String(transfer.remarks || "").match(/Reason for move:\s*([^.]+)\./i);
 
-          if (detailsEl) {
-            detailsEl.innerHTML = `
-              <div style="font-weight:700; font-size:13.5px; color:#1e293b; margin-bottom:4px;">Transfer #${transfer.transfer_id}</div>
-              <div style="color:#475569; font-size:12px;"><strong>From:</strong> ${esc(sourceName)}</div>
-              <div style="color:#475569; font-size:12px;"><strong>To:</strong> ${esc(destName)}</div>
-              <div style="color:#475569; font-size:12px;"><strong>Quantity:</strong> ${transfer.quantity_issued} units</div>
-              <div style="color:#64748b; font-size:11px; margin-top:4px;">Status: <span class="badge badge-warning" style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-weight:700;">PENDING RECEIPT</span></div>
-            `;
-          }
+          const row = (label, value) => value
+            ? `<div style="color:#475569; font-size:12px;"><strong>${esc(label)}:</strong> ${esc(value)}</div>`
+            : "";
+
+          detailsEl.innerHTML = `
+            <div style="font-weight:700; font-size:13.5px; color:#1e293b; margin-bottom:6px;">
+              Transfer #${transfer.transfer_id} · ${esc(DIRECTION_META[direction]?.label || "Transfer")}
+            </div>
+            ${row("From", sourceName)}
+            ${row("To", destName)}
+            <div style="border-top:1px dashed #cbd5e1; margin:8px 0;"></div>
+            ${row("Item", item?.name || `Item #${batch?.item_id ?? "—"}`)}
+            ${row("Generic", item?.generic_name)}
+            ${row("Batch", batch?.batch_number)}
+            ${row("Batch expiry", batch?.expiration_date)}
+            ${row("Quantity", `${transfer.quantity_issued} ${item?.unit_of_measure || "units"}`)}
+            ${row("Expected arrival", expected)}
+            ${row("Reason for move", reason ? reason[1].trim() : null)}
+            <div style="color:#64748b; font-size:11px; margin-top:8px;">Status: <span class="badge badge-warning" style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-weight:700;">PENDING RECEIPT</span></div>
+            <div style="color:#64748b; font-size:10.5px; margin-top:8px; border-top:1px dashed #cbd5e1; padding-top:8px;">
+              Received by: ______________________ &nbsp; Date: ____________
+            </div>
+          `;
 
           openModal("modal-transfer-qr");
         };
@@ -7051,6 +8642,31 @@
             // Keep the officer's choice across a refresh, unless that facility
             // no longer appears at all.
             if (prev && seen.has(prev)) reqFacSel.value = prev;
+          }
+
+          // 3c. Facility filter on the transfer tracker.
+          //
+          // Built from the transfers themselves rather than from `bhcs`, because
+          // a transfer can name a facility this office does not list — the
+          // municipal warehouse above an RHU is the obvious one, and a lateral
+          // move seen from the municipal portal names two BHCs two rungs down.
+          const trFacSel = document.getElementById("transfers-filter-facility");
+          if (trFacSel) {
+            const prevTr = trFacSel.value;
+            const seenTr = new Map();
+            const remember = (facilityId) => {
+              const key = isOwnDepot(facilityId) ? "central" : placeKey(facilityId);
+              if (seenTr.has(key)) return;
+              seenTr.set(key, transferEndpointName(facilityId));
+            };
+            inventoryTransfers.forEach(t => {
+              remember(transferSourceFacilityId(t));
+              remember(t.destination_facility_id);
+            });
+            const trOpts = [...seenTr.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+            trFacSel.innerHTML = `<option value="">Any Facility</option>` +
+              trOpts.map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join("");
+            if (prevTr && seenTr.has(prevTr)) trFacSel.value = prevTr;
           }
 
           // 4. Allocation Item Select
@@ -8128,22 +9744,42 @@
             return fieldError("issue-source-batch", municipalWording("Choose the batch this stock comes out of."));
           }
           if (!targetBhcVal) {
-            return fieldError("issue-target-bhc", `Choose the ${PortalScope.childTypeLabel.toLowerCase()} receiving this stock.`);
+            return fieldError("issue-target-bhc", "Choose the facility receiving this stock.");
           }
           if (!Number.isFinite(qtyInput) || qtyInput <= 0) {
             return fieldError("issue-qty", "Enter how many units to issue — a whole number above zero.");
           }
 
           const sourceBatchId = parseInt(sourceBatchVal);
-          const targetBhcId = parseInt(targetBhcVal);
+          const targetBhcId = resolveEndpointFacilityId(targetBhcVal);
+
+          if (!Number.isFinite(targetBhcId)) {
+            return fieldError("issue-target-bhc", "That destination could not be resolved. Pick another facility.");
+          }
 
           const sourceBatch = batches.find(b => String(b.batch_id) === String(sourceBatchVal));
           if (!sourceBatch) {
             return fieldError("issue-source-batch", "That batch is no longer in stock. Pick another.");
           }
 
+          // Last line of defence for the self-transfer the dropdowns already
+          // make unpickable. The batch is what actually decides where the stock
+          // sits, so it is the batch — not the source dropdown — that is
+          // compared: a stale dropdown cannot smuggle one through.
+          if (samePlace(sourceBatch.facility_id, targetBhcId)) {
+            return fieldError("issue-target-bhc",
+              `${transferEndpointName(sourceBatch.facility_id)} is already holding this batch. Choose a different facility to send it to.`);
+          }
+
           if (qtyInput > sourceBatch.quantity_remaining) {
             return fieldError("issue-qty", `This batch holds ${sourceBatch.quantity_remaining} unit(s). Issue that many or fewer, or draw from a second batch.`);
+          }
+
+          const direction = transferDirection(sourceBatch.facility_id, targetBhcId);
+          const moveReason = (document.getElementById("issue-move-reason")?.value || "").trim();
+          if (transferNeedsReason(direction) && !moveReason) {
+            return fieldError("issue-move-reason",
+              "Say why this stock is being moved. Sideways and upward moves are exceptions, and the record has to show what the exception was.");
           }
 
           const btn = document.getElementById("save-issue-btn");
@@ -8151,13 +9787,20 @@
           btn.innerHTML = '<div class="btn-loader"></div> Issuing...';
 
           try {
-            const targetBhcName = bhcs.find(b => String(b.bhc_id) === String(targetBhcId))?.bhc_name || unknownFacilityLabel(targetBhcId);
+            const targetBhcName = transferEndpointName(targetBhcId);
+            const sourceName = transferEndpointName(sourceBatch.facility_id);
             const parsedActorId = parseInt(actorId) || actorId;
             const expectedDateVal = document.getElementById("issue-expected-date")?.value;
-            let combinedRemarks = ref;
-            if (expectedDateVal) {
-              combinedRemarks = `Expected delivery: ${expectedDateVal}.${ref ? ' ' + ref : ''}`;
-            }
+
+            // Remarks are the only free-text field the transfer row carries, and
+            // update_inventory_transfer_delivery() already parses a "Delivery
+            // plan:" prefix back out of it. The move reason is appended in the
+            // same spirit — one line, in a shape the audit narrative can quote.
+            const remarkParts = [];
+            if (expectedDateVal) remarkParts.push(`Expected delivery: ${expectedDateVal}.`);
+            if (moveReason) remarkParts.push(`Reason for move: ${moveReason}.`);
+            if (ref) remarkParts.push(ref);
+            const combinedRemarks = remarkParts.join(" ").trim();
 
             let transferResult = null;
             let { data: issueData, error: issueError } = await db.rpc("issue_inventory_transfer", {
@@ -8184,7 +9827,10 @@
             if (issueError) throw issueError;
             transferResult = issueData;
 
-            showToast(`Issued ${qtyInput} stock to ${targetBhcName}; awaiting ${childTerm()} receipt.`, "success");
+            const verb = direction === "return" ? "Returned"
+                       : direction === "lateral" ? "Transferred"
+                       : "Issued";
+            showToast(`${verb} ${qtyInput} unit(s) from ${sourceName} to ${targetBhcName}; awaiting receipt confirmation.`, "success");
             closeModal("modal-issue");
             await loadInventoryData();
 
@@ -8260,6 +9906,40 @@
           });
         })();
 
+        /* ── Reachable from inline HTML ──────────────────────────────────────
+           Everything on this page lives inside one IIFE, so a plain `function
+           foo()` is invisible to an `onclick="foo()"` attribute — those run in
+           global scope. Four handlers written in the markup were therefore dead:
+           the Refresh button on the stock requests table, the item filter on the
+           allocation matrix, Refresh Insights on the analytics hub, and the
+           inline safety-check hooks in the issue dialog (that last one was
+           masked, because the form also has a JS-attached input listener).
+
+           Exporting them here rather than converting each call site keeps the
+           markup as it reads. */
+        window.loadInventoryData = loadInventoryData;
+        window.renderBarangayAllocation = renderBarangayAllocation;
+        window.loadAnalyticsReport = loadAnalyticsReport;
+        window.updateIssueSafetyCheck = updateIssueSafetyCheck;
+
+        /**
+         * Jump to one transfer in the tracker and filter the table down to it.
+         *
+         * Called from the alert centre, which is rendered into a string — so it
+         * has to be reachable from an inline handler, and it has to go through
+         * the table's own controls rather than poking the DOM, or the row count
+         * and the "filters active" line would disagree with what is on screen.
+         */
+        window.focusTransfer = function(transferId) {
+          switchTab("requests", "transfers");
+          const search = ctl("transfers-search");
+          if (!search) return;
+          // Clear anything that could hide the row we are pointing at.
+          clearTableFilters("transfers");
+          search.value = `#${transferId}`;
+          search.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+
         // Initial Page Boot. Resolve the office this account runs first: the
         // depot, the facilities under it and the rows it may see all follow from
         // it, and loadInventoryData filters against them.
@@ -8268,6 +9948,11 @@
           PortalScope.applyChrome();
           applyScopeLabels();
           restoreSectionState();
+          // Every hub keeps its own open pane; restore all four so switching
+          // between them lands where the officer left off rather than resetting.
+          // Positioning only — see inventoryBooting.
+          Object.keys(HUB_DEFAULT_SUBVIEW).forEach(restoreSubview);
+          inventoryBooting = false;
           await loadInventoryData();
         })();
 

@@ -206,6 +206,15 @@ class InventoryRepository {
 
       if (workflowAvailable) {
         try {
+          // Transfers where this facility is EITHER end.
+          //
+          // This used to filter on destination_facility_id alone, which was
+          // right while a health centre could only ever receive. It cannot any
+          // more: a centre sends stock sideways to a neighbour that has run
+          // out, and upward to the RHU when a brownout means it cannot keep the
+          // cold chain. Those units were debited from this shelf the moment the
+          // transfer was issued, so filtering them out made the count drop with
+          // nothing on the screen to explain where they had gone.
           final workflowResults = await Future.wait<dynamic>([
             _client
                 .from('inventory_stock_requests')
@@ -215,7 +224,10 @@ class InventoryRepository {
             _client
                 .from('inventory_transfers')
                 .select('*')
-                .eq('destination_facility_id', context.facilityId)
+                .or(
+                  'destination_facility_id.eq.${context.facilityId},'
+                  'source_facility_id.eq.${context.facilityId}',
+                )
                 .order('issued_at', ascending: false),
           ]);
 
@@ -224,42 +236,43 @@ class InventoryRepository {
               .toList();
 
           final transferRows = _rows(workflowResults[1]);
-          final sourceBatchIds = transferRows
-              .map((row) => _nullableInt(row['source_batch_id']))
-              .whereType<int>()
-              .toSet()
-              .toList();
-          final sourceBatches = <int, InventoryBatchRecord>{};
-          if (sourceBatchIds.isNotEmpty) {
-            final sourceRows = await _client
-                .from('inventory_batches')
-                .select(
-                  'batch_id, item_id, facility_id, batch_number, '
-                  'quantity_received, quantity_remaining, received_date, '
-                  'expiration_date, manufacturer, status',
-                )
-                .inFilter('batch_id', sourceBatchIds);
-            for (final row in _rows(sourceRows)) {
-              final batch = InventoryBatchRecord.fromJson(row);
-              sourceBatches[batch.batchId] = batch;
+          transfers = await _hydrateTransfers(transferRows);
+        } on Object catch (error) {
+          // source_facility_id arrives with 20260829. On a database without it
+          // the OR filter above is rejected outright, so fall back to the
+          // destination-only query rather than losing the whole workflow — the
+          // portal and the migrations deploy separately, and the app has to
+          // work either side of that gap.
+          if (_isMissingSourceFacilityColumn(error)) {
+            try {
+              final legacy = await Future.wait<dynamic>([
+                _client
+                    .from('inventory_stock_requests')
+                    .select('*')
+                    .eq('facility_id', context.facilityId)
+                    .order('created_at', ascending: false),
+                _client
+                    .from('inventory_transfers')
+                    .select('*')
+                    .eq('destination_facility_id', context.facilityId)
+                    .order('issued_at', ascending: false),
+              ]);
+              requests = _rows(legacy[0])
+                  .map(InventoryStockRequestRecord.fromJson)
+                  .toList();
+              transfers = await _hydrateTransfers(_rows(legacy[1]));
+            } catch (_) {
+              workflowAvailable = false;
+              workflowMessage =
+                  'The request and receipt workflow could not be loaded.';
             }
+          } else {
+            workflowAvailable = false;
+            workflowMessage = _isMissingWorkflow(error)
+                ? 'The inventory request and receipt migration has not been '
+                    'installed in Supabase yet.'
+                : 'The request and receipt workflow could not be loaded.';
           }
-
-          transfers = transferRows
-              .map(
-                (json) => InventoryTransferRecord.fromJson(
-                  json,
-                  sourceBatch:
-                      sourceBatches[_nullableInt(json['source_batch_id'])],
-                ),
-              )
-              .toList();
-        } catch (error) {
-          workflowAvailable = false;
-          workflowMessage = _isMissingWorkflow(error)
-              ? 'The inventory request and receipt migration has not been '
-                  'installed in Supabase yet.'
-              : 'The request and receipt workflow could not be loaded.';
         }
       } else {
         workflowMessage = 'The inventory workflow RPCs are not available.';
@@ -594,6 +607,100 @@ class InventoryRepository {
         text.contains('could not find the table') ||
         text.contains('could not find the function') ||
         text.contains('does not exist');
+  }
+
+  /// The database has not run 20260829 yet, so inventory_transfers has no
+  /// source_facility_id and the outbound half of the OR filter is rejected.
+  /// Narrower than [_isMissingWorkflow] on purpose: a genuinely broken
+  /// workflow must not be mistaken for an un-migrated one and silently retried.
+  static bool _isMissingSourceFacilityColumn(Object error) {
+    final text = error.toString().toLowerCase();
+    if (!text.contains('source_facility_id')) return false;
+    final code =
+        error is PostgrestException ? (error.code ?? '').toLowerCase() : '';
+    return code == '42703' ||
+        code == 'pgrst100' ||
+        code == 'pgrst204' ||
+        text.contains('does not exist') ||
+        text.contains('unexpected') ||
+        text.contains('schema cache');
+  }
+
+  /// Turn raw inventory_transfers rows into records, resolving the source batch
+  /// (for the item and batch number) and naming both facilities.
+  ///
+  /// Naming both ends is new and is the point of the change: a transfer this
+  /// facility SENT is meaningless without the name of where it went, and until
+  /// now the app never had to render one.
+  Future<List<InventoryTransferRecord>> _hydrateTransfers(
+    List<Map<String, dynamic>> transferRows,
+  ) async {
+    if (transferRows.isEmpty) return const [];
+
+    final sourceBatchIds = transferRows
+        .map((row) => _nullableInt(row['source_batch_id']))
+        .whereType<int>()
+        .toSet()
+        .toList();
+
+    final sourceBatches = <int, InventoryBatchRecord>{};
+    if (sourceBatchIds.isNotEmpty) {
+      final sourceRows = await _client
+          .from('inventory_batches')
+          .select(
+            'batch_id, item_id, facility_id, batch_number, '
+            'quantity_received, quantity_remaining, received_date, '
+            'expiration_date, manufacturer, status',
+          )
+          .inFilter('batch_id', sourceBatchIds);
+      for (final row in _rows(sourceRows)) {
+        final batch = InventoryBatchRecord.fromJson(row);
+        sourceBatches[batch.batchId] = batch;
+      }
+    }
+
+    final facilityIds = <int>{};
+    for (final row in transferRows) {
+      final source = _nullableInt(row['source_facility_id']) ??
+          sourceBatches[_nullableInt(row['source_batch_id'])]?.facilityId;
+      final target = _nullableInt(row['destination_facility_id']);
+      if (source != null) facilityIds.add(source);
+      if (target != null) facilityIds.add(target);
+    }
+
+    final facilityNames = <int, String>{};
+    if (facilityIds.isNotEmpty) {
+      try {
+        final facilityRows = await _client
+            .from('health_facilities')
+            .select('facility_id, name')
+            .inFilter('facility_id', facilityIds.toList());
+        for (final row in _rows(facilityRows)) {
+          final id = _nullableInt(row['facility_id']);
+          if (id != null) {
+            facilityNames[id] = (row['name'] ?? '').toString();
+          }
+        }
+      } catch (_) {
+        // Names are decoration; a transfer without them still renders with the
+        // quantity, the batch and the direction, which is what has to be right.
+      }
+    }
+
+    return transferRows.map((json) {
+      final record = InventoryTransferRecord.fromJson(
+        json,
+        sourceBatch: sourceBatches[_nullableInt(json['source_batch_id'])],
+      );
+      return record.copyWithFacilityNames(
+        // A NULL source facility is the municipal warehouse, which is a real
+        // place but has no health_facilities row of its own here.
+        sourceName: record.sourceFacilityId == null
+            ? 'Municipal Warehouse'
+            : facilityNames[record.sourceFacilityId!],
+        targetName: facilityNames[record.targetFacilityId],
+      );
+    }).toList();
   }
 
   static String _friendlyError(Object error) {

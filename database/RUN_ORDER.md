@@ -15,6 +15,8 @@ the SQL Editor, so this file is the record.
 | `20260823_prenatal_dispense_fixes.sql` | `deduct_prenatal_encounter_inventory` | applied |
 | `20260824_inventory_integration_fixes.sql` | `announce_inventory_transfer` — **absent** | **not applied** |
 | `20260825_vaccine_catalogue_corrections.sql` | IPV still reads 20 doses | **not applied** |
+| `20260826_audit_trail_completeness.sql` | `audit_trail_detailed`, `audit_write` | **not applied** |
+| `20260829_inventory_transfer_directions.sql` | `inventory_transfers.source_facility_id`, `cancel_inventory_transfer` | **not applied** |
 
 ## Run these, in this order
 
@@ -56,9 +58,55 @@ Never applied. Adds `announce_inventory_transfer`,
 
 ### 5. `migrations/20260825_vaccine_catalogue_corrections.sql` — first run
 
-Must be last. Corrects IPV to 5 doses, archives the stray "Test" item, points
-MMR immunizations at MMR stock instead of MR, and gives Rotavirus an inventory
-item. Idempotent — safe to run again.
+Corrects IPV to 5 doses, archives the stray "Test" item, points MMR
+immunizations at MMR stock instead of MR, and gives Rotavirus an inventory item.
+Idempotent — safe to run again.
+
+This must be the last of the *catalogue* steps: nothing after it rewrites dose
+counts, so IPV stays at 5. Steps 6 and 7 only add audit and distribution
+behaviour and never touch `inventory_items`.
+
+### 6. `migrations/20260826_audit_trail_completeness.sql` — first run
+
+Turns the audit trail from an action log into a record with an actor snapshot, a
+module, a severity, a structured breakdown and a readable narrative, and moves
+coverage from scattered hand-written inserts to triggers on the tables
+themselves. Adds the `audit_trail_detailed` view the portal reads.
+
+Requires step 4.
+
+### 7. `migrations/20260829_inventory_transfer_directions.sql` — first run
+
+Makes a transfer a movement between two named places instead of a delivery to
+one, and lets stock travel back up the hierarchy.
+
+- `inventory_transfers.source_facility_id` and `transfer_direction`, stamped by
+  a trigger and backfilled for history. NULL source means the municipal
+  warehouse, the same convention `inventory_batches.facility_id` uses.
+- Upward (BHC → RHU, RHU → MHO) and lateral (BHC → BHC, RHU → RHU) transfers are
+  first-class, for the brownout and cold-chain-failure cases where the point of
+  moving stock is to have it used somewhere rather than spoil where it sits.
+- A facility can no longer transfer to itself. The old guard compared raw
+  facility ids and never fired for the depot sentinel; the new one compares
+  *places*, so the municipal warehouse and the MHO facility row are correctly
+  read as one shelf.
+- Both ends of a transfer are now notified — issue, receipt and cancellation.
+- `cancel_inventory_transfer()` does the cancel, the stock restore, the
+  reversing ledger row and both notifications in one transaction. The portal
+  used to do the first two as separate unguarded writes and never wrote the
+  third, so the movement ledger showed stock leaving and never coming back.
+- `update_inventory_transfer_delivery()` no longer requires `account_type =
+  'admin'` exactly, so a municipal officer (`'mho'`) can finally re-plan the
+  arrival of the dispatches they issue, and both ends are notified instead of
+  only midwives at the destination — which told nobody at all when the
+  destination was an RHU.
+
+Requires step 6. Idempotent.
+
+**Before running:** a transfer addressed to the municipal office now lands in
+the warehouse (`facility_id IS NULL`) rather than against the MHO's
+`health_facilities` row. If any RHU → MHO transfer was already created by hand,
+check where its destination batch was filed.
 
 ## Why the order is what it is
 
@@ -68,11 +116,18 @@ copies are older than the ones in the 2026-08-21 and 2026-08-23 migrations.
 Running the seed **after** those migrations silently downgrades both functions.
 Seed first, migrations after.
 
-Step 5 is last for a different reason:
+Step 5 is last of the catalogue steps for a different reason:
 `migrations/20260819_fix_open_vial_deduction_and_linkage.sql` sets dose capacity
 by name and matches IPV with `name ILIKE '%polio%'`, rewriting it to OPV's 20
 doses. Nothing between 20260821 and 20260824 rewrites dose counts, so as long as
-step 5 runs last, IPV stays at 5.
+step 5 runs after them, IPV stays at 5. Steps 6 and 7 do not touch
+`inventory_items` at all, so they are safe to run after it.
+
+Steps 6 and 7 are in that order because 20260829 replaces two functions
+20260826 defines — `announce_inventory_transfer` and `audit_inventory_transfer`
+— and calls its helpers (`audit_write`, `audit_kv`, `audit_facility_label`).
+Running them the other way round would leave the older definitions in place, and
+20260829's preflight raises a clear message rather than failing halfway.
 
 ## Verify afterwards
 
@@ -113,6 +168,20 @@ SELECT COUNT(*) AS immunization_records FROM public.immunization_records;
 ```
 
 Non-zero. If this comes back 0, the old `TRUNCATE ... CASCADE` ran.
+
+```sql
+-- Every transfer names both ends and which way it went (step 7)
+SELECT transfer_id, transfer_direction,
+       public.audit_facility_label(source_facility_id)      AS moved_from,
+       public.audit_facility_label(destination_facility_id) AS moved_to,
+       quantity_issued, status
+  FROM public.inventory_transfers
+ ORDER BY transfer_id DESC LIMIT 20;
+```
+
+Nothing should read `internal` — that value exists only so the self-transfer
+guard has something to name, and a real row carrying it means a self-transfer
+was created before step 7 was applied.
 
 ## Note on the CLI
 
