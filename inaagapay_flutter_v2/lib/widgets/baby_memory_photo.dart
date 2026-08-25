@@ -26,6 +26,33 @@ class BabyMemoryPhoto extends StatelessWidget {
       );
     }
 
+    final url = memory.imageUrl;
+    if (url != null && url.isNotEmpty) {
+      return Image.network(
+        url,
+        width: double.infinity,
+        height: double.infinity,
+        fit: fit,
+        errorBuilder: _errorBuilder,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return Container(
+            color: const Color(0xFFFFF4F8),
+            alignment: Alignment.center,
+            child: const SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.4,
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(Color(0xFFFF68A5)),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
     return Image.asset(
       memory.assetPath!,
       width: double.infinity,

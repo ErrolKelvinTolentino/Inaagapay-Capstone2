@@ -1,3 +1,4 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 
 import '../data/pregnancy_growth_data.dart';
@@ -598,9 +599,13 @@ class BabyBookRepository {
     }
 
     try {
-      var query = SupabaseService.client
-          .from('baby_memories')
-          .select('memory_id, title, caption, memory_date');
+      // photo_file_id and the file row it points at. Without them this read
+      // returned a caption and a date for something that is, on this screen,
+      // a photograph — every saved memory would have come back blank.
+      var query = SupabaseService.client.from('baby_memories').select(
+            'memory_id, title, caption, memory_date, photo_file_id, '
+            'files(bucket_name, file_path)',
+          );
 
       query = pregnancyId != null
           ? query.eq('pregnancy_id', pregnancyId)
@@ -608,17 +613,186 @@ class BabyBookRepository {
 
       final rows = await query.order('memory_date', ascending: false);
 
-      return (rows as List).cast<Map<String, dynamic>>().map((r) {
-        return BabyMemory(
-          id: 'memory-${r['memory_id']}',
-          title: r['title']?.toString() ?? '',
-          caption: r['caption']?.toString() ?? '',
-          date: _parseDate(r['memory_date']) ?? DateTime.now(),
+      final memories = <BabyMemory>[];
+      for (final r in (rows as List).cast<Map<String, dynamic>>()) {
+        final file = r['files'] as Map<String, dynamic>?;
+        final path = file?['file_path']?.toString();
+        final bucket = file?['bucket_name']?.toString() ?? 'files';
+        final url = path == null
+            ? null
+            : SupabaseService.client.storage.from(bucket).getPublicUrl(path);
+
+        // A memory with no readable photo is dropped rather than shown as a
+        // broken frame. The gallery is a wall of pictures; an entry that
+        // cannot produce one has nothing to contribute to it.
+        if (url == null || url.isEmpty) continue;
+
+        memories.add(
+          BabyMemory(
+            id: 'memory-${r['memory_id']}',
+            title: r['title']?.toString() ?? '',
+            caption: r['caption']?.toString() ?? '',
+            date: _parseDate(r['memory_date']) ?? DateTime.now(),
+            imageUrl: url,
+          ),
         );
-      }).toList();
+      }
+      return memories;
     } catch (e) {
       if (kDebugMode) debugPrint('loadMemories failed: $e');
       return const [];
+    }
+  }
+
+  /// Buckets to try, in order, and the one that turned out to exist.
+  ///
+  /// `files` is what the schema documents and what `files.bucket_name`
+  /// defaults to, but it does not exist in every deployment — uploading to it
+  /// returns "Bucket not found" (404), which is what stopped a mother saving
+  /// her first photo. The midwife-side attachment upload hit this before and
+  /// settled on the same three names; this is that lesson applied here rather
+  /// than rediscovered.
+  ///
+  /// The winner is remembered for the session so later photos do not pay for
+  /// two failed round trips each. The name is also written into the row, so a
+  /// read never has to guess where a photo went.
+  static const List<String> _bucketCandidates = <String>[
+    'files',
+    'ultrasounds',
+    'documents',
+  ];
+  static String? _workingBucket;
+
+  Future<String?> _uploadToFirstWorkingBucket(
+    String filePath,
+    Uint8List bytes,
+  ) async {
+    final candidates =
+        _workingBucket != null ? <String>[_workingBucket!] : _bucketCandidates;
+
+    for (final bucket in candidates) {
+      try {
+        await SupabaseService.client.storage.from(bucket).uploadBinary(
+              filePath,
+              bytes,
+              fileOptions: const FileOptions(
+                contentType: 'image/jpeg',
+                upsert: true,
+              ),
+            )
+            // A bump photo off a phone is a couple of megabytes and a barangay
+            // connection is not fast. The midwife-side upload had this same
+            // timeout set to half a second, which failed on essentially every
+            // save; sixty seconds is generous rather than optimistic.
+            .timeout(const Duration(seconds: 60));
+        _workingBucket = bucket;
+        return bucket;
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('saveMemory: bucket "$bucket" did not take the file: $e');
+        }
+      }
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        'saveMemory: no storage bucket accepted the upload. Tried '
+        '${_bucketCandidates.join(", ")}. Create a public "files" bucket in '
+        'Supabase Storage.',
+      );
+    }
+    return null;
+  }
+
+  /// Saves a photo memory: the image into storage, then the row that finds it.
+  ///
+  /// Returns the saved memory, or null if any step failed. Null rather than a
+  /// thrown exception because the caller has a picked photo in hand and needs
+  /// to tell her plainly that it did not save — the previous version of this
+  /// screen kept the photo in a list in memory and said "Photo added to the
+  /// Memory Gallery", which was true until she closed the app.
+  ///
+  /// The three writes are not a transaction. If the `baby_memories` insert
+  /// fails after the upload, the uploaded file is removed again rather than
+  /// left as an orphan nothing points at.
+  Future<BabyMemory?> saveMemory({
+    int? pregnancyId,
+    int? childId,
+    required String title,
+    required String caption,
+    required Uint8List imageBytes,
+    int? createdByAccountId,
+  }) async {
+    if ((pregnancyId == null) == (childId == null)) {
+      if (kDebugMode) {
+        debugPrint('saveMemory: pass exactly one of pregnancyId / childId');
+      }
+      return null;
+    }
+
+    final scope = pregnancyId != null ? 'pregnancy' : 'child';
+    final scopeId = pregnancyId ?? childId;
+    final fileName = 'memory_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final filePath = 'baby-book/$scope/$scopeId/$fileName';
+
+    final bucket = await _uploadToFirstWorkingBucket(filePath, imageBytes);
+    if (bucket == null) return null;
+
+    try {
+      final fileRow = await SupabaseService.client
+          .from('files')
+          .insert({
+            'bucket_name': bucket,
+            'file_path': filePath,
+            'file_name': fileName,
+            'file_category': 'baby_book_memory',
+            'mime_type': 'image/jpeg',
+            'file_size': imageBytes.length,
+            'uploaded_by': createdByAccountId,
+            'reference_type': 'baby_memory',
+          })
+          .select('file_id')
+          .single();
+
+      final fileId = (fileRow['file_id'] as num).toInt();
+      final memoryDate = DateTime.now();
+
+      final memoryRow = await SupabaseService.client
+          .from('baby_memories')
+          .insert({
+            'pregnancy_id': pregnancyId,
+            'child_id': childId,
+            'title': title.trim(),
+            'caption': caption.trim(),
+            'memory_date': memoryDate.toIso8601String().split('T').first,
+            'photo_file_id': fileId,
+            'created_by': createdByAccountId,
+          })
+          .select('memory_id')
+          .single();
+
+      // Returned with the URL and *without* the bytes. The photo is in
+      // storage now, so keeping the picked bytes alive as well would hold a
+      // full-size image in memory for every photo she adds in one sitting,
+      // on the phones least able to spare it.
+      return BabyMemory(
+        id: 'memory-${memoryRow['memory_id']}',
+        title: title.trim(),
+        caption: caption.trim(),
+        date: memoryDate,
+        imageUrl:
+            SupabaseService.client.storage.from(bucket).getPublicUrl(filePath),
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('saveMemory row insert failed: $e');
+      try {
+        await SupabaseService.client.storage.from(bucket).remove([filePath]);
+      } catch (cleanupError) {
+        if (kDebugMode) {
+          debugPrint('saveMemory could not clean up $filePath: $cleanupError');
+        }
+      }
+      return null;
     }
   }
 
