@@ -15,6 +15,7 @@ import '../../services/baby_book_repository.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/baby_book/baby_growth_milestones_section.dart';
 import '../../services/auth_storage.dart';
+import '../../widgets/profile_section.dart';
 import '../../services/asset_pdf_download_service.dart';
 import '../../widgets/baby_book/references_panel.dart';
 import 'package:flutter/foundation.dart';
@@ -1613,6 +1614,163 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     return int.tryParse(match.group(1)!);
   }
 
+  /// A list drawn as one card with a connected spine down its left edge.
+  ///
+  /// The Development Milestones rail turned out to be the right shape for
+  /// every list on this page: one container instead of a column of loose
+  /// boxes, and a thread showing the entries belong together. Symptoms, key
+  /// nutrients and foods to skip all reuse it, so the tabs stop looking like
+  /// four different designers took one each.
+  ///
+  /// [entries] carry their own icon and colour — a marker per row that says
+  /// what the row is about, rather than a tick repeated down the column.
+  Widget _buildContentRail(List<_RailEntry> entries) {
+    if (entries.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF5E8ED)),
+      ),
+      child: Column(
+        children: [
+          for (var index = 0; index < entries.length; index++)
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: 34,
+                    child: Column(
+                      children: [
+                        if (index == 0)
+                          const SizedBox(height: 14)
+                        else
+                          Expanded(
+                            child: Container(
+                              width: 2,
+                              color: const Color(0xFFF3E4EA),
+                            ),
+                          ),
+                        Container(
+                          width: 30,
+                          height: 30,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: entries[index].colour.withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                            border: entries[index].highlighted
+                                ? Border.all(
+                                    color: entries[index].colour, width: 1.5)
+                                : null,
+                          ),
+                          child: Icon(
+                            entries[index].icon,
+                            size: 16,
+                            color: entries[index].colour,
+                          ),
+                        ),
+                        if (index == entries.length - 1)
+                          const SizedBox(height: 14)
+                        else
+                          Expanded(
+                            child: Container(
+                              width: 2,
+                              color: const Color(0xFFF3E4EA),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        top: index == 0 ? 0 : 8,
+                        bottom: index == entries.length - 1 ? 0 : 8,
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: entries[index].highlighted
+                              ? entries[index].colour.withValues(alpha: 0.06)
+                              : const Color(0xFFFFFCFD),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: entries[index].highlighted
+                                ? entries[index].colour.withValues(alpha: 0.35)
+                                : const Color(0xFFF5E8ED),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              entries[index].title,
+                              style: const TextStyle(
+                                color: AppColors.headingSoft,
+                                fontSize: 15,
+                                height: 1.3,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (entries[index].body != null) ...[
+                              const SizedBox(height: 5),
+                              Text(
+                                entries[index].body!,
+                                style: const TextStyle(
+                                  color: AppColors.inputText,
+                                  fontSize: 13.5,
+                                  height: 1.45,
+                                ),
+                              ),
+                            ],
+                            if (entries[index].note != null) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF7FA),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(Icons.lightbulb_outline_rounded,
+                                        size: 17, color: AppColors.brandText),
+                                    const SizedBox(width: 9),
+                                    Expanded(
+                                      child: Text(
+                                        entries[index].note!,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: AppColors.inputText,
+                                          height: 1.45,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBabyDevelopmentRail(AppLanguage language) {
     final entries = _data.babyDevelopment;
     if (entries.isEmpty) return const SizedBox.shrink();
@@ -2034,17 +2192,20 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
             icon: Icons.assignment_turned_in_outlined,
           ),
           const SizedBox(height: 10),
-          ..._personalizedSymptoms.map((symptom) => _buildSymptomTile(
-                name: symptom,
-                desc: _translate(
-                  'This symptom is officially recorded in your prenatal chart. Follow the care guidelines provided by your midwife.',
-                  'Ang sintomas na ito ay opisyal na nakatala sa iyong prenatal chart. Sundin ang mga tagubilin ng iyong midwife.',
+          _buildContentRail([
+            for (final symptom in _personalizedSymptoms)
+              _RailEntry(
+                icon: Icons.assignment_turned_in_outlined,
+                colour: AppColors.brandPrimary,
+                title: _translateContent(symptom, language),
+                note: _translate(
+                  'Recorded in your chart. Follow what your midwife told you about this.',
+                  'Nakatala ito sa iyong chart. Sundin ang bilin ng iyong midwife tungkol dito.',
                   language,
                 ),
-                icon: Icons.checklist_rounded,
-                isReported: true,
-                language: language,
-              )),
+                highlighted: true,
+              ),
+          ]),
           const SizedBox(height: 16),
         ],
         _SectionHeader(
@@ -2055,157 +2216,58 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           icon: Icons.spa_outlined,
         ),
         const SizedBox(height: 10),
-        ..._data.commonSymptoms.map((symptom) {
-          String whyItHappens = '';
-          final sName = symptom.name.toLowerCase();
-          if (sName.contains('morning') || sName.contains('nausea')) {
-            whyItHappens = _translate('Triggered by rising hCG hormone and estrogen levels in early pregnancy.', 'Sanhi ng tumataas na hCG hormone at estrogen sa unang yugto ng pagbubuntis.', language);
-          } else if (sName.contains('fatigue')) {
-            whyItHappens = _translate('Your body is producing more blood and using energy to build the placenta.', 'Ang iyong katawan ay gumagawa ng mas maraming dugo at gumagamit ng enerhiya para mabuo ang inunan.', language);
-          } else if (sName.contains('heartburn')) {
-            whyItHappens = _translate('Pregnancy hormones relax the valve between your stomach and esophagus.', 'Rinirelaks ng hormones ang balbula sa pagitan ng sikmura at esophagus, kaya umaakyat ang asido.', language);
-          } else if (sName.contains('back pain')) {
-            whyItHappens = _translate('As your baby grows, your center of gravity shifts and ligaments loosen.', 'Habang lumalaki ang sanggol, nagbabago ang sentro ng balanse at lumuluwag ang mga ligament.', language);
-          } else {
-            // No filler.
-            //
-            // Everything without a specific explanation used to get "A normal
-            // physiological response to gestational hormonal shifts" — the
-            // same sentence, in the same italics, under three cards in a row.
-            // Repetition on that scale teaches a mother to skip the line, and
-            // it takes the specific explanations above down with it. An entry
-            // with nothing particular to say now says nothing.
-            whyItHappens = '';
-          }
-
-          return _buildSymptomTile(
-            name: symptom.name,
-            desc: symptom.tip,
-            why: whyItHappens,
-            icon: symptom.icon,
-            isReported: false,
-            language: language,
-          );
-        }),
+        _buildContentRail([
+          for (final symptom in _data.commonSymptoms)
+            _RailEntry(
+              // The symptom's own icon, in pink — a marker that says what the
+              // row is about, rather than a tick repeated down the column.
+              icon: symptom.icon,
+              colour: AppColors.brandText,
+              title: _translateContent(symptom.name, language),
+              body: _symptomExplanation(symptom.name, language),
+              note: _translateContent(symptom.tip, language),
+            ),
+        ]),
         const SizedBox(height: 20),
       ],
     );
   }
 
-  Widget _buildSymptomTile({
-    required String name,
-    required String desc,
-    String? why,
-    required IconData icon,
-    required bool isReported,
-    required AppLanguage language,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isReported ? AppColors.brandPrimary.withValues(alpha: 0.4) : const Color(0xFFF5E8ED),
-          width: isReported ? 1.5 : 1.0,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.01),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Pink, not the cold blue-grey it used. That grey tile was the one
-          // piece of slate in a pink app, and it made every ordinary symptom
-          // look switched off.
-          Container(
-            width: 46,
-            height: 46,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFEDF4),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Icon(
-              icon,
-              size: 23,
-              color: isReported ? AppColors.brandPrimary : AppColors.brandText,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _translateContent(name, language),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15.5,
-                    height: 1.3,
-                    color: AppColors.headingSoft,
-                  ),
-                ),
-                if (why != null && why.isNotEmpty) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    why,
-                    // Upright, not italic. A whole paragraph set in italics is
-                    // harder to read, and it made the explanation look like an
-                    // aside rather than the answer to "why is this happening".
-                    style: const TextStyle(
-                      fontSize: 13,
-                      height: 1.45,
-                      color: AppColors.inputText,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 10),
-                // The tip in its own tinted strip.
-                //
-                // It is the only line on the card she can act on, and it was
-                // the smallest and faintest thing there — a 12pt grey line
-                // below a 11pt grey line.
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7FA),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.lightbulb_outline_rounded,
-                          size: 18, color: AppColors.brandText),
-                      const SizedBox(width: 9),
-                      Expanded(
-                        child: Text(
-                          _translateContent(desc, language),
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            color: AppColors.inputText,
-                            height: 1.45,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  /// Why a common symptom happens, where there is something specific to say.
+  ///
+  /// Returns null rather than filler. Everything without a specific answer
+  /// used to get "A normal physiological response to gestational hormonal
+  /// shifts" — the same sentence under three cards in a row, which teaches a
+  /// mother to skip the line and takes the real explanations with it.
+  String? _symptomExplanation(String name, AppLanguage language) {
+    final sName = name.toLowerCase();
+    if (sName.contains('morning') || sName.contains('nausea')) {
+      return _translate(
+          'Caused by the pregnancy hormones rising in the early weeks.',
+          'Dulot ito ng pagtaas ng mga hormone sa unang mga linggo ng pagbubuntis.',
+          language);
+    }
+    if (sName.contains('fatigue')) {
+      return _translate(
+          'Your body is making more blood and building the placenta, which takes a lot of energy.',
+          'Gumagawa ang katawan mo ng mas maraming dugo at binubuo ang inunan, kaya marami itong kinukuhang lakas.',
+          language);
+    }
+    if (sName.contains('heartburn')) {
+      return _translate(
+          'Pregnancy hormones loosen the valve at the top of your stomach, so acid rises.',
+          'Lumuluwag ang balbula sa itaas ng sikmura dahil sa hormones, kaya umaakyat ang asido.',
+          language);
+    }
+    if (sName.contains('back pain')) {
+      return _translate(
+          'As your baby grows, your balance shifts and your joints loosen.',
+          'Habang lumalaki ang sanggol, nagbabago ang iyong balanse at lumuluwag ang mga kasukasuan.',
+          language);
+    }
+    return null;
   }
+
 
   Widget _buildNutritionTab(AppLanguage language) {
     return ListView(
@@ -2285,21 +2347,28 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           icon: Icons.food_bank_outlined,
         ),
         const SizedBox(height: 10),
-        ..._data.nutritionTips
-            .where((tip) {
-              if (_activeAllergies.isEmpty) return true;
-              final foodLower = tip.food.toLowerCase();
-              for (final allergen in _activeAllergies) {
-                if (foodLower.contains(allergen) || allergen.contains(foodLower.split('(').first.trim())) {
-                  return false;
-                }
+        // Teal markers: these are the foods to reach for. The rail below the
+        // "foods to skip" heading uses pink, so the two lists read as opposite
+        // advice at a glance rather than as two identical grids of cards.
+        _buildContentRail([
+          for (final tip in _data.nutritionTips.where((tip) {
+            if (_activeAllergies.isEmpty) return true;
+            final foodLower = tip.food.toLowerCase();
+            for (final allergen in _activeAllergies) {
+              if (foodLower.contains(allergen) ||
+                  allergen.contains(foodLower.split('(').first.trim())) {
+                return false;
               }
-              return true;
-            })
-            .map((tip) => _NutritionCard(
-              tip: tip,
-              language: language,
-            )),
+            }
+            return true;
+          }))
+            _RailEntry(
+              icon: tip.icon,
+              colour: const Color(0xFF3E9184),
+              title: _translateContent(tip.food, language),
+              body: _translateContent(tip.benefit, language),
+            ),
+        ]),
         const SizedBox(height: 20),
         _SectionHeader(
           title: _translate('Foods to skip for now', 'Mga pagkaing iwasan muna', language),
@@ -2535,60 +2604,17 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       ),
     ];
 
-    return _Card(
-      child: Column(
-        children: listToAvoid.map((item) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // A muted stop mark, not a red cancel sign repeated six times
-                // down the card. The list is advice about the weekly shop, not
-                // six errors.
-                Container(
-                  width: 34,
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF1F2),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: const Icon(Icons.do_not_disturb_on_outlined,
-                      size: 18, color: Color(0xFF9F1239)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.$1,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          height: 1.3,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.headingSoft,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.$2,
-                        style: const TextStyle(
-                          fontSize: 13.5,
-                          color: AppColors.inputText,
-                          height: 1.45,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
+    // Pink markers, matching the "skip" advice, against the teal of the
+    // recommended list above. Same rail, opposite colour.
+    return _buildContentRail([
+      for (final item in listToAvoid)
+        _RailEntry(
+          icon: Icons.do_not_disturb_on_outlined,
+          colour: AppColors.brandText,
+          title: item.$1,
+          body: item.$2,
+        ),
+    ]);
   }
 
   Widget _buildWarningsTab(AppLanguage language) {
@@ -2927,69 +2953,105 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       ),
     ];
 
-    return _Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.contact_phone_outlined, color: AppColors.brandPrimary, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                _translate('Direct Dial Contacts', 'Mga Numerong Matatawagan Agad', language),
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.textPrimary),
-              ),
-            ],
+    // The same card the profile's Personal Information uses, so a mother
+    // meets one container shape across the app rather than a new one per page.
+    //
+    // Its own heading replaces the hand-built title row, which is also what
+    // removes the black rule: that was a bare `Divider()` taking the theme
+    // default, and it drew the only hard line in the mother's app.
+    return ProfileCardSection(
+      title: _translate('Emergency contacts', 'Mga matatawagan sa emergency',
+          language),
+      icon: Icons.contact_phone_outlined,
+      children: [
+        Text(
+          _translate(
+            'Tap a contact to call. Your phone will open with the number ready.',
+            'Pindutin ang isang contact para tumawag. Bubuksan ng telepono mo ang numero.',
+            language,
           ),
-          const SizedBox(height: 4),
-          Text(
-            _translate(
-              'Tap on any row below to launch your phone dialer app with the number pre-filled.',
-              'Pindutin ang kahit aling hilera sa ibaba upang tawagan ang numero sa iyong telepono.',
-              language,
-            ),
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          style: const TextStyle(
+            fontSize: 13,
+            height: 1.45,
+            color: AppColors.inputText,
           ),
-          const Divider(height: 20),
-          ...contacts.map((contact) => InkWell(
-                onTap: () => _launchPhoneDialer(contact.$2),
-                borderRadius: BorderRadius.circular(12),
+        ),
+        const SizedBox(height: 14),
+        for (var index = 0; index < contacts.length; index++)
+          Padding(
+            padding: EdgeInsets.only(
+                bottom: index == contacts.length - 1 ? 0 : 10),
+            child: Material(
+              color: const Color(0xFFFFFAFC),
+              borderRadius: BorderRadius.circular(16),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => _launchPhoneDialer(contacts[index].$2),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 12, horizontal: 12),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        width: 42,
+                        height: 42,
+                        alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: AppColors.brandPrimary.withValues(alpha: 0.08),
-                          shape: BoxShape.circle,
+                          color: const Color(0xFFFFEDF4),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Icon(contact.$3, color: AppColors.brandPrimary, size: 18),
+                        child: Icon(contacts[index].$3,
+                            color: AppColors.brandText, size: 20),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 13),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              contact.$1,
-                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                              contacts[index].$1,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                height: 1.3,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.headingSoft,
+                              ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 3),
                             Text(
-                              contact.$2,
-                              style: const TextStyle(fontSize: 12, color: AppColors.brandPrimary, fontWeight: FontWeight.w700),
+                              contacts[index].$2,
+                              style: const TextStyle(
+                                fontSize: 14.5,
+                                color: AppColors.brandText,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.2,
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      const Icon(Icons.phone_forwarded, size: 16, color: AppColors.textSecondary),
+                      const SizedBox(width: 8),
+                      // A filled call button rather than a faint grey glyph.
+                      // This is the one control on the page a mother may need
+                      // in a hurry, and it was the palest thing on the row.
+                      Container(
+                        width: 38,
+                        height: 38,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          color: AppColors.brandPrimary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.call_rounded,
+                            size: 18, color: Colors.white),
+                      ),
                     ],
                   ),
                 ),
-              )),
-        ],
-      ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -3086,67 +3148,6 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _NutritionCard extends StatelessWidget {
-  final _NutritionTip tip;
-  final AppLanguage language;
-
-  const _NutritionCard({required this.tip, required this.language});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF5E8ED)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFEDF4),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Icon(tip.icon, size: 23, color: AppColors.brandText),
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _translateContent(tip.food, language),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    height: 1.3,
-                    color: AppColors.headingSoft,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  _translateContent(tip.benefit, language),
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    height: 1.45,
-                    color: AppColors.inputText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // Static hospital bag items
 const _hospitalBagItems = [
   'Government-issued ID and PhilHealth card',
@@ -3158,3 +3159,34 @@ const _hospitalBagItems = [
   'Phone charger',
   'Cash for hospital fees',
 ];
+
+/// One row of a [_buildContentRail].
+///
+/// The icon and its colour travel with the entry rather than being fixed by
+/// the rail, which is what lets one widget draw a symptom list in pink, a
+/// nutrient list in teal, and a foods-to-skip list in rose without three
+/// copies of the layout.
+class _RailEntry {
+  final IconData icon;
+  final Color colour;
+  final String title;
+
+  /// The explanation, where there is one worth giving.
+  final String? body;
+
+  /// A practical line, shown in its own tinted strip.
+  final String? note;
+
+  /// Draws the marker ringed and tints the row — used for the entry that is
+  /// happening now, or one the mother has reported herself.
+  final bool highlighted;
+
+  const _RailEntry({
+    required this.icon,
+    required this.colour,
+    required this.title,
+    this.body,
+    this.note,
+    this.highlighted = false,
+  });
+}
