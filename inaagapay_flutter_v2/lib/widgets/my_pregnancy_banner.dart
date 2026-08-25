@@ -70,14 +70,35 @@ class MyPregnancyBanner extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
+                  // One line where it fits, wrapping where it does not.
+                  //
+                  // The hard newline forced two lines on every screen, however
+                  // wide. Removing it lets the title sit on one across
+                  // ordinary phone widths and wrap only when it truly cannot.
+                  //
+                  // Deliberately *not* a FittedBox: that would hold one line
+                  // by scaling the type down, which cancels a mother's system
+                  // text-size setting — the audience most likely to have it
+                  // turned up. Wrapping and letting the banner grow is what
+                  // the tests in my_pregnancy_banner_test pin, and it is the
+                  // right behaviour.
+                  //
+                  // Note for anyone measuring this under test: flutter_test
+                  // substitutes a fixed-width placeholder font where every
+                  // glyph is one em, so a widget test reports this wrapping
+                  // when the real font does not. Line count here has to be
+                  // checked on a device, not in the suite.
                   Text(
-                    t('Everything about\nyour journey',
-                        'Lahat tungkol sa\niyong paglalakbay'),
+                    // Named for what it opens. "Everything about your journey"
+                    // described a feeling rather than a destination, and the
+                    // page behind it is the mother-and-baby book — the thing a
+                    // mother already knows by name from her health centre.
+                    t('Mother and Baby Book', 'Aklat ng Ina at Sanggol'),
                     style: const TextStyle(
                       fontSize: 18,
                       height: 1.25,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: -0.2,
+                      letterSpacing: -0.3,
                       color: Colors.white,
                     ),
                   ),
@@ -116,8 +137,8 @@ class MyPregnancyBanner extends StatelessWidget {
             // without a hard edge, and matches the circular treatment the
             // hero and baby-size cards already use.
             Container(
-              width: 96,
-              height: 96,
+              width: 92,
+              height: 92,
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.22),
                 shape: BoxShape.circle,
