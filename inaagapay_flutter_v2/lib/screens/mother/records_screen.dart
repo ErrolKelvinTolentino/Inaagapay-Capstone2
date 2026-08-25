@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
 import '../../services/language_service.dart';
 import '../../services/maternal_td_service.dart';
+import '../../services/baby_book_repository.dart';
 import '../../services/mother_profile_service.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/headline.dart';
@@ -45,6 +46,7 @@ class _RecordsScreenState extends State<RecordsScreen>
   /// because protection carries across them.
   List<MaternalTdRecord> _tdDoses = [];
   Map<int, int> _pregnancyFetalCounts = {};
+  Map<int, DateTime> _pregnancyLmps = {};
   Map<int, String> _checkupSymptomSummaries = {};
 
   String _selectedFilter = 'all';
@@ -186,6 +188,9 @@ class _RecordsScreenState extends State<RecordsScreen>
           .select('''
             encounter_datetime,
             is_midwife_approved,
+            age_of_gestation_weeks,
+            age_of_gestation_days,
+            midwife_notes,
             recorded_by:midwives (
               midwife_id,
               account:accounts (first_name, last_name)
@@ -217,6 +222,17 @@ class _RecordsScreenState extends State<RecordsScreen>
           checkupMap['checkup_datetime'] = enc['encounter_datetime'];
           checkupMap['midwife'] = enc['recorded_by'];
           checkupMap['is_midwife_approved'] = enc['is_midwife_approved'];
+          // Age of gestation and the midwife's notes belong to the encounter,
+          // not to the checkup. The detail sheet was reading them off the
+          // checkup row, where they have never been, so both printed "Not
+          // inputted" for every checkup ever recorded — including the ones
+          // where the midwife had written a note.
+          //
+          // Carried onto the checkup here, which is the same handover the
+          // midwife's own screens make when they read these columns.
+          checkupMap['age_of_gestation_weeks'] = enc['age_of_gestation_weeks'];
+          checkupMap['age_of_gestation_days'] = enc['age_of_gestation_days'];
+          checkupMap['remarks'] = enc['midwife_notes'];
           // The evaluation is fetched against the encounter, not the checkup,
           // and is carried onto the checkup here — the same handover
           // MotherProfileService makes, so both screens read the same shape.
@@ -290,7 +306,10 @@ class _RecordsScreenState extends State<RecordsScreen>
 
       final pregnancyResponse = await SupabaseService.client
           .from('pregnancies')
-          .select('pregnancy_id, fetal_count')
+          // last_menstrual_period is what age of gestation is worked out
+          // from. prenatal_checkups has no age_of_gestation column and never
+          // did, so the detail sheet was reading a key that is not on the row.
+          .select('pregnancy_id, fetal_count, last_menstrual_period')
           .inFilter('pregnancy_id', pregnancyIds);
 
       final checkupIds = (checkupsResponse as List)
@@ -332,12 +351,18 @@ class _RecordsScreenState extends State<RecordsScreen>
       }
 
       final fetalCounts = <int, int>{};
+      final pregnancyLmps = <int, DateTime>{};
       for (final pregnancy
           in (pregnancyResponse as List).cast<Map<String, dynamic>>()) {
         final id = _toInt(pregnancy['pregnancy_id']);
         final count = _toInt(pregnancy['fetal_count']);
         if (id != null && count != null) {
           fetalCounts[id] = count;
+        }
+        final lmp =
+            DateTime.tryParse(pregnancy['last_menstrual_period']?.toString() ?? '');
+        if (id != null && lmp != null) {
+          pregnancyLmps[id] = lmp;
         }
       }
 
@@ -347,6 +372,7 @@ class _RecordsScreenState extends State<RecordsScreen>
         _labTests = List<Map<String, dynamic>>.from(labTestsResponse);
         _maternalVitals = List<Map<String, dynamic>>.from(maternalVitalsResponse);
         _pregnancyFetalCounts = fetalCounts;
+        _pregnancyLmps = pregnancyLmps;
         _checkupSymptomSummaries = symptomSummaries;
       });
     }
@@ -383,6 +409,60 @@ class _RecordsScreenState extends State<RecordsScreen>
   String _formatInputValue(dynamic value) {
     final formatted = _formatValue(value);
     return formatted == '—' ? _notInputted() : formatted;
+  }
+
+  /// How far along she was on the day of a checkup, as it was recorded.
+  ///
+  /// Read from the encounter first. `clinical_encounters` carries
+  /// `age_of_gestation_weeks` and `age_of_gestation_days`, which is what the
+  /// midwife's own screens display — so this shows what was written down at
+  /// the visit, including any correction the midwife made against a scan.
+  ///
+  /// Null when nothing was recorded, so the caller can fall back to working it
+  /// out from the LMP.
+  String? _recordedGestationalAge(Map<String, dynamic> record) {
+    final weeks = _toInt(record['age_of_gestation_weeks']);
+    if (weeks == null) return null;
+    final days = _toInt(record['age_of_gestation_days']) ?? 0;
+
+    // Days are shown only when there are any. "20 weeks, 0 days" is a stilted
+    // way of saying "20 weeks".
+    if (days <= 0) return _t('$weeks weeks', '$weeks na linggo');
+    return _t('$weeks weeks, $days days', '$weeks na linggo, $days araw');
+  }
+
+  /// How far along she was on the day of a checkup, worked out from the LMP.
+  ///
+  /// The fallback for older records saved before the encounter carried a
+  /// gestational age. The arithmetic is the same one the midwife's checkup
+  /// form uses — whole weeks between the last menstrual period and the checkup
+  /// date, floored — so the figure a mother reads is the figure the
+  /// weight-gain evaluation was made against, rather than a second opinion
+  /// that could disagree with it.
+  ///
+  /// Returns null when the pregnancy has no recorded LMP, or when the checkup
+  /// predates it. There is no age of gestation to state in either case, and a
+  /// guess is worse than saying nothing.
+  int? _gestationalWeeksAt(Map<String, dynamic> record) {
+    final lmp = _pregnancyLmps[_toInt(record['pregnancy_id']) ?? -1];
+    if (lmp == null) return null;
+
+    final checkupDate =
+        DateTime.tryParse(record['checkup_datetime']?.toString() ?? '');
+    if (checkupDate == null) return null;
+
+    final normalisedCheckup =
+        DateTime(checkupDate.year, checkupDate.month, checkupDate.day);
+    final normalisedLmp = DateTime(lmp.year, lmp.month, lmp.day);
+    if (normalisedCheckup.isBefore(normalisedLmp)) return null;
+
+    // Delegated rather than divided here. BabyBookRepository already owns the
+    // LMP-to-weeks rule, including the clamp past term; a fourth copy of it in
+    // this file would be free to drift from the one the Baby Book draws.
+    return BabyBookRepository.gestationalWeek(
+      normalisedLmp,
+      asOf: normalisedCheckup,
+    );
   }
 
   bool _isSameDay(dynamic dateVal1, dynamic dateVal2) {
@@ -514,6 +594,33 @@ class _RecordsScreenState extends State<RecordsScreen>
     );
   }
 
+  /// Drops the rows that have nothing to report.
+  ///
+  /// A record shows what was measured, not a checklist of what was not. The
+  /// sheet was listing every possible field and marking the untouched ones
+  /// "Not inputted" — so a checkup with a weight and a blood pressure rendered
+  /// as four cards, three of them saying nothing was recorded, and a mother
+  /// scrolling it met more absence than record.
+  ///
+  /// RecordDetailScreen already drops a section once it has no rows, so
+  /// removing the blanks here removes the empty containers with them. It is
+  /// done on this side rather than in that screen because the screen is shared
+  /// with the midwife, whose view of a checkup is a working document where a
+  /// field left blank is worth seeing.
+  ///
+  /// Only the "Not inputted" sentinel is removed. "None", "Not given" and
+  /// "None recorded" are answers — no symptoms, no supplements handed over —
+  /// and a mother should still see those stated.
+  List<MapEntry<String, String>> _withRecordedValuesOnly(
+    List<MapEntry<String, String>> rows,
+  ) {
+    final blank = _notInputted();
+    return rows.where((row) {
+      final value = row.value.trim();
+      return value.isNotEmpty && value != blank && value != '—';
+    }).toList();
+  }
+
   void _showRecordDetails({
     required String title,
     required List<MapEntry<String, String>> rows,
@@ -542,11 +649,11 @@ class _RecordsScreenState extends State<RecordsScreen>
           isMidwifeApproved: isMidwifeApproved,
           patient: _recordPatient(),
           remarksSource: remarksSource,
-          resultRows: resultRows,
+          resultRows: _withRecordedValuesOnly(resultRows),
           resultsTitle: resultsTitle,
           pendingImages: pendingImages,
           title: title,
-          rows: rows,
+          rows: _withRecordedValuesOnly(rows),
           icon: icon,
           subtitle: subtitle,
           imageUrls: imageUrls,
@@ -1813,9 +1920,19 @@ class _RecordsScreenState extends State<RecordsScreen>
                                   }
                                 }
 
+                                // Keyed by encounter_id, which is what
+                                // _checkupSymptomSummaries is built from and
+                                // what prenatal_checkups is actually keyed on.
+                                //
+                                // This read `prenatal_checkup_id`, a column
+                                // that does not exist on the row — so the
+                                // lookup was always -1, always missed, and
+                                // every checkup reported no symptoms no matter
+                                // what the midwife had recorded. The symptoms
+                                // were fetched correctly and then thrown away
+                                // one line before they were displayed.
                                 final symptomSummary = _checkupSymptomSummaries[
-                                        _toInt(record['prenatal_checkup_id']) ??
-                                            -1] ??
+                                        _toInt(record['encounter_id']) ?? -1] ??
                                     _noneRecorded();
                                 final fetalCount = (_pregnancyFetalCounts[
                                             _toInt(record['pregnancy_id']) ??
@@ -1871,10 +1988,23 @@ class _RecordsScreenState extends State<RecordsScreen>
                                         _t('Fetal Count', 'Bilang ng Sanggol'),
                                         fetalCount),
                                     MapEntry(
-                                        _t('Age of Gestation',
-                                            'Edad ng Pagbubuntis'),
-                                        _formatInputValue(
-                                            record['age_of_gestation'])),
+                                      _t('Age of Gestation',
+                                          'Edad ng Pagbubuntis'),
+                                      () {
+                                        final recorded =
+                                            _recordedGestationalAge(record);
+                                        if (recorded != null) return recorded;
+                                        final weeks =
+                                            _gestationalWeeksAt(record);
+                                        if (weeks == null) {
+                                          return _notInputted();
+                                        }
+                                        return _t(
+                                          '$weeks weeks',
+                                          '$weeks na linggo',
+                                        );
+                                      }(),
+                                    ),
                                     MapEntry(
                                         _t('Weight (kg)', 'Timbang (kg)'),
                                         _formatInputValue(
@@ -1882,11 +2012,22 @@ class _RecordsScreenState extends State<RecordsScreen>
                                     MapEntry(
                                         _t('Blood Pressure', 'Blood Pressure'),
                                         '$bpSys/$bpDia'),
-                                    MapEntry(
-                                        _t('Fetal Position',
-                                            'Posisyon ng Sanggol'),
-                                        _formatInputValue(
-                                            record['fetal_position'])),
+                                    // Fetal Position is shown only when there
+                                    // is one. `fetal_position` is read in five
+                                    // places across the app and written in
+                                    // none — the checkup form has no field for
+                                    // it — so on the mother's side the row was
+                                    // a permanent "Not inputted" that no
+                                    // midwife could ever clear. It stays in
+                                    // the list for the day the form captures
+                                    // it, rather than being deleted.
+                                    if (_formatValue(record['fetal_position']) !=
+                                        '—')
+                                      MapEntry(
+                                          _t('Fetal Position',
+                                              'Posisyon ng Sanggol'),
+                                          _formatInputValue(
+                                              record['fetal_position'])),
                                     MapEntry(
                                         _t('Fetal Heart Tone',
                                             'Tono ng Tibok ng Sanggol'),

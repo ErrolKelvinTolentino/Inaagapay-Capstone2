@@ -571,31 +571,42 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      builder: (dialogContext) => Dialog(
+        // The tinted ground the rest of the mother's dialogs use, so this does
+        // not read as a system alert dropped into the app.
+        backgroundColor: const Color(0xFFFFF7FA),
+        surfaceTintColor: const Color(0xFFFFF7FA),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(16),
+                width: 68,
+                height: 68,
                 decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.08),
+                  color: AppColors.error.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.logout_rounded,
-                  size: 32,
+                  size: 30,
                   color: AppColors.error,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               Text(
                 LanguageService.translate('Log out', 'Mag-logout'),
+                textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+                  // Soft dark grey, not the bold near-black the default
+                  // dialog title used.
+                  color: AppColors.headingSoft,
+                  fontSize: 21,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
                 ),
               ),
               const SizedBox(height: 8),
@@ -605,44 +616,66 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
                   'Sigurado ka bang mag-logout sa iyong account?',
                 ),
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: const TextStyle(
+                  color: AppColors.inputText,
+                  fontSize: 14.5,
+                  height: 1.45,
+                ),
               ),
               const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                      child: Text(
-                          LanguageService.translate('Cancel', 'Kanselahin')),
+              // Stacked, not side by side.
+              //
+              // Two buttons sharing a row have to fit the longest label in
+              // either language, and "Kanselahin" beside "Mag-logout" leaves
+              // each of them a little over a hundred pixels on a small phone.
+              // Full width also gives the destructive action a target she is
+              // not going to hit by accident reaching for the other one.
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                    _logout();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 3,
+                    shadowColor: AppColors.error.withValues(alpha: 0.4),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(27),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _logout();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.error,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                      child: Text(
-                          LanguageService.translate('Log out', 'Mag-logout')),
+                  child: Text(
+                    LanguageService.translate('Log out', 'Mag-logout'),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                  ),
+                  child: Text(
+                    LanguageService.translate('Cancel', 'Kanselahin'),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
