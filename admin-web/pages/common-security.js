@@ -189,7 +189,109 @@
     return /^(09|\+639)\d{9}$/.test(str);
   };
 
-  // 6. Custom RHU Confirmation Modal (Replaces browser confirm/alert popups)
+  // 6. Profile menu — the account control in the shared header opens the
+  // signed-in user's profile, settings, and help pages from every portal view.
+  function initProfileMenu() {
+    const headerUser = document.querySelector(".header-user");
+    if (!headerUser || document.querySelector(".profile-menu")) return;
+
+    const displayName = [session?.first_name, session?.last_name].filter(Boolean).join(" ") || "Admin";
+    const email = session?.email_address || "Signed-in account";
+    const initials = ((session?.first_name?.[0] ?? "") + (session?.last_name?.[0] ?? "")).toUpperCase() || "A";
+
+    headerUser.id = headerUser.id || "header-user-btn";
+    headerUser.setAttribute("role", "button");
+    headerUser.setAttribute("tabindex", "0");
+    headerUser.setAttribute("aria-haspopup", "menu");
+    headerUser.setAttribute("aria-expanded", "false");
+
+    const nameEl = headerUser.querySelector(".header-user-name");
+    const avatarEl = headerUser.querySelector(".header-avatar");
+    if (nameEl) nameEl.textContent = displayName;
+    if (avatarEl) {
+      avatarEl.textContent = initials;
+      avatarEl.setAttribute("aria-hidden", "true");
+    }
+    const existingChevron = headerUser.querySelector(".profile-menu-chevron, .fa-chevron-down, .fa-angle-down");
+    if (existingChevron) {
+      existingChevron.classList.add("profile-menu-chevron");
+      existingChevron.setAttribute("aria-hidden", "true");
+    } else {
+      const chevron = document.createElement("i");
+      chevron.className = "fa-solid fa-chevron-down profile-menu-chevron";
+      chevron.setAttribute("aria-hidden", "true");
+      headerUser.appendChild(chevron);
+    }
+
+    const userMenuWrap = document.createElement("div");
+    userMenuWrap.className = "header-user-menu";
+    headerUser.parentNode.insertBefore(userMenuWrap, headerUser);
+    userMenuWrap.appendChild(headerUser);
+
+    const menu = document.createElement("div");
+    menu.className = "profile-menu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Account menu");
+    menu.innerHTML = `
+      <div class="profile-menu-summary">
+        <strong>${window.escHtml(displayName)}</strong>
+        <span>${window.escHtml(email)}</span>
+      </div>
+      <a class="profile-menu-link" role="menuitem" href="profile.html">
+        <i class="fa-solid fa-user"></i><span>Profile</span>
+      </a>
+      <a class="profile-menu-link" role="menuitem" href="settings.html">
+        <i class="fa-solid fa-gear"></i><span>Settings</span>
+      </a>
+      <a class="profile-menu-link" role="menuitem" href="help.html">
+        <i class="fa-solid fa-circle-question"></i><span>Help &amp; Support</span>
+      </a>
+      <div class="profile-menu-divider" role="separator"></div>
+      <button class="profile-menu-link logout" role="menuitem" type="button" data-profile-action="logout">
+        <i class="fa-solid fa-right-from-bracket"></i><span>Log out</span>
+      </button>
+    `;
+    userMenuWrap.appendChild(menu);
+
+    function setOpen(isOpen) {
+      userMenuWrap.classList.toggle("open", isOpen);
+      headerUser.setAttribute("aria-expanded", String(isOpen));
+    }
+
+    headerUser.addEventListener("click", () => {
+      setOpen(!userMenuWrap.classList.contains("open"));
+    });
+    headerUser.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        setOpen(!userMenuWrap.classList.contains("open"));
+      }
+      if (event.key === "Escape") setOpen(false);
+    });
+    menu.addEventListener("click", (event) => {
+      const logout = event.target.closest("[data-profile-action=\"logout\"]");
+      if (logout) {
+        setOpen(false);
+        document.getElementById("logout-btn")?.click();
+        return;
+      }
+      if (event.target.closest("a")) setOpen(false);
+    });
+    document.addEventListener("click", (event) => {
+      if (!userMenuWrap.contains(event.target)) setOpen(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") setOpen(false);
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initProfileMenu);
+  } else {
+    initProfileMenu();
+  }
+
+  // 7. Custom RHU Confirmation Modal (Replaces browser confirm/alert popups)
   window.openConfirmationModal = function (options) {
     const opts = Object.assign({
       title: "Confirm Action",

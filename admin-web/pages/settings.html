@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings — InaAgapay RHU Portal</title>
+    <link rel="icon" type="image/png" href="../images/logo_icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link rel="stylesheet" href="../styles/main.css" />
+  </head>
+  <body>
+    <div class="app-layout">
+      <header class="app-header"><div class="header-brand"><button class="header-sidebar-toggle" id="sidebar-toggle" aria-label="Toggle menu"><i class="fa-solid fa-bars"></i></button><img src="../images/logo_icon.png" alt="InaAgapay Logo" class="header-logo" /><img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" /></div><div class="header-right"><span class="header-badge">RHU Portal</span><div class="header-user"><div class="header-avatar" id="header-avatar">A</div><span class="header-user-name" id="header-user-name">Admin</span><i class="fa-solid fa-chevron-down" style="font-size: 11px; color: var(--text-secondary)"></i></div></div></header>
+      <aside class="app-sidebar">
+        <span class="sidebar-section-label">Main Menu</span>
+        <ul class="sidebar-nav"><li><a href="dashboard.html"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li><li><a href="accounts.html"><i class="fa-solid fa-users"></i> Account Management</a></li><li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li><li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li><li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li></ul>
+        <div class="sidebar-divider"></div><span class="sidebar-section-label">Patient Management</span><ul class="sidebar-nav"><li><a href="patient-records.html"><i class="fa-solid fa-folder-open"></i> Patient Records</a></li></ul>
+        <div class="sidebar-divider"></div><span class="sidebar-section-label">System</span><ul class="sidebar-nav"><li><a href="audit-trail.html"><i class="fa-solid fa-clipboard-list"></i> Audit Trail</a></li><li><a href="backup.html"><i class="fa-solid fa-database"></i> Backup &amp; Restore</a></li></ul>
+        <div class="sidebar-divider"></div><div class="sidebar-footer-nav"><button class="sidebar-logout" id="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button></div>
+      </aside>
+
+      <main class="app-main">
+        <div class="page-header"><div class="page-title-block"><h1 class="page-title"><i class="fa-solid fa-gear" style="color: var(--brand-primary); margin-right: 8px;"></i>Settings</h1><p class="page-subtitle">Manage account security and review the portal settings available to you.</p></div></div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; max-width: 900px;">
+          <div class="card"><div class="card-header"><div class="card-title"><i class="fa-solid fa-lock" style="color: var(--brand-primary); margin-right: 6px;"></i>Security</div><div class="card-subtitle">Keep your sign-in credentials up to date.</div></div><div class="card-body"><div class="info-row"><div class="info-row-icon"><i class="fa-solid fa-key"></i></div><div class="info-row-content"><div class="info-row-label">Password</div><div class="info-row-value">Protected</div></div></div><a href="change-password.html" class="btn btn-primary btn-sm" style="margin-top: 16px;"><i class="fa-solid fa-pen-to-square"></i> Change password</a></div></div>
+          <div class="card"><div class="card-header"><div class="card-title"><i class="fa-solid fa-user-shield" style="color: var(--brand-primary); margin-right: 6px;"></i>Session security</div><div class="card-subtitle">Automatic safeguards for this administrative portal.</div></div><div class="card-body"><div class="info-row"><div class="info-row-icon"><i class="fa-solid fa-hourglass-half"></i></div><div class="info-row-content"><div class="info-row-label">Idle timeout</div><div class="info-row-value">15 minutes</div></div></div><p class="small-description" style="margin-top: 16px; line-height: 1.6;">You are signed out automatically after inactivity to help protect health information.</p></div></div>
+          <div class="card"><div class="card-header"><div class="card-title"><i class="fa-solid fa-building-shield" style="color: var(--brand-primary); margin-right: 6px;"></i>Portal access</div><div class="card-subtitle">Your current administrative scope.</div></div><div class="card-body"><div class="info-row"><div class="info-row-icon"><i class="fa-solid fa-hospital"></i></div><div class="info-row-content"><div class="info-row-label">Assigned office</div><div class="info-row-value" data-account-portal>Rural Health Unit</div></div></div><p class="small-description" style="margin-top: 16px; line-height: 1.6;">Access to records, facilities, reports, and inventory follows this office assignment.</p></div></div>
+        </div>
+      </main>
+      <footer class="app-footer"><span>&copy; 2026 InaAgapay — Maternal &amp; Child Health Information System</span><span style="color: var(--border-primary)">|</span><span>Admin Portal v2.5</span></footer>
+    </div>
+    <script src="common-security.js"></script><script src="portal-scope.js"></script><script src="account-pages.js"></script>
+  </body>
+</html>
