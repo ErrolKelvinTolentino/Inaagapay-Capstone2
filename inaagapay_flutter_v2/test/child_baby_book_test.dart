@@ -77,6 +77,7 @@ class _SpyRepo extends BabyBookRepository {
 }
 
 void main() {
+  _birthStoryTests();
   group('ageInMonths', () {
     test('counts completed months, not started ones', () {
       final born = DateTime(2026, 1, 15);
@@ -379,6 +380,112 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Juan Dela Cruz'), findsWidgets);
+    });
+  });
+}
+
+/// A repository that answers with one birth record and nothing else.
+class _BirthRepo extends BabyBookRepository {
+  const _BirthRepo(this.birth);
+
+  final Map<String, dynamic>? birth;
+
+  @override
+  Future<List<ChildMilestone>> loadChildMilestones({
+    required int childId,
+    required DateTime? birthdate,
+  }) async =>
+      const [];
+
+  @override
+  Future<List<BabyGrowthMilestone>> loadChildPrenatalChapter(
+          int childId) async =>
+      const [];
+
+  @override
+  Future<Map<String, dynamic>?> loadBirthDetails(int childId) async => birth;
+}
+
+Widget _book(BabyBookRepository repo) => MaterialApp(
+      home: ChildBabyBookPage(
+        childId: 1,
+        childName: 'Malachi',
+        birthdate: DateTime(2026, 1, 10),
+        repository: repo,
+      ),
+    );
+
+void _birthStoryTests() {
+  group('the day you were born', () {
+    testWidgets('shows the birth record that was already being stored', (
+      tester,
+    ) async {
+      // Every one of these was in birth_details and displayed nowhere. This is
+      // the page a mother re-reads, so the point of the test is that recorded
+      // facts actually reach it.
+      await tester.pumpWidget(_book(const _BirthRepo(<String, dynamic>{
+        'birthdate': '2026-01-10',
+        'birth_weight': 3.2,
+        'birth_length': 49.5,
+        'birthplace_facility': 'Barangay Health Station',
+        'birthplace_city_municipality': 'Ligao',
+        'birthplace_province': 'Albay',
+        'delivery_type': 'Normal Spontaneous Vaginal Delivery',
+      })));
+      await tester.pumpAndSettle();
+
+      expect(find.text('The day you were born'), findsOneWidget);
+      // A date she would read aloud, not an ISO string.
+      expect(find.text('January 10, 2026'), findsOneWidget);
+      expect(find.text('3.2 kg'), findsOneWidget);
+      expect(find.text('49.5 cm'), findsOneWidget);
+      expect(
+        find.text('Barangay Health Station, Ligao, Albay'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Normal Spontaneous'), findsOneWidget);
+    });
+
+    testWidgets('draws only the facts that exist', (tester) async {
+      // A half-filled birth record is normal. A keepsake page gains nothing
+      // from a row reading "not recorded", so those rows are simply absent.
+      await tester.pumpWidget(_book(const _BirthRepo(<String, dynamic>{
+        'birthdate': '2026-01-10',
+        'birth_weight': null,
+        'birth_length': null,
+        'birthplace_facility': null,
+        'birthplace_city_municipality': null,
+        'birthplace_province': null,
+        'delivery_type': null,
+      })));
+      await tester.pumpAndSettle();
+
+      expect(find.text('The day you were born'), findsOneWidget);
+      expect(find.text('January 10, 2026'), findsOneWidget);
+      expect(find.textContaining('kg'), findsNothing);
+      expect(find.textContaining('cm'), findsNothing);
+      expect(find.textContaining('not recorded'), findsNothing);
+    });
+
+    testWidgets('the chapter is absent when nothing was recorded at all', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_book(const _BirthRepo(null)));
+      await tester.pumpAndSettle();
+
+      expect(find.text('The day you were born'), findsNothing);
+    });
+
+    testWidgets('the book opens on a cover carrying the child\'s name', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_book(const _BirthRepo(null)));
+      await tester.pumpAndSettle();
+
+      // The name is the largest thing on the page, not a row in a list.
+      expect(find.text('BABY BOOK'), findsOneWidget);
+      final name = tester.widget<Text>(find.text('Malachi').first);
+      expect(name.style?.fontSize, greaterThanOrEqualTo(24));
     });
   });
 }

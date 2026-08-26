@@ -43,39 +43,131 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
     showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        title: Text(LanguageService.translate(
-            'Choose Source', 'Piliin ang Pinagmulan')),
-        content: Text(LanguageService.translate(
-            'Select where to get your photo from:',
-            'Piliin kung saan kukuha ng larawan:')),
+      // The app's dialog language, not the Material default.
+      //
+      // This was a white box with a near-black title and two text links in a
+      // row — "Choose Source" and "Select where to get your photo from" read
+      // like a developer's prompt, and the two choices were the least
+      // clickable things in it. They are the whole dialog, so they are now
+      // two full-width rows with a picture each.
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFFFFF7FA),
+        surfaceTintColor: const Color(0xFFFFF7FA),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(28),
         ),
-        actions: [
-          TextButton.icon(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _pickImage(ImageSource.gallery);
-            },
-            icon: const Icon(Icons.photo_library, size: 18),
-            label: Text(LanguageService.translate('Gallery', 'Gallery')),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.brandPrimary,
-            ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                LanguageService.translate(
+                    'Add a photo', 'Magdagdag ng larawan'),
+                style: const TextStyle(
+                  color: AppColors.headingSoft,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                LanguageService.translate(
+                    'Where would you like to take it from?',
+                    'Saan mo gustong kunin ito?'),
+                style: const TextStyle(
+                  color: AppColors.inputText,
+                  fontSize: 13.5,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 18),
+              _photoSourceRow(
+                ctx,
+                icon: Icons.photo_library_rounded,
+                label: LanguageService.translate(
+                    'Choose from gallery', 'Pumili mula sa gallery'),
+                source: ImageSource.gallery,
+              ),
+              const SizedBox(height: 10),
+              _photoSourceRow(
+                ctx,
+                icon: Icons.camera_alt_rounded,
+                label: LanguageService.translate(
+                    'Take a photo now', 'Kumuha ng larawan ngayon'),
+                source: ImageSource.camera,
+              ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                  ),
+                  child: Text(
+                    LanguageService.translate('Cancel', 'Kanselahin'),
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
           ),
-          TextButton.icon(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _pickImage(ImageSource.camera);
-            },
-            icon: const Icon(Icons.camera_alt, size: 18),
-            label: Text(LanguageService.translate('Camera', 'Camera')),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.brandPrimary,
-            ),
+        ),
+      ),
+    );
+  }
+
+  /// One way of getting a photo, sized as something to press.
+  Widget _photoSourceRow(
+    BuildContext dialogContext, {
+    required IconData icon,
+    required String label,
+    required ImageSource source,
+  }) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          Navigator.pop(dialogContext);
+          _pickImage(source);
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEDF4),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: AppColors.brandText, size: 21),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.headingSoft,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.brandPrimary, size: 22),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -215,7 +307,7 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
                         row.value,
                         style: const TextStyle(
                           fontSize: 13,
-                          color: AppColors.textPrimary,
+                          color: AppColors.headingSoft,
                           height: 1.45,
                         ),
                       ),
@@ -381,7 +473,7 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary,
+                                    color: AppColors.headingSoft,
                                   ),
                                 ),
                                 const SizedBox(height: 4),

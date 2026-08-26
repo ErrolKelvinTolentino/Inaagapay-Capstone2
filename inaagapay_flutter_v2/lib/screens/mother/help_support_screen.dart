@@ -206,17 +206,24 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
         children: [
           Row(
             children: [
+              // Pink whether or not she is linked.
+              //
+              // The grey variant read as "disabled" — the tile went colourless
+              // for exactly the mother this card is written for, the one who
+              // still needs to register. Not being linked is a step she has
+              // not taken, not a fault in her account.
               Container(
-                padding: const EdgeInsets.all(10),
+                width: 46,
+                height: 46,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: (isLinked ? AppColors.brandPrimary : AppColors.textSecondary)
-                      .withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
+                  color: const Color(0xFFFFEDF4),
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.local_hospital_rounded,
-                  color: isLinked ? AppColors.brandPrimary : AppColors.textSecondary,
-                  size: 24,
+                  color: AppColors.brandText,
+                  size: 22,
                 ),
               ),
               const SizedBox(width: 14),
@@ -227,9 +234,10 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     Text(
                       _t('Your Assigned Health Center', 'Iyong Barangay Health Center'),
                       style: const TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        height: 1.3,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.headingSoft,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -246,7 +254,13 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               ),
             ],
           ),
-          const Divider(height: 28, thickness: 0.5),
+          // A soft brand rule. A bare Divider takes the theme default, which
+          // on this page drew a hard black line across the card.
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Divider(
+                height: 1, thickness: 1, color: Color(0xFFF5E4EC)),
+          ),
           if (isLinked) ...[
             if (_midwives.isEmpty)
               Text(
@@ -260,7 +274,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                 style: const TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+                  color: AppColors.headingSoft,
                 ),
               ),
               const SizedBox(height: 12),
@@ -295,7 +309,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                                 style: const TextStyle(
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.textPrimary,
+                                  color: AppColors.headingSoft,
                                 ),
                               ),
                               const SizedBox(height: 2),
@@ -423,7 +437,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+                  color: AppColors.headingSoft,
                 ),
               ),
               iconColor: AppColors.brandPrimary,
@@ -509,7 +523,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+                  color: AppColors.headingSoft,
                 ),
               ),
               iconColor: AppColors.brandPrimary,
@@ -565,7 +579,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             style: const TextStyle(
               fontSize: 14.5,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: AppColors.headingSoft,
             ),
           ),
           const SizedBox(height: 6),

@@ -51,6 +51,7 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
   bool _loading = true;
   List<ChildMilestone> _milestones = const [];
   List<BabyGrowthMilestone> _prenatalChapter = const [];
+  Map<String, dynamic>? _birth;
   bool _chapterOpen = false;
 
   String _t(String en, String fil) => LanguageService.translate(en, fil);
@@ -67,10 +68,12 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
       birthdate: widget.birthdate,
     );
     final chapter = await _repo.loadChildPrenatalChapter(widget.childId);
+    final birth = await _repo.loadBirthDetails(widget.childId);
     if (!mounted) return;
     setState(() {
       _milestones = milestones;
       _prenatalChapter = chapter;
+      _birth = birth;
       _loading = false;
     });
   }
@@ -200,10 +203,13 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
         backgroundColor: AppColors.bgPrimary,
         body: Column(
           children: [
+            // The header names the book; the cover names the child.
+            //
+            // Both used to carry her name, one directly above the other, which
+            // is the same duplication the pregnancy book had between its
+            // header and its hero card.
             SecondaryHeader(
-              title: widget.childName.isEmpty
-                  ? _t('Baby Book', 'Baby Book')
-                  : widget.childName,
+              title: _t('Baby Book', 'Aklat ng Sanggol'),
               onBack: () => Navigator.pop(context),
             ),
             Expanded(
@@ -217,8 +223,16 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
                         children: [
                           _ageHeader(),
                           const SizedBox(height: 16),
+
+                          // Her story in the order it happened: the pregnancy
+                          // she was carried through, the day she arrived, then
+                          // everything since.
                           if (_prenatalChapter.isNotEmpty) ...[
                             _beforeYouWereBorn(),
+                            const SizedBox(height: 20),
+                          ],
+                          if (_birthStory() case final story?) ...[
+                            story,
                             const SizedBox(height: 20),
                           ],
                           ..._ageSections(),
@@ -247,48 +261,99 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
         ? null
         : BabyBookRepository.ageInMonths(b);
 
+    // A cover, the way the pregnancy book has one.
+    //
+    // This was a small white row with an icon — the child's book opened on
+    // something that looked like a list item. A book should open on its
+    // cover, and the child's name should be the largest thing on it.
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      // Content drives the height, with a floor.
+      //
+      // A fixed 168 overflowed by 12px as soon as a name wrapped to two lines
+      // — and long names are ordinary here. The same mistake the Home banner
+      // made, caught the same way.
+      constraints: const BoxConstraints(minHeight: 168),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border:
-            Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.15)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: AppColors.brandPrimary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.child_care_rounded,
-                color: AppColors.brandPrimary, size: 28),
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0xFFFF8FBC), Color(0xFFE6398D)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.brandAccent.withValues(alpha: 0.26),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
-          const SizedBox(width: 14),
-          Expanded(
+        ],
+      ),
+      child: Stack(
+        children: [
+          // The artwork sits behind the words rather than beside them, and is
+          // faded so white type stays readable over it whatever the drawing.
+          Positioned(
+            right: -14,
+            bottom: -10,
+            child: Opacity(
+              opacity: 0.32,
+              child: Image.asset(
+                'assets/images/baby.png',
+                height: 168,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  widget.childName,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.brandText,
+                  _t('BABY BOOK', 'AKLAT NG SANGGOL'),
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 8),
                 Text(
-                  age == null
-                      ? _t('Birthday not recorded yet',
-                          'Wala pang naitalang kaarawan')
-                      : ChildMilestone.ageLabel(age),
+                  widget.childName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      fontSize: 13, color: AppColors.textSecondary),
+                    color: Colors.white,
+                    fontSize: 26,
+                    height: 1.15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    age == null
+                        ? _t('Birthday not recorded yet',
+                            'Wala pang naitalang kaarawan')
+                        : ChildMilestone.ageLabel(age),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -303,6 +368,179 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
   /// It belongs to the pregnancy, not to this child, so it opens the book
   /// rather than sitting among their own milestones — and it stays folded so
   /// the page starts on the child a mother came to see.
+  /// "The day you were born" — the birth record, read as a page of a book.
+  ///
+  /// Every figure here was already in `birth_details` and shown nowhere: the
+  /// weight and length she was born at, where it happened, how. For a mother
+  /// this is the most re-read page of a paper baby book, and the app was
+  /// holding it and saying nothing.
+  ///
+  /// Only the facts that exist are drawn. A birth record filled in halfway is
+  /// normal, and a row reading "not recorded" adds nothing to a keepsake.
+  Widget? _birthStory() {
+    final birth = _birth;
+    if (birth == null) return null;
+
+    final born = DateTime.tryParse(birth['birthdate']?.toString() ?? '');
+    final weight = (birth['birth_weight'] as num?)?.toDouble();
+    final length = (birth['birth_length'] as num?)?.toDouble();
+    final delivery = birth['delivery_type']?.toString().trim();
+
+    final place = <String>[
+      birth['birthplace_facility']?.toString().trim() ?? '',
+      birth['birthplace_city_municipality']?.toString().trim() ?? '',
+      birth['birthplace_province']?.toString().trim() ?? '',
+    ].where((part) => part.isNotEmpty).join(', ');
+
+    final facts = <({IconData icon, String label, String value})>[
+      if (born != null)
+        (
+          icon: Icons.cake_outlined,
+          label: _t('Born on', 'Ipinanganak noong'),
+          value: _longDate(born),
+        ),
+      if (weight != null && weight > 0)
+        (
+          icon: Icons.monitor_weight_outlined,
+          label: _t('Weight at birth', 'Timbang nang isilang'),
+          value: '${weight.toStringAsFixed(weight % 1 == 0 ? 0 : 1)} kg',
+        ),
+      if (length != null && length > 0)
+        (
+          icon: Icons.straighten_rounded,
+          label: _t('Length at birth', 'Haba nang isilang'),
+          value: '${length.toStringAsFixed(length % 1 == 0 ? 0 : 1)} cm',
+        ),
+      if (place.isNotEmpty)
+        (
+          icon: Icons.place_outlined,
+          label: _t('Born at', 'Ipinanganak sa'),
+          value: place,
+        ),
+      if (delivery != null && delivery.isNotEmpty)
+        (
+          icon: Icons.favorite_outline_rounded,
+          label: _t('How you arrived', 'Paano ka dumating'),
+          value: delivery,
+        ),
+    ];
+
+    // Nothing recorded, nothing to show. An empty chapter heading over a blank
+    // card is worse than the chapter simply not being there yet.
+    if (facts.isEmpty) return null;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFFFDFEB)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF69243F).withValues(alpha: 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[Color(0xFFFF8FBC), AppColors.brandPrimary],
+                  ),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: const Icon(Icons.auto_awesome_rounded,
+                    color: Colors.white, size: 21),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  _t('The day you were born', 'Ang araw na ipinanganak ka'),
+                  style: const TextStyle(
+                    color: AppColors.headingSoft,
+                    fontSize: 18,
+                    height: 1.25,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          for (var index = 0; index < facts.length; index++)
+            Padding(
+              padding: EdgeInsets.only(
+                  bottom: index == facts.length - 1 ? 0 : 10),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFAFC),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Icon(facts[index].icon,
+                        size: 20, color: AppColors.brandText),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        facts[index].label,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          color: AppColors.inputText,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        facts[index].value,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.headingSoft,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// A date a mother would read aloud, not an ISO string.
+  String _longDate(DateTime date) {
+    const monthsEn = <String>[
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    const monthsFil = <String>[
+      'Enero', 'Pebrero', 'Marso', 'Abril', 'Mayo', 'Hunyo',
+      'Hulyo', 'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre',
+    ];
+    final month = _t(monthsEn[date.month - 1], monthsFil[date.month - 1]);
+    return '$month ${date.day}, ${date.year}';
+  }
+
   Widget _beforeYouWereBorn() {
     final kept = _prenatalChapter
         .where((m) => m.status == BabyGrowthMilestoneStatus.completed)
