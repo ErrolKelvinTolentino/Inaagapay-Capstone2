@@ -360,30 +360,41 @@ body::before {
 @keyframes pageEntrance {
   0% {
     opacity: 0;
-    transform: translateY(6px);
   }
   100% {
     opacity: 1;
-    transform: none;
   }
 }
 
 @keyframes pageExit {
   0% {
     opacity: 1;
-    transform: none;
   }
   100% {
     opacity: 0;
-    transform: translateY(-6px);
+  }
+}
+
+@keyframes contentEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
 body {
-  animation: pageEntrance 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: pageEntrance 0.22s ease-out both;
 }
 
 body.page-exiting {
-  animation: pageExit 0.18s cubic-bezier(0.4, 0, 1, 1) forwards !important;
+  animation: pageExit 0.16s ease-in forwards !important;
   pointer-events: none !important;
+}
+
+.login-wrapper {
+  animation: contentEntrance 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
 }

@@ -97,22 +97,29 @@ html {
 @keyframes pageEntrance {
   0% {
     opacity: 0;
-    transform: translateY(6px);
   }
   100% {
     opacity: 1;
-    transform: none;
   }
 }
 
 @keyframes pageExit {
   0% {
     opacity: 1;
-    transform: none;
   }
   100% {
     opacity: 0;
-    transform: translateY(-6px);
+  }
+}
+
+@keyframes contentEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -125,12 +132,18 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  animation: pageEntrance 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: pageEntrance 0.22s ease-out both;
 }
 
 body.page-exiting {
-  animation: pageExit 0.18s cubic-bezier(0.4, 0, 1, 1) forwards !important;
+  animation: pageExit 0.16s ease-in forwards !important;
   pointer-events: none !important;
+}
+
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+  animation: contentEntrance 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1482,18 +1495,24 @@ body.modal-open {
 /* ── Modals / Dialogs ─────────────────────────────── */
 .modal-overlay {
   position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(3px);
-  z-index: 1000;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(16, 24, 40, 0.56);
+  backdrop-filter: blur(5px);
+  z-index: 10000;
   display: flex;
-  align-items: flex-start;  /* allow overlay to scroll instead of clipping */
+  align-items: center;
   justify-content: center;
   padding: 20px;
-  overflow-y: auto;          /* overlay scrolls, not the background page */
+  box-sizing: border-box;
+  overflow-y: auto;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.25s ease, visibility 0.25s ease;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
 }
 
 .modal-overlay.show {
@@ -1502,14 +1521,20 @@ body.modal-open {
 }
 
 .modal {
-  background: var(--surface);
-  border-radius: var(--radius-dialog);
-  box-shadow: var(--shadow-dialog);
+  background: #FFFFFF;
+  border-radius: var(--radius-dialog, 20px);
+  border: 1px solid var(--border-primary, #F0F0F0);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
   width: 100%;
-  max-width: 520px;
-  margin: auto;              /* keeps it centered when content fits in viewport */
-  transform: scale(0.95) translateY(-10px);
-  transition: transform 0.25s ease;
+  max-width: 540px;
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+  position: relative;
+  box-sizing: border-box;
+  transform: scale(0.97) translateY(-6px);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .modal-overlay.show .modal {
@@ -1517,50 +1542,59 @@ body.modal-open {
 }
 
 .modal-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 28px 0;
-  margin-bottom: 4px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-primary, #F0F0F0);
 }
 
 .modal-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--brand-primary);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--brand-text, #C73578);
+  margin: 0;
 }
 
 .modal-close {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--border-primary);
+  background: var(--border-primary, #F0F0F0);
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  color: var(--text-secondary);
-  transition: var(--transition);
+  color: var(--text-secondary, #8A8A8A);
+  transition: var(--transition, 0.2s ease);
   flex-shrink: 0;
 }
 
 .modal-close:hover {
-  background: var(--brand-primary-10);
-  color: var(--brand-primary);
+  background: var(--brand-primary-10, rgba(255, 104, 165, 0.1));
+  color: var(--brand-primary, #FF68A5);
 }
 
 .modal-body {
-  padding: 20px 28px;
+  padding: 20px 24px;
+  overflow-y: auto;
+  max-height: calc(100vh - 150px);
+  flex: 1 1 auto;
 }
 
 .modal-footer {
-  padding: 16px 28px;
-  border-top: 1px solid var(--border-primary);
+  flex-shrink: 0;
+  padding: 14px 24px 18px;
+  border-top: 1px solid var(--border-primary, #F0F0F0);
+  background: var(--surface, #FFF9FC);
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
 }
 
 /* ── Alerts / Toasts (Snackbar style) ─────────────── */
@@ -2221,57 +2255,75 @@ body.modal-open {
 
 .rhu-modal-overlay {
   position: fixed;
-  top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(45, 45, 45, 0.45);
-  backdrop-filter: blur(4px);
-  z-index: 9999;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(16, 24, 40, 0.56);
+  backdrop-filter: blur(5px);
+  z-index: 999999;
   display: flex;
-  align-items: flex-start;   /* allow overlay to scroll when card is tall */
+  align-items: center;
   justify-content: center;
   padding: 20px;
-  overflow-y: auto;           /* overlay scrolls, not the background page */
+  box-sizing: border-box;
+  overflow-y: auto;
   animation: fadeIn 0.2s ease;
 }
 .rhu-modal-card {
   background: #FFFFFF;
-  border-radius: var(--radius-dialog, 24px);
+  border-radius: var(--radius-dialog, 20px);
   border: 1px solid var(--border-primary, #F0F0F0);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
   max-width: 480px;
   width: 100%;
-  margin: auto;               /* keeps card centered when it fits in viewport */
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+  position: relative;
+  box-sizing: border-box;
   animation: slideUp 0.2s ease;
 }
 .rhu-modal-header {
+  flex-shrink: 0;
   padding: 20px 24px 16px;
-  border-bottom: 1px solid var(--border-primary);
+  border-bottom: 1px solid var(--border-primary, #F0F0F0);
   display: flex;
   align-items: center;
   gap: 12px;
 }
 .rhu-modal-header i {
   font-size: 22px;
-  color: var(--brand-primary);
+  color: var(--brand-primary, #FF68A5);
 }
 .rhu-modal-title {
   font-size: 17px;
   font-weight: 700;
-  color: var(--brand-text);
+  color: var(--brand-text, #C73578);
   margin: 0;
 }
 .rhu-modal-body {
   padding: 20px 24px;
   font-size: 14px;
-  color: var(--text-primary);
+  color: var(--text-primary, #2D2D2D);
   line-height: 1.5;
+  overflow-y: auto;
+  max-height: calc(100vh - 150px);
+  flex: 1 1 auto;
 }
 .rhu-modal-footer {
-  padding: 14px 24px 20px;
-  background: var(--brand-secondary);
-  border-top: 1px solid var(--border-primary);
+  flex-shrink: 0;
+  padding: 14px 24px 18px;
+  background: var(--brand-secondary, #FFF8FB);
+  border-top: 1px solid var(--border-primary, #F0F0F0);
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
 }
 
 
