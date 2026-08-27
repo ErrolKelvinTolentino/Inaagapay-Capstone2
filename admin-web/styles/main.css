@@ -2343,21 +2343,7 @@ max-width: 280px;
   outline-offset: 1px;
 }
 
-.skip-link {
-  position: absolute;
-  left: -9999px;
-  top: 0;
-  z-index: 1000;
-  padding: 12px 20px;
-  background: var(--brand-primary);
-  color: #fff;
-  font-weight: 600;
-  border-radius: 0 0 var(--radius-sm) 0;
-  text-decoration: none;
-}
-.skip-link:focus {
-  left: 0;
-}
+
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -2576,30 +2562,6 @@ max-width: 280px;
 /* =====================================================
    Accessibility
    ===================================================== */
-
-/* Keyboard focus was previously invisible everywhere: nothing in this stylesheet
-.header-sidebar-toggle:focus-visible {
-  outline: 3px solid var(--brand-accent);
-  outline-offset: 2px;
-}
-
-.form-control:focus-visible,
-.form-select:focus-visible {
-  outline: 2px solid var(--brand-primary);
-  outline-offset: 1px;
-}
-
-/* Skip repeated sidebar/header navigation with the keyboard. */
-.skip-link {
-  position: absolute;
-  left: -9999px;
-  top: 0;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
 
 /* =====================================================
    2026 Admin Experience Refresh
