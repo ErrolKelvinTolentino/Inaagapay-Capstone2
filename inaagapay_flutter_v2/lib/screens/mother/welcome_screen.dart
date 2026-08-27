@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/headline.dart';
 import '../../widgets/main_button.dart';
+import '../../services/language_service.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -69,18 +70,24 @@ class WelcomeScreen extends StatelessWidget {
                             _buildInfoRow(
                               icon: Icons.calendar_today,
                               title: 'What\'s Next?',
-                              description: 'Track your pregnancy journey, get weekly updates, and access health resources.',
+                              description: LanguageService.translate(
+                                  'Track your pregnancy journey, get weekly updates, and access health resources.',
+                                  'Subaybayan ang iyong pagbubuntis, makatanggap ng lingguhang balita, at magbasa ng gabay sa kalusugan.'),
                             ),
                             const SizedBox(height: 16),
                             _buildInfoRow(
                               icon: Icons.notifications_active,
-                              title: 'Stay Informed',
-                              description: 'Receive timely reminders for checkups and important milestones.',
+                              title: LanguageService.translate(
+                                  'Stay Informed', 'Manatiling May Alam'),
+                              description: LanguageService.translate(
+                                  'Receive timely reminders for checkups and important milestones.',
+                                  'Makatanggap ng paalala para sa mga checkup at mahahalagang yugto.'),
                             ),
                             const SizedBox(height: 16),
                             _buildInfoRow(
                               icon: Icons.health_and_safety,
-                              title: 'Health Tracking',
+                              title: LanguageService.translate(
+                                  'Health Tracking', 'Pagsubaybay sa Kalusugan'),
                               description: 'Record symptoms, track weight, and monitor your baby\'s development.',
                             ),
                           ],

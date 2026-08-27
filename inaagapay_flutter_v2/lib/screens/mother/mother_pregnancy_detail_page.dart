@@ -815,8 +815,11 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('The guide could not be downloaded. Please try again.'),
+        SnackBar(
+          content: Text(LanguageService.translate(
+            'The guide could not be downloaded. Please try again.',
+            'Hindi na-download ang gabay. Pakisubukan muli.',
+          )),
           behavior: SnackBarBehavior.floating,
         ),
       );

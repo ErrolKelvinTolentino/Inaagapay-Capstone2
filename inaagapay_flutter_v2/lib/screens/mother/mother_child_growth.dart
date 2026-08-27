@@ -772,14 +772,15 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
             bmiLabels.length >= 2 &&
             bmiValues.length == bmiLabels.length)
           ChartCard(
-            title: 'Body size over time',
+            title: LanguageService.translate(
+                'Body size over time', 'Sukat ng katawan sa paglipas ng panahon'),
             lineColor: AppColors.brandPrimary,
             values: bmiValues,
             labels: bmiLabels,
             unit: 'kg/m²',
-            startingLabel: 'First',
+            startingLabel: LanguageService.translate('First', 'Una'),
             startingValue: bmiValues.first.toStringAsFixed(1),
-            latestLabel: 'Latest',
+            latestLabel: LanguageService.translate('Latest', 'Pinakabago'),
             latestValue: latestBMI > 0 ? latestBMI.toStringAsFixed(1) : 'n/a',
             insightText: 'How your child’s build is changing as they grow.',
           ),
@@ -791,15 +792,16 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
             weightLabels.length >= 2 &&
             weightValues.length == weightLabels.length)
           ChartCard(
-            title: 'Weight History',
+            title: LanguageService.translate(
+                'Weight History', 'Kasaysayan ng Timbang'),
             lineColor: AppColors.brandAccent,
             values: weightValues,
             labels: weightLabels,
             unit: 'kg',
             referenceCurves: weightWhoCurves,
-            startingLabel: 'First',
+            startingLabel: LanguageService.translate('First', 'Una'),
             startingValue: '${weightValues.first.toStringAsFixed(1)} kg',
-            latestLabel: 'Latest',
+            latestLabel: LanguageService.translate('Latest', 'Pinakabago'),
             latestValue: '${latestWeight.toStringAsFixed(1)} kg',
             insightText:
                 'Weight tracking provides insight into nutritional status.',
@@ -812,15 +814,16 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
             heightLabels.length >= 2 &&
             heightValues.length == heightLabels.length)
           ChartCard(
-            title: 'Height History',
+            title: LanguageService.translate(
+                'Height History', 'Kasaysayan ng Taas'),
             lineColor: AppColors.brandPrimary,
             values: heightValues,
             labels: heightLabels,
             unit: 'cm',
             referenceCurves: heightWhoCurves,
-            startingLabel: 'First',
+            startingLabel: LanguageService.translate('First', 'Una'),
             startingValue: '${heightValues.first.toStringAsFixed(1)} cm',
-            latestLabel: 'Latest',
+            latestLabel: LanguageService.translate('Latest', 'Pinakabago'),
             latestValue: '${latestHeight.toStringAsFixed(1)} cm',
             insightText:
                 'Weekly height measurements showing growth pattern over time.',

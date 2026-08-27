@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:intl/intl.dart';
 import 'package:record/record.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -125,6 +126,160 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
     _loadMotherMedicalInfo().then((_) {
       _initializeChat();
     });
+  }
+
+  /// The phone's own text-to-speech, used when the hosted voice cannot be.
+  ///
+  /// `flutter_tts` has been a dependency all along and was never wired to
+  /// anything — the app carried an offline, key-free, Filipino-capable
+  /// speech engine and used a gated English-only web service instead.
+  FlutterTts? _deviceTts;
+
+  /// Names that identify a female voice across the engines we see in practice.
+  ///
+  /// There is no gender field in Android's TTS voice API and none in what
+  /// `flutter_tts` returns, so this matches on the name — which is the only
+  /// signal available. Google's Android voices encode it in codes like
+  /// `en-us-x-tpf-local` (the `f`); iOS uses given names.
+  ///
+  /// Edit this list to change which voice Ate uses on a device. Anything not
+  /// matched leaves the engine's default alone rather than guessing.
+  static const List<String> _femaleVoiceHints = <String>[
+    'female',
+    // Google / Android voice-quality codes that denote the female set.
+    '-x-tpf-', '-x-sfg-', '-x-iof-', '-x-iog-', '-x-fic-',
+    // iOS and Samsung given names.
+    'samantha', 'karen', 'moira', 'tessa', 'fiona', 'nicky', 'ava',
+    'allison', 'susan', 'zoe', 'serena',
+  ];
+
+  /// Picks a female voice for [locale] where the device has one.
+  ///
+  /// Silent no-op when it cannot find one — a male voice reading her message
+  /// is still better than no voice, so this never fails the speak attempt.
+  Future<void> _preferFemaleVoice(FlutterTts tts, String locale) async {
+    try {
+      // Asked twice, because on web the first answer is empty.
+      //
+      // Flutter web routes this to the browser's speechSynthesis, whose voice
+      // list loads asynchronously — `getVoices` before the `voiceschanged`
+      // event returns []. That is exactly what the log showed: "no female en
+      // voice on this device ... Available: []" on a machine that has plenty.
+      var raw = await tts.getVoices;
+      if (raw is! List || raw.isEmpty) {
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        raw = await tts.getVoices;
+      }
+      if (raw is! List || raw.isEmpty) return;
+
+      final lang = locale.split('-').first.toLowerCase();
+      Map<String, String>? match;
+
+      for (final entry in raw) {
+        if (entry is! Map) continue;
+        final name = entry['name']?.toString() ?? '';
+        final voiceLocale = entry['locale']?.toString() ?? '';
+        if (name.isEmpty || voiceLocale.isEmpty) continue;
+        if (!voiceLocale.toLowerCase().startsWith(lang)) continue;
+
+        final needle = name.toLowerCase();
+        if (_femaleVoiceHints.any(needle.contains)) {
+          match = {'name': name, 'locale': voiceLocale};
+          // An exact locale match beats a language-only one — fil-PH over a
+          // generic Filipino voice, en-US over en-GB.
+          if (voiceLocale.toLowerCase() == locale.toLowerCase()) break;
+        }
+      }
+
+      if (match != null) {
+        await tts.setVoice(match);
+        debugPrint('[MotherChatbotPage] device voice: ${match['name']}');
+      } else {
+        // Logged rather than hidden: if Ate sounds like a man on a test
+        // device, this line is the reason and it names what was available.
+        debugPrint('[MotherChatbotPage] no female $lang voice on this device; '
+            'using the engine default. Available: '
+            '${raw.whereType<Map>().map((v) => v['name']).take(12).toList()}');
+      }
+    } catch (e) {
+      debugPrint('[MotherChatbotPage] voice selection skipped: $e');
+    }
+  }
+
+  /// Reads [text] with the device engine. Returns false if it could not.
+  ///
+  /// Never throws: this is the path taken when something else has already
+  /// gone wrong, so a failure here has to be quiet and let the caller show
+  /// the plain message.
+  Future<bool> _speakOnDevice(String text, String messageId) async {
+    try {
+      final tts = _deviceTts ??= FlutterTts();
+
+      // fil-PH where the device has it, en-US otherwise. isLanguageAvailable
+      // is asked rather than assumed — a phone without the Filipino voice
+      // would otherwise read Tagalog in an English accent silently.
+      final wanted = LanguageService.isFilipino ? 'fil-PH' : 'en-US';
+      final available = await tts.isLanguageAvailable(wanted);
+      final locale = available == true ? wanted : 'en-US';
+      await tts.setLanguage(locale);
+
+      // Ate is a woman.
+      //
+      // The hosted voice is "autumn", which is female, but the device engine
+      // hands out whatever its default is — on many Android builds that is a
+      // man. Ate is written as an older sister and every other word in the app
+      // treats her as one, so a male voice on the fallback path made the
+      // assistant change sex depending on whether the API was reachable.
+      await _preferFemaleVoice(tts, locale);
+
+      // Slower than default. This is health guidance being read to someone who
+      // may be hearing it while holding a baby.
+      await tts.setSpeechRate(0.45);
+      await tts.setPitch(1.0);
+
+      tts.setCompletionHandler(() {
+        if (mounted) setState(() => _currentlyReadingMessageId = null);
+      });
+
+      if (mounted) {
+        setState(() {
+          _loadingTtsMessageId = null;
+          _currentlyReadingMessageId = messageId;
+        });
+      }
+
+      // Markdown reads badly aloud — asterisks become "asterisk".
+      final clean = text
+          .replaceAll(RegExp(r'[*#_`]'), '')
+          .replaceAll(RegExp(r'\n{2,}'), '. ')
+          .replaceAll('\n', ' ')
+          .trim();
+
+      // An error handler, so a browser SpeechSynthesisErrorEvent is not left
+      // to surface as a bare "[object SpeechSynthesisErrorEvent]" with the
+      // reading state stuck on.
+      tts.setErrorHandler((dynamic message) {
+        debugPrint('[MotherChatbotPage] device TTS error: $message');
+        if (mounted) {
+          setState(() {
+            _loadingTtsMessageId = null;
+            _currentlyReadingMessageId = null;
+          });
+        }
+      });
+
+      final result = await tts.speak(clean);
+      return result == 1;
+    } catch (e) {
+      debugPrint('[MotherChatbotPage] device TTS unavailable: $e');
+      if (mounted) {
+        setState(() {
+          _loadingTtsMessageId = null;
+          _currentlyReadingMessageId = null;
+        });
+      }
+      return false;
+    }
   }
 
   void _initAudioPlayer() {
@@ -455,6 +610,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
     _amplitudeTimer?.cancel();
     _recordingGlowController.dispose();
     _audioPlayer.dispose();
+    _deviceTts?.stop();
     _audioRecorder.dispose();
     _drawerSearchController.dispose();
     _tabController.dispose();
@@ -1145,7 +1301,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
         backgroundColor: AppColors.cardColorOf(context),
         title: Text(
           _t('Clear History?', 'I-clear ang History?'),
-          style: TextStyle(color: AppColors.textPrimaryOf(context)),
+          style: TextStyle(color: AppColors.headingSoft),
         ),
         content: Text(
           _t('Are you sure you want to delete all chat history? This cannot be undone.',
@@ -1218,18 +1374,21 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                             color: AppColors.brandPrimary),
                         const SizedBox(width: 8),
                         Text(
-                          _t('AI Privacy Settings',
-                              'Mga Setting ng Privacy sa AI'),
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimaryOf(context),
+                          // Named for what she decides here, not for the
+                          // settings screen it technically is.
+                          _t('What Ate can see',
+                              'Ano ang nakikita ni Ate'),
+                          style: const TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                            color: AppColors.headingSoft,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const Divider(),
+                  const Divider(height: 24, thickness: 1, color: Color(0xFFF5E4EC)),
                   Expanded(
                     child: ListView(
                       padding: const EdgeInsets.symmetric(
@@ -1277,7 +1436,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                               _t('Share Pregnancy Details',
                                   'Ibahagi ang Detalye ng Pagbubuntis'),
                               style: TextStyle(
-                                  color: AppColors.textPrimaryOf(context),
+                                  color: AppColors.headingSoft,
                                   fontSize: 14),
                             ),
                             subtitle: Text(
@@ -1301,7 +1460,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                               });
                             },
                           ),
-                          const Divider(),
+                          const Divider(height: 24, thickness: 1, color: Color(0xFFF5E4EC)),
                         ],
                         _buildPrivacyHeader(_t('Allergies', 'Mga Allergy')),
                         if (_activeAllergies.isEmpty)
@@ -1326,7 +1485,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                               title: Text(
                                 allergen,
                                 style: TextStyle(
-                                    color: AppColors.textPrimaryOf(context),
+                                    color: AppColors.headingSoft,
                                     fontSize: 14),
                               ),
                               value: isVisible,
@@ -1351,7 +1510,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                               },
                             );
                           }),
-                        const Divider(),
+                        const Divider(height: 24, thickness: 1, color: Color(0xFFF5E4EC)),
                         _buildPrivacyHeader(_t(
                             'Medical Conditions', 'Mga Medikal na Kondisyon')),
                         if (_activeMedicalConditions.isEmpty)
@@ -1376,7 +1535,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                               title: Text(
                                 cond,
                                 style: TextStyle(
-                                    color: AppColors.textPrimaryOf(context),
+                                    color: AppColors.headingSoft,
                                     fontSize: 14),
                               ),
                               value: isVisible,
@@ -1401,7 +1560,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                               },
                             );
                           }),
-                        const Divider(),
+                        const Divider(height: 24, thickness: 1, color: Color(0xFFF5E4EC)),
                         const SizedBox(height: 8),
                         _buildPrivacyHeader(_t('AI Ethical Code & Safe Use',
                             'Etika at Ligtas na Paggamit ng AI')),
@@ -1458,16 +1617,19 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
     );
   }
 
+  /// The same small uppercase heading ProfileCardSection uses, so the sheet
+  /// reads like the rest of the app's grouped settings rather than a stack of
+  /// pink labels.
   Widget _buildPrivacyHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(top: 12.0, bottom: 4.0),
+      padding: const EdgeInsets.only(top: 16.0, bottom: 6.0),
       child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: AppColors.brandPrimaryOf(context),
-          letterSpacing: 0.5,
+        title.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+          color: AppColors.textSecondary,
+          letterSpacing: 0.8,
         ),
       ),
     );
@@ -1501,7 +1663,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimaryOf(context),
+                    color: AppColors.headingSoft,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1532,19 +1694,28 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
             backgroundColor: AppColors.cardColorOf(context),
             elevation: 0,
             centerTitle: true,
+            // Pink title, like every other pushed page in the mother's app.
+            // "Ate Assistant Chatbot" in near-black was the one screen whose
+            // header looked like a different application — and "Chatbot" is
+            // the developer's word for her; she calls it Ate.
             title: Text(
-              _t('Ate Assistant Chatbot', 'Kausap si Ate Assistant'),
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimaryOf(context),
+              _t('Ate', 'Ate'),
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+                color: AppColors.brandPrimary,
               ),
             ),
+            // Soft grey, not near-black. These two are secondary to the pink
+            // shield and the title — history and close are ways out of the
+            // screen, not the reason she is on it.
             leading: Builder(
               builder: (context) {
                 return IconButton(
                   icon: const Icon(Icons.history_rounded, size: 22),
-                  color: AppColors.textPrimaryOf(context),
+                  color: AppColors.textSecondary,
+                  tooltip: _t('Past chats', 'Mga dating usapan'),
                   onPressed: () => Scaffold.of(context).openDrawer(),
                 );
               },
@@ -1559,18 +1730,29 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
               ),
               IconButton(
                 icon: const Icon(Icons.close_rounded, size: 22),
-                color: AppColors.textPrimaryOf(context),
+                color: AppColors.textSecondary,
+                tooltip: _t('Close', 'Isara'),
                 onPressed: () => Navigator.pop(context),
               ),
             ],
             bottom: TabBar(
               controller: _tabController,
-              labelColor: AppColors.brandPrimaryOf(context),
-              unselectedLabelColor: AppColors.textSecondaryOf(context),
-              indicatorColor: AppColors.brandPrimaryOf(context),
+              labelColor: AppColors.brandPrimary,
+              unselectedLabelColor: AppColors.textSecondary,
+              indicatorColor: AppColors.brandPrimary,
               indicatorWeight: 3,
+              // The line under the tabs.
+              //
+              // Material draws this itself, and left alone it takes the
+              // theme's outline colour — which is what put a hard rule the
+              // full width of the header. Named explicitly so it matches the
+              // soft rules used everywhere else in the app.
+              dividerColor: const Color(0xFFF5E4EC),
+              dividerHeight: 1,
               labelStyle:
-                  const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
+              unselectedLabelStyle:
+                  const TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
               tabs: [
                 Tab(text: _t('Chat with Ate', 'Chat kay Ate')),
                 Tab(text: _t('FAQs', 'Mga Tanong')),
@@ -1606,7 +1788,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimaryOf(context),
+                      color: AppColors.headingSoft,
                     ),
                   ),
                   IconButton(
@@ -1618,7 +1800,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                 ],
               ),
             ),
-            const Divider(height: 1),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFF5E4EC)),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: ElevatedButton.icon(
@@ -1690,7 +1872,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   style: TextStyle(
-                    color: AppColors.textPrimaryOf(context),
+                    color: AppColors.headingSoft,
                     fontSize: 14,
                   ),
                 ),
@@ -1742,7 +1924,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                                     : FontWeight.normal,
                                 color: isSelected
                                     ? AppColors.brandPrimaryOf(context)
-                                    : AppColors.textPrimaryOf(context),
+                                    : AppColors.headingSoft,
                               ),
                             ),
                             subtitle: Text(
@@ -1847,7 +2029,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                     style: TextStyle(
                       fontSize: 12,
                       height: 1.4,
-                      color: AppColors.textPrimaryOf(context),
+                      color: AppColors.headingSoft,
                     ),
                   ),
                 ),
@@ -1925,7 +2107,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimaryOf(context),
+              color: AppColors.headingSoft,
             ),
           ),
           const SizedBox(height: 6),
@@ -2038,7 +2220,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimaryOf(context),
+                        color: AppColors.headingSoft,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -2280,7 +2462,10 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
   Future<void> _toggleTts(String messageId, String text) async {
     // If already playing this message → stop
     if (_currentlyReadingMessageId == messageId) {
+      // Both engines: either one could be the one talking, and stopping only
+      // the player would leave the device voice reading on.
       await _audioPlayer.stop();
+      await _deviceTts?.stop();
       if (mounted) {
         setState(() {
           _currentlyReadingMessageId = null;
@@ -2289,13 +2474,31 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
       return;
     }
 
-    // Stop whatever is currently playing
+    // Stop whatever is currently playing, from either engine.
     await _audioPlayer.stop();
+    await _deviceTts?.stop();
     if (mounted) {
       setState(() {
         _currentlyReadingMessageId = null;
         _loadingTtsMessageId = messageId;
       });
+    }
+
+    // Filipino goes straight to the device voice.
+    //
+    // Orpheus is `orpheus-v1-english` — an English-only model. Asked to read a
+    // Tagalog reply it pronounces it as English, which is worse than not
+    // reading it at all for the mother who chose Filipino. The phone's own
+    // engine has a fil-PH voice on most Android builds.
+    // If the device voice fails, this falls through to Groq below rather than
+    // returning — an English-accented reading is worse than a Filipino one,
+    // but both are better than a mother tapping the speaker and getting
+    // nothing. On web the device path fails often, which is what the
+    // SpeechSynthesisErrorEvent in the log was.
+    if (LanguageService.isFilipino) {
+      final spoken = await _speakOnDevice(text, messageId);
+      if (spoken) return;
+      debugPrint('[MotherChatbotPage] device voice failed; trying Groq');
     }
 
     try {
@@ -2316,19 +2519,41 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
       await _audioPlayer.play(DeviceFileSource(tempFile.path));
     } catch (e) {
       debugPrint('[MotherChatbotPage] Groq TTS error: $e');
+
+      // The phone can read it even when the service will not.
+      //
+      // Groq's TTS is a hosted, gated, English-only model behind an API key —
+      // four ways for it to be unavailable to a mother who just wants the
+      // message read to her. The device engine needs no key, no terms, and no
+      // signal. Tried before giving up, so the feature degrades instead of
+      // failing.
+      if (await _speakOnDevice(text, messageId)) return;
       if (mounted) {
         setState(() {
           _loadingTtsMessageId = null;
           _currentlyReadingMessageId = null;
         });
+        // What she sees is one plain sentence.
+        //
+        // This printed the provider's raw reply — a mother tapping the speaker
+        // met "Groq TTS Error (400): The model `canopylabs/orpheus-v1-english`
+        // requires terms acceptance. Please have the org admin accept the
+        // terms at console.groq.com..." in a red box. That is a message for
+        // whoever owns the API key, and it is already in the debug log above,
+        // where they will see it.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('TTS Error: $e'),
-            duration: const Duration(seconds: 8),
+            content: Text(_t(
+              'Reading aloud is not available right now. You can still read '
+                  'the message.',
+              'Hindi available ngayon ang pagbasa nang malakas. Mababasa mo pa '
+                  'rin ang mensahe.',
+            )),
+            duration: const Duration(seconds: 5),
             behavior: SnackBarBehavior.floating,
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            backgroundColor: AppColors.error,
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            backgroundColor: AppColors.headingSoft,
           ),
         );
       }
@@ -2372,7 +2597,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
   }
 
   Widget _buildFormattedText(String text, BuildContext context, bool isUser) {
-    final textColor = isUser ? Colors.white : AppColors.textPrimaryOf(context);
+    final textColor = isUser ? Colors.white : AppColors.headingSoft;
     final List<TextSpan> spans = [];
     final RegExp regex = RegExp(r'\*\*(.*?)\*\*');
     int start = 0;
@@ -2512,21 +2737,36 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
               )
             else
               Expanded(
+                // The white, softly-shadowed field the rest of the app uses,
+                // rather than a flat grey pill on a grey bar.
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
-                    color: AppColors.bgPrimaryOf(context),
-                    borderRadius: BorderRadius.circular(24),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(26),
+                    border: Border.all(color: const Color(0xFFF5E4EC)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: TextField(
                     controller: _inputController,
                     maxLines: null,
                     textCapitalization: TextCapitalization.sentences,
+                    style: const TextStyle(
+                        color: AppColors.inputText, fontSize: 14.5),
                     decoration: InputDecoration(
-                      hintText: _t('Ask Ate Assistant...',
-                          'Magtanong kay Ate Assistant...'),
+                      isDense: true,
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 14),
+                      hintText: _t('Ask Ate anything…',
+                          'Magtanong ka lang kay Ate…'),
                       hintStyle: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 14),
+                          color: AppColors.textSecondary, fontSize: 14.5),
                       border: InputBorder.none,
                     ),
                   ),
@@ -2538,16 +2778,26 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
               onPressed: (_isTyping || _isTranscribing) ? () {} : _toggleVoiceInput,
             ),
             const SizedBox(width: 8),
-            IconButton(
-              icon: Icon(
-                Icons.send_rounded,
+            // A filled circle, matching the send affordance elsewhere. A bare
+            // pink glyph beside a filled mic button read as the lesser of the
+            // two, when sending is the main action.
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
                 color: (_isTyping || _isTranscribing || _isRecording)
-                    ? AppColors.textSecondary
-                    : AppColors.brandPrimaryOf(context),
+                    ? const Color(0xFFFFD5E5)
+                    : AppColors.brandPrimary,
+                shape: BoxShape.circle,
               ),
-              onPressed: (_isTyping || _isTranscribing || _isRecording)
-                  ? null
-                  : () => _sendMessage(_inputController.text),
+              child: IconButton(
+                icon: const Icon(Icons.send_rounded,
+                    color: Colors.white, size: 20),
+                tooltip: _t('Send', 'Ipadala'),
+                onPressed: (_isTyping || _isTranscribing || _isRecording)
+                    ? null
+                    : () => _sendMessage(_inputController.text),
+              ),
             ),
           ],
         ),
@@ -2561,49 +2811,65 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
       itemCount: faqsList.length,
       itemBuilder: (context, index) {
         final faq = faqsList[index];
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          elevation: 2,
-          shadowColor: Colors.black.withValues(alpha: 0.05),
-          color: AppColors.cardColorOf(context),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ExpansionTile(
+        return Container(
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFF5E4EC)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Theme(
+            // The default ExpansionTile draws a rule above and below itself
+            // when open — two more hard lines on a page that had several.
+            data: Theme.of(context)
+                .copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
             title: Text(
               _t(faq.questionEn, faq.questionTl),
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimaryOf(context),
+                height: 1.35,
+                fontWeight: FontWeight.w800,
+                color: AppColors.headingSoft,
               ),
             ),
-            subtitle: Container(
-              margin: const EdgeInsets.only(top: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.brandPrimaryOf(context).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                _tCategory(faq.category),
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.brandPrimaryOf(context),
+            // A pill that fits its words.
+            //
+            // The category sat in a full-width block under every question, so
+            // "Nutrition" arrived as a pink bar the width of the card and read
+            // as a progress meter rather than a label.
+            subtitle: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                margin: const EdgeInsets.only(top: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEDF4),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _tCategory(faq.category),
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.brandText,
+                  ),
                 ),
               ),
             ),
-            iconColor: AppColors.brandPrimaryOf(context),
-            collapsedIconColor: AppColors.textSecondaryOf(context),
-            childrenPadding: const EdgeInsets.all(16),
+            iconColor: AppColors.brandPrimary,
+            collapsedIconColor: AppColors.brandPrimary,
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             expandedAlignment: Alignment.topLeft,
             children: [
               Text(
                 _t(faq.answerEn, faq.answerTl),
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 14,
-                  height: 1.5,
-                  color: AppColors.textPrimaryOf(context),
+                  height: 1.55,
+                  color: AppColors.inputText,
                 ),
               ),
               const SizedBox(height: 16),
@@ -2615,15 +2881,17 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                   label: Text(_t('Ask Ate in Chat', 'Itanong kay Ate sa Chat')),
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.white,
-                    backgroundColor: AppColors.brandPrimaryOf(context),
+                    backgroundColor: AppColors.brandPrimary,
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)),
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: const StadiumBorder(),
+                    textStyle: const TextStyle(
+                        fontSize: 13.5, fontWeight: FontWeight.w800),
                   ),
                 ),
               ),
             ],
+            ),
           ),
         );
       },
