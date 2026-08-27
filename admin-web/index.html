@@ -558,7 +558,8 @@
       </div>
     </div>
 
-    <!-- bcryptjs for password verification -->
+
+            <!-- bcryptjs for password verification -->
     <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
     <!-- Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -572,8 +573,43 @@
 
         const SESSION_KEY = "inaagapay_admin_session";
 
-        // Absolute session lifetime. A stored session with no age check never
-        // expires — reopening the tab days later would still be treated as signed in.
+        // ── Smooth Page Transitions (Flutter v2 Fluid Experience) ──
+        function navigateTo(url, delay = 180) {
+          if (!url || typeof url !== "string") return;
+          if (
+            url.startsWith("#") ||
+            url.startsWith("javascript:") ||
+            url.startsWith("mailto:") ||
+            url.startsWith("tel:")
+          ) {
+            return;
+          }
+          if (document.body && document.body.classList.contains("page-exiting")) return;
+          if (document.body) document.body.classList.add("page-exiting");
+          setTimeout(() => {
+            window.location.href = url;
+          }, delay);
+        }
+        window.navigateTo = navigateTo;
+
+        window.addEventListener("pageshow", (event) => {
+          if (document.body && (event.persisted || document.body.classList.contains("page-exiting"))) {
+            document.body.classList.remove("page-exiting");
+          }
+        });
+
+        // Intercept all internal navigation link clicks
+        document.addEventListener("click", (e) => {
+          const link = e.target.closest("a");
+          if (!link) return;
+          const href = link.getAttribute("href");
+          if (!href || href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
+          if (link.target === "_blank" || link.hasAttribute("download") || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
+          e.preventDefault();
+          navigateTo(link.href);
+        });
+
+        // Absolute session lifetime.
         const MAX_SESSION_AGE_MS = 12 * 60 * 60 * 1000;
 
         function isSessionExpired(s) {
@@ -592,9 +628,9 @@
               if (isSessionExpired(s)) {
                 localStorage.removeItem(SESSION_KEY);
               } else if (s.is_temporary_password === true) {
-                window.location.href = "pages/change-password.html";
+                navigateTo("pages/change-password.html");
               } else {
-                window.location.href = "pages/dashboard.html";
+                navigateTo("pages/dashboard.html");
               }
             }
           } catch (_) {
@@ -683,7 +719,8 @@
 
             // Verify the password before revealing anything about the account,
             // so account state is only disclosed to whoever holds the credentials.
-            const bcrypt = dcodeIO.bcrypt;
+            const bcrypt = window.dcodeIO?.bcrypt || window.bcrypt || (typeof dcodeIO !== "undefined" ? dcodeIO.bcrypt : null);
+            if (!bcrypt) throw new Error("Encryption module failed to load. Please refresh.");
             const match = await bcrypt.compare(password, user.password_hash);
             if (!match) {
               showError(GENERIC_FAILURE);
@@ -766,9 +803,9 @@
 
             // Redirect to dashboard or change password page
             if (user.is_temporary_password === true) {
-              window.location.href = "pages/change-password.html";
+              navigateTo("pages/change-password.html");
             } else {
-              window.location.href = "pages/dashboard.html";
+              navigateTo("pages/dashboard.html");
             }
           } catch (err) {
             console.error("Login error:", err);

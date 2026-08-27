@@ -1,7 +1,7 @@
 /* =====================================================
    InaAgapay Admin Web — Common Security & Defense Module
    Provides: DB Session Verification, Idle Timeout,
-   Network Status Monitor, and DPA 2012 Masking Utilities
+   Network Status Monitor, Smooth Page Transitions, and DPA Utilities
    ===================================================== */
 
 (function () {
@@ -35,6 +35,90 @@
   window.isPortalAccount = function (s) {
     return !!s && PORTAL_ACCOUNT_TYPES.includes(s.account_type);
   };
+
+  // ── Smooth Page Transitions (Flutter v2 Fluid Experience) ──
+  function navigateTo(url, delay = 180) {
+    if (!url || typeof url !== "string") return;
+    if (
+      url.startsWith("#") ||
+      url.startsWith("javascript:") ||
+      url.startsWith("mailto:") ||
+      url.startsWith("tel:")
+    ) {
+      return;
+    }
+    if (document.body && document.body.classList.contains("page-exiting")) return;
+    if (document.body) document.body.classList.add("page-exiting");
+    setTimeout(() => {
+      window.location.href = url;
+    }, delay);
+  }
+  window.navigateTo = navigateTo;
+
+  // Intercept all internal navigation link clicks
+  document.addEventListener("click", (e) => {
+    const link = e.target.closest("a");
+    if (!link) return;
+
+    const href = link.getAttribute("href");
+    if (!href) return;
+
+    if (
+      href.startsWith("#") ||
+      href.startsWith("javascript:") ||
+      href.startsWith("mailto:") ||
+      href.startsWith("tel:")
+    ) {
+      return;
+    }
+
+    if (
+      link.target === "_blank" ||
+      link.hasAttribute("download") ||
+      e.ctrlKey ||
+      e.metaKey ||
+      e.shiftKey ||
+      e.altKey ||
+      e.button !== 0
+    ) {
+      return;
+    }
+
+    if (
+      link.getAttribute("role") === "tab" ||
+      link.hasAttribute("data-bs-toggle") ||
+      link.hasAttribute("data-tab")
+    ) {
+      return;
+    }
+
+    try {
+      const targetUrl = new URL(link.href, window.location.href);
+      if (targetUrl.origin !== window.location.origin) {
+        return;
+      }
+      if (targetUrl.href === window.location.href) {
+        return;
+      }
+      if (
+        targetUrl.pathname === window.location.pathname &&
+        targetUrl.search === window.location.search &&
+        targetUrl.hash
+      ) {
+        return;
+      }
+    } catch (_) {}
+
+    e.preventDefault();
+    navigateTo(link.href);
+  });
+
+  // Handle BFCache (Back/Forward restore)
+  window.addEventListener("pageshow", (event) => {
+    if (document.body && (event.persisted || document.body.classList.contains("page-exiting"))) {
+      document.body.classList.remove("page-exiting");
+    }
+  });
 
   // 1. RBAC Session Enforcement
   const isLoginPage = window.location.pathname.endsWith("index.html") || window.location.pathname.endsWith("/");
@@ -70,7 +154,11 @@
 
     localStorage.removeItem(SESSION_KEY);
     alert("Session Expired: You have been logged out due to 15 minutes of inactivity for security compliance.");
-    window.location.href = "../index.html";
+    if (window.navigateTo) {
+      window.navigateTo("../index.html");
+    } else {
+      window.location.href = "../index.html";
+    }
   }
 
   // Bind Activity Listeners for Idle Timer
@@ -521,4 +609,3 @@
     _scrollLockObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
   }
 })();
-

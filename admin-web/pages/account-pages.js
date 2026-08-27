@@ -47,7 +47,11 @@
       if (!confirm("Logout?")) return;
       localStorage.removeItem(SESSION_KEY);
       window.PortalScope?.clear();
-      window.location.href = "../index.html";
+      if (window.navigateTo) {
+        window.navigateTo("../index.html");
+      } else {
+        window.location.href = "../index.html";
+      }
     });
   }
 

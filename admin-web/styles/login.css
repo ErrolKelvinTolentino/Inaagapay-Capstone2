@@ -355,3 +355,35 @@ body::before {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ── Smooth Page Transitions (Flutter v2 Fluid Experience) ── */
+@keyframes pageEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pageExit {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+body {
+  animation: pageEntrance 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+body.page-exiting {
+  animation: pageExit 0.18s cubic-bezier(0.4, 0, 1, 1) forwards !important;
+  pointer-events: none !important;
+}
