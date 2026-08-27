@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>InaAgapay — Admin Landing Dashboard</title>
+    <title>Dashboard — InaAgapay Admin Portal</title>
     <meta name="description" content="InaAgapay Admin Executive Landing Dashboard" />
     <link rel="icon" type="image/png" href="../images/logo_icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -154,7 +154,8 @@
       .badge-high { background: rgba(220, 38, 38, 0.15); color: #dc2626; }
     </style>
   </head>
-  <body>
+  <body class="dashboard-page">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <div class="app-layout">
       <!-- ── Header ── -->
       <header class="app-header">
@@ -162,7 +163,7 @@
           <button class="header-sidebar-toggle" id="sidebar-toggle" aria-label="Toggle menu">
             <i class="fa-solid fa-bars"></i>
           </button>
-          <img src="../images/logo_icon.png" alt="InaAgapay Logo" class="header-logo" />
+          <img src="../images/logo_icon.png" alt="" class="header-logo" aria-hidden="true" />
           <img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" />
         </div>
         <div class="header-right">
@@ -170,13 +171,13 @@
           <div class="header-user" id="header-user-btn">
             <div class="header-avatar" id="header-avatar">A</div>
             <span class="header-user-name" id="header-user-name">Admin</span>
-            <i class="fa-solid fa-chevron-down" style="font-size: 11px; color: var(--text-secondary)"></i>
+            <i class="fa-solid fa-chevron-down profile-menu-chevron" aria-hidden="true"></i>
           </div>
         </div>
       </header>
 
       <!-- ── Sidebar ── -->
-      <aside class="app-sidebar">
+      <aside class="app-sidebar" aria-label="Primary navigation">
         <span class="sidebar-section-label">Main Menu</span>
         <ul class="sidebar-nav">
           <li><a href="dashboard.html" class="active"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
@@ -203,16 +204,17 @@
       </aside>
 
       <!-- ── Main Content ── -->
-      <main class="app-main">
+      <main class="app-main page-dashboard" id="main-content" tabindex="-1">
         <!-- Hero Executive Welcome Banner -->
         <div class="dashboard-hero">
           <div>
-            <div class="hero-title" id="banner-title">Good morning, Admin 👋</div>
+            <div class="hero-kicker"><i class="fa-solid fa-chart-line" aria-hidden="true"></i> Operations overview</div>
+            <h1 class="hero-title" id="banner-title">Good morning, Admin</h1>
             <div class="hero-subtitle">
-              System Landing Dashboard — Real-time operational overview across all Barangay Health Centers for <span id="banner-date"></span>.
+              A real-time view of maternal care, child health, workforce, and supply activity for <span id="banner-date"></span>.
             </div>
           </div>
-          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <div class="hero-actions">
             <a href="reports.html" class="btn btn-secondary btn-sm" style="background: rgba(255,255,255,0.2); color: #ffffff; border: 1px solid rgba(255,255,255,0.4);">
               <i class="fa-solid fa-chart-pie"></i> Detailed Health Reports
             </a>
@@ -262,9 +264,9 @@
         </div>
 
         <!-- Quick Launchers Hub -->
-        <div style="margin-bottom: 24px;">
-          <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 12px;">
-            <i class="fa-solid fa-bolt" style="color: var(--brand-primary); margin-right: 6px;"></i> Quick Admin Launchers
+        <section style="margin-bottom: 24px;" aria-labelledby="quick-actions-title">
+          <div class="dashboard-section-label" id="quick-actions-title">
+            <i class="fa-solid fa-bolt" aria-hidden="true"></i> Quick actions
           </div>
           <div class="quick-actions-grid">
             <a href="account-create.html" class="quick-action-card">
@@ -307,9 +309,16 @@
               </div>
             </a>
           </div>
-        </div>
+        </section>
 
         <!-- Visual Analytics Grid (2x2 Balanced Charts Layout) -->
+        <div class="section-heading">
+          <div>
+            <h2>Health and operations trends</h2>
+            <p>Live indicators across the facilities included in your portal scope.</p>
+          </div>
+          <a href="reports.html" class="clickable-text">Explore all reports <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+        </div>
         <div class="charts-2x2-grid">
           <!-- Chart 1: Maternal Risk Level Breakdown -->
           <div class="chart-card">
@@ -357,7 +366,7 @@
         </div>
 
         <!-- Recent Audit Trail Feed -->
-        <div class="card">
+        <div class="card recent-activity-card">
           <div class="card-header" style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px;">
             <div>
               <div class="card-title" style="font-size: 15px; color: var(--text-primary);">
@@ -369,6 +378,7 @@
           </div>
           <div class="table-wrap" style="border: none; border-radius: 0;">
             <table class="data-table">
+              <caption class="sr-only">Recent administrative activity</caption>
               <thead>
                 <tr>
                   <th>Date &amp; Time</th>
@@ -395,16 +405,16 @@
       <footer class="app-footer">
         <span>&copy; 2026 InaAgapay — Maternal &amp; Child Health Information System</span>
         <span style="color: var(--border-primary)">|</span>
-        <span>Admin Landing Portal v2.5</span>
+        <span>Admin Portal v2.5</span>
       </footer>
     </div>
 
     <!-- Detail Inspection Modal -->
     <div class="modal-overlay" id="detail-modal">
-      <div class="modal" style="max-width: 600px;">
+      <div class="modal" style="max-width: 600px;" role="dialog" aria-modal="true" aria-labelledby="dashboard-detail-title">
         <div class="modal-header">
-          <h2 class="modal-title"><i class="fa-solid fa-circle-info" style="color:var(--brand-primary);margin-right:8px;"></i> Audit Trail Record Detail</h2>
-          <button class="modal-close" id="detail-modal-close"><i class="fa-solid fa-xmark"></i></button>
+          <h2 class="modal-title" id="dashboard-detail-title"><i class="fa-solid fa-circle-info" style="color:var(--brand-primary);margin-right:8px;" aria-hidden="true"></i> Audit Trail Record Detail</h2>
+          <button class="modal-close" id="detail-modal-close" aria-label="Close audit detail"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
         </div>
         <div class="modal-body" id="detail-body"></div>
         <div class="modal-footer">

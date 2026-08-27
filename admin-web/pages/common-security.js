@@ -192,18 +192,29 @@
   // 6. Profile menu — the account control in the shared header opens the
   // signed-in user's profile, settings, and help pages from every portal view.
   function initProfileMenu() {
-    const headerUser = document.querySelector(".header-user");
+    let headerUser = document.querySelector(".header-user");
     if (!headerUser || document.querySelector(".profile-menu")) return;
+
+    // Use a native disclosure button so keyboard and assistive-technology
+    // behavior does not depend on a div pretending to be interactive.
+    if (headerUser.tagName !== "BUTTON") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = headerUser.className;
+      button.id = headerUser.id;
+      while (headerUser.firstChild) button.appendChild(headerUser.firstChild);
+      headerUser.replaceWith(button);
+      headerUser = button;
+    }
 
     const displayName = [session?.first_name, session?.last_name].filter(Boolean).join(" ") || "Admin";
     const email = session?.email_address || "Signed-in account";
     const initials = ((session?.first_name?.[0] ?? "") + (session?.last_name?.[0] ?? "")).toUpperCase() || "A";
 
     headerUser.id = headerUser.id || "header-user-btn";
-    headerUser.setAttribute("role", "button");
-    headerUser.setAttribute("tabindex", "0");
     headerUser.setAttribute("aria-haspopup", "menu");
     headerUser.setAttribute("aria-expanded", "false");
+    headerUser.setAttribute("aria-label", `Open account menu for ${displayName}`);
 
     const nameEl = headerUser.querySelector(".header-user-name");
     const avatarEl = headerUser.querySelector(".header-avatar");
@@ -262,11 +273,10 @@
       setOpen(!userMenuWrap.classList.contains("open"));
     });
     headerUser.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        setOpen(!userMenuWrap.classList.contains("open"));
+      if (event.key === "Escape") {
+        setOpen(false);
+        headerUser.focus();
       }
-      if (event.key === "Escape") setOpen(false);
     });
     menu.addEventListener("click", (event) => {
       const logout = event.target.closest("[data-profile-action=\"logout\"]");
@@ -291,7 +301,76 @@
     initProfileMenu();
   }
 
-  // 7. Custom RHU Confirmation Modal (Replaces browser confirm/alert popups)
+  // 7. Responsive navigation — one shared drawer controller replaces the
+  // page-by-page toggle behavior while preserving each page's existing hooks.
+  function initResponsiveSidebar() {
+    const toggle = document.getElementById("sidebar-toggle");
+    const sidebar = document.querySelector(".app-sidebar");
+    if (!toggle || !sidebar || document.querySelector(".sidebar-backdrop")) return;
+
+    sidebar.id = sidebar.id || "primary-sidebar";
+    toggle.type = "button";
+    toggle.setAttribute("aria-controls", sidebar.id);
+    toggle.setAttribute("aria-expanded", "false");
+
+    const backdrop = document.createElement("button");
+    backdrop.type = "button";
+    backdrop.className = "sidebar-backdrop";
+    backdrop.setAttribute("aria-label", "Close navigation menu");
+    backdrop.setAttribute("aria-hidden", "true");
+    backdrop.tabIndex = -1;
+    document.body.appendChild(backdrop);
+
+    function syncDrawerState() {
+      const isOpen = sidebar.classList.contains("open");
+      toggle.setAttribute("aria-expanded", String(isOpen));
+      backdrop.classList.toggle("show", isOpen);
+      backdrop.setAttribute("aria-hidden", String(!isOpen));
+      document.body.classList.toggle("sidebar-open", isOpen && window.innerWidth <= 992);
+    }
+
+    function closeDrawer({ returnFocus = false } = {}) {
+      sidebar.classList.remove("open");
+      syncDrawerState();
+      if (returnFocus) toggle.focus();
+    }
+
+    // Capture the activation before legacy page handlers can toggle it a
+    // second time. This keeps older pages compatible with the shared control.
+    toggle.addEventListener("click", (event) => {
+      event.stopImmediatePropagation();
+      sidebar.classList.toggle("open");
+      syncDrawerState();
+    }, true);
+
+    backdrop.addEventListener("click", () => closeDrawer({ returnFocus: true }));
+    sidebar.addEventListener("click", (event) => {
+      if (event.target.closest("a") && window.innerWidth <= 992) closeDrawer();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && sidebar.classList.contains("open")) {
+        closeDrawer({ returnFocus: true });
+      }
+    });
+    window.addEventListener("resize", () => {
+      if (window.innerWidth > 992 && sidebar.classList.contains("open")) closeDrawer();
+      else syncDrawerState();
+    });
+
+    new MutationObserver(syncDrawerState).observe(sidebar, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    syncDrawerState();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initResponsiveSidebar);
+  } else {
+    initResponsiveSidebar();
+  }
+
+  // 8. Custom RHU Confirmation Modal (Replaces browser confirm/alert popups)
   window.openConfirmationModal = function (options) {
     const opts = Object.assign({
       title: "Confirm Action",

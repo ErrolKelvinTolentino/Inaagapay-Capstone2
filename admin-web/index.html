@@ -446,6 +446,7 @@
         }
       }
     </style>
+    <link rel="stylesheet" href="styles/login.css" />
   </head>
   <body>
     <div class="login-wrapper">
@@ -455,8 +456,9 @@
           <img src="images/logo_with_label.png" alt="InaAgapay Logo" style="height: 48px; object-fit: contain;" />
         </div>
         <div class="left-content">
+          <div class="login-eyebrow"><i class="fa-solid fa-heart-pulse"></i> Connected community care</div>
           <h1>Maternal &amp; Child Health Monitoring System</h1>
-          <p>One portal for the Municipal Health Office and the Rural Health Units it oversees.</p>
+          <p>One secure workspace for the Municipal Health Office and the Rural Health Units coordinating care across every barangay.</p>
 
           <div class="tier-list">
             <div class="tier">
@@ -489,12 +491,13 @@
       <div class="login-right">
         <div class="login-form-header">
           <img src="images/logo_icon.png" alt="InaAgapay Icon" />
+          <div class="form-kicker">Admin portal</div>
           <h2>Welcome back</h2>
           <p>Sign in with your MHO or RHU credentials. You will land on your own office's dashboard.</p>
         </div>
 
-        <div id="login-alert" class="alert-error hidden">
-          <i class="fa-solid fa-circle-xmark"></i>
+        <div id="login-alert" class="alert-error hidden" role="alert" aria-live="assertive">
+          <i class="fa-solid fa-circle-xmark" aria-hidden="true"></i>
           <span id="login-alert-msg">Invalid email or password.</span>
         </div>
 
@@ -530,9 +533,10 @@
                 type="button"
                 class="pwd-toggle"
                 id="pwd-toggle"
-                aria-label="Toggle password visibility"
+                aria-label="Show password"
+                aria-pressed="false"
               >
-                <i class="fa-solid fa-eye" id="pwd-eye"></i>
+                <i class="fa-solid fa-eye" id="pwd-eye" aria-hidden="true"></i>
               </button>
             </div>
           </div>
@@ -610,9 +614,13 @@
             if (isPassword) {
               passwordInput.type = "text";
               eyeIcon.className = "fa-solid fa-eye-slash";
+              toggleBtn.setAttribute("aria-label", "Hide password");
+              toggleBtn.setAttribute("aria-pressed", "true");
             } else {
               passwordInput.type = "password";
               eyeIcon.className = "fa-solid fa-eye";
+              toggleBtn.setAttribute("aria-label", "Show password");
+              toggleBtn.setAttribute("aria-pressed", "false");
             }
             // Slight accessibility: keep focus on input
             passwordInput.focus();
@@ -621,6 +629,7 @@
 
         // Login form submit
         const form = document.getElementById("login-form");
+        const emailInput = document.getElementById("email");
         const loginBtn = document.getElementById("login-btn");
         const btnTextSpan = document.getElementById("login-btn-text");
         const alertBox = document.getElementById("login-alert");
@@ -628,16 +637,23 @@
 
         form.addEventListener("submit", async (e) => {
           e.preventDefault();
-          const email = document.getElementById("email").value.trim();
+          const email = emailInput.value.trim();
           const password = document.getElementById("password").value;
 
           if (!email || !password) {
             showError("Please enter your email and password.");
             return;
           }
+          if (!emailInput.checkValidity()) {
+            emailInput.setAttribute("aria-invalid", "true");
+            showError("Enter a valid email address.");
+            emailInput.focus();
+            return;
+          }
 
           // Loading state
           loginBtn.disabled = true;
+          loginBtn.setAttribute("aria-busy", "true");
           btnTextSpan.innerHTML = '<div class="spinner"></div> Signing in…';
           alertBox.classList.add("hidden");
 
@@ -756,15 +772,19 @@
             }
           } catch (err) {
             console.error("Login error:", err);
-            showError(
-              err?.message
-                ? "Error: " + err.message
-                : "An error occurred. Please check your connection and try again."
-            );
+            showError("We could not connect to InaAgapay. Check your connection and try again.");
           } finally {
             loginBtn.disabled = false;
+            loginBtn.removeAttribute("aria-busy");
             btnTextSpan.textContent = "Sign In";
           }
+        });
+
+        [emailInput, passwordInput].forEach((input) => {
+          input.addEventListener("input", () => {
+            input.removeAttribute("aria-invalid");
+            alertBox.classList.add("hidden");
+          });
         });
 
         function showError(msg) {

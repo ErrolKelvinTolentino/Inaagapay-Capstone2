@@ -362,9 +362,15 @@
      */
     applyChrome() {
       const portalLabel = PortalScope.isMho ? "MHO Portal" : "RHU Portal";
+      const facilityName = String(scope.facility_name || "").trim();
+      const isGenericName = !facilityName || facilityName === "Municipal Health Office" || facilityName === "Rural Health Unit";
+      const headerLabel = scope.ready && !isGenericName
+        ? `${PortalScope.isMho ? "MHO" : "RHU"} · ${facilityName}`
+        : portalLabel;
 
       document.querySelectorAll(".header-badge").forEach((el) => {
-        el.textContent = portalLabel;
+        el.textContent = headerLabel;
+        el.title = facilityName || portalLabel;
       });
 
       // Footers and body copy that name the tier in prose, rather than the
