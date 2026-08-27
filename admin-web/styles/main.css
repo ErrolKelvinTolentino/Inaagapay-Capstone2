@@ -117,6 +117,14 @@ html {
 }
 
 body {
+  font-family: var(--font);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   animation: pageEntrance 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -131,17 +139,6 @@ body.page-exiting {
     animation: none !important;
     transform: none !important;
   }
-}
-
-body {
-  font-family: var(--font);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 14px;
-  line-height: 1.6;
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -2081,328 +2078,6 @@ body.modal-open {
   }
 
   .page-actions {
-max-width: 280px;
-}
-
-/* ── Info Row Pattern ─────────────────────────────── */
-.info-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border-primary);
-}
-
-.info-row:last-child {
-  border-bottom: none;
-}
-
-.info-row-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-sm);
-  background: var(--brand-accent-10);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.info-row-icon i {
-  font-size: 16px;
-  color: var(--brand-accent);
-}
-
-.info-row-content {
-  flex: 1;
-}
-
-.info-row-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.info-row-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* ── Small Info Box ───────────────────────────────── */
-.small-info-box {
-  width: 100%;
-  padding: 14px;
-  border: 1px solid var(--brand-primary-30);
-  border-radius: var(--radius-card-sm);
-  text-align: center;
-}
-
-.small-info-box .label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.small-info-box .value {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* ── Tab Buttons ──────────────────────────────────── */
-.tab-group {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
-}
-
-.tab-btn {
-  padding: 10px 20px;
-  border-radius: var(--radius-tab);
-  border: 1px solid var(--border-primary);
-  background: transparent;
-  color: var(--text-primary);
-  font-family: var(--font);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.tab-btn:hover {
-  background: var(--bg-secondary);
-}
-
-.tab-btn.active {
-  background: var(--brand-primary);
-  color: var(--text-on-color);
-  border-color: var(--brand-primary);
-  box-shadow: var(--shadow-btn-primary);
-}
-
-/* ── Clickable Text ───────────────────────────────── */
-.clickable-text {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--brand-primary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  background: none;
-  border: none;
-  font-family: var(--font);
-}
-
-.clickable-text:hover {
-  opacity: 0.85;
-}
-
-.clickable-text:active {
-  color: var(--brand-accent);
-  transform: scale(0.97);
-}
-
-/* ── Validation Message ───────────────────────────── */
-.validation-msg {
-  padding: 8px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.validation-msg.success {
-  background: var(--success-10);
-  border: 1px solid rgba(104, 203, 184, 0.3);
-  color: var(--success);
-}
-
-.validation-msg.error {
-  background: var(--error-10);
-  border: 1px solid rgba(229, 115, 115, 0.3);
-  color: var(--error);
-}
-
-.validation-msg.warning {
-  background: var(--warning-10);
-  border: 1px solid rgba(255, 181, 98, 0.3);
-  color: var(--warning);
-}
-
-.badge-expiring-warning {
-  background: rgba(255, 181, 98, 0.18);
-  color: #C77700;
-  border: 1px solid rgba(255, 181, 98, 0.35);
-}
-.badge-expiring-good {
-  background: rgba(255, 104, 165, 0.1);
-  color: var(--brand-primary);
-  border: 1px solid var(--brand-primary-30);
-}
-
-/* ── Data Privacy Act & Custom Confirmation Modal ── */
-.rhu-dpa-notice {
-  font-size: 12px;
-  color: var(--text-secondary);
-  background: var(--brand-secondary);
-  border: 1px dashed var(--brand-primary-30);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
-  margin-top: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.rhu-dpa-notice i {
-  color: var(--brand-primary);
-  font-size: 14px;
-}
-
-.rhu-modal-overlay {
-  position: fixed;
-  top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(45, 45, 45, 0.45);
-  backdrop-filter: blur(4px);
-  z-index: 9999;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 20px;
-  overflow-y: auto;
-  animation: fadeIn 0.2s ease;
-}
-.rhu-modal-card {
-  background: #FFFFFF;
-  border-radius: var(--radius-dialog, 24px);
-  border: 1px solid var(--border-primary, #F0F0F0);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
-  max-width: 480px;
-  width: 100%;
-  margin: auto;
-  animation: slideUp 0.2s ease;
-}
-.rhu-modal-header {
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid var(--border-primary);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.rhu-modal-header i {
-  font-size: 22px;
-  color: var(--brand-primary);
-}
-.rhu-modal-title {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--brand-text);
-  margin: 0;
-}
-.rhu-modal-body {
-  padding: 20px 24px;
-  font-size: 14px;
-  color: var(--text-primary);
-  line-height: 1.5;
-}
-.rhu-modal-footer {
-  padding: 14px 24px 20px;
-  background: var(--brand-secondary);
-  border-top: 1px solid var(--border-primary);
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-/* =====================================================
-   Accessibility
-   ===================================================== */
-
-:focus-visible {
-  outline: 3px solid var(--brand-primary);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-
-.btn:focus-visible,
-.page-btn:focus-visible,
-.pagination-btn:focus-visible,
-.tab-btn-modern:focus-visible,
-.inventory-tab-btn:focus-visible,
-.view-btn-modern:focus-visible,
-.sidebar-nav a:focus-visible,
-.sidebar-logout:focus-visible,
-.modal-close:focus-visible,
-.header-sidebar-toggle:focus-visible {
-  outline: 3px solid var(--brand-accent);
-  outline-offset: 2px;
-}
-
-.form-control:focus-visible,
-.form-select:focus-visible {
-  outline: 2px solid var(--brand-primary);
-  outline-offset: 1px;
-}
-
-
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/* ── Comprehensive Mobile & Tablet Responsive Enhancements ── */
-@media (max-width: 992px) {
-  .app-layout {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "header"
-      "main"
-      "footer";
-  }
-
-  .app-sidebar {
-    position: fixed;
-    top: var(--header-h);
-    left: 0;
-    width: 280px;
-    height: calc(100vh - var(--header-h));
-    z-index: 250;
-    transform: translateX(-100%);
-    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .app-sidebar.open {
-    transform: translateX(0);
-  }
-
-  .header-sidebar-toggle {
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
-    font-size: 22px;
-    border-radius: var(--radius-sm);
-  }
-
-  .app-main {
-    padding: 16px 14px;
-  }
-
-  .page-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  .page-actions {
     width: 100%;
     justify-content: flex-start;
   }
@@ -2516,10 +2191,51 @@ max-width: 280px;
   }
 }
 .badge-expiring-warning {
+  background: rgba(255, 181, 98, 0.18);
+  color: #C77700;
+  border: 1px solid rgba(255, 181, 98, 0.35);
+}
+.badge-expiring-good {
+  background: rgba(255, 104, 165, 0.1);
+  color: var(--brand-primary);
+  border: 1px solid var(--brand-primary-30);
+}
+
+/* ── Data Privacy Act & Custom Confirmation Modal ── */
+.rhu-dpa-notice {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--brand-secondary);
+  border: 1px dashed var(--brand-primary-30);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .rhu-dpa-notice i {
   color: var(--brand-primary);
   font-size: 14px;
+}
+
+.rhu-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(45, 45, 45, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: flex-start;   /* allow overlay to scroll when card is tall */
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;           /* overlay scrolls, not the background page */
+  animation: fadeIn 0.2s ease;
+}
+.rhu-modal-card {
+  background: #FFFFFF;
+  border-radius: var(--radius-dialog, 24px);
+  border: 1px solid var(--border-primary, #F0F0F0);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
   max-width: 480px;
   width: 100%;
@@ -2562,6 +2278,50 @@ max-width: 280px;
 /* =====================================================
    Accessibility
    ===================================================== */
+
+/* Keyboard focus was previously invisible everywhere: nothing in this stylesheet
+   styled :focus-visible, so tabbing through the portal gave no indication of
+   position. Applies only to keyboard focus, so mouse users see no change. */
+:focus-visible {
+  outline: 3px solid var(--brand-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.btn:focus-visible,
+.page-btn:focus-visible,
+.pagination-btn:focus-visible,
+.tab-btn-modern:focus-visible,
+.inventory-tab-btn:focus-visible,
+.view-btn-modern:focus-visible,
+.sidebar-nav a:focus-visible,
+.sidebar-logout:focus-visible,
+.modal-close:focus-visible,
+.header-sidebar-toggle:focus-visible {
+  outline: 3px solid var(--brand-accent);
+  outline-offset: 2px;
+}
+
+.form-control:focus-visible,
+.form-select:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+
+
+
+/* Respect the OS "reduce motion" setting — the portal animates toasts, tab
+   transitions and card hovers, which can trigger vestibular discomfort. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* =====================================================
    2026 Admin Experience Refresh
