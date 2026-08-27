@@ -1,14 +1,15 @@
 /* =====================================================
    InaAgapay Admin Portal — Sign-in experience
+   Light / Pastel / Flutter v2 Theme
    ===================================================== */
 
 :root {
-  --login-ink: #1d2433;
-  --login-muted: #626c7c;
-  --login-brand: #b42366;
-  --login-brand-dark: #8d174d;
-  --login-border: #dfe3ea;
-  --login-focus: rgba(180, 35, 102, 0.2);
+  --login-ink: #2D2D2D;
+  --login-muted: #8A8A8A;
+  --login-brand: #FF68A5;
+  --login-brand-dark: #E6398D;
+  --login-border: #F0F0F0;
+  --login-focus: rgba(255, 104, 165, 0.2);
 }
 
 body {
@@ -18,7 +19,7 @@ body {
   padding: clamp(18px, 4vw, 56px);
   color: var(--login-ink);
   background:
-    linear-gradient(105deg, rgba(23, 29, 42, 0.82) 0%, rgba(62, 29, 50, 0.63) 42%, rgba(23, 29, 42, 0.28) 100%),
+    linear-gradient(105deg, rgba(255, 245, 248, 0.55) 0%, rgba(255, 240, 245, 0.45) 42%, rgba(255, 248, 251, 0.35) 100%),
     url("../images/login-background.png") center 42% / cover no-repeat fixed;
 }
 
@@ -29,8 +30,8 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(circle at 15% 20%, rgba(255, 188, 214, 0.18), transparent 34%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.04), rgba(15, 23, 42, 0.28));
+    radial-gradient(circle at 15% 20%, rgba(255, 104, 165, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(255, 248, 251, 0.04), rgba(255, 240, 245, 0.18));
 }
 
 .login-wrapper {
@@ -40,36 +41,36 @@ body::before {
   max-width: none;
   min-height: min(720px, calc(100svh - clamp(36px, 8vw, 112px)));
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.32);
+  border: 1px solid rgba(255, 104, 165, 0.12);
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.3);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 28px 80px rgba(255, 104, 165, 0.1);
 }
 
 .login-left {
   min-width: 0;
   padding: clamp(38px, 5vw, 64px);
-  color: #fff;
+  color: var(--login-ink);
   background:
-    linear-gradient(150deg, rgba(28, 31, 45, 0.87), rgba(119, 24, 74, 0.62)),
-    linear-gradient(180deg, transparent 35%, rgba(16, 22, 34, 0.25));
+    linear-gradient(150deg, rgba(255, 245, 248, 0.75), rgba(255, 228, 238, 0.6)),
+    linear-gradient(180deg, transparent 35%, rgba(255, 240, 245, 0.15));
   backdrop-filter: blur(3px);
 }
 
 .login-left::before,
 .login-left::after {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 104, 165, 0.1);
+  background: rgba(255, 104, 165, 0.04);
 }
 
 .left-brand img {
   width: auto;
   height: 52px !important;
   padding: 8px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 104, 165, 0.15);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 24px rgba(255, 104, 165, 0.08);
 }
 
 .left-content {
@@ -83,10 +84,10 @@ body::before {
   gap: 8px;
   margin-bottom: 16px;
   padding: 7px 11px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid rgba(255, 104, 165, 0.2);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 104, 165, 0.08);
+  color: var(--login-brand-dark);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.09em;
@@ -96,7 +97,7 @@ body::before {
 .left-content h1 {
   max-width: 480px;
   margin-bottom: 16px;
-  color: #fff;
+  color: var(--login-ink);
   font-size: clamp(32px, 4vw, 48px);
   font-weight: 700;
   line-height: 1.08;
@@ -105,7 +106,7 @@ body::before {
 
 .left-content > p {
   max-width: 470px;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--login-muted);
   font-size: 15px;
   line-height: 1.7;
 }
@@ -121,24 +122,24 @@ body::before {
 .tier {
   min-width: 0;
   padding: 15px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 104, 165, 0.12);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.11);
-  box-shadow: none;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 2px 8px rgba(255, 104, 165, 0.05);
   backdrop-filter: blur(8px);
 }
 
 .tier-icon {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffd0e2;
+  background: rgba(255, 104, 165, 0.1);
+  color: var(--login-brand);
 }
 
 .tier-text strong {
-  color: #fff;
+  color: var(--login-ink);
 }
 
 .tier-text span {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--login-muted);
 }
 
 .left-footer {
@@ -146,9 +147,9 @@ body::before {
 }
 
 .left-chip {
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(255, 104, 165, 0.15);
+  background: rgba(255, 104, 165, 0.06);
+  color: var(--login-brand-dark);
 }
 
 .login-right {
@@ -197,7 +198,7 @@ body::before {
 
 .form-label {
   margin-bottom: 8px;
-  color: #394253;
+  color: #2D2D2D;
   font-size: 13px;
   font-weight: 700;
 }
@@ -208,16 +209,16 @@ body::before {
   border: 1px solid var(--login-border);
   border-radius: 13px;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   font-size: 15px;
 }
 
 .input-wrap input::placeholder {
-  color: #9aa2af;
+  color: #b0b0b0;
 }
 
 .input-wrap input:hover {
-  border-color: #c7ccd5;
+  border-color: #e0e0e0;
 }
 
 .input-wrap input:focus {
@@ -239,13 +240,13 @@ body::before {
   margin-top: 10px;
   border-radius: 13px;
   background: linear-gradient(135deg, var(--login-brand), var(--login-brand-dark));
-  box-shadow: 0 10px 22px rgba(141, 23, 77, 0.24);
+  box-shadow: 0 10px 22px rgba(255, 104, 165, 0.3);
 }
 
 .btn-login:hover:not(:disabled) {
   filter: none;
   transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(141, 23, 77, 0.3);
+  box-shadow: 0 14px 28px rgba(255, 104, 165, 0.35);
 }
 
 .alert-error {
@@ -257,9 +258,9 @@ body::before {
 .app-hint {
   margin-top: 22px;
   padding: 15px;
-  border: 1px solid #e6e9ef;
+  border: 1px solid var(--login-border);
   border-radius: 13px;
-  background: #f8f9fb;
+  background: #FFF8FB;
   color: var(--login-muted);
 }
 
@@ -268,11 +269,11 @@ body::before {
 }
 
 .login-footer-note {
-  color: #7b8492;
+  color: var(--login-muted);
 }
 
 :focus-visible {
-  outline: 3px solid #175cd3;
+  outline: 3px solid var(--login-brand);
   outline-offset: 3px;
 }
 
@@ -313,7 +314,7 @@ body::before {
 @media (max-width: 520px) {
   body {
     padding: 0;
-    background: #fff;
+    background: #FFF8FB;
   }
 
   .login-wrapper {
@@ -331,7 +332,7 @@ body::before {
   .login-left {
     min-height: 520px;
     background:
-      linear-gradient(150deg, rgba(28, 31, 45, 0.86), rgba(119, 24, 74, 0.6)),
+      linear-gradient(150deg, rgba(255, 245, 248, 0.6), rgba(255, 228, 238, 0.5)),
       url("../images/login-background.png") 62% center / cover no-repeat;
   }
 

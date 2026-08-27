@@ -229,7 +229,7 @@
         </div>
 
         <!-- ── Filter Control Bar ── -->
-        <div class="reports-controls-bar" style="background:#ffffff; border:1px solid var(--border-primary); border-radius:14px; padding:16px 20px; box-shadow:0 4px 16px rgba(0,0,0,0.03); margin-bottom:20px; display:flex; flex-direction:column; gap:12px;">
+        <div class="reports-controls-bar" style="background:#ffffff; border:1px solid var(--border-primary); border-radius:14px; padding:16px 20px; box-shadow:0 4px 16px rgba(0,0,0,0.03); margin-bottom:20px; display:flex; flex-direction:column; align-items:stretch; gap:12px;">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
             <div style="font-size:13px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
               <i class="fa-solid fa-filter" style="color:var(--brand-primary);"></i> Filter Reports &amp; Facility Analytics
@@ -238,14 +238,14 @@
               <button class="btn btn-secondary btn-sm" id="refresh-reports-btn" style="height:36px; border-radius:8px;"><i class="fa-solid fa-arrows-rotate"></i> Refresh Data</button>
             </div>
           </div>
-          <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
-            <div class="reports-filter-item">
+          <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;">
+            <div class="reports-filter-item" style="flex:1; min-width:200px;">
               <span class="reports-filter-label" style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-secondary);"><i class="fa-solid fa-hospital-user" style="color:var(--brand-primary);"></i> Health Center:</span>
-              <select id="filter-bhc-select" class="form-select" style="min-width: 220px; height:38px; border-radius:8px; font-size:12.5px;">
+              <select id="filter-bhc-select" class="form-select" style="flex:1; min-width: 180px; height:38px; border-radius:8px; font-size:12.5px;">
                 <option value="all">All Health Centers (System-wide)</option>
               </select>
             </div>
-            <div class="date-range-picker-group" id="reports-date-picker-wrap">
+            <div class="date-range-picker-group" id="reports-date-picker-wrap" style="flex:1; min-width:280px;">
               <i class="fa-solid fa-calendar-days date-icon"></i>
               <span class="date-label">From:</span>
               <input type="date" class="date-input" id="filter-start-date" title="Filter analytics from date" />
@@ -455,7 +455,7 @@
           <div class="card">
             <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
               <h3 class="card-title" style="color:var(--warning); font-size:15px;"><i class="fa-solid fa-boxes-packing"></i> Critical Stock Shortage Alerts</h3>
-              <span class="badge badge-low" id="shortage-count-badge">0 Items</span>
+              <span class="badge badge-medium" id="shortage-count-badge">0 Items</span>
             </div>
             <div class="table-wrap" style="max-height:280px; overflow-y:auto;">
               <table class="data-table">
@@ -1216,8 +1216,8 @@
 
           tbody.innerHTML = shortageItems.map(row => {
             const statusBadge = row.status === "out"
-              ? `<span class="badge badge-suspended" style="color:var(--error);">Out of Stock</span>`
-              : `<span class="badge badge-low">Low</span>`;
+              ? `<span class="badge badge-suspended">Out of Stock</span>`
+              : `<span class="badge badge-medium">Low</span>`;
             return `
             <tr>
               <td style="font-weight:600; color:var(--text-primary);">${esc(row.name)}</td>
@@ -1339,7 +1339,7 @@
               : `<span class="badge badge-inactive" title="No immunization records for this health center">—</span>`;
 
             const stockBadge = r.stockShortages > 0
-              ? `<span class="badge badge-low" style="color:var(--error);"><i class="fa-solid fa-triangle-exclamation"></i> ${r.stockShortages} Alerts</span>`
+              ? `<span class="badge badge-high"><i class="fa-solid fa-triangle-exclamation"></i> ${r.stockShortages} Alerts</span>`
               : `<span class="badge badge-teal"><i class="fa-solid fa-circle-check"></i> Stock Healthy</span>`;
 
             return `

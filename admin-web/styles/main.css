@@ -1089,6 +1089,18 @@ table.data-table tbody tr:hover td {
   background: var(--error);
   color: var(--text-on-color);
 }
+.badge-teal {
+  background: #0d9488;
+  color: var(--text-on-color);
+}
+.badge-high-risk {
+  background: var(--error);
+  color: var(--text-on-color);
+}
+.badge-low-risk {
+  background: var(--success);
+  color: var(--text-on-color);
+}
 
 /* ── Filters / Toolbar ────────────────────────────── */
 .toolbar {
@@ -1105,7 +1117,7 @@ table.data-table tbody tr:hover td {
   position: relative;
   flex: 1;
   min-width: 200px;
-  max-width: 340px;
+  max-width: 480px;
 }
 
 .search-box i {
@@ -1131,7 +1143,7 @@ table.data-table tbody tr:hover td {
 
 /* ── Modern Date Range Picker & Controls ───────────── */
 .date-range-picker-group {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
   background: #FFFFFF;
@@ -2294,34 +2306,34 @@ body.modal-open {
    ===================================================== */
 
 :root {
-  --brand-primary: #b42366;
-  --brand-accent: #8f174e;
-  --brand-text: #8f174e;
-  --brand-secondary: #fff2f7;
-  --brand-primary-10: rgba(180, 35, 102, 0.09);
-  --brand-primary-30: rgba(180, 35, 102, 0.24);
-  --brand-primary-40: rgba(180, 35, 102, 0.38);
-  --brand-accent-10: rgba(143, 23, 78, 0.09);
+  --brand-primary: #FF68A5;
+  --brand-accent: #E6398D;
+  --brand-text: #C73578;
+  --brand-secondary: #FFF8FB;
+  --brand-primary-10: rgba(255, 104, 165, 0.10);
+  --brand-primary-30: rgba(255, 104, 165, 0.30);
+  --brand-primary-40: rgba(255, 104, 165, 0.40);
+  --brand-accent-10: rgba(230, 57, 141, 0.10);
 
-  --bg-primary: #f5f6f8;
-  --bg-secondary: #faf5f7;
-  --surface: #ffffff;
+  --bg-primary: #FAFAFA;
+  --bg-secondary: #FFF5F8;
+  --surface: #FFF9FC;
   --card-bg: #ffffff;
-  --text-primary: #202737;
-  --text-secondary: #667085;
-  --text-tertiary: #8b94a3;
+  --text-primary: #2D2D2D;
+  --text-secondary: #8A8A8A;
+  --text-tertiary: #b0b0b0;
   --text-on-color: #ffffff;
-  --border-primary: #e4e7ec;
-  --border-strong: #d0d5dd;
+  --border-primary: #F0F0F0;
+  --border-strong: #e0e0e0;
 
-  --success: #087361;
-  --success-10: rgba(8, 115, 97, 0.1);
-  --warning: #a95308;
-  --warning-10: rgba(169, 83, 8, 0.1);
-  --error: #bd2c47;
-  --error-10: rgba(189, 44, 71, 0.1);
-  --info: #1e5fbe;
-  --info-10: rgba(30, 95, 190, 0.1);
+  --success: #68CBB8;
+  --success-10: rgba(104, 203, 184, 0.12);
+  --warning: #FFB562;
+  --warning-10: rgba(255, 181, 98, 0.12);
+  --error: #E57373;
+  --error-10: rgba(229, 115, 115, 0.12);
+  --info: #3B82F6;
+  --info-10: rgba(59, 130, 246, 0.12);
 
   --radius-btn: 12px;
   --radius-input: 12px;
@@ -2335,14 +2347,14 @@ body.modal-open {
   --radius-md: 14px;
   --radius-lg: 18px;
 
-  --shadow-header: none;
-  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.035), 0 8px 24px rgba(16, 24, 40, 0.035);
-  --shadow-card-hover: 0 16px 34px rgba(16, 24, 40, 0.09);
-  --shadow-input: 0 1px 2px rgba(16, 24, 40, 0.04);
-  --shadow-dialog: 0 24px 64px rgba(16, 24, 40, 0.2);
-  --shadow-snackbar: 0 14px 34px rgba(16, 24, 40, 0.14);
-  --shadow-btn-primary: 0 8px 18px rgba(143, 23, 78, 0.22);
-  --shadow-menu: 0 20px 44px rgba(16, 24, 40, 0.16);
+  --shadow-header: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.03);
+  --shadow-card-hover: 0 16px 34px rgba(0, 0, 0, 0.07);
+  --shadow-input: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-dialog: 0 24px 64px rgba(0, 0, 0, 0.15);
+  --shadow-snackbar: 0 14px 34px rgba(0, 0, 0, 0.1);
+  --shadow-btn-primary: 0 4px 12px rgba(255, 104, 165, 0.4);
+  --shadow-menu: 0 20px 44px rgba(0, 0, 0, 0.12);
 
   --btn-height: 44px;
   --btn-height-sm: 38px;
@@ -2378,8 +2390,8 @@ textarea {
 }
 
 ::selection {
-  background: rgba(180, 35, 102, 0.18);
-  color: #651033;
+  background: rgba(255, 104, 165, 0.18);
+  color: var(--brand-text);
 }
 
 /* ── Shared shell ─────────────────────────────────── */
@@ -2477,7 +2489,7 @@ textarea {
 .header-avatar {
   width: 32px;
   height: 32px;
-  background: linear-gradient(145deg, #c62f72, #8f174e);
+  background: linear-gradient(145deg, var(--brand-primary), var(--brand-accent));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
   font-size: 12px;
   font-weight: 800;
@@ -2528,14 +2540,14 @@ textarea {
   top: var(--header-h);
   height: calc(100vh - var(--header-h));
   padding: 22px 0 18px;
-  border-right: 0;
-  background: #1b2130;
-  box-shadow: inset -1px 0 rgba(255, 255, 255, 0.04);
+  border-right: 1px solid var(--border-primary);
+  background: #FFFFFF;
+  box-shadow: 1px 0 8px rgba(0, 0, 0, 0.03);
 }
 
 .sidebar-section-label {
   padding: 15px 24px 7px;
-  color: #8e99aa;
+  color: var(--text-secondary);
   font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.13em;
@@ -2554,7 +2566,7 @@ textarea {
   min-height: 44px;
   padding: 10px 13px;
   border-radius: 10px;
-  color: #c3cad5;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
 }
@@ -2562,22 +2574,22 @@ textarea {
 .sidebar-nav a i,
 .sidebar-nav a .nav-icon,
 .sidebar-logout i {
-  color: #919bac;
+  color: var(--text-secondary);
 }
 
 .sidebar-nav a:hover {
-  background: rgba(255, 255, 255, 0.065);
-  color: #fff;
+  background: var(--bg-secondary);
+  color: var(--brand-primary);
 }
 
 .sidebar-nav a:hover i {
-  color: #ffd2e3;
+  color: var(--brand-primary);
 }
 
 .sidebar-nav a.active {
-  background: linear-gradient(135deg, #b42366, #92164f);
+  background: var(--brand-primary);
   color: #fff;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(255, 104, 165, 0.35);
 }
 
 .sidebar-nav a.active i {
@@ -2586,7 +2598,7 @@ textarea {
 
 .sidebar-divider {
   margin: 11px 24px;
-  background: rgba(255, 255, 255, 0.075);
+  background: var(--border-primary);
 }
 
 .sidebar-footer-nav {
@@ -2595,12 +2607,12 @@ textarea {
 }
 
 .sidebar-logout:hover {
-  background: rgba(244, 114, 140, 0.12);
-  color: #fda4b7;
+  background: var(--error-10);
+  color: var(--error);
 }
 
 .sidebar-logout:hover i {
-  color: #fda4b7;
+  color: var(--error);
 }
 
 .sidebar-backdrop {
@@ -2624,7 +2636,7 @@ body.sidebar-open {
 .app-main {
   padding: clamp(24px, 3vw, 38px);
   background:
-    radial-gradient(circle at 100% 0, rgba(180, 35, 102, 0.04), transparent 27rem),
+    radial-gradient(circle at 100% 0, rgba(255, 104, 165, 0.04), transparent 27rem),
     var(--bg-primary);
 }
 
@@ -2755,7 +2767,7 @@ body.sidebar-open {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #b42366, #92164f);
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
   box-shadow: var(--shadow-btn-primary);
 }
 
@@ -2986,12 +2998,12 @@ table.data-table tbody tr:hover td {
 .page-dashboard .dashboard-hero {
   min-height: 188px;
   padding: clamp(24px, 3.5vw, 38px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 104, 165, 0.15);
   border-radius: 18px;
   background:
-    radial-gradient(circle at 89% 22%, rgba(236, 72, 153, 0.24), transparent 16rem),
-    linear-gradient(120deg, #1d2433 0%, #292537 54%, #692043 118%);
-  box-shadow: 0 18px 42px rgba(29, 36, 51, 0.16);
+    radial-gradient(circle at 89% 22%, rgba(255, 104, 165, 0.15), transparent 16rem),
+    linear-gradient(120deg, #FFF5F8 0%, #FFF0F5 54%, #FFE4EE 118%);
+  box-shadow: 0 18px 42px rgba(255, 104, 165, 0.08);
 }
 
 .page-dashboard .dashboard-hero::before {
@@ -2999,7 +3011,7 @@ table.data-table tbody tr:hover td {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(255, 104, 165, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 104, 165, 0.04) 1px, transparent 1px);
   background-size: 28px 28px;
   mask-image: linear-gradient(90deg, transparent, #000 45%);
 }
@@ -3009,7 +3021,7 @@ table.data-table tbody tr:hover td {
   height: 260px;
   right: -85px;
   bottom: -130px;
-  border: 40px solid rgba(255, 255, 255, 0.055);
+  border: 40px solid rgba(255, 104, 165, 0.06);
   background: transparent;
 }
 
@@ -3020,7 +3032,7 @@ table.data-table tbody tr:hover td {
   align-items: center;
   gap: 7px;
   margin-bottom: 12px;
-  color: #facde0;
+  color: var(--brand-primary);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.11em;
@@ -3030,7 +3042,7 @@ table.data-table tbody tr:hover td {
 .page-dashboard .hero-title {
   position: relative;
   z-index: 1;
-  color: #fff;
+  color: var(--text-primary);
   font-size: clamp(25px, 3vw, 34px);
   font-weight: 750;
   letter-spacing: -0.04em;
@@ -3040,7 +3052,7 @@ table.data-table tbody tr:hover td {
   position: relative;
   z-index: 1;
   max-width: 620px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.65;
 }
@@ -3054,17 +3066,17 @@ table.data-table tbody tr:hover td {
 }
 
 .page-dashboard .hero-actions .btn-secondary {
-  border-color: rgba(255, 255, 255, 0.2) !important;
-  background: rgba(255, 255, 255, 0.1) !important;
-  color: #fff !important;
+  border-color: var(--brand-primary-30) !important;
+  background: rgba(255, 104, 165, 0.08) !important;
+  color: var(--brand-text) !important;
   box-shadow: none !important;
 }
 
 .page-dashboard .hero-actions #export-pdf-btn {
-  border: 1px solid #fff !important;
-  background: #fff !important;
-  color: #8f174e !important;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18) !important;
+  border: 1px solid var(--brand-primary) !important;
+  background: var(--brand-primary) !important;
+  color: #fff !important;
+  box-shadow: var(--shadow-btn-primary) !important;
 }
 
 .page-dashboard .stats-grid {
@@ -3186,8 +3198,8 @@ table.data-table tbody tr:hover td {
   min-height: 118px;
   padding: 24px;
   background:
-    radial-gradient(circle at 88% 10%, rgba(255, 255, 255, 0.16), transparent 11rem),
-    linear-gradient(120deg, #1d2433, #5f2443);
+    radial-gradient(circle at 88% 10%, rgba(255, 104, 165, 0.12), transparent 11rem),
+    linear-gradient(120deg, #FFF5F8, #FFE8F0);
 }
 
 .profile-identity {
@@ -3203,17 +3215,17 @@ table.data-table tbody tr:hover td {
   flex: 0 0 64px;
   align-items: center;
   justify-content: center;
-  border: 3px solid rgba(255, 255, 255, 0.38);
+  border: 3px solid rgba(255, 104, 165, 0.25);
   border-radius: 18px;
-  background: linear-gradient(145deg, #db4c89, #9d1c57);
+  background: linear-gradient(145deg, var(--brand-primary), var(--brand-accent));
   color: #fff;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 12px 24px rgba(255, 104, 165, 0.2);
   font-size: 22px;
   font-weight: 800;
 }
 
 .profile-identity-name {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 22px;
   font-weight: 750;
   letter-spacing: -0.025em;
@@ -3221,7 +3233,7 @@ table.data-table tbody tr:hover td {
 
 .profile-identity-role {
   margin-top: 3px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -3231,10 +3243,10 @@ table.data-table tbody tr:hover td {
   gap: 6px;
   margin-top: 10px;
   padding: 5px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--border-primary);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text-primary);
   font-size: 10px;
   font-weight: 700;
 }
@@ -4396,9 +4408,9 @@ table.data-table tbody tr:hover td {
   align-items: center;
   justify-content: center;
   border-radius: 13px;
-  background: linear-gradient(145deg, #bd2a6b, #8f174e);
+  background: linear-gradient(145deg, var(--brand-primary), var(--brand-accent));
   color: #fff;
-  box-shadow: 0 9px 18px rgba(143, 23, 78, 0.2);
+  box-shadow: 0 9px 18px rgba(255, 104, 165, 0.2);
 }
 
 .help-guidance-content > p {
@@ -4467,12 +4479,12 @@ table.data-table tbody tr:hover td {
   min-height: 154px;
   padding: 26px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 104, 165, 0.15);
   border-radius: 18px;
   background:
-    radial-gradient(circle at 91% 10%, rgba(236, 72, 153, 0.22), transparent 14rem),
-    linear-gradient(120deg, #1c2332, #342538 58%, #652043 120%);
-  box-shadow: 0 18px 40px rgba(28, 35, 50, 0.15);
+    radial-gradient(circle at 91% 10%, rgba(255, 104, 165, 0.15), transparent 14rem),
+    linear-gradient(120deg, #FFF5F8, #FFEDF3 58%, #FFE4EE 120%);
+  box-shadow: 0 18px 40px rgba(255, 104, 165, 0.08);
 }
 
 .profile-identity-card::after {
@@ -4482,7 +4494,7 @@ table.data-table tbody tr:hover td {
   bottom: -120px;
   width: 250px;
   height: 250px;
-  border: 42px solid rgba(255, 255, 255, 0.045);
+  border: 42px solid rgba(255, 104, 165, 0.06);
   border-radius: 50%;
 }
 
@@ -4501,7 +4513,7 @@ table.data-table tbody tr:hover td {
 .profile-identity-label {
   display: block;
   margin-bottom: 3px;
-  color: #f2b6cf;
+  color: var(--brand-primary);
   font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.09em;
@@ -4520,16 +4532,16 @@ table.data-table tbody tr:hover td {
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--border-primary);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text-primary);
   font-size: 9.5px;
   font-weight: 700;
 }
 
 .profile-meta-chip-secure i {
-  color: #6ee7b7;
+  color: var(--success);
 }
 
 .profile-identity-actions {
@@ -4540,9 +4552,9 @@ table.data-table tbody tr:hover td {
 }
 
 .profile-identity-actions .btn-secondary {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.09);
-  color: #fff;
+  border-color: var(--brand-primary-30);
+  background: rgba(255, 104, 165, 0.08);
+  color: var(--brand-text);
 }
 
 .profile-content-grid {
@@ -4703,9 +4715,9 @@ table.data-table tbody tr:hover td {
   align-items: center;
   justify-content: center;
   border-radius: 13px;
-  background: linear-gradient(145deg, #bc2868, #8f174e);
+  background: linear-gradient(145deg, var(--brand-primary), var(--brand-accent));
   color: #fff;
-  box-shadow: 0 9px 18px rgba(143, 23, 78, 0.2);
+  box-shadow: 0 9px 18px rgba(255, 104, 165, 0.2);
   font-size: 17px;
 }
 
