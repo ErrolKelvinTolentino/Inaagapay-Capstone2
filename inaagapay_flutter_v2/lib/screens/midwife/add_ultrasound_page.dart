@@ -1085,7 +1085,7 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
                           ),
                           const SizedBox(height: 12),
                           AppInputField(
-                            hintText: 'Location / Facility (e.g. Austria Diagnostic Center)',
+                            hintText: 'Location / Facility',
                             controller: _locationCtrl,
                             leadingIcon: Icons.location_on_outlined,
                           ),
@@ -1148,11 +1148,11 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
                                 const SizedBox(width: 6),
                                 Text(
                                   'Registered AOG on Scan Date (${_date == null ? 'Select Date' : DateFormat('MMM d').format(_date!)}): ',
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
                                 ),
                                 Text(
                                   regAogStr,
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.brandPrimary),
+                                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.brandPrimary),
                                 ),
                               ],
                             ),
@@ -1183,8 +1183,9 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
                             style: const TextStyle(fontSize: 13, height: 1.5),
                             decoration: InputDecoration(
                               hintText: 'Sonologist remarks or impression summary (editable)...',
-                              hintStyle: TextStyle(
-                                color: AppColors.textSecondary.withValues(alpha: 0.5),
+                              hintStyle: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 13,
                               ),
                               border: const OutlineInputBorder(
                                 borderSide: BorderSide(color: AppColors.borderPrimary),
@@ -1280,30 +1281,14 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Headline(
-                text: 'Attach Ultrasound Document',
-                fontSize: 17,
-              ),
-              if (_attachments.isNotEmpty)
-                TextButton.icon(
-                  onPressed: _processingDocument ? null : _triggerAutoOcr,
-                  icon: _processingDocument
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brandPrimary))
-                      : const Icon(Icons.auto_awesome, size: 16, color: AppColors.brandPrimary),
-                  label: Text(
-                    _processingDocument ? 'Scanning...' : 'Re-scan OCR',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.brandPrimary),
-                  ),
-                ),
-            ],
+          const Headline(
+            text: 'Attach Ultrasound Document',
+            fontSize: 17,
           ),
           const SizedBox(height: 4),
           Text(
             'Upload ultrasound scan photos (JPG, PNG) or diagnostic PDF reports. Maximum 10 MB per file.',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
           ),
           const SizedBox(height: 16),
 
@@ -1328,7 +1313,7 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
                   const SizedBox(height: 4),
                   Text(
                     'Supports JPG, PNG, PDF (Up to 10 MB)',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                   ),
                   const SizedBox(height: 14),
                 ] else ...[
@@ -1420,7 +1405,9 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
                       children: [
                         SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brandPrimary)),
                         SizedBox(width: 8),
-                        Text('Scanning document for OCR fields...', style: TextStyle(fontSize: 12, color: AppColors.brandPrimary, fontWeight: FontWeight.bold)),
+                        Flexible(
+                          child: Text('Scanning document for OCR fields...', style: TextStyle(fontSize: 12, color: AppColors.brandPrimary, fontWeight: FontWeight.bold)),
+                        ),
                       ],
                     ),
                   ),
@@ -1438,35 +1425,44 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
                       children: [
                         Icon(Icons.check_circle, color: Colors.green, size: 16),
                         SizedBox(width: 6),
-                        Text('✓ Fields Auto-Extracted! Review or edit below.', style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold)),
+                        Flexible(
+                          child: Text('✓ Review contents below', style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold)),
+                        ),
                       ],
                     ),
                   ),
                 ],
 
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Column(
                   children: [
-                    ElevatedButton.icon(
-                      onPressed: _attachments.length >= 5 ? null : _pickFiles,
-                      icon: Icon(_attachments.isEmpty ? Icons.attach_file : Icons.add, size: 18),
-                      label: Text(_attachments.isEmpty ? 'Choose File (JPG/PNG/PDF)' : 'Add File'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.brandPrimary,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _attachments.length >= 5 ? null : _pickFiles,
+                        icon: Icon(_attachments.isEmpty ? Icons.attach_file : Icons.add, size: 18),
+                        label: Text(_attachments.isEmpty ? 'Choose File (JPG/PNG/PDF)' : 'Add File'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.brandPrimary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    OutlinedButton.icon(
-                      onPressed: _attachments.length >= 5 ? null : _capturePhoto,
-                      icon: const Icon(Icons.camera_alt_outlined, size: 18),
-                      label: const Text('Take Photo'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.brandPrimary,
-                        side: BorderSide(color: AppColors.brandPrimary.withValues(alpha: 0.4), width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _attachments.length >= 5 ? null : _capturePhoto,
+                        icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                        label: const Text('Take Photo'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.brandPrimary,
+                          side: BorderSide(color: AppColors.brandPrimary.withValues(alpha: 0.4), width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        ),
                       ),
                     ),
                   ],

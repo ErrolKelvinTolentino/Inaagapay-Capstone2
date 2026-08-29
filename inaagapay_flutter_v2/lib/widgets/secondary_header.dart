@@ -19,39 +19,40 @@ class SecondaryHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       bottom: false,
-      child: SizedBox(
+      child: Container(
         height: 56,
         width: double.infinity,
-        child: Stack(
-          alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 48.0),
-              child: Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.brandPrimary,
+            if (onBack != null)
+              IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new),
+                color: AppColors.brandPrimary,
+                onPressed: onBack,
+              )
+            else
+              const SizedBox(width: 48),
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.center,
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.brandPrimary,
+                  ),
                 ),
               ),
             ),
-            Positioned(
-              left: 0,
-              child: onBack != null
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new),
-                      color: AppColors.brandPrimary,
-                      onPressed: onBack,
-                    )
-                  : const SizedBox.shrink(),
-            ),
             if (trailing != null)
-              Positioned(
-                right: 8,
-                child: trailing!,
-              ),
+              trailing!
+            else
+              const SizedBox(width: 48),
           ],
         ),
       ),

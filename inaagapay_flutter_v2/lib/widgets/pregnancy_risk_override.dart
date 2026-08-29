@@ -71,8 +71,8 @@ class PregnancyRiskOverride extends StatelessWidget {
           Text(
             helperText!,
             style: const TextStyle(
-              fontSize: 11,
-              height: 1.35,
+              fontSize: 12.5,
+              height: 1.4,
               color: AppColors.textSecondary,
             ),
           ),

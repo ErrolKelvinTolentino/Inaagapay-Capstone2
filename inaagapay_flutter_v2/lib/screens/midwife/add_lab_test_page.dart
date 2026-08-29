@@ -1332,7 +1332,7 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
       children: [
         _labResultHeading('Blood Count'),
         const Text(_blankFieldHint,
-            style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
         const SizedBox(height: 10),
         Row(
           children: [
@@ -1359,7 +1359,7 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
       children: [
         _labResultHeading('Urinalysis'),
         const Text(_blankFieldHint,
-            style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+            style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
         const SizedBox(height: 10),
         // A dropdown, not free text: the column accepts exactly this scale and
         // rejects anything else, so the form offers only what can be saved.
@@ -1514,7 +1514,7 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                             ),
                             const SizedBox(height: 12),
                             AppInputField(
-                              hintText: 'Location / Facility (e.g. Hi-Precision Diagnostics)',
+                              hintText: 'Location / Facility',
                               controller: _locationCtrl,
                               leadingIcon: Icons.location_on_outlined,
                             ),
@@ -1561,8 +1561,9 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                               style: const TextStyle(fontSize: 13, height: 1.5),
                               decoration: InputDecoration(
                                 hintText: 'Lab report findings, impressions, or extracted lab values (editable)...',
-                                hintStyle: TextStyle(
-                                  color: AppColors.textSecondary.withValues(alpha: 0.5),
+                                hintStyle: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
                                 ),
                                 border: const OutlineInputBorder(
                                   borderSide: BorderSide(color: AppColors.borderPrimary),
@@ -1678,30 +1679,14 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Headline(
-                text: 'Attach Lab Test Document',
-                fontSize: 17,
-              ),
-              if (_attachments.isNotEmpty)
-                TextButton.icon(
-                  onPressed: _processingDocument ? null : _triggerAutoOcr,
-                  icon: _processingDocument
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brandPrimary))
-                      : const Icon(Icons.auto_awesome, size: 16, color: AppColors.brandPrimary),
-                  label: Text(
-                    _processingDocument ? 'Scanning...' : 'Re-scan OCR',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.brandPrimary),
-                  ),
-                ),
-            ],
+          const Headline(
+            text: 'Attach Lab Test Document',
+            fontSize: 17,
           ),
           const SizedBox(height: 4),
           Text(
             'Upload lab result photos (JPG, PNG) or diagnostic PDF reports. Maximum 10 MB per file.',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
           ),
           const SizedBox(height: 16),
 
@@ -1726,7 +1711,7 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                   const SizedBox(height: 4),
                   Text(
                     'Supports JPG, PNG, PDF (Up to 10 MB)',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                   ),
                   const SizedBox(height: 14),
                 ] else ...[
@@ -1818,7 +1803,9 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                       children: [
                         SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brandPrimary)),
                         SizedBox(width: 8),
-                        Text('Scanning document for OCR fields...', style: TextStyle(fontSize: 12, color: AppColors.brandPrimary, fontWeight: FontWeight.bold)),
+                        Flexible(
+                          child: Text('Scanning document for OCR fields...', style: TextStyle(fontSize: 12, color: AppColors.brandPrimary, fontWeight: FontWeight.bold)),
+                        ),
                       ],
                     ),
                   ),
@@ -1836,35 +1823,44 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
                       children: [
                         Icon(Icons.check_circle, color: Colors.green, size: 16),
                         SizedBox(width: 6),
-                        Text('✓ Fields Auto-Extracted! Review or edit below.', style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold)),
+                        Flexible(
+                          child: Text('✓ Review contents below', style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold)),
+                        ),
                       ],
                     ),
                   ),
                 ],
 
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Column(
                   children: [
-                    ElevatedButton.icon(
-                      onPressed: _attachments.length >= 5 ? null : _pickFiles,
-                      icon: Icon(_attachments.isEmpty ? Icons.attach_file : Icons.add, size: 18),
-                      label: Text(_attachments.isEmpty ? 'Choose File (JPG/PNG/PDF)' : 'Add File'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.brandPrimary,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _attachments.length >= 5 ? null : _pickFiles,
+                        icon: Icon(_attachments.isEmpty ? Icons.attach_file : Icons.add, size: 18),
+                        label: Text(_attachments.isEmpty ? 'Choose File (JPG/PNG/PDF)' : 'Add File'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.brandPrimary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    OutlinedButton.icon(
-                      onPressed: _attachments.length >= 5 ? null : _capturePhoto,
-                      icon: const Icon(Icons.camera_alt_outlined, size: 18),
-                      label: const Text('Take Photo'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.brandPrimary,
-                        side: BorderSide(color: AppColors.brandPrimary.withValues(alpha: 0.4), width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _attachments.length >= 5 ? null : _capturePhoto,
+                        icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                        label: const Text('Take Photo'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.brandPrimary,
+                          side: BorderSide(color: AppColors.brandPrimary.withValues(alpha: 0.4), width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        ),
                       ),
                     ),
                   ],
