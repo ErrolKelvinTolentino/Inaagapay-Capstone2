@@ -461,7 +461,10 @@
           return;
         }
 
-        if (window.verifyAdminSessionWithDB) { window.verifyAdminSessionWithDB(db); }
+        // Direct clinical patient records have been decentralized to the Midwife Mobile App
+        // under the Data Privacy Act (RA 10173). Administrative users are redirected to Dashboard / Reports.
+        window.location.replace("dashboard.html");
+        return;
 
         // The sidebar Logout button had no handler on this page, so it did nothing.
         document.getElementById("logout-btn")?.addEventListener("click", () => {

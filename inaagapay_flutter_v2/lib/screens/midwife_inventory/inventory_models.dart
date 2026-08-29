@@ -164,7 +164,12 @@ class InventoryBatchRecord {
       status: _asString(json['status'], fallback: 'unknown'),
       dosesRemainingInOpenVial: _asInt(json['doses_remaining_in_open_vial'], fallback: 0),
       openVialsCount: _asInt(json['open_vials_count'], fallback: 0),
-      vialOpenedAt: _asDate(json['vial_opened_at']),
+      // _asTimestamp, not _asDate. This is a TIMESTAMPTZ and the open-vial
+      // clock is measured in HOURS: truncating it to midnight made a vial
+      // opened at 2pm read as fourteen hours old the moment it was opened, so
+      // every same-day multi-dose vial showed EXPIRED against a 6h shelf life
+      // and the app was telling midwives to throw away good vaccine.
+      vialOpenedAt: _asTimestamp(json['vial_opened_at']),
     );
   }
 
@@ -185,13 +190,33 @@ class InventoryBatchRecord {
   bool get isActive => status.toLowerCase() == 'active';
 
   bool isOpenVialExpired([DateTime? now, int shelfHours = 6]) {
-    if (dosesRemainingInOpenVial <= 0 || vialOpenedAt == null || shelfHours <= 0) return false;
-    final current = now ?? DateTime.now();
-    return current.difference(vialOpenedAt!).inHours >= shelfHours;
+    final left = openVialTimeLeft(shelfHours, now);
+    return left != null && left <= Duration.zero;
   }
 
   bool isExpiredOpenVial(int shelfHours, [DateTime? now]) =>
       isOpenVialExpired(now, shelfHours);
+
+  /// The moment this open vial must be discarded, or null when nothing is open
+  /// or the item has no shelf-life policy.
+  DateTime? openVialExpiresAt(int shelfHours) {
+    final opened = vialOpenedAt;
+    if (dosesRemainingInOpenVial <= 0 || opened == null || shelfHours <= 0) {
+      return null;
+    }
+    return opened.add(Duration(hours: shelfHours));
+  }
+
+  /// How long is left on the open-vial clock. Negative once it has run out, so
+  /// callers can say how long a vial is overdue rather than only that it is.
+  ///
+  /// Kept as a Duration rather than whole hours: a 6-hour BCG vial with 40
+  /// minutes left rounds to "0 hours", which reads as expired when it is not.
+  Duration? openVialTimeLeft(int shelfHours, [DateTime? now]) {
+    final expiresAt = openVialExpiresAt(shelfHours);
+    if (expiresAt == null) return null;
+    return expiresAt.difference(now ?? DateTime.now());
+  }
 
   DateTime? get expirationDay {
     final value = expirationDate;
@@ -637,6 +662,17 @@ class InventoryTransferRecord {
   }
 }
 
+/// One movement in the batch ledger, as the BHC needs to read it.
+///
+/// [quantity] counts whole units and [doseQuantity] counts clinical doses, and
+/// the two genuinely differ: a dose drawn from a vial that was already open
+/// moves no unit at all, so `quantity` is 0 while `doseQuantity` is -1. Showing
+/// the unit figure alone is what made the activity feed read "0 vial • BCG".
+///
+/// Everything from [performedByName] down arrives only from the
+/// `inventory_dose_ledger` view (20260830_dose_traceability.sql). On a database
+/// without that migration the repository falls back to the base table and these
+/// stay null, which every caller renders as a placeholder rather than a guess.
 class InventoryTransactionRecord {
   const InventoryTransactionRecord({
     required this.transactionId,
@@ -650,6 +686,17 @@ class InventoryTransactionRecord {
     required this.itemName,
     required this.unit,
     required this.batchNumber,
+    this.doseQuantity,
+    this.dosesPerUnit = 1,
+    this.resultingQuantityRemaining,
+    this.resultingOpenVialDoses,
+    this.referenceId,
+    this.notes = '',
+    this.batchExpiration,
+    this.performedByName,
+    this.performedByRole,
+    this.patientKind,
+    this.patientNumber,
   });
 
   factory InventoryTransactionRecord.fromJson(
@@ -661,34 +708,60 @@ class InventoryTransactionRecord {
     final nestedItem = _asMap(
       nestedBatch?['inventory_items'] ?? json['inventory_items'],
     );
+    int? nullableInt(Object? value) =>
+        value == null ? null : _asInt(value);
+
     return InventoryTransactionRecord(
       transactionId: _asInt(json['transaction_id']),
       batchId: _asInt(json['batch_id']),
-      facilityId:
-          json['facility_id'] == null ? null : _asInt(json['facility_id']),
+      facilityId: nullableInt(json['facility_id']),
       transactionType:
           _asString(json['transaction_type'], fallback: 'movement'),
       quantity: _asInt(json['quantity']),
       referenceType: _asString(json['reference_type']),
       loggedAt: _asTimestamp(json['logged_at']) ?? DateTime.now(),
       itemId: _asInt(
-        nestedItem?['item_id'] ??
+        json['item_id'] ??
+            nestedItem?['item_id'] ??
             nestedBatch?['item_id'] ??
             batch?.itemId ??
             item?.itemId,
       ),
       itemName: _asString(
-        nestedItem?['name'] ?? item?.name,
+        json['item_name'] ?? nestedItem?['name'] ?? item?.name,
         fallback: 'Inventory item',
       ),
       unit: _asString(
-        nestedItem?['unit_of_measure'] ?? item?.unit,
+        json['unit_of_measure'] ?? nestedItem?['unit_of_measure'] ?? item?.unit,
         fallback: 'units',
       ),
       batchNumber: _asString(
-        nestedBatch?['batch_number'] ?? batch?.batchNumber,
+        json['batch_number'] ?? nestedBatch?['batch_number'] ?? batch?.batchNumber,
         fallback: 'Unspecified',
       ),
+      doseQuantity: nullableInt(json['dose_quantity']),
+      dosesPerUnit: _asInt(
+        json['doses_per_unit'] ?? item?.dosesPerUnit,
+        fallback: 1,
+      ),
+      resultingQuantityRemaining:
+          nullableInt(json['resulting_quantity_remaining']),
+      resultingOpenVialDoses: nullableInt(json['resulting_open_vial_doses']),
+      referenceId: nullableInt(json['reference_id']),
+      notes: _asString(json['notes'] ?? json['activity_notes']),
+      batchExpiration: _asDate(json['expiration_date']),
+      performedByName: _asString(json['performed_by_name']).isEmpty
+          ? null
+          : _asString(json['performed_by_name']),
+      performedByRole: _asString(json['performed_by_role']).isEmpty
+          ? null
+          : _asString(json['performed_by_role']),
+      patientKind: _asString(json['patient_kind']).isEmpty
+          ? null
+          : _asString(json['patient_kind']),
+      patientNumber: _asString(json['patient_number']).isEmpty
+          ? null
+          : _asString(json['patient_number']),
     );
   }
 
@@ -703,6 +776,60 @@ class InventoryTransactionRecord {
   final String itemName;
   final String unit;
   final String batchNumber;
+
+  /// Signed clinical doses moved. Null on a database that has not run
+  /// 20260822_dose_accounting.sql.
+  final int? doseQuantity;
+  final int dosesPerUnit;
+  final int? resultingQuantityRemaining;
+
+  /// Doses left in the open vial straight after this movement. Null for rows
+  /// written before 20260830_dose_traceability.sql, whose level cannot be
+  /// recovered.
+  final int? resultingOpenVialDoses;
+
+  final int? referenceId;
+  final String notes;
+  final DateTime? batchExpiration;
+  final String? performedByName;
+  final String? performedByRole;
+
+  /// 'child' or 'mother' when this movement went into a patient's arm.
+  final String? patientKind;
+
+  /// The patient's BHC chart number (NAK-000 / INA-000), or an internal-id
+  /// pseudonym when no chart number has been assigned.
+  ///
+  /// Deliberately a number and never a name. The ledger's purpose is stock
+  /// accountability, which the chart number serves in full; the name is looked
+  /// up in Patient Records, where that access is governed. See the comment on
+  /// `inventory_dose_ledger` in 20260830_dose_traceability.sql.
+  final String? patientNumber;
+
+  bool get isMultiDose => dosesPerUnit > 1;
+
+  /// True when this row records a dose going into a patient.
+  bool get isAdministration =>
+      referenceType == 'Child Immunization' ||
+      referenceType == 'Maternal Td Immunization' ||
+      referenceType == 'Prenatal Encounter';
+
+  bool get hasPatient => patientNumber != null;
+
+  /// Doses moved, whichever column the database can answer from.
+  ///
+  /// Falls back to units x doses-per-unit so a pre-20260822 database still
+  /// shows a dose figure instead of a blank, and to 1 for an administration
+  /// row, which always moves exactly one dose however the units landed.
+  int get dosesMoved {
+    final recorded = doseQuantity;
+    if (recorded != null) return recorded.abs();
+    if (isAdministration) return 1;
+    return quantity.abs() * (dosesPerUnit < 1 ? 1 : dosesPerUnit);
+  }
+
+  /// How the recipient is shown on screen: the chart number, e.g. "NAK-004".
+  String? get patientLabel => patientNumber;
 }
 
 class InventorySnapshot {

@@ -11,6 +11,7 @@ import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/stock_indicators.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/branded_date_picker.dart';
 import '../../widgets/confirmation_dialog_box.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/main_header.dart';
@@ -20,6 +21,7 @@ import '../../widgets/tab_button.dart';
 import '../midwife/midwife_notification_center.dart';
 import 'inventory_models.dart' as live;
 import 'inventory_repository.dart';
+import 'midwife_inventory_report_service.dart';
 
 /// Midwife side of the RHU -> BHC inventory flow: incoming shipments, receipt
 /// confirmation, and stock requests. Reads and writes the same Supabase project
@@ -36,15 +38,26 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
   static const double _pullUpRefreshThreshold = 56;
 
   final TextEditingController _stockSearchController = TextEditingController();
+  final TextEditingController _historySearchController =
+      TextEditingController();
   final InventoryRepository _repository = InventoryRepository();
   final List<InventoryItem> _inventory = [];
   final List<IncomingShipment> _shipments = [];
   final List<StockRequest> _requests = [];
   final List<InventoryEvent> _events = [];
+
+  /// The raw batch ledger for this BHC, kept alongside [_events] because the
+  /// dose trace needs the full row — patient, performer, post-movement vial
+  /// level — and an InventoryEvent is only ever a one-line summary of it.
+  final List<live.InventoryTransactionRecord> _transactions = [];
   final List<live.InventoryNotificationRecord> _inventoryNotifications = [];
 
   int _selectedTab = 0;
   String _stockFilter = 'all';
+  String _historyFilter = 'all';
+  String _historySort = 'newest';
+  String _historyDatePreset = 'all';
+  DateTimeRange? _historyDateRange;
   bool _isLoading = true;
   bool _isRefreshing = false;
   bool _workflowAvailable = false;
@@ -101,6 +114,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
       unawaited(_repository.removeRealtimeChannel(facilityChannel));
     }
     _stockSearchController.dispose();
+    _historySearchController.dispose();
     super.dispose();
   }
 
@@ -295,6 +309,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         _events
           ..clear()
           ..addAll(events);
+        _transactions
+          ..clear()
+          ..addAll(snapshot.transactions);
         _isLoading = false;
         _isRefreshing = false;
         _loadError = null;
@@ -315,29 +332,61 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     live.InventoryTransactionRecord transaction,
   ) {
     final type = transaction.transactionType.toLowerCase();
-    final isIncoming = transaction.quantity > 0;
+    final doses = transaction.dosesMoved;
+    // Direction has to come from the dose figure, not the unit figure. A dose
+    // drawn from a vial that was already open moves no whole unit, so
+    // `quantity` is 0 — which used to read as "incoming" and paint the tile
+    // green with a "+0 vial" subtitle.
+    final isIncoming = transaction.doseQuantity != null
+        ? transaction.doseQuantity! > 0
+        : transaction.quantity > 0;
+
     final title = switch (type) {
       'receipt' => 'Stock receipt recorded',
-      'dispense' => 'Stock dispensed',
+      'dispense' =>
+        transaction.hasPatient ? 'Dose given to a patient' : 'Stock dispensed',
       'expiry_disposal' => 'Unusable stock reported',
+      'discard' => 'Open vial discarded',
       'adjustment' => 'Stock adjusted',
       _ => isIncoming ? 'Stock added' : 'Stock deducted',
     };
+
+    // Doses for a multi-dose presentation, units for everything else — a
+    // midwife counts BCG in doses and iron tablets in bottles.
+    final sign = isIncoming ? '+' : '−';
+    final measure = transaction.isMultiDose
+        ? '$sign$doses ${doses == 1 ? 'dose' : 'doses'}'
+        : '$sign${transaction.quantity.abs()} ${transaction.unit.toLowerCase()}';
+
+    final parts = <String>[
+      measure,
+      transaction.itemName,
+      'Batch ${transaction.batchNumber}',
+      if (transaction.patientLabel != null) transaction.patientLabel!,
+      if (transaction.performedByName != null)
+        'by ${transaction.performedByName}',
+      if (transaction.resultingOpenVialDoses != null &&
+          transaction.isMultiDose &&
+          transaction.resultingOpenVialDoses! > 0)
+        '${transaction.resultingOpenVialDoses} left in vial',
+    ];
+
     return InventoryEvent(
       title: title,
-      details:
-          '${transaction.quantity > 0 ? '+' : ''}${transaction.quantity} ${transaction.unit.toLowerCase()} • ${transaction.itemName} • ${transaction.batchNumber}${transaction.referenceType.isEmpty ? '' : ' • ${transaction.referenceType}'}',
+      details: parts.join(' • '),
       occurredAt: transaction.loggedAt,
-      icon: type == 'expiry_disposal'
-          ? Icons.report_outlined
-          : isIncoming
-              ? Icons.add_circle_outline_rounded
-              : Icons.remove_circle_outline_rounded,
-      color: type == 'expiry_disposal'
-          ? AppColors.error
-          : isIncoming
-              ? AppColors.success
-              : AppColors.info,
+      icon: switch (type) {
+        'expiry_disposal' || 'discard' => Icons.report_outlined,
+        _ when transaction.hasPatient => Icons.vaccines_rounded,
+        _ when isIncoming => Icons.add_circle_outline_rounded,
+        _ => Icons.remove_circle_outline_rounded,
+      },
+      color: switch (type) {
+        'expiry_disposal' || 'discard' => AppColors.error,
+        _ when isIncoming => AppColors.success,
+        _ => AppColors.info,
+      },
+      transaction: transaction,
     );
   }
 
@@ -640,6 +689,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
             : switch (_selectedTab) {
                 1 => _buildStockTab(),
                 2 => _buildRequestsTab(),
+                3 => _buildHistoryTab(),
                 _ => _buildOverviewTab(),
               };
 
@@ -944,6 +994,12 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
             isActive: _selectedTab == 2,
             onTap: () => setState(() => _selectedTab = 2),
           ),
+          const SizedBox(width: 10),
+          TabButton(
+            label: 'History',
+            isActive: _selectedTab == 3,
+            onTap: () => setState(() => _selectedTab = 3),
+          ),
         ],
       ),
     );
@@ -1075,7 +1131,11 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         const SizedBox(height: 16),
         _buildLatestRequestCard(),
         const SizedBox(height: 26),
-        _sectionHeading('RECENT ACTIVITY'),
+        _sectionHeading(
+          'RECENT ACTIVITY',
+          actionLabel: 'View all',
+          onAction: () => setState(() => _selectedTab = 3),
+        ),
         const SizedBox(height: 10),
         _buildRecentActivityCard(),
       ],
@@ -1150,58 +1210,170 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                 final dpu = item.dosesPerUnit;
                 final dosesLeft = b.dosesRemainingInOpenVial;
                 final isExpired = b.isExpiredOpenVial(item.openVialShelfHours);
-                return Container(
-                  margin: const EdgeInsets.only(top: 8),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isExpired ? const Color(0xFFFECACA) : const Color(0xFFD1FAE5),
-                    ),
+                final timeLeft = b.openVialTimeLeft(item.openVialShelfHours);
+                // Under an hour is when a 6h BCG vial stops being a note and
+                // starts being a decision: use it or lose it.
+                final isUrgent = !isExpired &&
+                    timeLeft != null &&
+                    timeLeft <= const Duration(hours: 1);
+                // "3 of 10 remaining" is the question, and the trace is the
+                // answer: tapping through lists the seven doses that went, who
+                // each one went into and when.
+                return InkWell(
+                  onTap: () => _showDoseTraceSheet(
+                    itemId: item.itemId,
+                    itemName: item.name,
+                    batchId: b.batchId,
+                    batchNumber: b.batchNumber,
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.name,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.brandText,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Batch #${b.batchNumber} • $dosesLeft of $dpu doses remaining',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: isExpired ? const Color(0xFFDC2626) : const Color(0xFF059669),
-                              ),
-                            ),
-                          ],
-                        ),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isExpired ? const Color(0xFFFECACA) : const Color(0xFFD1FAE5),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isExpired ? const Color(0xFFFEE2E2) : const Color(0xFFECFDF5),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          isExpired ? 'EXPIRED (> ${item.openVialShelfHours}h)' : 'Active (${item.openVialShelfHours}h limit)',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: isExpired ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.name,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.brandText,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Batch #${b.batchNumber} • $dosesLeft of $dpu doses remaining',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: isExpired ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                                ),
+                              ),
+                              // The shelf-life clock, in the hands of the
+                              // person who has to act on it. The portal has
+                              // always computed this; the BHC — who holds the
+                              // vial — only ever saw "6h limit", which is the
+                              // policy, not the answer.
+                              if (timeLeft != null) ...[
+                                const SizedBox(height: 3),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isExpired
+                                          ? Icons.timer_off_outlined
+                                          : Icons.timer_outlined,
+                                      size: 11,
+                                      color: isExpired
+                                          ? const Color(0xFFDC2626)
+                                          : isUrgent
+                                              ? const Color(0xFFB45309)
+                                              : const Color(0xFF047857),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      isExpired
+                                          ? 'Overdue by ${_durationLabel(-timeLeft)} — discard now'
+                                          : '${_durationLabel(timeLeft)} left of ${item.openVialShelfHours}h',
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: isExpired
+                                            ? const Color(0xFFDC2626)
+                                            : isUrgent
+                                                ? const Color(0xFFB45309)
+                                                : const Color(0xFF047857),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 3),
+                              const Row(
+                                children: [
+                                  Icon(
+                                    Icons.fact_check_outlined,
+                                    size: 11,
+                                    color: Color(0xFF047857),
+                                  ),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    'Tap to see where each dose went',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF047857),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ],
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isExpired
+                                    ? const Color(0xFFFEE2E2)
+                                    : isUrgent
+                                        ? const Color(0xFFFEF3C7)
+                                        : const Color(0xFFECFDF5),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                isExpired
+                                    ? 'EXPIRED'
+                                    : isUrgent
+                                        ? 'USE SOON'
+                                        : 'Active',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: isExpired
+                                      ? const Color(0xFFDC2626)
+                                      : isUrgent
+                                          ? const Color(0xFFB45309)
+                                          : const Color(0xFF059669),
+                                ),
+                              ),
+                            ),
+                            if (isExpired) ...[
+                              const SizedBox(height: 6),
+                              // Until now the app could say EXPIRED and offer
+                              // nothing to do about it — the discard RPC was
+                              // only ever wired to the portal.
+                              TextButton.icon(
+                                onPressed: () => _confirmDiscardOpenVial(item, b),
+                                icon: const Icon(Icons.delete_outline_rounded, size: 15),
+                                label: const Text('Discard'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.error,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  textStyle: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }).toList(),
@@ -2093,7 +2265,10 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         children: [
           for (int index = 0; index < recentEvents.length; index++) ...[
             _ActivityTile(
-                event: recentEvents[index], dateLabel: _dateTimeLabel),
+              event: recentEvents[index],
+              dateLabel: _dateTimeLabel,
+              onTap: _traceTapFor(recentEvents[index]),
+            ),
             if (index != recentEvents.length - 1)
               const Padding(
                 padding: EdgeInsets.only(left: 64),
@@ -2274,7 +2449,11 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
             ),
           ),
         const SizedBox(height: 12),
-        _sectionHeading('RECENT DISPENSING & UNUSABLE STOCK'),
+        _sectionHeading(
+          'RECENT DISPENSING & UNUSABLE STOCK',
+          actionLabel: 'Full history',
+          onAction: () => setState(() => _selectedTab = 3),
+        ),
         const SizedBox(height: 10),
         _buildStockOutActivityCard(),
         const SizedBox(height: 18),
@@ -2330,6 +2509,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
             _ActivityTile(
               event: activities[index],
               dateLabel: _dateTimeLabel,
+              onTap: _traceTapFor(activities[index]),
             ),
             if (index != activities.length - 1)
               const Padding(
@@ -2640,22 +2820,40 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               ),
             ],
           ),
-          if (item.isLowStock) ...[
-            const SizedBox(height: 5),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed:
-                    _workflowAvailable ? () => _showRequestSheet(item) : null,
-                icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                label: const Text('Request this item'),
+          const SizedBox(height: 5),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: () => _showDoseTraceSheet(
+                  itemId: item.itemId,
+                  itemName: item.name,
+                ),
+                icon: const Icon(Icons.fact_check_outlined, size: 17),
+                label: Text(
+                  item.isMultiDose ? 'Dose trace' : 'Movement trace',
+                ),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppColors.brandText,
-                  textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                  foregroundColor: AppColors.textSecondary,
+                  textStyle: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-            ),
-          ],
+              const Spacer(),
+              if (item.isLowStock)
+                TextButton.icon(
+                  onPressed:
+                      _workflowAvailable ? () => _showRequestSheet(item) : null,
+                  icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                  label: const Text('Request this item'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.brandText,
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );
@@ -3180,6 +3378,2300 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                   ),
                 ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // History tab: Stock Movement & Audit Trail
+  //
+  // Complete transparent ledger of all dispensing, replenishments,
+  // expirations, discards, transfers, and adjustments for this BHC.
+  // ---------------------------------------------------------------------
+
+  String get _historyDateLabel {
+    return switch (_historyDatePreset) {
+      'today' => 'Today',
+      '7d' => 'Last 7 days',
+      '30d' => 'Last 30 days',
+      'month' => 'This month',
+      'custom' when _historyDateRange != null =>
+        '${_shortDate(_historyDateRange!.start)} – ${_shortDate(_historyDateRange!.end)}, ${_historyDateRange!.end.year}',
+      'custom' => 'Custom range',
+      _ => 'All time',
+    };
+  }
+
+  String get _historySortLabel {
+    return switch (_historySort) {
+      'oldest' => 'Oldest first',
+      'name_asc' => 'Item A → Z',
+      'name_desc' => 'Item Z → A',
+      'qty_desc' => 'Qty: Highest',
+      'qty_asc' => 'Qty: Lowest',
+      _ => 'Newest first',
+    };
+  }
+
+  Future<void> _pickCustomDateRange() async {
+    final now = DateTime.now();
+    final picked = await showBrandedDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 2),
+      initialDateRange: _historyDateRange ??
+          DateTimeRange(
+            start: now.subtract(const Duration(days: 30)),
+            end: now,
+          ),
+      helpText: 'SELECT AUDIT TRAIL DATE RANGE',
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _historyDatePreset = 'custom';
+        _historyDateRange = picked;
+      });
+    }
+  }
+
+  void _showHistorySortSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.bgPrimary,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderPrimary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Row(
+                children: [
+                  Icon(Icons.sort_rounded, color: AppColors.brandPrimary),
+                  SizedBox(width: 8),
+                  Text(
+                    'SORT MOVEMENTS BY',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      color: AppColors.brandText,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _buildSortOptionTile(
+                sheetContext: sheetContext,
+                value: 'newest',
+                label: 'Newest first (Default)',
+                icon: Icons.schedule_rounded,
+              ),
+              _buildSortOptionTile(
+                sheetContext: sheetContext,
+                value: 'oldest',
+                label: 'Oldest first',
+                icon: Icons.history_rounded,
+              ),
+              _buildSortOptionTile(
+                sheetContext: sheetContext,
+                value: 'name_asc',
+                label: 'Item name: A to Z',
+                icon: Icons.sort_by_alpha_rounded,
+              ),
+              _buildSortOptionTile(
+                sheetContext: sheetContext,
+                value: 'name_desc',
+                label: 'Item name: Z to A',
+                icon: Icons.sort_by_alpha_rounded,
+              ),
+              _buildSortOptionTile(
+                sheetContext: sheetContext,
+                value: 'qty_desc',
+                label: 'Quantity moved: Largest first',
+                icon: Icons.trending_up_rounded,
+              ),
+              _buildSortOptionTile(
+                sheetContext: sheetContext,
+                value: 'qty_asc',
+                label: 'Quantity moved: Smallest first',
+                icon: Icons.trending_down_rounded,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSortOptionTile({
+    required BuildContext sheetContext,
+    required String value,
+    required String label,
+    required IconData icon,
+  }) {
+    final isSelected = _historySort == value;
+    return InkWell(
+      onTap: () {
+        Navigator.pop(sheetContext);
+        setState(() => _historySort = value);
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        margin: const EdgeInsets.only(bottom: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.brandPrimary.withValues(alpha: 0.08)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: isSelected
+              ? Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.3))
+              : Border.all(color: AppColors.borderPrimary),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected
+                  ? AppColors.brandPrimary
+                  : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected
+                      ? AppColors.brandPrimary
+                      : AppColors.textPrimary,
+                ),
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle_rounded,
+                size: 18,
+                color: AppColors.brandPrimary,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showHistoryDateFilterSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.bgPrimary,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderPrimary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Row(
+                children: [
+                  Icon(Icons.calendar_month_rounded,
+                      color: AppColors.brandPrimary),
+                  SizedBox(width: 8),
+                  Text(
+                    'FILTER BY DATE RANGE',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      color: AppColors.brandText,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _buildDatePresetTile(
+                sheetContext: sheetContext,
+                value: 'all',
+                label: 'All time (No date filter)',
+                icon: Icons.all_inclusive_rounded,
+              ),
+              _buildDatePresetTile(
+                sheetContext: sheetContext,
+                value: 'today',
+                label: 'Today',
+                icon: Icons.today_rounded,
+              ),
+              _buildDatePresetTile(
+                sheetContext: sheetContext,
+                value: '7d',
+                label: 'Last 7 days',
+                icon: Icons.date_range_rounded,
+              ),
+              _buildDatePresetTile(
+                sheetContext: sheetContext,
+                value: '30d',
+                label: 'Last 30 days',
+                icon: Icons.calendar_view_month_rounded,
+              ),
+              _buildDatePresetTile(
+                sheetContext: sheetContext,
+                value: 'month',
+                label: 'This month',
+                icon: Icons.calendar_today_rounded,
+              ),
+              InkWell(
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickCustomDateRange();
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  margin: const EdgeInsets.only(bottom: 6),
+                  decoration: BoxDecoration(
+                    color: _historyDatePreset == 'custom'
+                        ? AppColors.brandPrimary.withValues(alpha: 0.08)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _historyDatePreset == 'custom'
+                          ? AppColors.brandPrimary.withValues(alpha: 0.3)
+                          : AppColors.borderPrimary,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.edit_calendar_rounded,
+                        size: 20,
+                        color: _historyDatePreset == 'custom'
+                            ? AppColors.brandPrimary
+                            : AppColors.brandText,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _historyDatePreset == 'custom' &&
+                                  _historyDateRange != null
+                              ? 'Custom: ${_shortDate(_historyDateRange!.start)} – ${_shortDate(_historyDateRange!.end)}, ${_historyDateRange!.end.year}'
+                              : 'Select custom date range...',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: _historyDatePreset == 'custom'
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                            color: _historyDatePreset == 'custom'
+                                ? AppColors.brandPrimary
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 14,
+                        color: AppColors.textSecondary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDatePresetTile({
+    required BuildContext sheetContext,
+    required String value,
+    required String label,
+    required IconData icon,
+  }) {
+    final isSelected = _historyDatePreset == value;
+    return InkWell(
+      onTap: () {
+        Navigator.pop(sheetContext);
+        setState(() {
+          _historyDatePreset = value;
+          _historyDateRange = null;
+        });
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        margin: const EdgeInsets.only(bottom: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.brandPrimary.withValues(alpha: 0.08)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: isSelected
+              ? Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.3))
+              : Border.all(color: AppColors.borderPrimary),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected
+                  ? AppColors.brandPrimary
+                  : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected
+                      ? AppColors.brandPrimary
+                      : AppColors.textPrimary,
+                ),
+              ),
+            ),
+            if (isSelected)
+              const Icon(
+                Icons.check_circle_rounded,
+                size: 18,
+                color: AppColors.brandPrimary,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showGenerateReportDialog(
+      List<live.InventoryTransactionRecord> currentTransactions) {
+    String reportPeriod =
+        _historyDatePreset == 'all' ? 'this_week' : _historyDatePreset;
+    DateTimeRange? reportCustomRange = _historyDateRange;
+    String reportCategory = _historyFilter;
+    final midwifeNameController = TextEditingController(
+      text: _liveContext?.displayName ?? 'Midwife-in-Charge',
+    );
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setModalState) {
+            final periodLabel = MidwifeInventoryReportService.formatPeriodLabel(
+              reportPeriod,
+              range: reportPeriod == 'custom'
+                  ? reportCustomRange
+                  : MidwifeInventoryReportService.resolveDateRange(
+                      reportPeriod),
+            );
+
+            final resolvedRange = reportPeriod == 'custom'
+                ? reportCustomRange
+                : MidwifeInventoryReportService.resolveDateRange(
+                    reportPeriod);
+
+            final reportTransactions = _transactions.where((t) {
+              final type = t.transactionType.toLowerCase();
+              final typeMatch = switch (reportCategory) {
+                'dispense' => type == 'dispense' || t.isAdministration,
+                'replenishment' =>
+                  type == 'receipt' ||
+                      (type == 'transfer' &&
+                          (t.doseQuantity ?? t.quantity) > 0),
+                'unusable' =>
+                  type == 'expiry_disposal' ||
+                      type == 'discard' ||
+                      t.referenceType.toLowerCase().contains('unusable') ||
+                      t.referenceType.toLowerCase().contains('discard') ||
+                      t.referenceType.toLowerCase().contains('expired'),
+                'transfer' => type == 'transfer',
+                'adjustment' => type == 'adjustment',
+                _ => true,
+              };
+              if (!typeMatch) return false;
+
+              if (resolvedRange != null) {
+                if (t.loggedAt.isBefore(resolvedRange.start) ||
+                    t.loggedAt.isAfter(resolvedRange.end)) {
+                  return false;
+                }
+              }
+              return true;
+            }).toList()
+              ..sort((a, b) => b.loggedAt.compareTo(a.loggedAt));
+
+            return Container(
+              decoration: const BoxDecoration(
+                color: AppColors.bgPrimary,
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 16,
+                bottom:
+                    MediaQuery.of(dialogContext).viewInsets.bottom + 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.borderPrimary,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.brandPrimary
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.picture_as_pdf_rounded,
+                            color: AppColors.brandPrimary,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'GENERATE INVENTORY REPORT',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                  color: AppColors.brandText,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Official BHC Stock Movement Audit Report',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'REPORTING PERIOD',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildReportOptionChip(
+                          label: 'This Week',
+                          isSelected: reportPeriod == 'this_week',
+                          onTap: () => setModalState(
+                              () => reportPeriod = 'this_week'),
+                        ),
+                        _buildReportOptionChip(
+                          label: 'Last Week',
+                          isSelected: reportPeriod == 'last_week',
+                          onTap: () => setModalState(
+                              () => reportPeriod = 'last_week'),
+                        ),
+                        _buildReportOptionChip(
+                          label: 'This Month',
+                          isSelected: reportPeriod == 'this_month',
+                          onTap: () => setModalState(
+                              () => reportPeriod = 'this_month'),
+                        ),
+                        _buildReportOptionChip(
+                          label: 'Last Month',
+                          isSelected: reportPeriod == 'last_month',
+                          onTap: () => setModalState(
+                              () => reportPeriod = 'last_month'),
+                        ),
+                        _buildReportOptionChip(
+                          label: 'Today',
+                          isSelected: reportPeriod == 'today',
+                          onTap: () =>
+                              setModalState(() => reportPeriod = 'today'),
+                        ),
+                        _buildReportOptionChip(
+                          label: 'All Time',
+                          isSelected: reportPeriod == 'all',
+                          onTap: () =>
+                              setModalState(() => reportPeriod = 'all'),
+                        ),
+                        _buildReportOptionChip(
+                          label: reportPeriod == 'custom' &&
+                                  reportCustomRange != null
+                              ? 'Custom: ${_shortDate(reportCustomRange!.start)} – ${_shortDate(reportCustomRange!.end)}'
+                              : 'Pick Date Range...',
+                          isSelected: reportPeriod == 'custom',
+                          icon: Icons.calendar_month_rounded,
+                          onTap: () async {
+                            final now = DateTime.now();
+                            final picked = await showBrandedDateRangePicker(
+                              context: context,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(now.year + 2),
+                              initialDateRange: reportCustomRange ??
+                                  DateTimeRange(
+                                    start: now.subtract(
+                                        const Duration(days: 30)),
+                                    end: now,
+                                  ),
+                              helpText: 'SELECT REPORT PERIOD',
+                            );
+                            if (picked != null) {
+                              setModalState(() {
+                                reportPeriod = 'custom';
+                                reportCustomRange = picked;
+                              });
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'MOVEMENT CATEGORY',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildReportOptionChip(
+                          label: 'All Movements',
+                          isSelected: reportCategory == 'all',
+                          onTap: () =>
+                              setModalState(() => reportCategory = 'all'),
+                        ),
+                        _buildReportOptionChip(
+                          label: 'Dispensed Only',
+                          isSelected: reportCategory == 'dispense',
+                          onTap: () => setModalState(
+                              () => reportCategory = 'dispense'),
+                        ),
+                        _buildReportOptionChip(
+                          label: 'Replenishments Only',
+                          isSelected: reportCategory == 'replenishment',
+                          onTap: () => setModalState(
+                              () => reportCategory = 'replenishment'),
+                        ),
+                        _buildReportOptionChip(
+                          label: 'Expired & Discards',
+                          isSelected: reportCategory == 'unusable',
+                          onTap: () => setModalState(
+                              () => reportCategory = 'unusable'),
+                        ),
+                        _buildReportOptionChip(
+                          label: 'Transfers',
+                          isSelected: reportCategory == 'transfer',
+                          onTap: () => setModalState(
+                              () => reportCategory = 'transfer'),
+                        ),
+                        _buildReportOptionChip(
+                          label: 'Adjustments',
+                          isSelected: reportCategory == 'adjustment',
+                          onTap: () => setModalState(
+                              () => reportCategory = 'adjustment'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'PREPARED BY (MIDWIFE NAME)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    AppInputField(
+                      controller: midwifeNameController,
+                      hintText: 'Enter Midwife-in-Charge Name',
+                      leadingIcon: Icons.person_outline_rounded,
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.bgSecondary,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.borderPrimary),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline_rounded,
+                              size: 16, color: AppColors.brandPrimary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Report will include ${reportTransactions.length} movement records for $periodLabel.',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textSecondary,
+                              side: const BorderSide(
+                                  color: AppColors.borderPrimary),
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text('Cancel',
+                                style:
+                                    TextStyle(fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              Navigator.pop(dialogContext);
+                              final facilityName =
+                                  _liveContext?.facilityName ??
+                                      'Barangay Health Center';
+                              final midwifeName = midwifeNameController
+                                      .text
+                                      .trim()
+                                      .isEmpty
+                                  ? (_liveContext?.displayName ??
+                                      'Midwife-in-Charge')
+                                  : midwifeNameController.text.trim();
+
+                              await MidwifeInventoryReportService
+                                  .previewAndPrintReport(
+                                context: context,
+                                facilityName: facilityName,
+                                midwifeName: midwifeName,
+                                periodLabel: periodLabel,
+                                transactions: reportTransactions,
+                                categoryFilter: reportCategory,
+                              );
+                            },
+                            icon: const Icon(Icons.print_rounded, size: 18),
+                            label: const Text('Generate PDF & Print'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.brandPrimary,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              textStyle: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildReportOptionChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    IconData? icon,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.brandPrimary : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.brandPrimary
+                : AppColors.borderPrimary,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 13,
+                color: isSelected ? Colors.white : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight:
+                    isSelected ? FontWeight.w700 : FontWeight.w500,
+                color:
+                    isSelected ? Colors.white : AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryTab() {
+    final query = _historySearchController.text.trim().toLowerCase();
+
+    final DateTime now = DateTime.now();
+    final DateTime todayStart = DateTime(now.year, now.month, now.day);
+    final DateTime todayEnd =
+        DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+
+    DateTime? filterStart;
+    DateTime? filterEnd;
+
+    switch (_historyDatePreset) {
+      case 'today':
+        filterStart = todayStart;
+        filterEnd = todayEnd;
+        break;
+      case '7d':
+        filterStart = todayStart.subtract(const Duration(days: 7));
+        filterEnd = todayEnd;
+        break;
+      case '30d':
+        filterStart = todayStart.subtract(const Duration(days: 30));
+        filterEnd = todayEnd;
+        break;
+      case 'month':
+        filterStart = DateTime(now.year, now.month, 1);
+        filterEnd = todayEnd;
+        break;
+      case 'custom':
+        if (_historyDateRange != null) {
+          filterStart = DateTime(
+            _historyDateRange!.start.year,
+            _historyDateRange!.start.month,
+            _historyDateRange!.start.day,
+          );
+          filterEnd = DateTime(
+            _historyDateRange!.end.year,
+            _historyDateRange!.end.month,
+            _historyDateRange!.end.day,
+            23,
+            59,
+            59,
+            999,
+          );
+        }
+        break;
+      case 'all':
+      default:
+        filterStart = null;
+        filterEnd = null;
+        break;
+    }
+
+    final filteredTransactions = _transactions.where((t) {
+      final type = t.transactionType.toLowerCase();
+      final typeMatch = switch (_historyFilter) {
+        'dispense' => type == 'dispense' || t.isAdministration,
+        'replenishment' =>
+          type == 'receipt' ||
+              (type == 'transfer' && (t.doseQuantity ?? t.quantity) > 0),
+        'unusable' =>
+          type == 'expiry_disposal' ||
+              type == 'discard' ||
+              t.referenceType.toLowerCase().contains('unusable') ||
+              t.referenceType.toLowerCase().contains('discard') ||
+              t.referenceType.toLowerCase().contains('expired'),
+        'transfer' => type == 'transfer',
+        'adjustment' => type == 'adjustment',
+        _ => true,
+      };
+      if (!typeMatch) return false;
+
+      if (filterStart != null && t.loggedAt.isBefore(filterStart)) {
+        return false;
+      }
+      if (filterEnd != null && t.loggedAt.isAfter(filterEnd)) {
+        return false;
+      }
+
+      if (query.isEmpty) return true;
+      return t.itemName.toLowerCase().contains(query) ||
+          t.batchNumber.toLowerCase().contains(query) ||
+          (t.patientNumber ?? '').toLowerCase().contains(query) ||
+          (t.performedByName ?? '').toLowerCase().contains(query) ||
+          t.referenceType.toLowerCase().contains(query) ||
+          t.notes.toLowerCase().contains(query) ||
+          t.transactionType.toLowerCase().contains(query);
+    }).toList();
+
+    filteredTransactions.sort((a, b) {
+      return switch (_historySort) {
+        'oldest' => a.loggedAt.compareTo(b.loggedAt),
+        'name_asc' =>
+          a.itemName.toLowerCase().compareTo(b.itemName.toLowerCase()),
+        'name_desc' =>
+          b.itemName.toLowerCase().compareTo(a.itemName.toLowerCase()),
+        'qty_desc' => b.dosesMoved.compareTo(a.dosesMoved),
+        'qty_asc' => a.dosesMoved.compareTo(b.dosesMoved),
+        'newest' || _ => b.loggedAt.compareTo(a.loggedAt),
+      };
+    });
+
+    final totalMovements = _transactions.length;
+    final dispensedCount = _transactions
+        .where(
+          (t) =>
+              t.transactionType.toLowerCase() == 'dispense' ||
+              t.isAdministration,
+        )
+        .length;
+    final replenishedCount = _transactions
+        .where(
+          (t) =>
+              t.transactionType.toLowerCase() == 'receipt' ||
+              (t.transactionType.toLowerCase() == 'transfer' &&
+                  (t.doseQuantity ?? t.quantity) > 0),
+        )
+        .length;
+    final unusableCount = _transactions
+        .where(
+          (t) =>
+              t.transactionType.toLowerCase() == 'expiry_disposal' ||
+              t.transactionType.toLowerCase() == 'discard',
+        )
+        .length;
+
+    final hasActiveFilter = _historyFilter != 'all' ||
+        _historyDatePreset != 'all' ||
+        _historySort != 'newest' ||
+        _historySearchController.text.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'STOCK MOVEMENT & AUDIT TRAIL',
+                    style: TextStyle(
+                      color: AppColors.brandText,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                  SizedBox(height: 5),
+                  Text(
+                    'Complete transparent ledger of all dispensing, replenishments, expirations, discards, and adjustments for your health center.',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: () =>
+                  _showGenerateReportDialog(filteredTransactions),
+              icon: const Icon(Icons.picture_as_pdf_rounded, size: 15),
+              label: const Text('Generate Report'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brandPrimary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                textStyle: const TextStyle(
+                    fontSize: 11.5, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _buildHistoryTransparencyBanner(),
+        const SizedBox(height: 16),
+        _buildHistorySummaryCards(
+          total: totalMovements,
+          dispensed: dispensedCount,
+          replenished: replenishedCount,
+          unusable: unusableCount,
+        ),
+        const SizedBox(height: 18),
+        AppInputField(
+          controller: _historySearchController,
+          hintText: 'Search item, batch, patient ID, performer, or reason',
+          leadingIcon: Icons.search_rounded,
+          trailingIcon: _historySearchController.text.isEmpty
+              ? null
+              : Icons.close_rounded,
+          onTrailingTap: () {
+            _historySearchController.clear();
+            setState(() {});
+          },
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        // Sort & Date Selection Action Bar
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: _showHistoryDateFilterSheet,
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _historyDatePreset != 'all'
+                        ? AppColors.brandPrimary.withValues(alpha: 0.08)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: _historyDatePreset != 'all'
+                          ? AppColors.brandPrimary
+                          : AppColors.borderPrimary,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_month_rounded,
+                        size: 16,
+                        color: _historyDatePreset != 'all'
+                            ? AppColors.brandPrimary
+                            : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _historyDateLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: _historyDatePreset != 'all'
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                            color: _historyDatePreset != 'all'
+                                ? AppColors.brandPrimary
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_drop_down_rounded,
+                        size: 18,
+                        color: AppColors.textSecondary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: InkWell(
+                onTap: _showHistorySortSheet,
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _historySort != 'newest'
+                        ? AppColors.brandPrimary.withValues(alpha: 0.08)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: _historySort != 'newest'
+                          ? AppColors.brandPrimary
+                          : AppColors.borderPrimary,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.sort_rounded,
+                        size: 16,
+                        color: _historySort != 'newest'
+                            ? AppColors.brandPrimary
+                            : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _historySortLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: _historySort != 'newest'
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                            color: _historySort != 'newest'
+                                ? AppColors.brandPrimary
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_drop_down_rounded,
+                        size: 18,
+                        color: AppColors.textSecondary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Quick Category Filters
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _buildHistoryFilterChip(
+                value: 'all',
+                label: 'All types',
+                icon: Icons.list_alt_rounded,
+              ),
+              const SizedBox(width: 8),
+              _buildHistoryFilterChip(
+                value: 'dispense',
+                label: 'Dispensed',
+                icon: Icons.vaccines_rounded,
+                color: AppColors.brandPrimary,
+              ),
+              const SizedBox(width: 8),
+              _buildHistoryFilterChip(
+                value: 'replenishment',
+                label: 'Replenishments',
+                icon: Icons.inventory_2_outlined,
+                color: AppColors.success,
+              ),
+              const SizedBox(width: 8),
+              _buildHistoryFilterChip(
+                value: 'unusable',
+                label: 'Expired & Discards',
+                icon: Icons.event_busy_outlined,
+                color: AppColors.error,
+              ),
+              const SizedBox(width: 8),
+              _buildHistoryFilterChip(
+                value: 'transfer',
+                label: 'Transfers',
+                icon: Icons.local_shipping_outlined,
+                color: AppColors.warning,
+              ),
+              const SizedBox(width: 8),
+              _buildHistoryFilterChip(
+                value: 'adjustment',
+                label: 'Adjustments',
+                icon: Icons.tune_rounded,
+                color: const Color(0xFF8B5CF6),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.bgSecondary,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppColors.brandPrimary.withValues(alpha: 0.12),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.history_rounded,
+                size: 16,
+                color: AppColors.brandPrimary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Showing ${filteredTransactions.length} of $totalMovements logged movement${totalMovements == 1 ? '' : 's'}',
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (hasActiveFilter)
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _historyFilter = 'all';
+                      _historySort = 'newest';
+                      _historyDatePreset = 'all';
+                      _historyDateRange = null;
+                      _historySearchController.clear();
+                    });
+                  },
+                  child: const Text(
+                    'Reset filters',
+                    style: TextStyle(
+                      color: AppColors.brandPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        if (filteredTransactions.isEmpty)
+          _buildNoHistoryResults()
+        else
+          ...filteredTransactions.map(
+            (transaction) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildHistoryMovementCard(transaction),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHistoryTransparencyBanner() {
+    final facilityName =
+        _liveContext?.facilityName ?? 'Barangay Health Center';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppColors.success.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.verified_user_rounded,
+              color: AppColors.success,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Audit Trail Active • $facilityName',
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  'Every dose dispensed, shipment received, or expired item is immutably timestamped with the responsible staff account and running batch balance.',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistorySummaryCards({
+    required int total,
+    required int dispensed,
+    required int replenished,
+    required int unusable,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderPrimary),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _HistoryMetricItem(
+              label: 'Total Logs',
+              value: '$total',
+              icon: Icons.receipt_long_rounded,
+              color: AppColors.brandPrimary,
+              isActive: _historyFilter == 'all',
+              onTap: () => setState(() => _historyFilter = 'all'),
+            ),
+          ),
+          Container(width: 1, height: 36, color: AppColors.borderPrimary),
+          Expanded(
+            child: _HistoryMetricItem(
+              label: 'Dispensed',
+              value: '$dispensed',
+              icon: Icons.vaccines_rounded,
+              color: AppColors.info,
+              isActive: _historyFilter == 'dispense',
+              onTap: () => setState(() => _historyFilter = 'dispense'),
+            ),
+          ),
+          Container(width: 1, height: 36, color: AppColors.borderPrimary),
+          Expanded(
+            child: _HistoryMetricItem(
+              label: 'Replenished',
+              value: '$replenished',
+              icon: Icons.inventory_2_outlined,
+              color: AppColors.success,
+              isActive: _historyFilter == 'replenishment',
+              onTap: () => setState(() => _historyFilter = 'replenishment'),
+            ),
+          ),
+          Container(width: 1, height: 36, color: AppColors.borderPrimary),
+          Expanded(
+            child: _HistoryMetricItem(
+              label: 'Expired/Loss',
+              value: '$unusable',
+              icon: Icons.event_busy_outlined,
+              color: AppColors.error,
+              isActive: _historyFilter == 'unusable',
+              onTap: () => setState(() => _historyFilter = 'unusable'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryFilterChip({
+    required String value,
+    required String label,
+    required IconData icon,
+    Color color = AppColors.brandPrimary,
+  }) {
+    final selected = _historyFilter == value;
+    final selectedForeground =
+        color == AppColors.warning ? AppColors.textPrimary : Colors.white;
+    return FilterChip(
+      selected: selected,
+      onSelected: (_) => setState(() => _historyFilter = value),
+      avatar: Icon(
+        icon,
+        size: 16,
+        color: selected ? selectedForeground : color,
+      ),
+      label: Text(label),
+      labelStyle: TextStyle(
+        color: selected ? selectedForeground : AppColors.textPrimary,
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+      ),
+      selectedColor: color,
+      backgroundColor: Colors.white,
+      side: BorderSide(
+        color: selected ? color : color.withValues(alpha: 0.25),
+      ),
+      showCheckmark: false,
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+    );
+  }
+
+  Widget _buildHistoryMovementCard(live.InventoryTransactionRecord row) {
+    final type = row.transactionType.toLowerCase();
+    final isWaste = type == 'expiry_disposal' || type == 'discard';
+    final isReplenishment = type == 'receipt' ||
+        (type == 'transfer' && (row.doseQuantity ?? row.quantity) > 0);
+    final isDispense = type == 'dispense' || row.isAdministration;
+    final isOutbound =
+        type == 'transfer' && (row.doseQuantity ?? row.quantity) < 0;
+    final isIn = (row.doseQuantity ?? row.quantity) > 0;
+
+    final Color accentColor = isWaste
+        ? AppColors.error
+        : isReplenishment
+            ? AppColors.success
+            : isOutbound
+                ? AppColors.warning
+                : isDispense
+                    ? AppColors.brandPrimary
+                    : type == 'adjustment'
+                        ? const Color(0xFF8B5CF6)
+                        : (isIn ? AppColors.success : AppColors.brandPrimary);
+
+    final IconData categoryIcon = switch (type) {
+      'receipt' => Icons.add_circle_outline_rounded,
+      'expiry_disposal' => Icons.event_busy_outlined,
+      'discard' => Icons.delete_outline_rounded,
+      'adjustment' => Icons.tune_rounded,
+      'transfer' =>
+        isOutbound ? Icons.outbound_rounded : Icons.south_west_rounded,
+      _ when row.isAdministration => Icons.vaccines_rounded,
+      _ when isDispense => Icons.medication_rounded,
+      _ => isIn
+          ? Icons.add_circle_outline_rounded
+          : Icons.remove_circle_outline_rounded,
+    };
+
+    final String headline = switch (type) {
+      'receipt' => 'Stock Replenishment Received',
+      'discard' => 'Open Vial Discarded',
+      'expiry_disposal' => 'Unusable / Expired Stock Written Off',
+      'adjustment' => 'Stock Ledger Adjusted',
+      'transfer' => isOutbound
+          ? 'Stock Transferred Outward'
+          : 'Stock Transferred Inward',
+      _ when row.isAdministration => 'Dose Administered to Patient',
+      _ => isIn ? 'Stock Added' : 'Stock Dispensed',
+    };
+
+    final doses = row.dosesMoved;
+    final sign = isIn ? '+' : '−';
+    final String measureText = row.isMultiDose
+        ? '$sign$doses ${doses == 1 ? 'dose' : 'doses'}'
+        : '$sign${row.quantity.abs()} ${row.unit.toLowerCase()}';
+
+    return InkWell(
+      onTap: () => _showDoseTraceSheet(
+        itemId: row.itemId,
+        itemName: row.itemName,
+        batchId: row.batchId,
+        batchNumber: row.batchNumber,
+      ),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: _cardDecoration(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(categoryIcon, color: accentColor, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        headline,
+                        style: const TextStyle(
+                          color: AppColors.brandText,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        _dateTimeLabel(row.loggedAt),
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: accentColor.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    measureText,
+                    style: TextStyle(
+                      color: accentColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: AppColors.borderPrimary),
+            const SizedBox(height: 12),
+            // Item & Batch info
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        row.itemName,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        row.batchExpiration == null
+                            ? 'Batch ${row.batchNumber}'
+                            : 'Batch ${row.batchNumber} • Exp: ${_shortDate(row.batchExpiration!)}, ${row.batchExpiration!.year}',
+                        style: const TextStyle(
+                          color: AppColors.brandText,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // Audit metadata grid
+            if (row.resultingQuantityRemaining != null ||
+                (row.resultingOpenVialDoses != null && row.isMultiDose))
+              _historyDetailRow(
+                icon: Icons.warehouse_outlined,
+                label: 'Resulting balance',
+                value:
+                    '${row.resultingQuantityRemaining ?? 0} ${row.unit.toLowerCase()}'
+                    '${row.isMultiDose && row.resultingOpenVialDoses != null ? ' (${row.resultingOpenVialDoses} open doses left)' : ''}',
+                emphasise: true,
+              ),
+            if (row.hasPatient)
+              _historyDetailRow(
+                icon: Icons.badge_outlined,
+                label: 'Recipient',
+                value:
+                    '${row.patientLabel} (${row.patientKind == 'child' ? 'Child' : 'Mother'})',
+                emphasise: true,
+                badgeColor: AppColors.brandPrimary,
+              ),
+            if (row.performedByName != null)
+              _historyDetailRow(
+                icon: Icons.person_outline_rounded,
+                label: 'Handled by',
+                value:
+                    '${row.performedByName}${row.performedByRole != null ? ' • ${_displayRole(row.performedByRole!)}' : ''}',
+              ),
+            if (row.referenceType.isNotEmpty)
+              _historyDetailRow(
+                icon: Icons.receipt_outlined,
+                label: 'Reference / Reason',
+                value: row.referenceType,
+              ),
+            if (row.notes.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.bgSecondary,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.borderPrimary.withValues(alpha: 0.6),
+                  ),
+                ),
+                child: Text(
+                  'Note: "${row.notes}"',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  'Tap to inspect batch trace',
+                  style: TextStyle(
+                    color: AppColors.brandPrimary.withValues(alpha: 0.9),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 11,
+                  color: AppColors.brandPrimary,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _historyDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    bool emphasise = false,
+    Color? badgeColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: AppColors.textSecondary),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 108,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: emphasise ? FontWeight.w700 : FontWeight.w500,
+                color: badgeColor ??
+                    (emphasise
+                        ? AppColors.brandPrimary
+                        : AppColors.textPrimary),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoHistoryResults() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          Icon(
+            Icons.search_off_rounded,
+            size: 42,
+            color: AppColors.textSecondary.withValues(alpha: 0.6),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'No matching inventory records found',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Try adjusting your search terms or filter selection.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: () {
+              setState(() {
+                _historyFilter = 'all';
+                _historySort = 'newest';
+                _historyDatePreset = 'all';
+                _historyDateRange = null;
+                _historySearchController.clear();
+              });
+            },
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Reset filters'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.brandPrimary,
+              side: const BorderSide(color: AppColors.brandPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _displayRole(String role) {
+    return switch (role.toLowerCase()) {
+      'midwife' => 'Midwife',
+      'admin' => 'RHU Admin',
+      'superadmin' => 'MHO Officer',
+      'nurse' => 'Nurse',
+      'doctor' => 'Physician',
+      _ => role,
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // Dose trace
+  //
+  // The question this answers is the one a midwife is asked at an audit and
+  // could not previously answer from the phone: this vial says 3 doses left of
+  // 10 — where did the other 7 go? Each row names the patient, the person who
+  // drew the dose, the minute it happened and the level the vial was left at,
+  // so the physical vial on the shelf can be reconciled against the record
+  // without opening the portal.
+  // ---------------------------------------------------------------------
+
+  /// "4h 20m", "45m", "2d 3h" — a duration a midwife can act on.
+  ///
+  /// Whole hours are not enough resolution here: a 6-hour vial with 40 minutes
+  /// on it rounds to "0 hours", which reads as already gone.
+  String _durationLabel(Duration d) {
+    final abs = d.isNegative ? -d : d;
+    if (abs.inDays >= 1) {
+      final hours = abs.inHours % 24;
+      return hours == 0 ? '${abs.inDays}d' : '${abs.inDays}d ${hours}h';
+    }
+    if (abs.inHours >= 1) {
+      final minutes = abs.inMinutes % 60;
+      return minutes == 0 ? '${abs.inHours}h' : '${abs.inHours}h ${minutes}m';
+    }
+    if (abs.inMinutes >= 1) return '${abs.inMinutes}m';
+    return 'under a minute';
+  }
+
+  /// Discards the doses left in an expired open vial, from the BHC.
+  ///
+  /// The wasted doses are recorded against this facility, which is the point:
+  /// the DOH wastage rate is only meaningful if spoilage is booked where it
+  /// happened rather than quietly left on the shelf as usable stock.
+  Future<void> _confirmDiscardOpenVial(
+    InventoryItem item,
+    live.InventoryBatchRecord batch,
+  ) async {
+    final contextRecord = _liveContext;
+    if (contextRecord == null) {
+      AppSnackbar.error(
+        context,
+        'Your health center session could not be read, so the discard was not recorded.',
+      );
+      return;
+    }
+
+    final doses = batch.dosesRemainingInOpenVial;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => ConfirmationDialogBox(
+        title: 'Discard $doses open dose${doses == 1 ? '' : 's'}?',
+        subtitle:
+            'This ${item.name} vial (Batch ${batch.batchNumber}) passed its '
+            '${item.openVialShelfHours}-hour open-vial limit, so the remaining '
+            '$doses dose${doses == 1 ? '' : 's'} can no longer be given. '
+            'They will be recorded as wastage for this health center and the '
+            'vial closed. This cannot be undone.',
+        confirmText: 'Discard doses',
+        cancelText: 'Keep for now',
+        accentColor: AppColors.error,
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+        onConfirm: () => Navigator.of(dialogContext).pop(true),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final result = await _repository.discardOpenVialDoses(
+        context: contextRecord,
+        batchId: batch.batchId,
+        reason: 'Past the ${item.openVialShelfHours}h open-vial limit',
+      );
+      if (!mounted) return;
+
+      final discarded = result['doses_discarded'] ?? doses;
+      AppSnackbar.success(
+        context,
+        '$discarded dose(s) of ${item.name} discarded from Batch '
+        '${batch.batchNumber} and recorded as wastage.',
+      );
+      await _loadLiveInventory(refresh: true);
+    } on live.InventoryWorkflowUnavailableException catch (error) {
+      if (!mounted) return;
+      AppSnackbar.warning(context, error.message);
+    } on live.InventoryRepositoryException catch (error) {
+      if (!mounted) return;
+      AppSnackbar.error(context, error.message);
+    }
+  }
+
+  /// Opens the trace for the batch behind an activity tile, when it has one.
+  VoidCallback? _traceTapFor(InventoryEvent event) {
+    final row = event.transaction;
+    if (row == null) return null;
+    return () => _showDoseTraceSheet(
+          itemId: row.itemId,
+          itemName: row.itemName,
+          batchId: row.batchId,
+          batchNumber: row.batchNumber,
+        );
+  }
+
+  /// Ledger rows for one catalogue item, newest first, optionally narrowed to a
+  /// single batch.
+  List<live.InventoryTransactionRecord> _doseTraceFor({
+    required int itemId,
+    int? batchId,
+  }) {
+    return _transactions
+        .where(
+          (t) =>
+              t.itemId == itemId && (batchId == null || t.batchId == batchId),
+        )
+        .toList()
+      ..sort((a, b) => b.loggedAt.compareTo(a.loggedAt));
+  }
+
+  void _showDoseTraceSheet({
+    required int itemId,
+    required String itemName,
+    int? batchId,
+    String? batchNumber,
+  }) {
+    final rows = _doseTraceFor(itemId: itemId, batchId: batchId);
+
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) {
+          final maxHeight = MediaQuery.of(sheetContext).size.height * 0.86;
+          final administered =
+              rows.where((r) => r.isAdministration).toList();
+
+          return Container(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            decoration: const BoxDecoration(
+              color: AppColors.bgPrimary,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderPrimary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.brandPrimary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.fact_check_outlined,
+                          size: 18,
+                          color: AppColors.brandPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'DOSE TRACE',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.6,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              batchNumber == null
+                                  ? itemName
+                                  : '$itemName • Batch $batchNumber',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.brandText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        color: AppColors.textSecondary,
+                      ),
+                    ],
+                  ),
+                ),
+                if (rows.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    child: Row(
+                      children: [
+                        _doseTraceStat(
+                          label: 'Movements',
+                          value: '${rows.length}',
+                        ),
+                        const SizedBox(width: 8),
+                        _doseTraceStat(
+                          label: 'Doses given',
+                          value: '${administered.fold<int>(0, (sum, r) => sum + r.dosesMoved)}',
+                        ),
+                        const SizedBox(width: 8),
+                        _doseTraceStat(
+                          label: 'Named patients',
+                          value:
+                              '${administered.where((r) => r.hasPatient).length}',
+                        ),
+                      ],
+                    ),
+                  ),
+                Flexible(
+                  child: rows.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.fromLTRB(20, 8, 20, 40),
+                          child: Text(
+                            'Nothing has moved for this item at this BHC yet. '
+                            'Receipts, doses given and discards all appear here '
+                            'as they happen.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          itemCount: rows.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
+                          itemBuilder: (_, index) =>
+                              _buildDoseTraceRow(rows[index]),
+                        ),
+                ),
+                if (rows.any((r) => r.hasPatient))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.privacy_tip_outlined,
+                          size: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Patients are shown by chart number only. Open the '
+                            'patient record to see who a number belongs to.',
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              height: 1.35,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _doseTraceStat({required String label, required String value}) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.borderPrimary),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: AppColors.brandPrimary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDoseTraceRow(live.InventoryTransactionRecord row) {
+    final type = row.transactionType.toLowerCase();
+    final isWaste = type == 'expiry_disposal' || type == 'discard';
+    final isIn = (row.doseQuantity ?? row.quantity) > 0;
+    final accent = isWaste
+        ? AppColors.error
+        : isIn
+            ? AppColors.success
+            : AppColors.brandPrimary;
+
+    final headline = switch (type) {
+      'receipt' => 'Received into stock',
+      'discard' => 'Open vial discarded',
+      'expiry_disposal' => 'Written off as unusable',
+      'adjustment' => 'Stock adjusted',
+      'transfer' => isIn ? 'Transferred in' : 'Transferred out',
+      _ when row.isAdministration => 'Dose administered',
+      _ => isIn ? 'Stock added' : 'Stock dispensed',
+    };
+
+    // Only a multi-dose presentation has an "of N" to report; on a single-dose
+    // item the unit and the dose are the same thing and saying so twice reads
+    // as a second, different number.
+    final doseText = row.isMultiDose
+        ? '${row.dosesMoved} ${row.dosesMoved == 1 ? 'dose' : 'doses'} of ${row.dosesPerUnit} per ${row.unit.toLowerCase()}'
+        : '${row.quantity.abs()} ${row.unit.toLowerCase()}';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderPrimary),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  isWaste
+                      ? Icons.delete_outline_rounded
+                      : row.isAdministration
+                          ? Icons.vaccines_rounded
+                          : isIn
+                              ? Icons.south_west_rounded
+                              : Icons.north_east_rounded,
+                  size: 15,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      headline,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.brandText,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${isIn ? '+' : '−'}$doseText',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: accent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                _dateTimeLabel(row.loggedAt),
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _doseTraceField(
+            icon: Icons.inventory_2_outlined,
+            label: 'Batch',
+            value: row.batchExpiration == null
+                ? row.batchNumber
+                : '${row.batchNumber} · expires ${_shortDate(row.batchExpiration!)}, '
+                    '${row.batchExpiration!.year}',
+          ),
+          _doseTraceField(
+            icon: Icons.badge_outlined,
+            label: 'Given to',
+            // The chart number, never the name — see the note at the foot of
+            // this sheet and the comment on inventory_dose_ledger.
+            value: row.patientLabel,
+            // An administration with no resolvable patient is a genuine gap in
+            // the trail and is labelled as one. A receipt or a transfer has no
+            // patient by nature, so it says so plainly instead.
+            missingText: row.isAdministration
+                ? 'Not linked to a patient record'
+                : 'Not a patient movement',
+            emphasise: row.hasPatient,
+          ),
+          _doseTraceField(
+            icon: Icons.person_outline_rounded,
+            label: 'Given by',
+            value: row.performedByName,
+            missingText: 'System / not recorded',
+          ),
+          if (row.isMultiDose)
+            _doseTraceField(
+              icon: Icons.colorize_rounded,
+              label: 'Left in vial',
+              value: row.resultingOpenVialDoses == null
+                  ? null
+                  : '${row.resultingOpenVialDoses} '
+                      '${row.resultingOpenVialDoses == 1 ? 'dose' : 'doses'}',
+              missingText: 'Not recorded for this movement',
+            ),
+          if (row.resultingQuantityRemaining != null)
+            _doseTraceField(
+              icon: Icons.warehouse_outlined,
+              label: 'Sealed left',
+              value: '${row.resultingQuantityRemaining} '
+                  '${row.unit.toLowerCase()}',
+            ),
+          if (row.notes.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              row.notes,
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontStyle: FontStyle.italic,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _doseTraceField({
+    required IconData icon,
+    required String label,
+    required String? value,
+    String missingText = '—',
+    bool emphasise = false,
+  }) {
+    final missing = value == null || value.isEmpty;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 13, color: AppColors.textSecondary),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 78,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              missing ? missingText : value,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: emphasise ? FontWeight.w700 : FontWeight.w500,
+                fontStyle: missing ? FontStyle.italic : FontStyle.normal,
+                color: missing
+                    ? AppColors.textSecondary
+                    : emphasise
+                        ? AppColors.brandPrimary
+                        : AppColors.textPrimary,
+              ),
+            ),
           ),
         ],
       ),
@@ -4991,6 +7483,7 @@ class InventoryEvent {
     required this.occurredAt,
     required this.icon,
     required this.color,
+    this.transaction,
   });
 
   final String title;
@@ -4998,6 +7491,11 @@ class InventoryEvent {
   final DateTime occurredAt;
   final IconData icon;
   final Color color;
+
+  /// The ledger row behind this tile, when there is one. Transfers and stock
+  /// requests are events too but move no dose, so they leave this null and
+  /// their tiles are not tappable.
+  final live.InventoryTransactionRecord? transaction;
 }
 
 class _InventoryCountLabel extends StatelessWidget {
@@ -5108,6 +7606,64 @@ class _HeroTag extends StatelessWidget {
   }
 }
 
+class _HistoryMetricItem extends StatelessWidget {
+  const _HistoryMetricItem({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        decoration: BoxDecoration(
+          color: isActive ? color.withValues(alpha: 0.08) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                color: isActive ? color : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StatusChip extends StatelessWidget {
   const _StatusChip({
     required this.label,
@@ -5190,13 +7746,27 @@ class _DetailValue extends StatelessWidget {
 }
 
 class _ActivityTile extends StatelessWidget {
-  const _ActivityTile({required this.event, required this.dateLabel});
+  const _ActivityTile({
+    required this.event,
+    required this.dateLabel,
+    this.onTap,
+  });
 
   final InventoryEvent event;
   final String Function(DateTime) dateLabel;
 
+  /// Opens the dose trace for the item behind this tile. Null for events with
+  /// no ledger row, which stay as plain, untappable text.
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
+    final tile = _buildContent();
+    if (onTap == null) return tile;
+    return InkWell(onTap: onTap, child: tile);
+  }
+
+  Widget _buildContent() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(

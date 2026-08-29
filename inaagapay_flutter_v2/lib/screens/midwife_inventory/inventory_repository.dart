@@ -159,17 +159,7 @@ class InventoryRepository {
             )
             .eq('facility_id', context.facilityId)
             .order('expiration_date'),
-        _client
-            .from('inventory_transactions')
-            .select(
-              'transaction_id, batch_id, facility_id, transaction_type, '
-              'quantity, reference_type, reference_id, logged_at, '
-              'inventory_batches(batch_id, item_id, batch_number, '
-              'inventory_items(item_id, name, unit_of_measure))',
-            )
-            .eq('facility_id', context.facilityId)
-            .order('logged_at', ascending: false)
-            .limit(100),
+        _loadDoseLedger(context.facilityId),
       ]);
 
       final catalog = _rows(results[0])
@@ -593,6 +583,114 @@ class InventoryRepository {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse(value.toString());
+  }
+
+  /// Set once `inventory_dose_ledger` has been found missing, so the fallback
+  /// query is used directly on every later refresh instead of paying for a
+  /// rejected request first.
+  bool _doseLedgerUnavailable = false;
+
+  /// Discards whatever doses are left in a batch's open vial.
+  ///
+  /// The BHC is who holds the vial and who watches the shelf-life clock run
+  /// out, but until now `discard_open_vial_doses` was only ever called from the
+  /// admin portal — so a midwife could watch the app say EXPIRED and had no way
+  /// to act on it except to telephone the RHU. The RPC is facility-agnostic and
+  /// writes its own ledger and audit rows, so calling it from here needs no new
+  /// server work.
+  ///
+  /// Returns the RPC's payload. Throws [InventoryWorkflowUnavailableException]
+  /// on a database without the function, which the caller reports rather than
+  /// swallowing — silently doing nothing to a vial is worse than saying so.
+  Future<Map<String, dynamic>> discardOpenVialDoses({
+    required MidwifeInventoryContext context,
+    required int batchId,
+    required String reason,
+  }) async {
+    try {
+      final response = await _client.rpc(
+        'discard_open_vial_doses',
+        params: {
+          'p_batch_id': batchId,
+          'p_discarded_by': context.midwifeId,
+          'p_reason': reason,
+        },
+      );
+
+      final row = response is Map
+          ? Map<String, dynamic>.from(response)
+          : _singleRow(response);
+
+      if (row == null) {
+        throw const InventoryRepositoryException(
+          'Supabase did not return a result for the discard.',
+        );
+      }
+
+      // The RPC reports refusals in its payload rather than by raising, so a
+      // false here is a real failure and must not read as success.
+      if (row['success'] == false) {
+        final reported = row['error']?.toString().trim() ?? '';
+        throw InventoryRepositoryException(
+          reported.isEmpty
+              ? 'The open vial could not be discarded.'
+              : reported,
+        );
+      }
+
+      return row;
+    } on Object catch (error) {
+      if (error is InventoryRepositoryException) rethrow;
+      if (_isMissingWorkflow(error)) {
+        throw InventoryWorkflowUnavailableException(
+          'The open-vial discard function is not installed in Supabase yet.',
+          cause: error,
+        );
+      }
+      throw InventoryRepositoryException(_friendlyError(error), cause: error);
+    }
+  }
+
+  /// The BHC's stock movements, with the dose maths, the performing account and
+  /// the receiving patient already resolved.
+  ///
+  /// Reads `inventory_dose_ledger` (20260830_dose_traceability.sql). That view
+  /// is what turns an opaque "Child Immunization #57" into a named child and a
+  /// dose count, and resolving it client-side instead would be one round trip
+  /// per row on a screen that lists a hundred.
+  ///
+  /// A database without the migration simply has no such view, so this falls
+  /// back to the base table: the timeline still renders, minus the patient and
+  /// the post-movement dose level. The portal and the migrations deploy
+  /// separately and the app has to work either side of that gap.
+  Future<List<Map<String, dynamic>>> _loadDoseLedger(int facilityId) async {
+    if (!_doseLedgerUnavailable) {
+      try {
+        final response = await _client
+            .from('inventory_dose_ledger')
+            .select()
+            .eq('facility_id', facilityId)
+            .order('logged_at', ascending: false)
+            .limit(300);
+        return _rows(response);
+      } on Object catch (error) {
+        if (!_isMissingWorkflow(error)) rethrow;
+        _doseLedgerUnavailable = true;
+      }
+    }
+
+    final legacy = await _client
+        .from('inventory_transactions')
+        .select(
+          'transaction_id, batch_id, facility_id, transaction_type, '
+          'quantity, reference_type, reference_id, logged_at, '
+          'inventory_batches(batch_id, item_id, batch_number, '
+          'inventory_items(item_id, name, unit_of_measure))',
+        )
+        .eq('facility_id', facilityId)
+        .order('logged_at', ascending: false)
+        .limit(300);
+    return _rows(legacy);
   }
 
   static bool _isMissingWorkflow(Object error) {
