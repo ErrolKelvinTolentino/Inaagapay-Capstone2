@@ -5191,6 +5191,8 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         ),
         ProfileInfoRow(
           icon: Icons.speed_rounded,
+          labelFlex: 4,
+          valueFlex: 2,
           labelWidget: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -5203,12 +5205,12 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 ),
               ),
               if (bmiStatus != null) ...[
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
                     color: bmiColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: bmiColor.withValues(alpha: 0.3),
                       width: 1,
@@ -5217,7 +5219,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   child: Text(
                     bmiStatus,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w700,
                       color: bmiColor,
                     ),

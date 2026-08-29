@@ -1483,7 +1483,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
   // ── UI helpers ─────────────────────────────────────────────────────────
 
-  Widget _sectionCard({required String title, required Widget child}) {
+  Widget _sectionCard({
+    required String title,
+    required Widget child,
+    Widget? trailing,
+  }) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
@@ -1502,14 +1506,20 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
-              letterSpacing: 0.8,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              if (trailing != null) trailing,
+            ],
           ),
           const SizedBox(height: 12),
           child,
@@ -1518,81 +1528,167 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     );
   }
 
-  Widget _buildClickableSummarySection(String title, List<Widget> rows,
-      {required VoidCallback onTap}) {
+  Widget _buildClickableSummarySection(
+    String title,
+    List<Widget> rows, {
+    required VoidCallback onTap,
+    IconData? icon,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2))
-            ]),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.brandPrimary.withValues(alpha: 0.12),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Row(children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.brandPrimary)),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: Row(
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 16, color: AppColors.brandPrimary),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      color: Color(0xFF5A5A5A),
+                    ),
+                  ),
                   const Spacer(),
-                  const Icon(Icons.edit_outlined,
-                      size: 16, color: AppColors.brandPrimary)
-                ])),
+                  const Icon(
+                    Icons.edit_outlined,
+                    size: 16,
+                    color: AppColors.brandPrimary,
+                  ),
+                ],
+              ),
+            ),
             Divider(
-                height: 1,
-                indent: 16,
-                endIndent: 16,
-                color: AppColors.borderPrimary),
+              height: 1,
+              indent: 16,
+              endIndent: 16,
+              color: AppColors.borderPrimary.withValues(alpha: 0.6),
+            ),
             Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(children: rows)),
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: rows,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _summaryRow(String label, String value,
-      {Color? valueColor, IconData? icon, Widget? badge}) {
+  Widget _summaryRow(
+    String label,
+    String value, {
+    Color? valueColor,
+    IconData? icon,
+    Widget? badge,
+    bool fullText = false,
+  }) {
+    final textColor = valueColor ?? const Color(0xFF5A5A5A);
+
+    if (fullText) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 14, color: AppColors.textSecondary),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                if (badge != null) ...[
+                  const SizedBox(width: 6),
+                  badge,
+                ],
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 5.5),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 15, color: AppColors.textSecondary),
-            const SizedBox(width: 6)
+            Icon(icon, size: 14, color: AppColors.textSecondary),
+            const SizedBox(width: 6),
           ],
-          SizedBox(
-            width: 125,
-            child: Text(label,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
                 style: const TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary)),
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              if (badge != null) ...[
+                const SizedBox(width: 6),
+                badge,
+              ],
+            ],
           ),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               value,
+              textAlign: TextAlign.end,
               style: TextStyle(
                 fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: valueColor ?? AppColors.brandText,
+                fontWeight: FontWeight.w600,
+                color: textColor,
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (badge != null) ...[
-            const SizedBox(width: 8),
-            badge,
-          ],
         ],
       ),
     );
@@ -1622,10 +1718,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     final isLow = cat == BpCategory.low;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: isLow ? const Color(0xFFEFF6FF) : pillColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: isLow ? const Color(0xFFBFDBFE) : pillColor.withValues(alpha: 0.3),
         ),
@@ -1633,9 +1729,9 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       child: Text(
         pillLabel,
         style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.3,
+          fontSize: 9.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
           color: pillColor,
         ),
       ),
@@ -1798,18 +1894,18 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: pillColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: pillColor.withValues(alpha: 0.3)),
       ),
       child: Text(
         pillLabel,
         style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.3,
+          fontSize: 9.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
           color: pillColor,
         ),
       ),
@@ -2879,40 +2975,21 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'VISIT DATE & TIME',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  Row(
-                    children: const [
-                      Icon(Icons.lock_outline_rounded, size: 12, color: AppColors.textSecondary),
-                      SizedBox(width: 3),
-                      Text(
-                        'Auto-locked',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              const Text(
+                'VISIT DATE & TIME',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 10),
               Row(
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 42,
+                    height: 42,
                     decoration: BoxDecoration(
                       color: AppColors.brandPrimary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
@@ -2920,20 +2997,26 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                     child: const Icon(
                       Icons.calendar_today_rounded,
                       color: AppColors.brandPrimary,
-                      size: 22,
+                      size: 20,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          DateFormat('MMMM d, yyyy').format(_checkupDateTime),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: AppColors.brandText,
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            DateFormat('MMMM d, yyyy').format(_checkupDateTime),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: AppColors.brandText,
+                            ),
+                            maxLines: 1,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -2941,16 +3024,17 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                           DateFormat('h:mm a').format(_checkupDateTime),
                           style: const TextStyle(
                             color: AppColors.textSecondary,
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
                   if (_aogWeeks != null)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
@@ -2969,12 +3053,12 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                         children: [
                           const Icon(
                             Icons.child_care_rounded,
-                            size: 16,
+                            size: 15,
                             color: AppColors.brandPrimary,
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '${_aogWeeks!.toInt()} wks AOG',
+                            'Week ${_aogWeeks!.toInt()}',
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -3383,39 +3467,69 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           VoidCallback? onEdit}) =>
       Container(
         margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2))
-            ]),
-        child: ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          leading: leading,
-          title: Text(title,
-              style:
-                  const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-          subtitle: Text(subtitle,
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary)),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (onEdit != null)
-                IconButton(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            leading,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onEdit != null)
+                  IconButton(
                     icon: const Icon(Icons.edit_outlined,
-                        color: AppColors.brandPrimary, size: 20),
-                    onPressed: onEdit),
-              IconButton(
+                        color: AppColors.brandPrimary, size: 18),
+                    onPressed: onEdit,
+                    padding: const EdgeInsets.all(6),
+                    constraints: const BoxConstraints(),
+                  ),
+                if (onEdit != null) const SizedBox(width: 6),
+                IconButton(
                   icon: const Icon(Icons.delete_outline_rounded,
-                      color: AppColors.error, size: 20),
-                  onPressed: onDelete),
-            ],
-          ),
+                      color: AppColors.error, size: 18),
+                  onPressed: onDelete,
+                  padding: const EdgeInsets.all(6),
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ],
         ),
       );
 
@@ -3451,20 +3565,29 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         const SizedBox(height: 12),
         _sectionCard(
           title: 'Recorded Symptoms',
+          trailing: _symptoms.isNotEmpty
+              ? GestureDetector(
+                  onTap: _confirmClearAllSymptoms,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.clear_all, size: 16, color: AppColors.error),
+                      SizedBox(width: 4),
+                      Text(
+                        'Clear all',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.error,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : null,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_symptoms.isNotEmpty)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: _confirmClearAllSymptoms,
-                    icon: const Icon(Icons.clear_all, size: 16),
-                    label: const Text('Clear all'),
-                    style:
-                        TextButton.styleFrom(foregroundColor: AppColors.error),
-                  ),
-                ),
               if (_symptoms.isEmpty)
                 _emptyState(
                   Icons.healing_outlined,
@@ -3538,11 +3661,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       builder: (ctx) {
         return Dialog(
           backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
           child: Container(
-            width: MediaQuery.of(ctx).size.width * 0.9,
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             child: StatefulBuilder(
               builder: (dialogCtx, setDialogState) {
                 final isCustom = _symptomTypes.isEmpty;
@@ -3557,9 +3680,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                         IconButton(
                           icon: const Icon(Icons.close, color: AppColors.brandText),
                           onPressed: () => Navigator.pop(dialogCtx, false),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                         ),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: Center(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
                             child: Text(
                               editIndex != null ? 'Edit Symptom' : 'Add Symptom',
                               style: const TextStyle(
@@ -3567,10 +3695,10 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                                 fontSize: 18,
                                 color: AppColors.brandText,
                               ),
+                              maxLines: 1,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 48),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -3969,12 +4097,12 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
         _sectionCard(
           title: 'Maternal Td Immunization Status',
           child: Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: isFim || isProtectedAtBirth ? const Color(0xFFF0FDF4) : const Color(0xFFFFFBEB),
-              borderRadius: BorderRadius.circular(12),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: isFim || isProtectedAtBirth ? const Color(0xFFBBF7D0) : const Color(0xFFFDE68A),
+                color: AppColors.borderPrimary.withValues(alpha: 0.8),
               ),
             ),
             child: Column(
@@ -3982,68 +4110,83 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               children: [
                 Row(
                   children: [
-                    Icon(
-                      isFim || isProtectedAtBirth ? Icons.shield_rounded : Icons.vaccines_rounded,
-                      size: 20,
-                      color: isFim || isProtectedAtBirth ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.vaccines_rounded,
+                        size: 18,
+                        color: AppColors.brandPrimary,
+                      ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         isFim
                             ? 'Fully Immunized Mother (FIM ⭐)'
                             : (highestTd > 0 ? 'Td$highestTd Recorded' : 'No Td Recorded'),
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.bold,
-                          color: isFim || isProtectedAtBirth ? const Color(0xFF166534) : const Color(0xFF92400E),
+                          color: AppColors.brandText,
                         ),
                       ),
                     ),
+                    const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: isFim || isProtectedAtBirth ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
-                        borderRadius: BorderRadius.circular(6),
+                        color: isFim || isProtectedAtBirth
+                            ? const Color(0xFFDCFCE7)
+                            : const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isFim || isProtectedAtBirth
+                              ? const Color(0xFF86EFAC)
+                              : const Color(0xFFFDE68A),
+                        ),
                       ),
                       child: Text(
                         isFim ? 'LIFETIME' : (isProtectedAtBirth ? 'PAB PROTECTED' : 'UNPROTECTED'),
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: isFim || isProtectedAtBirth ? const Color(0xFF166534) : const Color(0xFF92400E),
+                          color: isFim || isProtectedAtBirth
+                              ? const Color(0xFF166534)
+                              : const Color(0xFF92400E),
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Text(
                   isFim
                       ? 'Lifetime maternal and neonatal tetanus protection achieved.'
                       : (isProtectedAtBirth
                           ? 'Baby is Protected at Birth (PAB). Manage or backfill remaining doses in the dedicated Td module.'
                           : 'DOH recommends starting or updating Td doses as early as possible in pregnancy.'),
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: isFim || isProtectedAtBirth ? const Color(0xFF14532D) : const Color(0xFF78350F),
-                    height: 1.3,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: AppColors.textSecondary,
+                    height: 1.35,
                   ),
                 ),
 
                 // Next-dose timing, mirroring the Td screen so the two views
                 // never tell the midwife different things.
                 if (!isFim) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(8),
+                      color: AppColors.bgSecondary,
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: isProtectedAtBirth
-                            ? const Color(0xFFBBF7D0)
-                            : const Color(0xFFFDE68A),
+                        color: AppColors.borderPrimary.withValues(alpha: 0.6),
                       ),
                     ),
                     child: Row(
@@ -4052,22 +4195,22 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                           _tdStatus.canAdministerToday
                               ? Icons.event_available_rounded
                               : Icons.schedule_rounded,
-                          size: 14,
+                          size: 15,
                           color: _tdStatus.canAdministerToday
-                              ? const Color(0xFF16A34A)
-                              : const Color(0xFF92400E),
+                              ? AppColors.brandPrimary
+                              : AppColors.textSecondary,
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _prenatalTdTimingLabel(),
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: _tdStatus.canAdministerToday
-                                  ? const Color(0xFF15803D)
-                                  : const Color(0xFF78350F),
-                              height: 1.25,
+                                  ? AppColors.brandPrimary
+                                  : AppColors.brandText,
+                              height: 1.3,
                             ),
                           ),
                         ),
@@ -4081,12 +4224,13 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.brandPrimary,
-                      side: const BorderSide(color: AppColors.brandPrimary),
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.brandPrimary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: const StadiumBorder(),
                     ),
                     icon: const Icon(Icons.vaccines_rounded, size: 16),
                     label: const Text(
@@ -4315,22 +4459,78 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AppInputField(
-                hintText: 'Tap to set recommended next visit (optional)',
-                controller: TextEditingController(
-                  text: _nextSchedule == null
-                      ? ''
-                      : DateFormat('MMMM d, yyyy (EEEE)').format(_nextSchedule!),
-                ),
-                readOnly: true,
+              InkWell(
+                borderRadius: BorderRadius.circular(28),
                 onTap: _pickNextSchedule,
-                leadingIcon: Icons.calendar_month,
-                trailingIcon: _nextSchedule != null ? Icons.clear : null,
-                onTrailingTap: _nextSchedule != null
-                    ? () => setState(() => _nextSchedule = null)
-                    : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: AppColors.borderPrimary,
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_month_rounded, color: AppColors.brandAccent),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _nextSchedule == null
+                            ? const Text(
+                                'Recommended next visit (optional)',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 14,
+                                ),
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'Recommended next visit',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    DateFormat('MMMM d, yyyy (EEEE)').format(_nextSchedule!),
+                                    style: const TextStyle(
+                                      color: AppColors.inputText,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                      ),
+                      if (_nextSchedule != null)
+                        GestureDetector(
+                          onTap: () => setState(() => _nextSchedule = null),
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.close_rounded, size: 20, color: AppColors.brandAccent),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   const Icon(Icons.auto_awesome, size: 13, color: AppColors.brandPrimary),
@@ -4626,70 +4826,83 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               }),
             ),
             const SizedBox(height: 10),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(
-                  width: 125,
-                  child: Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text(
-                      'Detected Factors',
-                      style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            if (detectedFactors.isEmpty)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: const [
+                  Text(
+                    'Detected Factors',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
                     ),
                   ),
-                ),
-                Expanded(
-                  child: detectedFactors.isEmpty
-                      ? const Padding(
-                          padding: EdgeInsets.only(top: 4),
-                          child: Text(
-                            'No critical risk factors',
-                            style: TextStyle(fontSize: 13, color: AppColors.brandText),
-                          ),
-                        )
-                      : Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: detectedFactors.map((factor) {
-                            final isHigh = factor.toLowerCase().contains('severe') ||
-                                factor.toLowerCase().contains('hypertension') ||
-                                factor.toLowerCase().contains('urgent');
-                            final chipColor = isHigh ? AppColors.error : AppColors.warning;
+                  Text(
+                    'None',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF5A5A5A),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Detected Factors',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: detectedFactors.map((factor) {
+                      final isHigh = factor.toLowerCase().contains('severe') ||
+                          factor.toLowerCase().contains('hypertension') ||
+                          factor.toLowerCase().contains('urgent');
+                      final chipColor = isHigh ? AppColors.error : AppColors.warning;
 
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: chipColor.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: chipColor.withValues(alpha: 0.25)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    isHigh ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
-                                    size: 13,
-                                    color: chipColor,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    factor,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: chipColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: chipColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: chipColor.withValues(alpha: 0.25)),
                         ),
-                ),
-              ],
-            ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isHigh ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
+                              size: 13,
+                              color: chipColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                factor,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: chipColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
           ],
+          icon: Icons.shield_outlined,
           onTap: () {},
         ),
         const SizedBox(height: 12),
@@ -4714,6 +4927,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               badge: _bpStatusPill(),
             ),
           ],
+          icon: Icons.monitor_heart_outlined,
           onTap: () => _jumpToStep(0),
         ),
         _buildClickableSummarySection(
@@ -4727,6 +4941,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             ),
             _summaryRow('Heart Tone', _fetalTone ?? 'Not recorded'),
           ],
+          icon: Icons.child_care_rounded,
           onTap: () => _jumpToStep(1),
         ),
         _buildClickableSummarySection(
@@ -4745,6 +4960,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                   : _symptoms.map((s) => s.name).join(', '),
             ),
           ],
+          icon: Icons.healing_outlined,
           onTap: () => _jumpToStep(2),
         ),
         _buildClickableSummarySection(
@@ -4770,6 +4986,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                       : 'None given today'),
             ),
           ],
+          icon: Icons.medication_outlined,
           onTap: () => _jumpToStep(3),
         ),
         _buildClickableSummarySection(
@@ -4786,6 +5003,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               _remarksCtrl.text.trim().isEmpty
                   ? 'None'
                   : _remarksCtrl.text.trim(),
+              fullText: true,
             ),
             if (_remarksSource != 'midwife_authored') ...[
               const SizedBox(height: 6),
@@ -4820,6 +5038,7 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               ),
             ],
           ],
+          icon: Icons.event_note_outlined,
           onTap: () => _jumpToStep(4),
         ),
       ],
@@ -4942,18 +5161,28 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
               child: Row(
                 children: [
                   if (_step > 0) ...[
-                    Expanded(
-                      child: MainButton(
-                        label: 'Back',
-                        leftIcon: Icons.arrow_back_ios_new_rounded,
-                        isWhiteVariant: true,
+                    SizedBox(
+                      width: 56,
+                      height: 56,
+                      child: OutlinedButton(
                         onPressed: _submitting ? null : _back,
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppColors.brandPrimary,
+                          side: const BorderSide(color: AppColors.brandPrimary, width: 1.2),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 18,
+                          color: AppColors.brandPrimary,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                   ],
                   Expanded(
-                    flex: (_step > 0) ? 2 : 1,
                     child: _step == _totalSteps - 1
                         ? MainButton(
                             label: 'Save Checkup',

@@ -6410,12 +6410,23 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
             child: Row(
               children: [
                 if (_step > 0) ...[
-                  Expanded(
-                    child: MainButton(
-                      label: 'Back',
-                      leftIcon: Icons.arrow_back_ios_new_rounded,
-                      isWhiteVariant: true,
+                  SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: OutlinedButton(
                       onPressed: _submitting ? null : _goBack,
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.brandPrimary,
+                        side: const BorderSide(color: AppColors.brandPrimary, width: 1.2),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                        padding: EdgeInsets.zero,
+                      ),
+                      child: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 18,
+                        color: AppColors.brandPrimary,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
