@@ -1,3 +1,11 @@
+-- !! STALE COPY OF deduct_prenatal_encounter_inventory !!
+--
+-- The definition in this file reads v_enc.encounter_date. clinical_encounters
+-- has no such column (it is encounter_datetime), so every call raises 42703 and
+-- no prenatal checkup ever deducts stock. Everything else in this file is still
+-- required. If you run it, run 20260901_prenatal_deduction_column_fix.sql
+-- afterwards to restore the working definition.
+
 -- ====================================================================
 -- InaAgapay — Clean Inventory & Seed Vaccines + Prenatal Supplements
 -- Clean up all inventory tables and re-populate only Vaccines and

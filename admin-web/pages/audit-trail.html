@@ -49,11 +49,6 @@
           <li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li>
         </ul>
         <div class="sidebar-divider"></div>
-        <span class="sidebar-section-label">Patient Management</span>
-        <ul class="sidebar-nav">
-          <li><a href="patient-records.html"><i class="fa-solid fa-folder-open"></i> Patient Records</a></li>
-        </ul>
-        <div class="sidebar-divider"></div>
         <span class="sidebar-section-label">System</span>
         <ul class="sidebar-nav">
           <li><a href="audit-trail.html" class="active"><i class="fa-solid fa-clipboard-list"></i> Audit Trail</a></li>
@@ -338,6 +333,15 @@
       .audit-diff th { background:#f8fafc; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary); }
       .audit-diff td.was { color:#dc2626; background:#fff5f5; font-weight:500; }
       .audit-diff td.now { color:#16a34a; background:#f0fdf4; font-weight:600; }
+      /* A withheld value is neither a before nor an after — colouring it as one
+         would read as a real change from "(recorded)" to "(changed)". */
+      .audit-diff td.withheld { color:var(--text-secondary); background:#f8fafc; font-weight:500; font-style:italic; }
+      .audit-withheld-note {
+        margin:0 0 10px; padding:9px 11px; border-radius:8px;
+        background:#f1f5f9; border:1px solid #e2e8f0;
+        font-size:11.5px; line-height:1.5; color:var(--text-secondary);
+      }
+      .audit-withheld-note i { color:var(--brand-primary); margin-right:5px; }
       .audit-raw { margin-top:10px; }
       .audit-raw summary { cursor:pointer; font-size:12px; font-weight:600; color:var(--text-secondary); }
       .audit-raw pre { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; overflow-x:auto; font-size:11px; margin-top:8px; font-family:monospace; }
@@ -1103,12 +1107,64 @@
           pregnancy_id:'Pregnancy'
         };
 
-        // Fields that must never be exposed or reprinted, whatever a snapshot happens to hold.
-        // Strictly adheres to Republic Act No. 10173 (Data Privacy Act of 2012).
+        /* ═══════════════════════════════════════════════════════════════════
+           REDACTION
+
+           audit_clinical_change() snapshots the WHOLE row into old_data /
+           new_data — 20260826 says so, and says the values are "shown only to
+           accounts cleared to read patient data". Nothing enforced that. This
+           page printed every non-credential key verbatim, so amending a mother
+           put her name, house number, street, barangay, birthdate, blood type
+           and obstetric history on screen for any portal account.
+
+           There is no account here that is cleared to read patient data. The
+           portal has exactly two roles — mho and admin — and both are
+           administrative; the governed surface for patient data is Patient
+           Records. So the values are withheld from this page outright rather
+           than gated behind a clearance that does not exist.
+
+           What survives is the audit fact: WHICH field moved, by whom, when.
+           "Blood type — (recorded) → (changed)" is the auditable event; the
+           value belongs in the record, not in the log. That is already how
+           credentials were handled here, extended to the rest.
+
+           Adheres to Republic Act No. 10173 (Data Privacy Act of 2012),
+           specifically the proportionality rule in Sec. 11(d).
+           ═══════════════════════════════════════════════════════════════════ */
+
+        // Never printed anywhere, under any policy.
         const REDACTED_KEYS = new Set([
           'password_hash','password','verification_code','reset_code',
           'last_login_token','temporary_password','pending_password_hash','auth_id',
           'raw_password','pwd','pass','otp','pin','token','secret','access_token','refresh_token'
+        ]);
+
+        // Rows that describe a patient. A snapshot of one of these is treated
+        // fail-closed: a key is printed only if it is recognisably structural,
+        // so a column added later cannot start leaking by default.
+        const PATIENT_TABLES = new Set([
+          'mothers','children','pregnancies','prenatal_checkups','clinical_encounters',
+          'deliveries','lab_tests','ultrasounds','child_growth_records',
+          'immunization_records','given_medications','maternal_td_records',
+          'birth_details','postnatal_checkups','baby_book_entries'
+        ]);
+
+        // Identifiers, routing and bookkeeping — no personal or clinical content.
+        // Anything outside this on a patient row is withheld.
+        const STRUCTURAL_KEY =
+          /^(?:[a-z0-9_]*_id|id|status|source|created_at|updated_at|added_at|logged_at|recorded_at|is_[a-z0-9_]+|has_[a-z0-9_]+|[a-z0-9_]*_deducted|[a-z0-9_]*_approved|dose_number|encounter_type|visit_type|item_type|record_source|administration_place)$/;
+
+        // Direct identifiers on an account row. Redacted only for a PATIENT
+        // account: naming a midwife or an officer is the point of an audit
+        // trail, and blanking staff names would cost accountability for no
+        // privacy gain.
+        const PERSONAL_KEYS = new Set([
+          'first_name','middle_name','last_name','extension_name','full_name',
+          'birthdate','date_of_birth','dob','age',
+          'phone_number','contact_number','mobile_number','email_address','email',
+          'house_number','street','barangay','city_municipality','province',
+          'address','purok','zone','philhealth_number','civil_status','religion',
+          'occupation','nationality'
         ]);
 
         function isSensitiveKey(key) {
@@ -1118,25 +1174,55 @@
           return /password|passwd|secret|token|otp|pin|auth_key|api_key|verification_code|reset_code/i.test(k);
         }
 
-        function redactSnapshot(obj){
-          if (!obj || typeof obj !== 'object') return obj;
-          if (Array.isArray(obj)) return obj.map(redactSnapshot);
-          const out = {};
-          Object.entries(obj).forEach(([k,v]) => {
-            if (isSensitiveKey(k)) {
-              out[k] = '[redacted]';
-            } else if (v && typeof v === 'object') {
-              out[k] = redactSnapshot(v);
-            } else {
-              out[k] = v;
+        // The rule this entry's snapshots are read under.
+        //
+        // Returns a predicate: true means the value may be printed. Credentials
+        // are already excluded before this is consulted.
+        function redactionPolicy(log) {
+          const table = String(log?.table_name || '').toLowerCase().trim();
+
+          if (PATIENT_TABLES.has(table)) {
+            return { withheldFor: 'patient record', allows: k => STRUCTURAL_KEY.test(k) };
+          }
+
+          // An accounts row is a patient's only when it says so. account_type
+          // is read from either snapshot: a DELETE has no new_data, an INSERT
+          // no old_data.
+          if (table === 'accounts') {
+            const type = String(
+              (log?.new_data && log.new_data.account_type) ||
+              (log?.old_data && log.old_data.account_type) ||
+              log?.actor_role || ''
+            ).toLowerCase();
+            if (type === 'mother' || type === 'patient') {
+              return { withheldFor: 'patient account', allows: k => !PERSONAL_KEYS.has(k) };
             }
-          });
-          return out;
+          }
+
+          return { withheldFor: null, allows: () => true };
         }
 
-        function shortValue(v){
+        function redactSnapshot(obj, policy){
+          const allows = (policy && policy.allows) || (() => true);
+          const walk = (value) => {
+            if (!value || typeof value !== 'object') return value;
+            if (Array.isArray(value)) return value.map(walk);
+            const out = {};
+            Object.entries(value).forEach(([k, v]) => {
+              const key = String(k).toLowerCase().trim();
+              if (isSensitiveKey(k)) out[k] = '[redacted]';
+              else if (!allows(key))  out[k] = '[withheld — see Patient Records]';
+              else if (v && typeof v === 'object') out[k] = walk(v);
+              else out[k] = v;
+            });
+            return out;
+          };
+          return walk(obj);
+        }
+
+        function shortValue(v, policy){
           if (v === null || v === undefined || v === '') return '—';
-          if (typeof v === 'object') return JSON.stringify(redactSnapshot(v));
+          if (typeof v === 'object') return JSON.stringify(redactSnapshot(v, policy));
           const s = String(v);
           return s.length > 400 ? s.slice(0,400) + '…' : s;
         }
@@ -1144,15 +1230,20 @@
         function changedFields(log){
           const oldD = log.old_data, newD = log.new_data;
           if (!oldD || !newD || typeof oldD !== 'object' || typeof newD !== 'object') return [];
+          const policy = redactionPolicy(log);
           const keys = [...new Set([...Object.keys(oldD), ...Object.keys(newD)])].sort();
           return keys
             .filter(k => JSON.stringify(oldD[k]) !== JSON.stringify(newD[k]))
             .map(k => {
-              const sensitive = isSensitiveKey(k);
+              const key = String(k).toLowerCase().trim();
+              // Which field moved is the audit fact and is always shown. The
+              // value is shown only where the policy allows it.
+              const withheld = isSensitiveKey(k) || !policy.allows(key);
               return {
                 key: titleCase(k),
-                was: sensitive ? '(not recorded)' : shortValue(oldD[k]),
-                now: sensitive ? '(changed)'      : shortValue(newD[k])
+                was: withheld ? '(recorded)' : shortValue(oldD[k], policy),
+                now: withheld ? '(changed)'  : shortValue(newD[k], policy),
+                withheld
               };
             });
         }
@@ -1161,6 +1252,7 @@
           opts = opts || {};
           const sev = severityOf(log);
           const sections = (log.details && Array.isArray(log.details.sections)) ? log.details.sections : [];
+          const policy = redactionPolicy(log);
           const diffs = changedFields(log);
 
           const sectionHTML = sections.map(s => `
@@ -1183,18 +1275,29 @@
               <div class="audit-sec-title">Records this entry connects</div>
               <dl class="audit-kv">
                 ${relatedRows.map(([k,v]) =>
-                  `<dt>${esc(RELATED_LABELS[k] || titleCase(k))}</dt><dd>${esc(shortValue(v))}</dd>`
+                  `<dt>${esc(RELATED_LABELS[k] || titleCase(k))}</dt><dd>${esc(shortValue(v, policy))}</dd>`
                 ).join('')}
               </dl>
             </div>` : '';
 
+          // Say why a value is blank rather than leaving it looking like a bug.
+          const withheldNote = (policy.withheldFor && diffs.some(d => d.withheld)) ? `
+            <p class="audit-withheld-note">
+              <i class="fa-solid fa-user-shield"></i>
+              This entry describes a ${esc(policy.withheldFor)}. The audit trail records
+              <strong>which</strong> fields were changed, by whom and when — the values themselves
+              are held in the patient's record and are read there, where access to patient data is
+              governed. Data Privacy Act (RA 10173), Sec. 11(d).
+            </p>` : '';
+
           const diffHTML = diffs.length ? `
             <div class="audit-sec">
               <div class="audit-sec-title">Exactly what changed (${diffs.length} field${diffs.length===1?'':'s'})</div>
+              ${withheldNote}
               <table class="audit-diff">
                 <thead><tr><th style="width:30%">Field</th><th style="width:35%">Was</th><th style="width:35%">Became</th></tr></thead>
                 <tbody>
-                  ${diffs.map(d => `<tr><td>${esc(d.key)}</td><td class="was">${esc(d.was)}</td><td class="now">${esc(d.now)}</td></tr>`).join('')}
+                  ${diffs.map(d => `<tr><td>${esc(d.key)}</td><td class="was${d.withheld?' withheld':''}">${esc(d.was)}</td><td class="now${d.withheld?' withheld':''}">${esc(d.now)}</td></tr>`).join('')}
                 </tbody>
               </table>
             </div>` : '';
@@ -1202,14 +1305,17 @@
           // The database redacts credentials before storing a snapshot, but this
           // dump is the one place that prints a snapshot verbatim, so it redacts
           // again rather than trusting that every row it is handed came from a
-          // migrated database.
+          // migrated database — and applies the same withholding policy as the
+          // diff above, which is the whole point: a raw dump that printed what
+          // the diff withheld would be a way straight around it.
           const rawHTML = opts.forPrint ? '' : `
             <details class="audit-raw">
               <summary>Show the raw stored record</summary>
               <pre>${esc(JSON.stringify({
                 audit_id: log.audit_id, action: log.action, table_name: log.table_name,
                 row_id: log.row_id, event_key: log.event_key, source: log.source,
-                old_data: redactSnapshot(log.old_data), new_data: redactSnapshot(log.new_data)
+                old_data: redactSnapshot(log.old_data, policy),
+                new_data: redactSnapshot(log.new_data, policy)
               }, null, 2))}</pre>
             </details>`;
 
@@ -1469,10 +1575,24 @@
               y += 3;
             });
 
+            // changedFields applies the redaction policy itself, so an exported
+            // report carries the same withholding the screen does. This file
+            // leaves the portal's access controls entirely, which is exactly
+            // why it must not be the looser copy.
+            const policy = redactionPolicy(log);
             const diffs = changedFields(log);
             if(diffs.length){
               para(`EXACTLY WHAT CHANGED (${diffs.length})`, 8, 'bold', [110,110,110]); y += 1;
               diffs.forEach(d => para(`${d.key}: "${d.was}"  ->  "${d.now}"`, 8.5, 'normal'));
+              // Whoever receives this file needs to know the blanks are policy,
+              // not a broken export.
+              if (policy.withheldFor && diffs.some(d => d.withheld)) {
+                para(
+                  'Values withheld: this entry describes a ' + policy.withheldFor +
+                  '. The changed fields are listed; the values are held in the patient record ' +
+                  'and are read there. Data Privacy Act (RA 10173), Sec. 11(d).',
+                  7.5, 'italic', [130,130,130]);
+              }
               y += 3;
             }
 
@@ -1481,7 +1601,7 @@
               : [];
             if(rel.length){
               para('RECORDS THIS ENTRY CONNECTS', 8, 'bold', [110,110,110]); y += 1;
-              rel.forEach(([k,v]) => para(`${RELATED_LABELS[k] || titleCase(k)}: ${shortValue(v)}`, 8.5, 'normal'));
+              rel.forEach(([k,v]) => para(`${RELATED_LABELS[k] || titleCase(k)}: ${shortValue(v, policy)}`, 8.5, 'normal'));
             }
           });
 

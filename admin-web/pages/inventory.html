@@ -1119,11 +1119,6 @@
           <li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li>
         </ul>
         <div class="sidebar-divider"></div>
-        <span class="sidebar-section-label">Patient Management</span>
-        <ul class="sidebar-nav">
-          <li><a href="patient-records.html"><i class="fa-solid fa-folder-open"></i> Patient Records</a></li>
-        </ul>
-        <div class="sidebar-divider"></div>
         <span class="sidebar-section-label">System</span>
         <ul class="sidebar-nav">
           <li><a href="audit-trail.html"><i class="fa-solid fa-clipboard-list"></i> Audit Trail</a></li>
@@ -1158,6 +1153,10 @@
           <div class="page-actions" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
             <button class="btn btn-primary btn-sm" id="open-batch-modal-btn" onclick="openModal('modal-batch')"><i class="fa-solid fa-box-archive"></i> Receive Stock</button>
             <button class="btn btn-primary btn-sm" id="open-issue-modal-btn" onclick="openGeneralIssueModal()" style="background:#8b5cf6; border-color:#8b5cf6;"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock to BHC</button>
+            <!-- Asking the office above is a top-level action, not something to
+                 go hunting for inside the requests table. Hidden for the
+                 municipal office, which has nobody to ask. -->
+            <button class="btn btn-primary btn-sm" id="open-request-modal-top-btn" data-request-action style="display:none; background:#0d9488; border-color:#0d9488; color:#fff;" onclick="openRequestModal()"><i class="fa-solid fa-paper-plane"></i> Request Stock</button>
 
             <div class="action-menu" id="inventory-action-menu">
               <button class="btn btn-secondary btn-sm" id="inventory-action-menu-btn" aria-haspopup="true" aria-expanded="false">
@@ -1442,10 +1441,16 @@
           <div class="card" id="dist-subview-requests" style="margin-bottom:20px;">
             <div class="toolbar">
               <div>
-                <h3 style="margin:0;font-size:15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-clipboard-list" style="color:var(--brand-primary);margin-right:7px;"></i> Midwife Stock Requests from Barangay Health Centers</h3>
-                <p style="margin:4px 0 0;color:var(--text-secondary);font-size:12.5px;">Review requested items from BHC midwives, approve requested quotas, and dispatch central warehouse batches.</p>
+                <h3 id="requests-card-title" style="margin:0;font-size:15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-clipboard-list" style="color:var(--brand-primary);margin-right:7px;"></i> Stock Requests from Barangay Health Centers</h3>
+                <p id="requests-card-subtitle" style="margin:4px 0 0;color:var(--text-secondary);font-size:12.5px;">Review requested items from BHC midwives, approve requested quotas, and dispatch central warehouse batches.</p>
               </div>
-              <button class="btn btn-secondary btn-sm" id="refresh-requests-btn" onclick="loadInventoryData()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+              <div style="display:flex;gap:8px;">
+                <!-- Only an office with one above it has somewhere to send a
+                     request. applyScopeLabels() unhides this for an RHU and
+                     leaves it hidden for the municipal office, which is the top. -->
+                <button class="btn btn-primary btn-sm" id="open-request-modal-btn" data-request-action style="display:none; background:#0d9488; border-color:#0d9488; color:#fff;" onclick="openRequestModal()"><i class="fa-solid fa-paper-plane"></i> Request Stock</button>
+                <button class="btn btn-secondary btn-sm" id="refresh-requests-btn" onclick="loadInventoryData()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+              </div>
             </div>
 
             <!-- This table had a status dropdown and nothing else: no search, no
@@ -1467,6 +1472,16 @@
                 </select>
                 <select class="form-select" id="requests-filter-facility" style="width:auto;" aria-label="Filter by requesting facility">
                   <option value="">All Requesting Facilities</option>
+                </select>
+                <!-- This table holds two different jobs since 20260904: requests
+                     to decide on, and requests this office raised with the one
+                     above and can only wait on. Hidden for the municipal office,
+                     which has nowhere to send one and so only ever sees the
+                     first kind. -->
+                <select class="form-select" id="requests-filter-direction" style="width:auto;" aria-label="Filter by request direction">
+                  <option value="">Any Direction</option>
+                  <option value="incoming">From Barangay Health Centers</option>
+                  <option value="outgoing">Sent Upward</option>
                 </select>
                 <select class="form-select" id="requests-filter-archived" style="width:auto;" aria-label="Filter by archive state">
                   <option value="active">Active Requests Only</option>
@@ -1648,7 +1663,10 @@
                 <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-clock-rotate-left" style="color: var(--brand-primary); margin-right: 8px;"></i> Stock Movement History Ledger</h3>
                 <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: 12.5px;">Every unit that entered or left a shelf: receipts, dispenses, adjustments, transfers in both directions, and disposals. Each row shows the balance it left behind.</p>
               </div>
-              <button class="btn btn-outline-pink btn-sm" id="export-tx-csv-btn" onclick="exportTransactionsCSV()"><i class="fa-solid fa-file-csv"></i> Export Ledger CSV</button>
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <button class="btn btn-primary btn-sm" id="generate-inv-report-btn" onclick="openInventoryReportModal()"><i class="fa-solid fa-file-pdf"></i> Generate Printable Report</button>
+                <button class="btn btn-outline-pink btn-sm" id="export-tx-csv-btn" onclick="exportTransactionsCSV()"><i class="fa-solid fa-file-csv"></i> Export Ledger CSV</button>
+              </div>
             </div>
             <div class="table-controls">
               <div class="table-controls-fields">
@@ -1696,12 +1714,13 @@
                     <th class="th-sort" data-sort="tx:item" tabindex="0">Item Details<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="tx:qty" tabindex="0" style="text-align: right">Qty<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="tx:balance" tabindex="0" style="text-align: right">Balance After<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="tx:patient" tabindex="0">Given To<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="tx:user" tabindex="0">Performed By<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th>Reference / Notes</th>
                   </tr>
                 </thead>
                 <tbody id="tx-tbody">
-                  <tr><td colspan="8" style="text-align:center;padding:48px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px"></div>Loading transaction history...</td></tr>
+                  <tr><td colspan="9" style="text-align:center;padding:48px;color:var(--text-secondary);"><div class="spinner" style="margin:0 auto 12px"></div>Loading transaction history...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1916,6 +1935,12 @@
               </h4>
               <button class="action-pill-btn pill-secondary" onclick="renderOpenVialsTracker()"><i class="fa-solid fa-arrows-rotate"></i> Refresh Open Vials</button>
             </div>
+
+            <!-- Items whose dose presentation is being guessed from their name.
+                 This sits above the wastage rate on purpose: that percentage is
+                 doses discarded over doses handled, and every item listed here
+                 is contributing a denominator nobody confirmed. -->
+            <div id="dose-config-warning" style="display:none; margin-bottom:16px;"></div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 16px;">
               <div style="background: #fffbeb; border: 1px solid #fde68a; padding: 12px 14px; border-radius: 10px;">
@@ -2318,6 +2343,52 @@
       </div>
     </div>
 
+    <!-- Request Stock ────────────────────────────────────────────────────
+         A request travels one rung up the hierarchy: a barangay health centre
+         asks its RHU, an RHU asks the Municipal Health Office. The midwives
+         have had this in the mobile app since 20260803; until 20260904 the
+         portal had no way to raise one, so an RHU could only wait to be sent
+         stock it had never asked for. The destination is not a choice - it is
+         whatever office sits above this one - so it is shown, not selected. -->
+    <div class="modal-overlay" id="modal-request">
+      <div class="modal" style="max-width: 520px;">
+        <div class="modal-header" style="padding: 16px 24px;">
+          <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--brand-text);"><i class="fa-solid fa-paper-plane" style="color:var(--brand-primary);margin-right:8px;"></i> Request Stock</h3>
+          <button class="modal-close" onclick="closeModal('modal-request')" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 18px 24px;">
+          <form id="form-request" onsubmit="return false;">
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="request-item-id" style="font-weight: 600; font-size: 12.5px;">Item Needed <span class="req" style="color:#dc2626;">*</span></label>
+              <select class="form-select" id="request-item-id" required style="border-radius: 8px;">
+                <option value="">— Select Item —</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="request-qty" style="font-weight: 600; font-size: 12.5px;">Quantity Needed <span class="req" style="color:#dc2626;">*</span></label>
+              <input class="form-control" type="number" id="request-qty" min="1" step="1" placeholder="e.g. 500" required style="border-radius: 8px;" />
+            </div>
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="request-reason" style="font-weight: 600; font-size: 12.5px;">Reason <span class="req" style="color:#dc2626;">*</span></label>
+              <textarea class="form-control" id="request-reason" rows="2" placeholder="e.g. Below reorder threshold; two BHCs due for resupply this week" required style="border-radius: 8px; resize: vertical;"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="request-remarks" style="font-weight: 600; font-size: 12.5px;">Remarks <span style="color:var(--text-secondary);font-weight:500;">(optional)</span></label>
+              <input class="form-control" type="text" id="request-remarks" placeholder="Anything the reviewing office should know" style="border-radius: 8px;" />
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-weight: 600; font-size: 12.5px;">Sending This Request To</label>
+              <div id="request-destination" style="padding:9px 12px;border-radius:8px;background:#f8fafc;border:1px solid var(--border-primary);font-weight:600;font-size:13px;color:#334155;">the office above this one</div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #fafafa; display: flex; justify-content: flex-end; gap: 10px;">
+          <button class="btn btn-secondary" onclick="closeModal('modal-request')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px;">Cancel</button>
+          <button class="btn btn-primary" id="save-request-btn" style="height: 36px; padding: 0 18px; border-radius: 8px; font-size: 13px;"><i class="fa-solid fa-paper-plane"></i> Submit Request</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal 4: Dispense / Adjust Stock -->
     <div class="modal-overlay" id="modal-dispense">
       <div class="modal" style="max-width: 500px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
@@ -2601,7 +2672,8 @@
           <button class="btn btn-secondary" onclick="closeModal('modal-item-details')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600;">Close</button>
           <div style="display: flex; gap: 8px;">
             <button class="btn btn-secondary" id="item-details-edit-btn" style="height: 36px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight:600;"><i class="fa-solid fa-pen-to-square"></i> Edit Catalog</button>
-            <button class="btn btn-primary" id="item-details-receive-btn" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600; box-shadow:0 2px 8px rgba(255,104,165,0.3);"><i class="fa-solid fa-plus"></i> Receive Batch</button>
+            <button class="btn btn-secondary" id="item-details-receive-btn" style="height: 36px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight:600;"><i class="fa-solid fa-plus"></i> Receive Batch</button>
+            <button class="btn btn-primary" id="item-details-issue-btn" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600; background:#8b5cf6; border-color:#8b5cf6; color:#fff;"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock</button>
           </div>
         </div>
       </div>
@@ -2621,6 +2693,85 @@
         <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #ffffff; display: flex; justify-content: flex-end; gap: 10px;">
           <button class="btn btn-secondary" onclick="closeModal('modal-invaudit-detail')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600;">Close</button>
           <button class="btn btn-primary" onclick="window.print()" style="height: 36px; padding: 0 18px; border-radius: 8px; font-size: 13px; font-weight:600; box-shadow:0 2px 8px rgba(255,104,165,0.3);"><i class="fa-solid fa-print"></i> Print Record</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Generate Printable Inventory Report -->
+    <div class="modal-overlay" id="modal-inventory-report">
+      <div class="modal" style="max-width: 680px; width: 92%; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 45px rgba(0,0,0,0.18);">
+        <div class="modal-header" style="padding: 16px 24px 14px; border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center; background:#ffffff;">
+          <div>
+            <h2 class="modal-title" style="font-size: 17px; font-weight: 700; color: var(--brand-text); margin: 0; display: flex; align-items: center; gap: 8px;">
+              <i class="fa-solid fa-file-invoice" style="color:var(--brand-primary);"></i> Generate Inventory &amp; Stock Movement Report
+            </h2>
+            <div style="font-size:12px; color:var(--text-secondary); margin-top:3px;">
+              Official Municipal / Barangay Health Center stock traceability and audit report
+            </div>
+          </div>
+          <button class="modal-close" onclick="closeModal('modal-inventory-report')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" style="padding: 20px 24px; background:#ffffff; max-height: 75vh; overflow-y: auto;">
+          <div style="margin-bottom: 16px;">
+            <label class="form-label" style="font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--text-secondary);"><i class="fa-solid fa-calendar-days" style="color: var(--brand-primary); margin-right: 4px;"></i> Reporting Period</label>
+            <select class="form-select" id="inv-report-period" onchange="toggleReportCustomDate(this.value)">
+              <option value="this_week">This Week (Current Mon – Sun)</option>
+              <option value="last_week">Last Week</option>
+              <option value="this_month">This Month</option>
+              <option value="last_month">Last Month</option>
+              <option value="today">Today</option>
+              <option value="30d">Last 30 Days</option>
+              <option value="all">All Recorded History</option>
+              <option value="custom">Custom Date Range…</option>
+            </select>
+          </div>
+
+          <div id="inv-report-custom-dates" style="display: none; margin-bottom: 16px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label class="form-label" style="font-size: 11px; font-weight: 600;">Start Date</label>
+                <input type="date" id="inv-report-start-date" class="form-control" />
+              </div>
+              <div>
+                <label class="form-label" style="font-size: 11px; font-weight: 600;">End Date</label>
+                <input type="date" id="inv-report-end-date" class="form-control" />
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <label class="form-label" style="font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--text-secondary);"><i class="fa-solid fa-hospital-user" style="color: var(--brand-primary); margin-right: 4px;"></i> Health Center / Facility Scope</label>
+            <select class="form-select" id="inv-report-facility">
+              <option value="all">All Facilities (Consolidated RHU &amp; BHCs)</option>
+            </select>
+          </div>
+
+          <div style="margin-bottom: 16px;">
+            <label class="form-label" style="font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--text-secondary);"><i class="fa-solid fa-filter" style="color: var(--brand-primary); margin-right: 4px;"></i> Movement Category Scope</label>
+            <select class="form-select" id="inv-report-category">
+              <option value="all">All Movements (Receipts, Dispenses, Discards, Transfers, Adjustments)</option>
+              <option value="dispense">Dispensed / Clinical Administrations Only</option>
+              <option value="receipt">Stock Receipts &amp; Replenishments Only</option>
+              <option value="expiry_disposal">Expiry Discards &amp; Unusable Stock Only</option>
+              <option value="transfer">Transfers Between Facilities Only</option>
+              <option value="adjustment">Stock Adjustments Only</option>
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div>
+              <label class="form-label" style="font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--text-secondary);"><i class="fa-solid fa-user-pen" style="color: var(--brand-primary); margin-right: 4px;"></i> Prepared By (Officer Name)</label>
+              <input type="text" id="inv-report-officer" class="form-control" placeholder="e.g. Admin Maria Santos" />
+            </div>
+            <div>
+              <label class="form-label" style="font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--text-secondary);"><i class="fa-solid fa-id-badge" style="color: var(--brand-primary); margin-right: 4px;"></i> Designation / Title</label>
+              <input type="text" id="inv-report-designation" class="form-control" value="Municipal Inventory Officer" placeholder="Designation" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #ffffff; display: flex; justify-content: flex-end; gap: 10px;">
+          <button class="btn btn-secondary" onclick="closeModal('modal-inventory-report')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600;">Cancel</button>
+          <button class="btn btn-primary" onclick="generateAndPrintInventoryReport()" style="height: 36px; padding: 0 20px; border-radius: 8px; font-size: 13px; font-weight:600; box-shadow:0 2px 8px rgba(255,104,165,0.3);"><i class="fa-solid fa-print"></i> Generate &amp; Print Report</button>
         </div>
       </div>
     </div>
@@ -2699,6 +2850,11 @@
         let motherCountsByBhc = [];
         let workflowLoadError = null;
 
+        // False once inventory_dose_ledger has been found missing, so the
+        // Patient column can say the trail is not installed rather than reading
+        // as "no patient was recorded" for every row on the page.
+        let doseLedgerViewAvailable = true;
+
         // View Pagination State
         const paginationState = {
           catalog: { currentPage: 1, pageSize: 10 },
@@ -2747,7 +2903,8 @@
             render: () => renderStockRequests(),
             defaults: {
               "requests-search": "", "request-filter-status": "",
-              "requests-filter-facility": "", "requests-filter-archived": "active",
+              "requests-filter-facility": "", "requests-filter-direction": "",
+              "requests-filter-archived": "active",
               "requests-filter-date": "all", "requests-date-start": "", "requests-date-end": ""
             }
           },
@@ -3070,7 +3227,9 @@
 
         // An empty table means one of two completely different things, and the
         // fix differs, so say which one it is.
-        function emptyStateRow(key, colspan, icon, emptyTitle, emptyHint) {
+        // actionHtml is optional and appears under the hint: an empty table is
+        // the best place to offer the thing that would fill it.
+        function emptyStateRow(key, colspan, icon, emptyTitle, emptyHint, actionHtml) {
           const n = activeFilterCount(key);
           if (n > 0) {
             return `<tr><td colspan="${colspan}"><div class="table-empty">
@@ -3084,6 +3243,7 @@
             <i class="fa-solid ${icon} table-empty-icon"></i>
             <div class="table-empty-title">${esc(emptyTitle)}</div>
             <div class="table-empty-hint">${esc(emptyHint)}</div>
+            ${actionHtml || ''}
           </div></td></tr>`;
         }
 
@@ -4344,24 +4504,35 @@
 
           let lowCount = 0;
           let outCount = 0;
+          const lowChildIds = [];
 
           locations.forEach(loc => {
             const m = getItemStockMetrics(item.item_id, loc.id);
             // Out means no dose can be given, not no sealed unit is left: a
             // location holding only an open vial can still vaccinate.
+            let low = false;
             if (m.availableDoses === 0) {
               outCount++;
               lowCount++;
+              low = true;
             } else if (m.available <= baseMin) {
               lowCount++;
+              low = true;
             }
+            // Whose shelf is short decides what to do about it: this office's
+            // own depot is solved by asking the office above, a facility below
+            // by sending stock down to it. The counts above fold both together,
+            // so keep the ones below separately.
+            if (low && String(loc.id) !== "central") lowChildIds.push(String(loc.id));
           });
 
           return {
             hasLowFacilities: lowCount > 0,
             lowCount,
             outCount,
-            totalFacilities: locations.length
+            totalFacilities: locations.length,
+            lowChildIds,
+            lowChildCount: lowChildIds.length
           };
         }
 
@@ -4424,6 +4595,28 @@
           tableViews[key]?.render();
         };
 
+        // The movement ledger, with the patient and the post-movement vial level
+        // already resolved.
+        //
+        // inventory_dose_ledger (20260830_dose_traceability.sql) is a view over
+        // inventory_transactions that names the child or mother behind a
+        // "Child Immunization #57" and carries resulting_open_vial_doses. Doing
+        // that resolution here instead would be a join per row on a table the
+        // Movement Ledger renders in full.
+        //
+        // It returns the same shape as the base table plus extra columns, so a
+        // database that has not run the migration falls back to the table and
+        // every reader below simply finds those columns undefined.
+        async function loadMovementLedger() {
+          const viewRes = await db.from("inventory_dose_ledger")
+            .select("*").order("logged_at", { ascending: false });
+          if (!viewRes.error) return viewRes;
+
+          console.warn("inventory_dose_ledger unavailable, falling back to inventory_transactions:", viewRes.error);
+          doseLedgerViewAvailable = false;
+          return db.from("inventory_transactions").select("*").order("logged_at", { ascending: false });
+        }
+
         // Main Data Fetcher
         async function loadInventoryData() {
           const syncInd = document.getElementById("live-sync-indicator");
@@ -4436,7 +4629,7 @@
             const [itemRes, batchRes, txRes, reqRes, transRes] = await Promise.all([
               db.from("inventory_items").select("*").order("name"),
               db.from("inventory_batches").select("*").order("expiration_date"),
-              db.from("inventory_transactions").select("*").order("logged_at", { ascending: false }),
+              loadMovementLedger(),
               db.from("inventory_stock_requests").select("*").order("created_at", { ascending: false }),
               db.from("inventory_transfers").select("*").order("issued_at", { ascending: false })
             ]);
@@ -4521,6 +4714,11 @@
                 console.warn("Account lookup error:", accErr);
               }
             }
+
+            // Cheap, and it gates a warning that qualifies every dose figure on
+            // the page, so it is loaded before anything renders rather than
+            // letting the panel appear a beat later.
+            await loadDoseConfigGaps();
 
             renderFacilityScopeStrip();
             renderKPIs();
@@ -4796,6 +4994,7 @@
                     <button class="btn btn-sm btn-secondary" onclick="openItemDetails(${item.item_id})" title="View Barangay Breakdown" style="padding:2px 5px;font-size:11px;"><i class="fa-solid fa-eye"></i></button>
                     <button class="btn btn-sm btn-secondary" onclick="openEditItem(${item.item_id})" title="Edit Item Details" style="padding:2px 5px;font-size:11px;"><i class="fa-solid fa-pen"></i></button>
                     ${!item.is_archived ? `<button class="btn btn-sm btn-outline-pink" onclick="quickReceive(${item.item_id})" title="Receive New Batch" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;"><i class="fa-solid fa-plus"></i> Batch</button>` : ''}
+                    ${!item.is_archived && PortalScope.hasParent ? `<button class="btn btn-sm" onclick="quickRequest(${item.item_id})" title="Request this item from ${esc(PortalScope.parentFacilityName || 'the office above')}" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;background:#0d9488; border-color:#0d9488; color:#fff;"><i class="fa-solid fa-paper-plane"></i> Request</button>` : ''}
                     ${archiveActionBtn}
                   </div>
                 </td>
@@ -5126,6 +5325,23 @@
             `).join('');
         }
 
+        /**
+         * True when this office raised the request itself, rather than a
+         * facility below it.
+         *
+         * The table shows every request inside PortalScope, and since 20260904
+         * that includes this office's own requests to the office above. Those
+         * are somebody else's to decide: an RHU may not approve, reject or
+         * issue against the request it sent the municipal office. Nothing in
+         * the database enforces that, so this is the guard.
+         */
+        function isOwnRequest(request) {
+          if (!request) return false;
+          if (PortalScope.isDepot(request.facility_id)) return true;
+          return PortalScope.facilityId != null &&
+                 String(request.facility_id) === String(PortalScope.facilityId);
+        }
+
         // Render Stock Requests Table
         // Workflow order, not alphabetical: a status sort should surface what
         // still needs a decision, and "approved" sorting above "pending"
@@ -5138,6 +5354,7 @@
           const q = ctlVal("requests-search").trim().toLowerCase();
           const statusFilter = ctlVal("request-filter-status");
           const facilityFilter = ctlVal("requests-filter-facility");
+          const directionFilter = ctlVal("requests-filter-direction");
           const archivedFilter = ctlVal("requests-filter-archived") || "active";
           const win = dateWindow("requests");
 
@@ -5149,6 +5366,10 @@
           const filtered = stockRequests.filter(r => {
             if (statusFilter && r.status !== statusFilter) return false;
             if (facilityFilter && String(r.facility_id) !== String(facilityFilter)) return false;
+            // "incoming" is everything this office has to decide; "outgoing" is
+            // what it asked the office above for and can only wait on.
+            if (directionFilter === "incoming" && isOwnRequest(r)) return false;
+            if (directionFilter === "outgoing" && !isOwnRequest(r)) return false;
             if (archivedFilter === "active" && r.is_archived) return false;
             if (archivedFilter === "archived" && !r.is_archived) return false;
             if (!inDateWindow(r.created_at, win)) return false;
@@ -5185,7 +5406,12 @@
           if (sorted.length === 0) {
             tbody.innerHTML = emptyStateRow("requests", 7, "fa-clipboard-list",
               "No stock requests yet",
-              "Requests appear here when a midwife submits one from the mobile app.");
+              PortalScope.hasParent
+                ? `Requests from your ${PortalScope.childTypeLabelPlural.toLowerCase()} appear here, alongside any you raise with ${PortalScope.parentFacilityName || "the office above"}.`
+                : `Requests appear here when a ${PortalScope.childTypeLabel.toLowerCase()} submits one.`,
+              PortalScope.hasParent
+                ? `<button class="btn btn-sm" style="background:#0d9488; border-color:#0d9488; color:#fff;" onclick="openRequestModal()"><i class="fa-solid fa-paper-plane"></i> Request Stock</button>`
+                : '');
             renderPaginationControls("requests-pagination", 0, "requests");
             return;
           }
@@ -5204,8 +5430,30 @@
               ? `<button class="btn btn-xs btn-outline-pink" onclick="unarchiveStockRequest(${request.request_id})" style="padding:2px 6px;font-size:10.5px;color:#059669;border-color:#bbf7d0;"><i class="fa-solid fa-rotate-left"></i> Restore</button>`
               : (['received', 'completed', 'rejected', 'issued'].includes(request.status) ? `<button class="btn btn-xs btn-secondary" onclick="archiveStockRequest(${request.request_id})" title="Archive Request" style="padding:2px 6px;font-size:10.5px;color:#dc2626;"><i class="fa-solid fa-box-archive"></i></button>` : '');
 
+            // Before 20260904 only facilities below this one could appear here,
+            // so the action buttons never needed an ownership guard. An RHU now
+            // sees its own outgoing requests in the same table; without this it
+            // could approve, reject and issue against its own request to the
+            // municipal office, and the RPC would let it.
+            const own = isOwnRequest(request);
+            const upstream = PortalScope.parentFacilityName || "the office above";
+            const progress = (icon, text, colour) =>
+              `<span style="font-size:11px;color:${colour};font-weight:600;white-space:nowrap;"><i class="fa-solid ${icon}"></i> ${esc(text)}</span>`;
+
             let actions = "—";
-            if (request.status === "pending" && !request.is_archived) {
+            if (own) {
+              // Ours to watch, not to decide.
+              if (request.is_archived) actions = archiveBtn || "—";
+              else if (request.status === "pending")
+                actions = progress("fa-hourglass-half", `Awaiting ${upstream}`, "var(--text-secondary)");
+              else if (request.status === "approved")
+                actions = progress("fa-check", "Approved — awaiting dispatch", "#059669");
+              else if (request.status === "issued")
+                actions = `${progress("fa-truck", "In transit to you", "var(--brand-primary)")} ${archiveBtn}`;
+              else if (request.status === "rejected")
+                actions = `${progress("fa-xmark", `Declined by ${upstream}`, "#dc2626")} ${archiveBtn}`;
+              else actions = archiveBtn || "—";
+            } else if (request.status === "pending" && !request.is_archived) {
               actions = `
                 <div style="display:flex;justify-content:center;gap:3px;flex-wrap:nowrap;">
                   <button class="btn btn-xs btn-primary" onclick="openApproveModal(${request.request_id})" style="padding:2px 8px;font-size:11px;border-radius:5px;"><i class="fa-solid fa-check"></i> Approve</button>
@@ -5229,7 +5477,11 @@
             return `
               <tr style="${request.is_archived ? 'opacity:0.75;background:#fafafa;' : ''}">
                 <td><strong>#${request.request_id}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${submitted}</div></td>
-                <td><strong>${esc(bhc?.bhc_name || unknownFacilityLabel(request.facility_id))}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${esc(requester)}</div></td>
+                <td>
+                  <strong>${esc(bhc?.bhc_name || unknownFacilityLabel(request.facility_id))}</strong>
+                  ${own ? `<span class="badge-health-muted" style="margin-left:5px;font-size:9.5px;vertical-align:middle;" title="Raised by this office and sent to ${esc(upstream)}"><i class="fa-solid fa-arrow-up"></i> Sent upward</span>` : ''}
+                  <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${esc(requester)}</div>
+                </td>
                 <td class="col-item-details">
                   <div style="display:flex;align-items:center;gap:4px;">
                     <strong style="color:var(--text-primary);cursor:pointer;" onclick="openItemDetails(${request.item_id})">${esc(item ? item.name : `Item #${request.item_id}`)}</strong>
@@ -5245,7 +5497,7 @@
                 </td>
                 <td style="max-width:220px;white-space:normal;word-break:break-word;font-size:11.5px;line-height:1.3;">
                   <div>${esc(request.reason)}</div>
-                  ${request.remarks ? `<div style="font-size:10.5px;color:var(--text-secondary);margin-top:2px;">Midwife Note: ${esc(request.remarks)}</div>` : ''}
+                  ${request.remarks ? `<div style="font-size:10.5px;color:var(--text-secondary);margin-top:2px;">Note: ${esc(request.remarks)}</div>` : ''}
                 </td>
                 <td style="text-align:center;min-width:90px;">${statusBadge}</td>
                 <td style="text-align:center;min-width:130px;">${actions}</td>
@@ -5460,7 +5712,11 @@
             const route = transfer
               ? `${transferEndpointName(transferSourceFacilityId(transfer))} ${transferEndpointName(transfer.destination_facility_id)}`
               : "";
-            const searchStr = `${batch?.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""} ${user} ${t.reference_type || ""} ${t.activity_reason || ""} ${t.activity_notes || ""} ${t.notes || ""} ${route}`.toLowerCase();
+            // The patient is searchable by number and by name: "NAK-004" is
+            // what the physical chart is filed under, and the name is what the
+            // person asking at the counter actually says.
+            const patient = `${t.patient_number || ""}`;
+            const searchStr = `${batch?.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""} ${user} ${patient} ${t.reference_type || ""} ${t.activity_reason || ""} ${t.activity_notes || ""} ${t.notes || ""} ${route}`.toLowerCase();
             if (q && !searchStr.includes(q)) return false;
             return true;
           });
@@ -5472,6 +5728,7 @@
             item: t => txItem(t)?.name || "",
             qty: t => t.quantity ?? 0,
             balance: t => (t.resulting_quantity_remaining ?? null),
+            patient: t => t.patient_number || "",
             user: t => accountMap[t.performed_by] || ""
           });
           syncSortIndicators("tx");
@@ -5481,7 +5738,7 @@
           if (!tbody) return;
 
           if (sorted.length === 0) {
-            tbody.innerHTML = emptyStateRow("tx", 8, "fa-clock-rotate-left",
+            tbody.innerHTML = emptyStateRow("tx", 9, "fa-clock-rotate-left",
               "No stock has moved here yet",
               "Receipts, dispenses, transfers and disposals are recorded here automatically.");
             renderPaginationControls("tx-pagination", 0, "tx");
@@ -5525,9 +5782,45 @@
               ? `<div style="font-size:10px;color:var(--text-secondary);">${Number(t.dose_quantity) > 0 ? "+" : ""}${t.dose_quantity} dose(s)</div>`
               : "";
 
+            // Balance in units, and — where the presentation has more than one
+            // dose per unit — the level the open vial was left at. Units alone
+            // do not move when a dose is drawn from an open vial, so the column
+            // used to repeat the same number down a whole clinic day.
+            const dpuHere = Math.max(1, parseInt(item?.doses_per_unit, 10) || 1);
+            const openLevel = (dpuHere > 1 && t.resulting_open_vial_doses != null)
+              ? `<div style="font-size:10px;color:var(--text-secondary);">${t.resulting_open_vial_doses} dose(s) in open vial</div>`
+              : "";
             const balanceCell = t.resulting_quantity_remaining != null
-              ? `<strong>${t.resulting_quantity_remaining}</strong>`
-              : `<span style="color:var(--text-secondary);">—</span>`;
+              ? `<strong>${t.resulting_quantity_remaining}</strong>${openLevel}`
+              : `<span style="color:var(--text-secondary);">—</span>${openLevel}`;
+
+            // Who the dose went into.
+            //
+            // An administration with no resolvable patient is a hole in the
+            // trail and is marked as one; a receipt or a transfer has no
+            // patient by nature and says so quietly instead. The two used to
+            // look identical, because both rendered nothing at all.
+            const isAdministration = ["Child Immunization", "Maternal Td Immunization", "Prenatal Encounter"]
+              .includes(t.reference_type);
+            let patientCell;
+            if (t.patient_number) {
+              // Chart number only, never a name. This ledger is read by RHU and
+              // municipal officers with no treatment relationship to the patient
+              // and it exports to CSV, so the name would travel well past the
+              // purpose it was collected for. Same rule the audit trail applies.
+              const kindIcon = t.patient_kind === "child" ? "fa-child-reaching" : "fa-person-pregnant";
+              patientCell = `
+                <div style="display:flex;align-items:center;gap:5px;">
+                  <i class="fa-solid ${kindIcon}" style="color:var(--brand-primary);font-size:11px;" title="${t.patient_kind === 'child' ? 'Child record' : 'Maternal record'}"></i>
+                  <strong style="font-family:monospace;font-size:11.5px;color:var(--brand-primary);">${esc(t.patient_number)}</strong>
+                </div>`;
+            } else if (!doseLedgerViewAvailable) {
+              patientCell = `<span style="color:var(--text-secondary);font-size:10.5px;" title="Run database/migrations/20260830_dose_traceability.sql to resolve patients on this ledger.">Not tracked</span>`;
+            } else if (isAdministration) {
+              patientCell = `<span style="color:#b45309;font-size:10.5px;"><i class="fa-solid fa-triangle-exclamation"></i> Unlinked record</span>`;
+            } else {
+              patientCell = `<span style="color:var(--text-secondary);font-size:10.5px;">—</span>`;
+            }
 
             const notes = [t.notes, t.activity_notes].filter(Boolean);
             const hasReasonOrNotes = isBhcUnusableRecord || t.activity_reason || notes.length > 0;
@@ -5560,7 +5853,8 @@
                 </td>
                 <td style="text-align:right;font-weight:700;color:${t.quantity < 0 ? '#dc2626' : '#059669'};">${qtyStr}${doseNote}</td>
                 <td style="text-align:right;">${balanceCell}</td>
-                <td>${esc(accountMap[t.performed_by] || "System / Admin")}</td>
+                <td>${patientCell}</td>
+                <td>${esc(t.performed_by_name || accountMap[t.performed_by] || "System / Admin")}</td>
                 <td style="font-size:12px;color:var(--text-secondary);vertical-align:middle;">
                   ${activityDetails}
                   <div style="margin-top:6px;">
@@ -5621,6 +5915,18 @@
             if (t.activity_reason) narrativeProse += `Reason / Clinical Purpose: ${String(t.activity_reason).replace(/_/g, ' ')}.\n`;
             if (notesStr) narrativeProse += `Officer Notes: ${notesStr}\n`;
             if (t.resulting_quantity_remaining != null) narrativeProse += `Shelf balance after movement: ${t.resulting_quantity_remaining} ${item?.unit_of_measure || 'units'}.\n`;
+            // The dose half of the story, for a presentation where a unit and a
+            // dose are not the same thing.
+            const dpuDetail = Math.max(1, parseInt(item?.doses_per_unit, 10) || 1);
+            if (dpuDetail > 1 && t.dose_quantity != null) {
+              narrativeProse += `Doses moved: ${t.dose_quantity} (this item holds ${dpuDetail} dose(s) per ${item?.unit_of_measure || 'unit'}).\n`;
+            }
+            if (dpuDetail > 1 && t.resulting_open_vial_doses != null) {
+              narrativeProse += `Doses left in the open vial afterwards: ${t.resulting_open_vial_doses}.\n`;
+            }
+            if (t.patient_number) {
+              narrativeProse += `Given to: ${t.patient_number}.\n`;
+            }
             if (transfer) narrativeProse += `Transfer route: ${facilityName} (Transfer #${transfer.transfer_id}).\n`;
 
             const syntheticLog = {
@@ -5647,11 +5953,23 @@
                       { label: 'Batch Expiration Date', value: batch?.expiration_date || '—' },
                       { label: 'Movement Operation', value: typeLabel },
                       { label: 'Quantity Transacted', value: `${signQty} ${item?.unit_of_measure || 'units'}` },
+                      ...(dpuDetail > 1 ? [
+                        { label: 'Doses Transacted', value: t.dose_quantity != null ? `${t.dose_quantity} of ${dpuDetail} per ${item?.unit_of_measure || 'unit'}` : '—' },
+                        { label: 'Doses Left In Open Vial', value: t.resulting_open_vial_doses != null ? `${t.resulting_open_vial_doses}` : 'Not recorded for this movement' }
+                      ] : []),
                       { label: 'Ending Shelf Balance', value: t.resulting_quantity_remaining != null ? `${t.resulting_quantity_remaining} ${item?.unit_of_measure || 'units'}` : '—' },
                       { label: 'Location Facility', value: facilityName },
                       { label: 'Reference Code', value: t.reference_type ? `${t.reference_type}${t.reference_id ? ' #' + t.reference_id : ''}` : '—' }
                     ]
                   },
+                  ...(t.patient_number ? [{
+                    title: 'Recipient',
+                    rows: [
+                      { label: 'Chart Number', value: t.patient_number },
+                      { label: 'Record Type', value: t.patient_kind === 'child' ? 'Child immunisation record' : 'Maternal record' },
+                      { label: 'Patient Name', value: 'Not shown here — look the chart number up in Patient Records' }
+                    ]
+                  }] : []),
                   ...(t.activity_reason || notesStr ? [{
                     title: 'Reasoning & Clinical Notes',
                     rows: [
@@ -5697,19 +6015,22 @@
             const batch = batches.find(b => b.batch_id === t.batch_id);
             const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
             const user = accountMap[t.performed_by] || "";
-            const searchStr = `${batch?.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""} ${user} ${t.reference_type || ""} ${t.activity_reason || ""} ${t.activity_notes || ""}`.toLowerCase();
+            const patient = `${t.patient_number || ""}`;
+            const searchStr = `${batch?.batch_number || ""} ${item?.name || ""} ${item?.generic_name || ""} ${user} ${patient} ${t.reference_type || ""} ${t.activity_reason || ""} ${t.activity_notes || ""}`.toLowerCase();
             if (q && !searchStr.includes(q)) return false;
             return true;
           });
 
           // The export carries what the table now shows: both ends of a
-          // transfer, the direction, the dose figure and the resulting balance.
-          // A CSV that omits them is not the ledger anybody was reading.
+          // transfer, the direction, the dose figure, the resulting balance and
+          // the patient the dose went into. A CSV that omits them is not the
+          // ledger anybody was reading.
           const headers = [
             "Timestamp", "Facility / Location", "Movement Type", "Direction",
             "Moved From", "Moved To", "Item Name", "Generic Name", "Batch Number",
-            "Batch Expiry", "Quantity", "Doses", "Balance After", "Performed By",
-            "Reference", "Reason", "Notes"
+            "Batch Expiry", "Quantity", "Doses", "Balance After",
+            "Doses Left In Open Vial", "Patient Chart Number",
+            "Performed By", "Reference", "Reason", "Notes"
           ];
           const rows = filtered.map(t => {
             const batch = batches.find(b => b.batch_id === t.batch_id);
@@ -5734,7 +6055,9 @@
               formatCell(t.quantity),
               formatCell(t.dose_quantity ?? ""),
               formatCell(t.resulting_quantity_remaining ?? ""),
-              formatCell(accountMap[t.performed_by] || "System / Admin"),
+              formatCell(t.resulting_open_vial_doses ?? ""),
+              formatCell(t.patient_number ?? ""),
+              formatCell(t.performed_by_name || accountMap[t.performed_by] || "System / Admin"),
               formatCell(`${t.reference_type || ""}${t.reference_id ? ` #${t.reference_id}` : ""}`.trim()),
               formatCell(t.activity_reason || ""),
               formatCell([t.notes, t.activity_notes].filter(Boolean).join(" · "))
@@ -5748,6 +6071,279 @@
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
+        };
+
+        window.toggleReportCustomDate = function(val) {
+          const customWrap = document.getElementById("inv-report-custom-dates");
+          if (customWrap) {
+            customWrap.style.display = (val === "custom") ? "block" : "none";
+          }
+        };
+
+        window.openInventoryReportModal = function() {
+          // Populate facility select
+          const facSelect = document.getElementById("inv-report-facility");
+          if (facSelect) {
+            facSelect.innerHTML = '<option value="all">All Facilities (Consolidated RHU & BHCs)</option>' +
+              facilities.map(f => `<option value="${f.facility_id}">${escapeHtml(f.name)}</option>`).join("");
+            const currentFilter = document.getElementById("global-bhc-filter")?.value;
+            if (currentFilter && currentFilter !== "all") {
+              facSelect.value = currentFilter;
+            }
+          }
+
+          // Pre-populate officer name
+          const officerInput = document.getElementById("inv-report-officer");
+          if (officerInput && !officerInput.value) {
+            const userName = document.getElementById("header-user-name")?.textContent || "Admin Officer";
+            officerInput.value = userName.trim();
+          }
+
+          // Default custom dates to last 30 days
+          const now = new Date();
+          const dStart = new Date();
+          dStart.setDate(dStart.getDate() - 30);
+          const startInp = document.getElementById("inv-report-start-date");
+          const endInp = document.getElementById("inv-report-end-date");
+          if (startInp && !startInp.value) startInp.value = dStart.toISOString().split("T")[0];
+          if (endInp && !endInp.value) endInp.value = now.toISOString().split("T")[0];
+
+          openModal("modal-inventory-report");
+        };
+
+        window.generateAndPrintInventoryReport = function() {
+          const period = document.getElementById("inv-report-period")?.value || "this_week";
+          const facilityId = document.getElementById("inv-report-facility")?.value || "all";
+          const category = document.getElementById("inv-report-category")?.value || "all";
+          const officerName = document.getElementById("inv-report-officer")?.value.trim() || "Municipal Inventory Officer";
+          const designation = document.getElementById("inv-report-designation")?.value.trim() || "Inventory Officer";
+
+          // Calculate period date window
+          const now = new Date();
+          let startDate = null;
+          let endDate = null;
+          let periodLabel = "All Recorded History";
+
+          if (period === "today") {
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            periodLabel = `Today (${startDate.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })})`;
+          } else if (period === "this_week") {
+            const dayOfWeek = (now.getDay() + 6) % 7; // Monday = 0
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 6, 23, 59, 59, 999);
+            periodLabel = `This Week (${startDate.toLocaleDateString("en-PH", { month: "short", day: "numeric" })} – ${endDate.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })})`;
+          } else if (period === "last_week") {
+            const dayOfWeek = (now.getDay() + 6) % 7;
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek - 7);
+            endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek - 1, 23, 59, 59, 999);
+            periodLabel = `Last Week (${startDate.toLocaleDateString("en-PH", { month: "short", day: "numeric" })} – ${endDate.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })})`;
+          } else if (period === "this_month") {
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+            periodLabel = `${startDate.toLocaleDateString("en-PH", { month: "long", year: "numeric" })} (This Month)`;
+          } else if (period === "last_month") {
+            startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+            periodLabel = `${startDate.toLocaleDateString("en-PH", { month: "long", year: "numeric" })} (Last Month)`;
+          } else if (period === "30d") {
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() - 30);
+            endDate = now;
+            periodLabel = `Last 30 Days (${startDate.toLocaleDateString("en-PH", { month: "short", day: "numeric" })} – ${endDate.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })})`;
+          } else if (period === "custom") {
+            const sVal = document.getElementById("inv-report-start-date")?.value;
+            const eVal = document.getElementById("inv-report-end-date")?.value;
+            if (sVal) startDate = new Date(sVal + "T00:00:00");
+            if (eVal) endDate = new Date(eVal + "T23:59:59.999");
+            periodLabel = `${startDate ? startDate.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "Earliest"} – ${endDate ? endDate.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "Latest"}`;
+          }
+
+          // Facility label
+          let facilityLabel = "All Facilities (Consolidated RHU & BHCs)";
+          if (facilityId !== "all") {
+            const fac = facilities.find(f => String(f.facility_id) === String(facilityId));
+            if (fac) facilityLabel = fac.name;
+          }
+
+          // Filter transactions
+          const reportRows = transactions.filter(t => {
+            if (facilityId !== "all" && !facilityMatches(t.facility_id, facilityId)) return false;
+            if (category !== "all" && t.transaction_type !== category) return false;
+            if (startDate || endDate) {
+              if (!t.logged_at) return false;
+              const tDate = new Date(t.logged_at);
+              if (startDate && tDate < startDate) return false;
+              if (endDate && tDate > endDate) return false;
+            }
+            return true;
+          }).sort((a, b) => new Date(b.logged_at || 0) - new Date(a.logged_at || 0));
+
+          // Compute KPI totals
+          let totalDispensed = 0;
+          let totalReplenished = 0;
+          let totalLoss = 0;
+
+          reportRows.forEach(t => {
+            const type = (t.transaction_type || "").toLowerCase();
+            const doses = t.doses_moved || t.dose_quantity || t.quantity || 0;
+            if (type === "dispense") {
+              totalDispensed += Math.abs(doses);
+            } else if (type === "receipt" || (type === "transfer" && t.quantity > 0)) {
+              totalReplenished += Math.abs(t.quantity || 0);
+            } else if (type === "expiry_disposal" || type === "discard") {
+              totalLoss += Math.abs(doses);
+            }
+          });
+
+          // Build printable HTML document
+          const printWindow = window.open("", "_blank");
+          if (!printWindow) {
+            alert("Please allow popups to generate and print the inventory report.");
+            return;
+          }
+
+          const tableRowsHtml = reportRows.length === 0
+            ? `<tr><td colspan="8" style="text-align:center; padding: 24px; color: #64748b; font-style: italic;">No inventory movements recorded for the selected period and criteria.</td></tr>`
+            : reportRows.map((t, idx) => {
+              const batch = batches.find(b => b.batch_id === t.batch_id);
+              const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
+              const loc = transferEndpointName(t.facility_id);
+              const dateStr = t.logged_at ? new Date(t.logged_at).toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+              const isPos = (t.dose_quantity || t.quantity) > 0;
+              const deltaStr = isPos ? `+${t.quantity || 0}` : `${t.quantity || 0}`;
+              const balanceAfter = `${t.resulting_quantity_remaining != null ? t.resulting_quantity_remaining : '—'}${t.resulting_open_vial_doses ? ` (${t.resulting_open_vial_doses} open doses)` : ''}`;
+              const patient = t.patient_number ? escapeHtml(t.patient_number) : "—";
+              const performer = t.performed_by_name || accountMap[t.performed_by] || "Staff";
+              const notes = [t.reference_type, t.notes, t.activity_notes].filter(Boolean).join(" · ") || "—";
+
+              return `
+                <tr style="background: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+                  <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px; white-space: nowrap;">${dateStr}</td>
+                  <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px;"><strong>${escapeHtml(item?.name || 'Item')}</strong><br><span style="color:#64748b; font-size:10px;">Batch: ${escapeHtml(batch?.batch_number || '—')} (Exp: ${batch?.expiration_date || '—'})</span></td>
+                  <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px;"><span style="text-transform: capitalize; font-weight:600;">${escapeHtml((t.transaction_type || '').replace('_', ' '))}</span><br><span style="color:#64748b; font-size:10px;">${escapeHtml(loc)}</span></td>
+                  <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px; text-align: right; font-weight: 700; color: ${isPos ? '#166534' : '#991b1b'};">${deltaStr}</td>
+                  <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px; text-align: right;">${balanceAfter}</td>
+                  <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${patient}</td>
+                  <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${escapeHtml(performer)}</td>
+                  <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 10.5px; color: #475569;">${escapeHtml(notes)}</td>
+                </tr>
+              `;
+            }).join("");
+
+          const htmlContent = `
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+              <meta charset="UTF-8">
+              <title>Inventory &amp; Stock Movement Report — ${escapeHtml(facilityLabel)}</title>
+              <style>
+                @page { size: landscape; margin: 12mm 10mm; }
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1e293b; margin: 0; padding: 12px; font-size: 12px; }
+                .report-header { border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start; }
+                .report-title-h1 { font-size: 15px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin: 0 0 2px; }
+                .report-sub { font-size: 10px; color: #475569; margin: 0; }
+                .meta-box { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; font-size: 11px; }
+                .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+                .kpi-box { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; text-align: center; background: #fafafa; }
+                .kpi-box-val { font-size: 15px; font-weight: 800; }
+                .kpi-box-lbl { font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-top: 2px; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }
+                th { background: #e2e8f0; border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 10px; font-weight: 700; text-align: left; text-transform: uppercase; }
+                .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 28px; page-break-inside: avoid; }
+                .sig-line { border-top: 1px solid #0f172a; margin-top: 36px; padding-top: 4px; text-align: center; font-size: 11px; }
+                @media print {
+                  .no-print { display: none !important; }
+                  body { padding: 0; }
+                }
+              </style>
+            </head>
+            <body>
+              <div class="no-print" style="margin-bottom: 12px; display: flex; justify-content: flex-end; gap: 8px;">
+                <button onclick="window.print()" style="padding: 8px 16px; background: #ec4899; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Print Report</button>
+                <button onclick="window.close()" style="padding: 8px 16px; background: #e2e8f0; color: #334155; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Close Window</button>
+              </div>
+
+              <div class="report-header">
+                <div>
+                  <p class="report-sub" style="font-weight: 700;">Republic of the Philippines • Department of Health • Rural Health Unit</p>
+                  <h1 class="report-title-h1">BARANGAY HEALTH CENTER &amp; RHU INVENTORY STOCK MOVEMENT REPORT</h1>
+                  <p class="report-sub">Comprehensive traceability ledger of all vaccine, medicine, and healthcare supply movements</p>
+                </div>
+                <div style="text-align: right;">
+                  <span style="display:inline-block; padding: 2px 6px; background: #e2e8f0; font-weight: 800; font-size: 9px; border-radius: 4px;">OFFICIAL AUDIT LEDGER</span>
+                  <p class="report-sub" style="margin-top: 4px;">Generated: ${new Date().toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" })}</p>
+                </div>
+              </div>
+
+              <div class="meta-box">
+                <div><strong>Facility Scope:</strong> ${escapeHtml(facilityLabel)}</div>
+                <div><strong>Reporting Period:</strong> ${escapeHtml(periodLabel)}</div>
+                <div><strong>Category Scope:</strong> ${escapeHtml(category.toUpperCase())}</div>
+              </div>
+
+              <div class="kpi-grid">
+                <div class="kpi-box">
+                  <div class="kpi-box-val" style="color: #0f172a;">${reportRows.length}</div>
+                  <div class="kpi-box-lbl">Total Movements Logged</div>
+                </div>
+                <div class="kpi-box" style="background: #fdf2f8;">
+                  <div class="kpi-box-val" style="color: #db2777;">${totalDispensed}</div>
+                  <div class="kpi-box-lbl">Total Dispensed Doses</div>
+                </div>
+                <div class="kpi-box" style="background: #f0fdf4;">
+                  <div class="kpi-box-val" style="color: #16a34a;">+${totalReplenished}</div>
+                  <div class="kpi-box-lbl">Total Replenished Units</div>
+                </div>
+                <div class="kpi-box" style="background: #fef2f2;">
+                  <div class="kpi-box-val" style="color: #dc2626;">-${totalLoss}</div>
+                  <div class="kpi-box-lbl">Total Expired / Loss Doses</div>
+                </div>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 100px;">Date &amp; Time</th>
+                    <th>Item &amp; Batch Details</th>
+                    <th>Movement &amp; Location</th>
+                    <th style="width: 60px; text-align: right;">Delta</th>
+                    <th style="width: 95px; text-align: right;">Balance After</th>
+                    <th style="width: 70px;">Patient Chart</th>
+                    <th style="width: 110px;">Performed By</th>
+                    <th>Reference / Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${tableRowsHtml}
+                </tbody>
+              </table>
+
+              <div class="sig-grid">
+                <div>
+                  <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">Prepared &amp; Certified Correct:</div>
+                  <div class="sig-line">
+                    <strong>${escapeHtml(officerName.toUpperCase())}</strong><br>
+                    <span style="font-size: 10px; color: #64748b;">${escapeHtml(designation)}</span>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">Verified &amp; Noted by:</div>
+                  <div class="sig-line">
+                    <strong>MUNICIPAL HEALTH OFFICER (MHO)</strong><br>
+                    <span style="font-size: 10px; color: #64748b;">Rural Health Unit (RHU)</span>
+                  </div>
+                </div>
+              </div>
+            </body>
+            </html>
+          `;
+
+          printWindow.document.open();
+          printWindow.document.write(htmlContent);
+          printWindow.document.close();
+
+          closeModal("modal-inventory-report");
         };
 
         /* ═══════════════════════════════════════════════════════════════════
@@ -7420,7 +8016,12 @@
         // the shelf being emptied — which is what a "Move this stock out" action
         // on a facility's own row needs, and what makes a lateral or upward move
         // one click rather than four.
-        window.openGeneralIssueModal = function(targetBhcId = null, sourceFacilityId = null) {
+        // itemId narrows the source-batch picker to one catalogue item. Callers
+        // that arrive from a specific item -- the details modal, a facility row
+        // in its stock breakdown -- already know which; making the officer pick
+        // it again from every batch on the shelf is how the wrong batch gets
+        // chosen.
+        window.openGeneralIssueModal = function(targetBhcId = null, sourceFacilityId = null, itemId = null) {
           openModal("modal-issue");
           try {
             const form = document.getElementById("form-issue");
@@ -7462,7 +8063,7 @@
             }
             ensureBhcDropdownPopulated();
 
-            populateIssueBatchDropdown(null);
+            populateIssueBatchDropdown(itemId);
             applySuggestedDeliveryEstimate(true);
             updateTransferDirectionBanner();
             resetIssueSafetyCheck();
@@ -7623,6 +8224,11 @@
                   <td style="padding:8px 12px; text-align:right; color:${incoming ? '#15803d' : 'var(--text-secondary)'}; font-weight:${incoming ? '700' : '400'};">${incoming ? `+${incoming}` : '—'}</td>
                   <td style="padding:8px 12px; text-align:right; color:${outgoing ? '#be123c' : 'var(--text-secondary)'}; font-weight:${outgoing ? '700' : '400'};">${outgoing ? `−${outgoing}` : '—'}</td>
                   <td style="padding:8px 12px; text-align:right; font-weight:800; font-size:13px; color:${m.available <= 0 ? '#dc2626' : 'var(--brand-primary)'}; background:rgba(255,104,165,0.04);">${m.available}</td>
+                  <td style="padding:8px 12px; text-align:center;">
+                    ${facilityKey === "central"
+                      ? '<span style="color:var(--text-secondary);">—</span>'
+                      : `<button class="btn btn-sm" onclick="closeModal(\'modal-item-details\'); openGeneralIssueModal(\'${facilityKey}\', null, ${itemId});" title="Send ${esc(label)} some of this item from ${esc(PortalScope.depotName)}" style="padding:2px 8px;font-size:10.5px;white-space:nowrap;background:#8b5cf6; border-color:#8b5cf6; color:#fff;"><i class="fa-solid fa-truck-ramp-box"></i> Issue</button>`}
+                  </td>
                 </tr>
               `;
             };
@@ -7753,6 +8359,7 @@
                         <th style="padding:9px 12px; text-align:right;" title="Dispatched to this facility, not yet confirmed">In Transit ▸ In</th>
                         <th style="padding:9px 12px; text-align:right;" title="Dispatched from this facility, not yet confirmed elsewhere">In Transit ▸ Out</th>
                         <th style="padding:9px 12px; text-align:right; background:rgba(255,104,165,0.08); color:var(--brand-text); font-weight:800;">Available Stock</th>
+                        <th style="padding:9px 12px; text-align:center;">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -7794,6 +8401,12 @@
 
             const recvBtn = document.getElementById("item-details-receive-btn");
             if (recvBtn) recvBtn.onclick = () => { closeModal("modal-item-details"); quickReceive(item.item_id); };
+
+            const issueBtn = document.getElementById("item-details-issue-btn");
+            if (issueBtn) issueBtn.onclick = () => {
+              closeModal("modal-item-details");
+              openGeneralIssueModal(null, null, item.item_id);
+            };
 
             const modal = document.getElementById("modal-item-details");
             if (modal) modal.classList.add("show");
@@ -7996,6 +8609,61 @@
           document.getElementById("modal-alerts-hub").classList.add("show");
         };
 
+        /**
+         * What to offer about a shortage, given whose shelf is short.
+         *
+         * It was always "Receive Batch", which registers a delivery from a
+         * supplier. That is the right answer for the municipal office and
+         * almost never the right one for an RHU: a barangay health centre
+         * running low is fixed by dispatching to it, and the RHU's own depot
+         * running low is fixed by asking the municipal office. Neither is a
+         * consignment from DOH.
+         *
+         *   viewing one facility below  -> issue to it
+         *   combined or own depot       -> request from the office above
+         *   no office above (the MHO)   -> receive a batch, as before
+         *
+         * Issuing is only offered when the depot actually holds some: a button
+         * that opens a picker with nothing in it is a dead end, and the real
+         * answer there is to restock this office first.
+         */
+        function lowStockAction(item, bhcFilter, fHealth) {
+          const isCombined = bhcFilter === "all" || bhcFilter === "" || bhcFilter == null;
+          const viewingChild = !isCombined && bhcFilter !== "central";
+          const depotAvailable = getItemStockMetrics(item.item_id, "central").available;
+
+          const issueBtn = (targetId, label) => {
+            const target = targetId == null ? "null" : `'${targetId}'`;
+            return `<button class="btn btn-sm" style="background:#8b5cf6;border-color:#8b5cf6;color:#fff;"`
+                 + ` onclick="closeModal('modal-alerts-hub'); openGeneralIssueModal(${target}, null, ${item.item_id});">`
+                 + `<i class="fa-solid fa-truck-ramp-box"></i> ${label}</button>`;
+          };
+
+          const upwardBtn = PortalScope.hasParent
+            ? `<button class="btn btn-sm" style="background:#0d9488;border-color:#0d9488;color:#fff;"`
+              + ` onclick="closeModal('modal-alerts-hub'); openRequestModal(${item.item_id});">`
+              + `<i class="fa-solid fa-paper-plane"></i> Request Stock</button>`
+            : `<button class="btn btn-sm btn-primary"`
+              + ` onclick="closeModal('modal-alerts-hub'); quickReceive(${item.item_id});">`
+              + `<i class="fa-solid fa-plus"></i> Receive Batch</button>`;
+
+          if (viewingChild) {
+            return depotAvailable > 0 ? issueBtn(bhcFilter, "Issue Stock") : upwardBtn;
+          }
+
+          // Combined or own-depot view. Restocking this office is the answer,
+          // but in the combined view the shortage may be entirely at facilities
+          // below while this depot is fine -- offer the dispatch too, aimed at
+          // the one that is short when there is only one.
+          let action = upwardBtn;
+          if (isCombined && fHealth && fHealth.lowChildCount > 0 && depotAvailable > 0) {
+            action += " " + issueBtn(
+              fHealth.lowChildCount === 1 ? fHealth.lowChildIds[0] : null,
+              fHealth.lowChildCount === 1 ? "Issue Stock" : "Issue to a Facility");
+          }
+          return action;
+        }
+
         window.filterAlerts = function(type) {
           ["all", "low", "expiry", "vials", "requests", "transit"].forEach(t => {
             const btn = document.getElementById(`alert-tab-${t}`);
@@ -8026,7 +8694,7 @@
               kind: "low",
               title: `Low Stock: ${esc(item.name)}`,
               desc: `Available stock is ${formatStockWithDoses(metrics.available, metrics.availableDoses, item)} (${note}).`,
-              action: `<button class="btn btn-sm btn-primary" onclick="closeModal('modal-alerts-hub'); quickReceive(${item.item_id});"><i class="fa-solid fa-plus"></i> Receive Batch</button>`
+              action: lowStockAction(item, bhcFilter, fHealth)
             };
           });
 
@@ -8703,8 +9371,80 @@
           openModal("modal-transfer-qr");
         };
 
+        // Items running on an assumed dose presentation.
+        //
+        // item_dose_presentation() falls back to the DOH standard vial when a
+        // catalogue row was left at the default 1 dose per unit — BCG 20, OPV
+        // 20, measles 10, Td 10. That keeps the arithmetic consistent, but it
+        // is still a guess made from the item's name, and a guess nobody can
+        // see is one nobody ever corrects. Every row here is real stock whose
+        // dose counts and wastage rate rest on it.
+        //
+        // Absent on a database that has not run 20260831; the panel simply
+        // stays hidden rather than claiming everything is configured.
+        let doseConfigGaps = [];
+
+        async function loadDoseConfigGaps() {
+          const { data, error } = await db.from("inventory_items_needing_dose_config").select("*");
+          if (error) {
+            console.warn("inventory_items_needing_dose_config unavailable:", error);
+            doseConfigGaps = [];
+            return;
+          }
+          doseConfigGaps = data || [];
+        }
+
+        function renderDoseConfigWarning() {
+          const el = document.getElementById("dose-config-warning");
+          if (!el) return;
+
+          if (!doseConfigGaps.length) {
+            el.style.display = "none";
+            el.innerHTML = "";
+            return;
+          }
+
+          // Stock on hand first: an assumption riding on 40 vials matters more
+          // than the same assumption on an item nobody has stocked.
+          const sorted = [...doseConfigGaps].sort(
+            (a, b) => (b.units_on_hand || 0) - (a.units_on_hand || 0));
+
+          el.style.display = "";
+          el.innerHTML = `
+            <div style="background:#fffbeb; border:1px solid #fcd34d; border-radius:10px; padding:13px 15px;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:7px;">
+                <i class="fa-solid fa-triangle-exclamation" style="color:#b45309;"></i>
+                <strong style="font-size:13px; color:#92400e;">
+                  ${sorted.length} item${sorted.length === 1 ? " is" : "s are"} using an assumed dose presentation
+                </strong>
+              </div>
+              <p style="margin:0 0 10px; font-size:11.5px; color:#78350f; line-height:1.5;">
+                These items were never given a <strong>doses per unit</strong>, so the system is
+                inferring one from the item name to keep the dose figures consistent. The wastage
+                rate and every dose total below depend on these numbers being right.
+                Set the real value on each item to remove it from this list.
+              </p>
+              <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                ${sorted.map(g => `
+                  <button class="action-pill-btn pill-secondary"
+                          onclick="openEditItem(${g.item_id})"
+                          title="Set the real doses per unit for ${esc(g.name)}"
+                          style="font-size:11px;">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    ${esc(g.name)}
+                    <span style="color:#b45309; font-weight:700;">assumed ${g.assumed_doses_per_unit}/unit</span>
+                    ${g.units_on_hand > 0
+                      ? `<span style="color:var(--text-secondary);">· ${g.units_on_hand} on hand</span>`
+                      : ""}
+                  </button>`).join("")}
+              </div>
+            </div>`;
+        }
+        window.renderDoseConfigWarning = renderDoseConfigWarning;
+
         // ⏱️ Feature 3: Open Vial Expiry Tracker & Wastage Rate Engine
         function renderOpenVialsTracker() {
+          renderDoseConfigWarning();
           const tbody = document.getElementById("open-vials-tbody");
           const wastageStatEl = document.getElementById("stat-wastage-rate");
           const openCountStatEl = document.getElementById("stat-open-vials-count");
@@ -8884,6 +9624,33 @@
             createSearchableSelect({ elementId: "batch-item-id", placeholder: "Search or select item...", options: itemOpts });
           }
 
+          // 1b. Request Item Select. Same catalogue as the batch picker: the
+          //     item list is municipality-wide, so an office may ask for
+          //     anything in it whether or not it currently holds any.
+          const reqItemSel = document.getElementById("request-item-id");
+          if (reqItemSel) {
+            const curReqVal = reqItemSel.value;
+            reqItemSel.innerHTML = `<option value="">— Select Item —</option>` + activeItems.map(i => {
+              const label = i.name.length > 30 ? i.name.substring(0, 28) + '…' : i.name;
+              return `<option value="${i.item_id}">${esc(label)} (${esc(i.unit_of_measure)})</option>`;
+            }).join('');
+            if (curReqVal && activeItems.some(i => String(i.item_id) === String(curReqVal))) {
+              reqItemSel.value = curReqVal;
+            }
+            createSearchableSelect({
+              elementId: "request-item-id",
+              placeholder: "Search or select item...",
+              options: activeItems.map(i => ({
+                value: i.item_id,
+                name: i.name,
+                genericName: i.generic_name,
+                type: i.item_type,
+                label: `${i.name} (${i.unit_of_measure})`,
+                richChipHtml: `<span class="select-chip chip-type"><i class="fa-solid fa-tag"></i> ${esc(i.item_type.replace('_',' '))}</span> <span class="select-chip" style="background:#f1f5f9;color:#475569;"><i class="fa-solid fa-ruler-horizontal"></i> ${esc(i.unit_of_measure)}</span>`
+              }))
+            });
+          }
+
           // 2. Dispense Batch Select
           const batchSel = document.getElementById("dispense-batch-id");
           const activeBatches = batches.filter(b => {
@@ -9058,6 +9825,24 @@
           }
           openModal("modal-batch");
         };
+
+        // Ask the office above for stock. Called bare from the action bar and
+        // the requests card, or with an item id from a catalogue row, which is
+        // the moment an officer actually notices the shelf is short.
+        window.openRequestModal = function(itemId) {
+          if (!PortalScope.hasParent) {
+            showToast(`${PortalScope.facilityName || "This office"} is the highest office in the municipality — record a stock receipt instead of requesting one.`, "warning");
+            return;
+          }
+          const el = document.getElementById("request-item-id");
+          if (el && itemId) {
+            el.value = itemId;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          openModal("modal-request");
+        };
+
+        window.quickRequest = function(itemId) { openRequestModal(itemId); };
 
         // ── Dispense plan ────────────────────────────────────────────────────
         //
@@ -9369,6 +10154,56 @@
           }
         });
 
+        // Form Submit: Request Stock
+        //
+        // submit_inventory_stock_request resolves the requesting facility from
+        // the account itself and addresses the request to the office above it,
+        // so neither is passed here - the client cannot nominate a facility it
+        // does not belong to. No audit row is written from here either: since
+        // 20260826 trg_audit_inventory_stock_request covers the table.
+        document.getElementById("save-request-btn").addEventListener("click", async () => {
+          const itemId  = parseInt(document.getElementById("request-item-id").value);
+          const qty     = parseInt(document.getElementById("request-qty").value);
+          const reason  = document.getElementById("request-reason").value.trim();
+          const remarks = document.getElementById("request-remarks").value.trim();
+
+          clearFieldErrors("modal-request");
+
+          if (!itemId) return fieldError("request-item-id", "Choose which item you need.");
+          if (!Number.isFinite(qty) || qty <= 0) {
+            return fieldError("request-qty", "Enter how many units you need — a whole number above zero.");
+          }
+          if (!reason) {
+            return fieldError("request-reason", "Say why the stock is needed. The reviewing office reads this before approving.");
+          }
+
+          const btn = document.getElementById("save-request-btn");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Submitting...';
+
+          try {
+            const { error } = await db.rpc("submit_inventory_stock_request", {
+              p_requested_by: actorId,
+              p_item_id: itemId,
+              p_requested_quantity: qty,
+              p_reason: reason,
+              p_remarks: remarks || null
+            });
+            if (error) throw error;
+
+            const dest = PortalScope.parentFacilityName || "the office above";
+            showToast(`Request sent to ${dest} — ${qty} unit(s). You will be notified when it is reviewed.`, "success");
+            closeModal("modal-request");
+            document.getElementById("form-request").reset();
+            loadInventoryData();
+          } catch (err) {
+            showToast("Could not submit the request: " + err.message, "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Request';
+          }
+        });
+
         // Form Submit: Receive Batch
         document.getElementById("save-batch-btn").addEventListener("click", async () => {
           const itemId = parseInt(document.getElementById("batch-item-id").value);
@@ -9378,7 +10213,15 @@
           const expDate = document.getElementById("batch-expiration-date").value;
           const mfg = document.getElementById("batch-manufacturer").value.trim();
           const facilityVal = document.getElementById("batch-facility-id").value;
-          const facilityId = (facilityVal === "central" || !facilityVal) ? null : parseInt(facilityVal);
+          // "central" is this dropdown's word for "the depot this portal runs",
+          // which is the municipal warehouse (facility_id IS NULL) for the MHO but
+          // the RHU's own facility for an RHU. Resolving it to null unconditionally
+          // booked every RHU's consignment into the municipal warehouse instead of
+          // onto its own shelf. PortalScope knows which is which; line 3881 already
+          // does this same translation for the transfer picker.
+          const facilityId = (facilityVal === "central" || !facilityVal)
+            ? PortalScope.depotFacilityId
+            : parseInt(facilityVal);
 
           clearFieldErrors("modal-batch");
 
@@ -9453,7 +10296,10 @@
             closeModal("modal-batch");
 
             const filterDropdown = document.getElementById("global-bhc-filter");
-            const targetFilterVal = (facilityId === null || facilityId === 0) ? "central" : String(facilityId);
+            // The filter represents this portal's own depot as "central" whatever its
+            // real facility_id, so an RHU depot id must map back to that word or the
+            // dropdown is set to an option that does not exist.
+            const targetFilterVal = PortalScope.isDepot(facilityId) ? "central" : String(facilityId);
             if (filterDropdown && filterDropdown.value !== "all" && filterDropdown.value !== targetFilterVal) {
               filterDropdown.value = targetFilterVal;
             }
@@ -9714,6 +10560,58 @@
 
         function applyScopeLabels() {
           const depot = PortalScope.depotName;
+
+          // The requests table serves both tiers: an RHU reads what its
+          // barangay health centres asked for, the municipal office what its
+          // RHUs did. It was worded for the first case only.
+          const reqTitle = document.getElementById("requests-card-title");
+          if (reqTitle) {
+            reqTitle.innerHTML =
+              '<i class="fa-solid fa-clipboard-list" style="color:var(--brand-primary);margin-right:7px;"></i> Stock Requests from ' +
+              esc(PortalScope.childTypeLabelPlural);
+          }
+
+          const reqSubtitle = document.getElementById("requests-card-subtitle");
+          if (reqSubtitle) {
+            const base = `Review what your ${PortalScope.childTypeLabelPlural.toLowerCase()} asked for, ` +
+                         `approve a quantity, and dispatch it from ${depot}.`;
+            // An office with one above it also sees its own requests here,
+            // marked "Sent upward" and read-only.
+            reqSubtitle.textContent = PortalScope.hasParent
+              ? `${base} Requests you raised with ${PortalScope.parentFacilityName || "the office above"} appear here too.`
+              : base;
+          }
+
+          // Only an office with one above it can raise a request. The municipal
+          // office is the top of the hierarchy: it receives consignments, it
+          // does not ask anyone for them.
+          // An office with nothing above it never has an outgoing request, so
+          // the split is meaningless there. Cleared as well as hidden: a filter
+          // nobody can see must not still be narrowing the table.
+          const dirFilter = document.getElementById("requests-filter-direction");
+          if (dirFilter) {
+            if (!PortalScope.hasParent) dirFilter.value = "";
+            dirFilter.style.display = PortalScope.hasParent ? "" : "none";
+          }
+
+          document.querySelectorAll("[data-request-action]").forEach(btn => {
+            btn.style.display = PortalScope.hasParent ? "" : "none";
+            btn.title = PortalScope.hasParent
+              ? `Ask ${PortalScope.parentFacilityName || "the office above"} for stock`
+              : "";
+          });
+
+          const requestDest = document.getElementById("request-destination");
+          if (requestDest) {
+            requestDest.textContent = PortalScope.parentFacilityName || "the office above this one";
+          }
+
+          // The Receive Stock modal offers one destination, and it is disabled, so
+          // this label is the only thing telling the officer where the consignment
+          // is landing. Hardcoded as "Central Warehouse / Main RHU" it named the
+          // municipal shelf on every RHU portal.
+          const receiveOpt = document.querySelector('#batch-facility-id option[value="central"]');
+          if (receiveOpt) receiveOpt.textContent = depot + " (Primary Depot)";
 
           const title = document.getElementById("page-title-inventory");
           if (title) {

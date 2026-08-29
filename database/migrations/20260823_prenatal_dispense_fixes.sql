@@ -36,6 +36,10 @@
   -- Requires 20260821_inventory_and_td_fixes.sql (resolve_actor_account_id) and
   -- 20260822_dose_accounting.sql (dose_quantity).
   --
+  -- SUPERSEDED by 20260901_prenatal_deduction_column_fix.sql. The function
+  -- below reads v_enc.encounter_date and v_pc.mother_id, neither of which
+  -- exists, so every call raises 42703. Do not run this file on its own.
+  --
   -- Safe to run more than once.
   -- ==============================================================================
 
