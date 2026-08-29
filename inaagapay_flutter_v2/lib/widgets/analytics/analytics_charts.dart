@@ -193,6 +193,8 @@ class AnalyticsVerticalBars extends StatelessWidget {
                   Text(
                     bands[i].axisLabel,
                     textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: AnalyticsTheme.axisStyle,
                   ),
                 ],

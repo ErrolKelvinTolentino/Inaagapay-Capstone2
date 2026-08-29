@@ -1762,7 +1762,7 @@ class MidwifeAnalyticsService {
       final first = factors.first;
       if (first is Map) {
         final label = _canonicalFactor(first['factor']?.toString() ?? '');
-        if (label.isNotEmpty) factorByPregnancy[id] = _lowerFirst(label);
+        if (label.isNotEmpty) factorByPregnancy[id] = label;
       }
     }
 
@@ -1775,10 +1775,8 @@ class MidwifeAnalyticsService {
       final factor = factorByPregnancy[pregnancyId ?? -1];
       priorities.add(
         AnalyticsPriority(
-          title: 'High-risk pregnancy — ${_motherName(mother)}',
-          detail: factor == null
-              ? 'Marked high risk — review at the next visit'
-              : 'Flagged for $factor',
+          title: _motherName(mother),
+          detail: factor ?? 'Marked high risk — review at the next visit',
           severity: AnalyticsSeverity.alert,
           action: AnalyticsAction.viewMothers,
           sortKey: -20,

@@ -1669,6 +1669,17 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         onChanged: (index) => setState(() => _analyticsTab = index),
       ),
       const SizedBox(height: 16),
+      // The caseload the rest of the Mothers cards are measured against, so it
+      // opens that tab rather than sitting up with the health centre totals.
+      if (tabIndex == 0) ...[
+        MidwifeStatisticsCard(
+          totalPregnancies: _totalPregnancies,
+          firstTrimester: _firstTrimester,
+          secondTrimester: _secondTrimester,
+          thirdTrimester: _thirdTrimester,
+        ),
+        const SizedBox(height: 16),
+      ],
       if (_analyticsLoading && _analytics.isEmpty)
         _buildSectionLoadingCard('Reading this month\'s records...')
       else if (metrics.isEmpty)
@@ -1877,7 +1888,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                 // Global Search Bar
                                 AppInputField(
                                   controller: _searchController,
-                                  hintText: 'Search mothers, children, check-ups...',
+                                  hintText: 'Search patients and records',
                                   leadingIcon: Icons.search,
                                   trailingIcon: _searchController.text.isNotEmpty
                                       ? Icons.clear
@@ -2099,16 +2110,6 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                 ),
                               ),
                             ],
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          // Active Pregnancies Card
-                          MidwifeStatisticsCard(
-                            totalPregnancies: _totalPregnancies,
-                            firstTrimester: _firstTrimester,
-                            secondTrimester: _secondTrimester,
-                            thirdTrimester: _thirdTrimester,
                           ),
 
                           const SizedBox(height: 20),
