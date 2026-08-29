@@ -733,11 +733,11 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
         bottom: false,
         child: Column(
           children: [
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             // Modern Banner
             Container(
-              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               height: 100,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -797,11 +797,11 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             // Search and Sort/Filter Row
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: Row(
                 children: [
                   Expanded(
@@ -809,9 +809,18 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
                       hintText: 'Search child by name',
                       controller: _searchController,
                       leadingIcon: Icons.search,
+                      trailingIcon:
+                          _searchController.text.isNotEmpty ? Icons.clear : null,
+                      onTrailingTap: _searchController.text.isNotEmpty
+                          ? () {
+                              _searchController.clear();
+                              _searchQuery = '';
+                              _applyFilters();
+                            }
+                          : null,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   Container(
                     decoration: BoxDecoration(
                       color: (_selectedSort != 'ID Number' ||
@@ -927,7 +936,7 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
                                 ),
                               )
                             : ListView.builder(
-                                padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                                 itemCount: displayedChildren.length,
                                 itemBuilder: (context, index) {
                                   final child = displayedChildren[index];
@@ -1006,65 +1015,69 @@ class _ChildCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            )
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(24),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Color(0xFFFFEEF3),
-                          Color(0xFFFFD5E2),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      shape: BoxShape.circle,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppColors.cardColorOf(context),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0xFFFFEEF3),
+                        Color(0xFFFFD5E2),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    child: Center(
-                      child: Text(
-                        _initials,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.brandPrimary,
-                        ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      _initials,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.brandPrimary,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if ((bhcChildId != null && bhcChildId!.isNotEmpty) || isGuardianChild) ...[
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            if (bhcChildId != null) ...[
+                            if (bhcChildId != null && bhcChildId!.isNotEmpty)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: AppColors.brandPrimary.withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(12),
@@ -1075,69 +1088,66 @@ class _ChildCard extends StatelessWidget {
                                 child: Text(
                                   bhcChildId!,
                                   style: const TextStyle(
-                                    fontSize: 9,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.brandPrimary,
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                            ],
-                            Expanded(
-                              child: Text(
-                                fullName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: AppColors.inputText,
+                            if (isGuardianChild)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.success.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.success.withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Guardian',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.success,
+                                  ),
                                 ),
                               ),
-                            ),
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          '$age • $parentName',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
                       ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (isGuardianChild) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.success.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppColors.success.withValues(alpha: 0.2),
+                      Text(
+                        fullName.isEmpty ? 'Unnamed Child' : fullName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: AppColors.inputText,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      child: const Text(
-                        'Guardian',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.success,
+                      const SizedBox(height: 3),
+                      Text(
+                        '$age • $parentName',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    size: 24,
-                    color: AppColors.textSecondary,
+                    ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.chevron_right,
+                  color: AppColors.brandPrimary,
+                  size: 24,
+                ),
+              ],
             ),
           ),
         ),

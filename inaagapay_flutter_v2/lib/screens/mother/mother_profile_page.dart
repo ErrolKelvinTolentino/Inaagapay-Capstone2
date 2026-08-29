@@ -6351,50 +6351,34 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       title: 'PREGNANCY INFORMATION',
       icon: Icons.info_outline_rounded,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildDetailsItem(
-                icon: Icons.calendar_month_rounded,
-                color: AppColors.brandPrimary,
-                label: 'LMP (Last Menstrual)',
-                value: lmpStr,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildDetailsItem(
-                icon: Icons.event_available_rounded,
-                color: Colors.purple.shade600,
-                label: 'EDD (Expected Delivery)',
-                value: eddStr,
-              ),
-            ),
-          ],
+        _buildDetailsItem(
+          icon: Icons.calendar_month_rounded,
+          color: AppColors.brandPrimary,
+          label: 'LMP (Last Menstrual)',
+          value: lmpStr,
         ),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _buildDetailsItem(
-                icon: Icons.hourglass_bottom_rounded,
-                color: Colors.blue.shade600,
-                label: 'AOG (Age of Gestation)',
-                value: aogStr,
-                subtext: aogSubtext,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildDetailsItem(
-                icon: Icons.child_care_rounded,
-                color: Colors.teal.shade600,
-                label: 'Fetus Count',
-                value: fetalLabel,
-                subtext: fetalSubtext,
-              ),
-            ),
-          ],
+        _buildDetailsItem(
+          icon: Icons.event_available_rounded,
+          color: Colors.purple.shade600,
+          label: 'EDD (Expected Delivery)',
+          value: eddStr,
+        ),
+        const SizedBox(height: 10),
+        _buildDetailsItem(
+          icon: Icons.hourglass_bottom_rounded,
+          color: Colors.blue.shade600,
+          label: 'AOG (Age of Gestation)',
+          value: aogStr,
+          subtext: aogSubtext,
+        ),
+        const SizedBox(height: 10),
+        _buildDetailsItem(
+          icon: Icons.child_care_rounded,
+          color: Colors.teal.shade600,
+          label: 'Fetus Count',
+          value: fetalLabel,
+          subtext: fetalSubtext,
         ),
       ],
     );
@@ -6793,8 +6777,26 @@ class _MotherProfilePageState extends State<MotherProfilePage>
             // begins with a heading, so without it the two read as one block.
             const SizedBox(height: 16),
 
-            // ── Maternal Td Immunization ──────────────────────────────
+            // ── Maternal Td Immunization & History ───────────────────
             _buildMaternalTdQuickCard(profile),
+            () {
+              final tdDoses = _sortedTdDoses();
+              return _buildPreviewRecordSection(
+                title: 'TD VACCINE HISTORY',
+                icon: Icons.vaccines_outlined,
+                totalCount: tdDoses.length,
+                previewWidgets:
+                    tdDoses.take(3).map((r) => _buildTdVaccineCard(r)).toList(),
+                allWidgetsBuilder: (sort) => _sortedTdDoses(sort)
+                    .map((r) => _buildTdVaccineCard(r))
+                    .toList(),
+                emptyText: 'No Td vaccine doses recorded yet',
+                modalTitle: 'Td Vaccine History',
+                sortValue: _tdSort,
+                onSortChanged: (v) => setState(() => _tdSort = v ?? 'desc'),
+              );
+            }(),
+            const SizedBox(height: 14),
 
             // ── Prenatal Checkups ──
             _buildPreviewRecordSection(
@@ -6858,28 +6860,6 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 modalTitle: 'Lab Test Results',
                 sortValue: _labSort,
                 onSortChanged: (v) => setState(() => _labSort = v ?? 'desc'),
-              );
-            }(),
-            const SizedBox(height: 14),
-
-            // ── Td Vaccines ──
-            // Lifetime series, not per-pregnancy, so it reads from
-            // _tdStatus rather than from the pregnancy payload.
-            () {
-              final tdDoses = _sortedTdDoses();
-              return _buildPreviewRecordSection(
-                title: 'TD VACCINES',
-                icon: Icons.vaccines_outlined,
-                totalCount: tdDoses.length,
-                previewWidgets:
-                    tdDoses.take(3).map((r) => _buildTdVaccineCard(r)).toList(),
-                allWidgetsBuilder: (sort) => _sortedTdDoses(sort)
-                    .map((r) => _buildTdVaccineCard(r))
-                    .toList(),
-                emptyText: 'No Td vaccine doses recorded yet',
-                modalTitle: 'Td Vaccine History',
-                sortValue: _tdSort,
-                onSortChanged: (v) => setState(() => _tdSort = v ?? 'desc'),
               );
             }(),
             const SizedBox(height: 14),
@@ -6952,7 +6932,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   Widget _buildMaternalTdQuickCard(Map<String, dynamic> profile) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -6968,54 +6948,33 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: AppColors.brandPrimary.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.vaccines_rounded, color: AppColors.brandPrimary, size: 22),
+            child: const Icon(Icons.vaccines_rounded, color: AppColors.brandPrimary, size: 20),
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'MATERNAL TD IMMUNIZATION',
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                const Text(
-                  'Lifetime 5-Dose Td Schedule',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Track PAB status, intervals, and doses',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                ),
-              ],
+          const Expanded(
+            child: Text(
+              'TD Vaccine',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
+          const SizedBox(width: 8),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.brandPrimary,
               foregroundColor: Colors.white,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-              // Fully rounded, matching the pill shapes this page uses for
-              // every other action — "View All", the status chips, the risk
-              // segments. An 8px radius made this the one square control on a
-              // page of pills.
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               shape: const StadiumBorder(),
             ),
             onPressed: () async {

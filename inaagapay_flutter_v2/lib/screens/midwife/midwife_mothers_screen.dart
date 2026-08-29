@@ -851,7 +851,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                 children: [
                   Expanded(
                     child: AppInputField(
-                      hintText: 'Search Mother by name or email',
+                      hintText: 'Search mothers',
                       controller: _searchController,
                       leadingIcon: Icons.search,
                       trailingIcon:
@@ -1324,8 +1324,8 @@ class _MotherCard extends StatelessWidget {
             child: Row(
               children: [
                 Container(
-                  width: 56,
-                  height: 56,
+                  width: 50,
+                  height: 50,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
@@ -1340,15 +1340,15 @@ class _MotherCard extends StatelessWidget {
                             profilePictureUrl!.isNotEmpty
                         ? Image.network(
                             profilePictureUrl!,
-                            width: 56,
-                            height: 56,
+                            width: 50,
+                            height: 50,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
                               return Center(
                                 child: Text(
                                   _getInitials(displayName),
                                   style: const TextStyle(
-                                    fontSize: 20,
+                                    fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                     color: AppColors.brandPrimary,
                                   ),
@@ -1359,8 +1359,8 @@ class _MotherCard extends StatelessWidget {
                               if (loadingProgress == null) return child;
                               return const Center(
                                 child: SizedBox(
-                                  width: 24,
-                                  height: 24,
+                                  width: 20,
+                                  height: 20,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
                                     color: AppColors.brandPrimary,
@@ -1373,7 +1373,7 @@ class _MotherCard extends StatelessWidget {
                             child: Text(
                               _getInitials(displayName),
                               style: const TextStyle(
-                                fontSize: 20,
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.brandPrimary,
                               ),
@@ -1387,13 +1387,13 @@ class _MotherCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Wrap(
-                        spacing: 8,
+                        spacing: 6,
                         runSpacing: 4,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
+                                horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: AppColors.brandPrimary.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(12),
@@ -1410,62 +1410,56 @@ class _MotherCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 160),
-                            child: Text(
-                              displayName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                                color: AppColors.inputText,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: riskColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: riskColor.withValues(alpha: 0.3),
                               ),
-                              overflow: TextOverflow.ellipsis,
+                            ),
+                            child: Text(
+                              riskLabel,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: riskColor,
+                              ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 4),
                       Text(
+                        displayName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: AppColors.inputText,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
                         subtitleBuffer.toString(),
                         style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
                         ),
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: riskColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: riskColor.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Text(
-                        riskLabel,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: riskColor,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: AppColors.brandPrimary,
-                      size: 24,
-                    ),
-                  ],
+                const Icon(
+                  Icons.chevron_right,
+                  color: AppColors.brandPrimary,
+                  size: 24,
                 ),
               ],
             ),
