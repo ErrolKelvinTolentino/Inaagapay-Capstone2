@@ -1153,6 +1153,10 @@
           <div class="page-actions" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
             <button class="btn btn-primary btn-sm" id="open-batch-modal-btn" onclick="openModal('modal-batch')"><i class="fa-solid fa-box-archive"></i> Receive Stock</button>
             <button class="btn btn-primary btn-sm" id="open-issue-modal-btn" onclick="openGeneralIssueModal()" style="background:#8b5cf6; border-color:#8b5cf6;"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock to BHC</button>
+            <!-- Asking the office above is a top-level action, not something to
+                 go hunting for inside the requests table. Hidden for the
+                 municipal office, which has nobody to ask. -->
+            <button class="btn btn-primary btn-sm" id="open-request-modal-top-btn" data-request-action style="display:none; background:#0d9488; border-color:#0d9488; color:#fff;" onclick="openRequestModal()"><i class="fa-solid fa-paper-plane"></i> Request Stock</button>
 
             <div class="action-menu" id="inventory-action-menu">
               <button class="btn btn-secondary btn-sm" id="inventory-action-menu-btn" aria-haspopup="true" aria-expanded="false">
@@ -1437,10 +1441,16 @@
           <div class="card" id="dist-subview-requests" style="margin-bottom:20px;">
             <div class="toolbar">
               <div>
-                <h3 style="margin:0;font-size:15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-clipboard-list" style="color:var(--brand-primary);margin-right:7px;"></i> Midwife Stock Requests from Barangay Health Centers</h3>
-                <p style="margin:4px 0 0;color:var(--text-secondary);font-size:12.5px;">Review requested items from BHC midwives, approve requested quotas, and dispatch central warehouse batches.</p>
+                <h3 id="requests-card-title" style="margin:0;font-size:15px; font-weight: 700; color: var(--brand-text);"><i class="fa-solid fa-clipboard-list" style="color:var(--brand-primary);margin-right:7px;"></i> Stock Requests from Barangay Health Centers</h3>
+                <p id="requests-card-subtitle" style="margin:4px 0 0;color:var(--text-secondary);font-size:12.5px;">Review requested items from BHC midwives, approve requested quotas, and dispatch central warehouse batches.</p>
               </div>
-              <button class="btn btn-secondary btn-sm" id="refresh-requests-btn" onclick="loadInventoryData()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+              <div style="display:flex;gap:8px;">
+                <!-- Only an office with one above it has somewhere to send a
+                     request. applyScopeLabels() unhides this for an RHU and
+                     leaves it hidden for the municipal office, which is the top. -->
+                <button class="btn btn-primary btn-sm" id="open-request-modal-btn" data-request-action style="display:none; background:#0d9488; border-color:#0d9488; color:#fff;" onclick="openRequestModal()"><i class="fa-solid fa-paper-plane"></i> Request Stock</button>
+                <button class="btn btn-secondary btn-sm" id="refresh-requests-btn" onclick="loadInventoryData()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+              </div>
             </div>
 
             <!-- This table had a status dropdown and nothing else: no search, no
@@ -1462,6 +1472,16 @@
                 </select>
                 <select class="form-select" id="requests-filter-facility" style="width:auto;" aria-label="Filter by requesting facility">
                   <option value="">All Requesting Facilities</option>
+                </select>
+                <!-- This table holds two different jobs since 20260904: requests
+                     to decide on, and requests this office raised with the one
+                     above and can only wait on. Hidden for the municipal office,
+                     which has nowhere to send one and so only ever sees the
+                     first kind. -->
+                <select class="form-select" id="requests-filter-direction" style="width:auto;" aria-label="Filter by request direction">
+                  <option value="">Any Direction</option>
+                  <option value="incoming">From Barangay Health Centers</option>
+                  <option value="outgoing">Sent Upward</option>
                 </select>
                 <select class="form-select" id="requests-filter-archived" style="width:auto;" aria-label="Filter by archive state">
                   <option value="active">Active Requests Only</option>
@@ -2323,6 +2343,52 @@
       </div>
     </div>
 
+    <!-- Request Stock ────────────────────────────────────────────────────
+         A request travels one rung up the hierarchy: a barangay health centre
+         asks its RHU, an RHU asks the Municipal Health Office. The midwives
+         have had this in the mobile app since 20260803; until 20260904 the
+         portal had no way to raise one, so an RHU could only wait to be sent
+         stock it had never asked for. The destination is not a choice - it is
+         whatever office sits above this one - so it is shown, not selected. -->
+    <div class="modal-overlay" id="modal-request">
+      <div class="modal" style="max-width: 520px;">
+        <div class="modal-header" style="padding: 16px 24px;">
+          <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--brand-text);"><i class="fa-solid fa-paper-plane" style="color:var(--brand-primary);margin-right:8px;"></i> Request Stock</h3>
+          <button class="modal-close" onclick="closeModal('modal-request')" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 18px 24px;">
+          <form id="form-request" onsubmit="return false;">
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="request-item-id" style="font-weight: 600; font-size: 12.5px;">Item Needed <span class="req" style="color:#dc2626;">*</span></label>
+              <select class="form-select" id="request-item-id" required style="border-radius: 8px;">
+                <option value="">— Select Item —</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="request-qty" style="font-weight: 600; font-size: 12.5px;">Quantity Needed <span class="req" style="color:#dc2626;">*</span></label>
+              <input class="form-control" type="number" id="request-qty" min="1" step="1" placeholder="e.g. 500" required style="border-radius: 8px;" />
+            </div>
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="request-reason" style="font-weight: 600; font-size: 12.5px;">Reason <span class="req" style="color:#dc2626;">*</span></label>
+              <textarea class="form-control" id="request-reason" rows="2" placeholder="e.g. Below reorder threshold; two BHCs due for resupply this week" required style="border-radius: 8px; resize: vertical;"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label" for="request-remarks" style="font-weight: 600; font-size: 12.5px;">Remarks <span style="color:var(--text-secondary);font-weight:500;">(optional)</span></label>
+              <input class="form-control" type="text" id="request-remarks" placeholder="Anything the reviewing office should know" style="border-radius: 8px;" />
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-weight: 600; font-size: 12.5px;">Sending This Request To</label>
+              <div id="request-destination" style="padding:9px 12px;border-radius:8px;background:#f8fafc;border:1px solid var(--border-primary);font-weight:600;font-size:13px;color:#334155;">the office above this one</div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #fafafa; display: flex; justify-content: flex-end; gap: 10px;">
+          <button class="btn btn-secondary" onclick="closeModal('modal-request')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px;">Cancel</button>
+          <button class="btn btn-primary" id="save-request-btn" style="height: 36px; padding: 0 18px; border-radius: 8px; font-size: 13px;"><i class="fa-solid fa-paper-plane"></i> Submit Request</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal 4: Dispense / Adjust Stock -->
     <div class="modal-overlay" id="modal-dispense">
       <div class="modal" style="max-width: 500px; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.15);">
@@ -2606,7 +2672,8 @@
           <button class="btn btn-secondary" onclick="closeModal('modal-item-details')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600;">Close</button>
           <div style="display: flex; gap: 8px;">
             <button class="btn btn-secondary" id="item-details-edit-btn" style="height: 36px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight:600;"><i class="fa-solid fa-pen-to-square"></i> Edit Catalog</button>
-            <button class="btn btn-primary" id="item-details-receive-btn" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600; box-shadow:0 2px 8px rgba(255,104,165,0.3);"><i class="fa-solid fa-plus"></i> Receive Batch</button>
+            <button class="btn btn-secondary" id="item-details-receive-btn" style="height: 36px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight:600;"><i class="fa-solid fa-plus"></i> Receive Batch</button>
+            <button class="btn btn-primary" id="item-details-issue-btn" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600; background:#8b5cf6; border-color:#8b5cf6; color:#fff;"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock</button>
           </div>
         </div>
       </div>
@@ -2836,7 +2903,8 @@
             render: () => renderStockRequests(),
             defaults: {
               "requests-search": "", "request-filter-status": "",
-              "requests-filter-facility": "", "requests-filter-archived": "active",
+              "requests-filter-facility": "", "requests-filter-direction": "",
+              "requests-filter-archived": "active",
               "requests-filter-date": "all", "requests-date-start": "", "requests-date-end": ""
             }
           },
@@ -3159,7 +3227,9 @@
 
         // An empty table means one of two completely different things, and the
         // fix differs, so say which one it is.
-        function emptyStateRow(key, colspan, icon, emptyTitle, emptyHint) {
+        // actionHtml is optional and appears under the hint: an empty table is
+        // the best place to offer the thing that would fill it.
+        function emptyStateRow(key, colspan, icon, emptyTitle, emptyHint, actionHtml) {
           const n = activeFilterCount(key);
           if (n > 0) {
             return `<tr><td colspan="${colspan}"><div class="table-empty">
@@ -3173,6 +3243,7 @@
             <i class="fa-solid ${icon} table-empty-icon"></i>
             <div class="table-empty-title">${esc(emptyTitle)}</div>
             <div class="table-empty-hint">${esc(emptyHint)}</div>
+            ${actionHtml || ''}
           </div></td></tr>`;
         }
 
@@ -4433,24 +4504,35 @@
 
           let lowCount = 0;
           let outCount = 0;
+          const lowChildIds = [];
 
           locations.forEach(loc => {
             const m = getItemStockMetrics(item.item_id, loc.id);
             // Out means no dose can be given, not no sealed unit is left: a
             // location holding only an open vial can still vaccinate.
+            let low = false;
             if (m.availableDoses === 0) {
               outCount++;
               lowCount++;
+              low = true;
             } else if (m.available <= baseMin) {
               lowCount++;
+              low = true;
             }
+            // Whose shelf is short decides what to do about it: this office's
+            // own depot is solved by asking the office above, a facility below
+            // by sending stock down to it. The counts above fold both together,
+            // so keep the ones below separately.
+            if (low && String(loc.id) !== "central") lowChildIds.push(String(loc.id));
           });
 
           return {
             hasLowFacilities: lowCount > 0,
             lowCount,
             outCount,
-            totalFacilities: locations.length
+            totalFacilities: locations.length,
+            lowChildIds,
+            lowChildCount: lowChildIds.length
           };
         }
 
@@ -4912,6 +4994,7 @@
                     <button class="btn btn-sm btn-secondary" onclick="openItemDetails(${item.item_id})" title="View Barangay Breakdown" style="padding:2px 5px;font-size:11px;"><i class="fa-solid fa-eye"></i></button>
                     <button class="btn btn-sm btn-secondary" onclick="openEditItem(${item.item_id})" title="Edit Item Details" style="padding:2px 5px;font-size:11px;"><i class="fa-solid fa-pen"></i></button>
                     ${!item.is_archived ? `<button class="btn btn-sm btn-outline-pink" onclick="quickReceive(${item.item_id})" title="Receive New Batch" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;"><i class="fa-solid fa-plus"></i> Batch</button>` : ''}
+                    ${!item.is_archived && PortalScope.hasParent ? `<button class="btn btn-sm" onclick="quickRequest(${item.item_id})" title="Request this item from ${esc(PortalScope.parentFacilityName || 'the office above')}" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;background:#0d9488; border-color:#0d9488; color:#fff;"><i class="fa-solid fa-paper-plane"></i> Request</button>` : ''}
                     ${archiveActionBtn}
                   </div>
                 </td>
@@ -5242,6 +5325,23 @@
             `).join('');
         }
 
+        /**
+         * True when this office raised the request itself, rather than a
+         * facility below it.
+         *
+         * The table shows every request inside PortalScope, and since 20260904
+         * that includes this office's own requests to the office above. Those
+         * are somebody else's to decide: an RHU may not approve, reject or
+         * issue against the request it sent the municipal office. Nothing in
+         * the database enforces that, so this is the guard.
+         */
+        function isOwnRequest(request) {
+          if (!request) return false;
+          if (PortalScope.isDepot(request.facility_id)) return true;
+          return PortalScope.facilityId != null &&
+                 String(request.facility_id) === String(PortalScope.facilityId);
+        }
+
         // Render Stock Requests Table
         // Workflow order, not alphabetical: a status sort should surface what
         // still needs a decision, and "approved" sorting above "pending"
@@ -5254,6 +5354,7 @@
           const q = ctlVal("requests-search").trim().toLowerCase();
           const statusFilter = ctlVal("request-filter-status");
           const facilityFilter = ctlVal("requests-filter-facility");
+          const directionFilter = ctlVal("requests-filter-direction");
           const archivedFilter = ctlVal("requests-filter-archived") || "active";
           const win = dateWindow("requests");
 
@@ -5265,6 +5366,10 @@
           const filtered = stockRequests.filter(r => {
             if (statusFilter && r.status !== statusFilter) return false;
             if (facilityFilter && String(r.facility_id) !== String(facilityFilter)) return false;
+            // "incoming" is everything this office has to decide; "outgoing" is
+            // what it asked the office above for and can only wait on.
+            if (directionFilter === "incoming" && isOwnRequest(r)) return false;
+            if (directionFilter === "outgoing" && !isOwnRequest(r)) return false;
             if (archivedFilter === "active" && r.is_archived) return false;
             if (archivedFilter === "archived" && !r.is_archived) return false;
             if (!inDateWindow(r.created_at, win)) return false;
@@ -5301,7 +5406,12 @@
           if (sorted.length === 0) {
             tbody.innerHTML = emptyStateRow("requests", 7, "fa-clipboard-list",
               "No stock requests yet",
-              "Requests appear here when a midwife submits one from the mobile app.");
+              PortalScope.hasParent
+                ? `Requests from your ${PortalScope.childTypeLabelPlural.toLowerCase()} appear here, alongside any you raise with ${PortalScope.parentFacilityName || "the office above"}.`
+                : `Requests appear here when a ${PortalScope.childTypeLabel.toLowerCase()} submits one.`,
+              PortalScope.hasParent
+                ? `<button class="btn btn-sm" style="background:#0d9488; border-color:#0d9488; color:#fff;" onclick="openRequestModal()"><i class="fa-solid fa-paper-plane"></i> Request Stock</button>`
+                : '');
             renderPaginationControls("requests-pagination", 0, "requests");
             return;
           }
@@ -5320,8 +5430,30 @@
               ? `<button class="btn btn-xs btn-outline-pink" onclick="unarchiveStockRequest(${request.request_id})" style="padding:2px 6px;font-size:10.5px;color:#059669;border-color:#bbf7d0;"><i class="fa-solid fa-rotate-left"></i> Restore</button>`
               : (['received', 'completed', 'rejected', 'issued'].includes(request.status) ? `<button class="btn btn-xs btn-secondary" onclick="archiveStockRequest(${request.request_id})" title="Archive Request" style="padding:2px 6px;font-size:10.5px;color:#dc2626;"><i class="fa-solid fa-box-archive"></i></button>` : '');
 
+            // Before 20260904 only facilities below this one could appear here,
+            // so the action buttons never needed an ownership guard. An RHU now
+            // sees its own outgoing requests in the same table; without this it
+            // could approve, reject and issue against its own request to the
+            // municipal office, and the RPC would let it.
+            const own = isOwnRequest(request);
+            const upstream = PortalScope.parentFacilityName || "the office above";
+            const progress = (icon, text, colour) =>
+              `<span style="font-size:11px;color:${colour};font-weight:600;white-space:nowrap;"><i class="fa-solid ${icon}"></i> ${esc(text)}</span>`;
+
             let actions = "—";
-            if (request.status === "pending" && !request.is_archived) {
+            if (own) {
+              // Ours to watch, not to decide.
+              if (request.is_archived) actions = archiveBtn || "—";
+              else if (request.status === "pending")
+                actions = progress("fa-hourglass-half", `Awaiting ${upstream}`, "var(--text-secondary)");
+              else if (request.status === "approved")
+                actions = progress("fa-check", "Approved — awaiting dispatch", "#059669");
+              else if (request.status === "issued")
+                actions = `${progress("fa-truck", "In transit to you", "var(--brand-primary)")} ${archiveBtn}`;
+              else if (request.status === "rejected")
+                actions = `${progress("fa-xmark", `Declined by ${upstream}`, "#dc2626")} ${archiveBtn}`;
+              else actions = archiveBtn || "—";
+            } else if (request.status === "pending" && !request.is_archived) {
               actions = `
                 <div style="display:flex;justify-content:center;gap:3px;flex-wrap:nowrap;">
                   <button class="btn btn-xs btn-primary" onclick="openApproveModal(${request.request_id})" style="padding:2px 8px;font-size:11px;border-radius:5px;"><i class="fa-solid fa-check"></i> Approve</button>
@@ -5345,7 +5477,11 @@
             return `
               <tr style="${request.is_archived ? 'opacity:0.75;background:#fafafa;' : ''}">
                 <td><strong>#${request.request_id}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${submitted}</div></td>
-                <td><strong>${esc(bhc?.bhc_name || unknownFacilityLabel(request.facility_id))}</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${esc(requester)}</div></td>
+                <td>
+                  <strong>${esc(bhc?.bhc_name || unknownFacilityLabel(request.facility_id))}</strong>
+                  ${own ? `<span class="badge-health-muted" style="margin-left:5px;font-size:9.5px;vertical-align:middle;" title="Raised by this office and sent to ${esc(upstream)}"><i class="fa-solid fa-arrow-up"></i> Sent upward</span>` : ''}
+                  <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${esc(requester)}</div>
+                </td>
                 <td class="col-item-details">
                   <div style="display:flex;align-items:center;gap:4px;">
                     <strong style="color:var(--text-primary);cursor:pointer;" onclick="openItemDetails(${request.item_id})">${esc(item ? item.name : `Item #${request.item_id}`)}</strong>
@@ -5361,7 +5497,7 @@
                 </td>
                 <td style="max-width:220px;white-space:normal;word-break:break-word;font-size:11.5px;line-height:1.3;">
                   <div>${esc(request.reason)}</div>
-                  ${request.remarks ? `<div style="font-size:10.5px;color:var(--text-secondary);margin-top:2px;">Midwife Note: ${esc(request.remarks)}</div>` : ''}
+                  ${request.remarks ? `<div style="font-size:10.5px;color:var(--text-secondary);margin-top:2px;">Note: ${esc(request.remarks)}</div>` : ''}
                 </td>
                 <td style="text-align:center;min-width:90px;">${statusBadge}</td>
                 <td style="text-align:center;min-width:130px;">${actions}</td>
@@ -7880,7 +8016,12 @@
         // the shelf being emptied — which is what a "Move this stock out" action
         // on a facility's own row needs, and what makes a lateral or upward move
         // one click rather than four.
-        window.openGeneralIssueModal = function(targetBhcId = null, sourceFacilityId = null) {
+        // itemId narrows the source-batch picker to one catalogue item. Callers
+        // that arrive from a specific item -- the details modal, a facility row
+        // in its stock breakdown -- already know which; making the officer pick
+        // it again from every batch on the shelf is how the wrong batch gets
+        // chosen.
+        window.openGeneralIssueModal = function(targetBhcId = null, sourceFacilityId = null, itemId = null) {
           openModal("modal-issue");
           try {
             const form = document.getElementById("form-issue");
@@ -7922,7 +8063,7 @@
             }
             ensureBhcDropdownPopulated();
 
-            populateIssueBatchDropdown(null);
+            populateIssueBatchDropdown(itemId);
             applySuggestedDeliveryEstimate(true);
             updateTransferDirectionBanner();
             resetIssueSafetyCheck();
@@ -8083,6 +8224,11 @@
                   <td style="padding:8px 12px; text-align:right; color:${incoming ? '#15803d' : 'var(--text-secondary)'}; font-weight:${incoming ? '700' : '400'};">${incoming ? `+${incoming}` : '—'}</td>
                   <td style="padding:8px 12px; text-align:right; color:${outgoing ? '#be123c' : 'var(--text-secondary)'}; font-weight:${outgoing ? '700' : '400'};">${outgoing ? `−${outgoing}` : '—'}</td>
                   <td style="padding:8px 12px; text-align:right; font-weight:800; font-size:13px; color:${m.available <= 0 ? '#dc2626' : 'var(--brand-primary)'}; background:rgba(255,104,165,0.04);">${m.available}</td>
+                  <td style="padding:8px 12px; text-align:center;">
+                    ${facilityKey === "central"
+                      ? '<span style="color:var(--text-secondary);">—</span>'
+                      : `<button class="btn btn-sm" onclick="closeModal(\'modal-item-details\'); openGeneralIssueModal(\'${facilityKey}\', null, ${itemId});" title="Send ${esc(label)} some of this item from ${esc(PortalScope.depotName)}" style="padding:2px 8px;font-size:10.5px;white-space:nowrap;background:#8b5cf6; border-color:#8b5cf6; color:#fff;"><i class="fa-solid fa-truck-ramp-box"></i> Issue</button>`}
+                  </td>
                 </tr>
               `;
             };
@@ -8213,6 +8359,7 @@
                         <th style="padding:9px 12px; text-align:right;" title="Dispatched to this facility, not yet confirmed">In Transit ▸ In</th>
                         <th style="padding:9px 12px; text-align:right;" title="Dispatched from this facility, not yet confirmed elsewhere">In Transit ▸ Out</th>
                         <th style="padding:9px 12px; text-align:right; background:rgba(255,104,165,0.08); color:var(--brand-text); font-weight:800;">Available Stock</th>
+                        <th style="padding:9px 12px; text-align:center;">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -8254,6 +8401,12 @@
 
             const recvBtn = document.getElementById("item-details-receive-btn");
             if (recvBtn) recvBtn.onclick = () => { closeModal("modal-item-details"); quickReceive(item.item_id); };
+
+            const issueBtn = document.getElementById("item-details-issue-btn");
+            if (issueBtn) issueBtn.onclick = () => {
+              closeModal("modal-item-details");
+              openGeneralIssueModal(null, null, item.item_id);
+            };
 
             const modal = document.getElementById("modal-item-details");
             if (modal) modal.classList.add("show");
@@ -8456,6 +8609,61 @@
           document.getElementById("modal-alerts-hub").classList.add("show");
         };
 
+        /**
+         * What to offer about a shortage, given whose shelf is short.
+         *
+         * It was always "Receive Batch", which registers a delivery from a
+         * supplier. That is the right answer for the municipal office and
+         * almost never the right one for an RHU: a barangay health centre
+         * running low is fixed by dispatching to it, and the RHU's own depot
+         * running low is fixed by asking the municipal office. Neither is a
+         * consignment from DOH.
+         *
+         *   viewing one facility below  -> issue to it
+         *   combined or own depot       -> request from the office above
+         *   no office above (the MHO)   -> receive a batch, as before
+         *
+         * Issuing is only offered when the depot actually holds some: a button
+         * that opens a picker with nothing in it is a dead end, and the real
+         * answer there is to restock this office first.
+         */
+        function lowStockAction(item, bhcFilter, fHealth) {
+          const isCombined = bhcFilter === "all" || bhcFilter === "" || bhcFilter == null;
+          const viewingChild = !isCombined && bhcFilter !== "central";
+          const depotAvailable = getItemStockMetrics(item.item_id, "central").available;
+
+          const issueBtn = (targetId, label) => {
+            const target = targetId == null ? "null" : `'${targetId}'`;
+            return `<button class="btn btn-sm" style="background:#8b5cf6;border-color:#8b5cf6;color:#fff;"`
+                 + ` onclick="closeModal('modal-alerts-hub'); openGeneralIssueModal(${target}, null, ${item.item_id});">`
+                 + `<i class="fa-solid fa-truck-ramp-box"></i> ${label}</button>`;
+          };
+
+          const upwardBtn = PortalScope.hasParent
+            ? `<button class="btn btn-sm" style="background:#0d9488;border-color:#0d9488;color:#fff;"`
+              + ` onclick="closeModal('modal-alerts-hub'); openRequestModal(${item.item_id});">`
+              + `<i class="fa-solid fa-paper-plane"></i> Request Stock</button>`
+            : `<button class="btn btn-sm btn-primary"`
+              + ` onclick="closeModal('modal-alerts-hub'); quickReceive(${item.item_id});">`
+              + `<i class="fa-solid fa-plus"></i> Receive Batch</button>`;
+
+          if (viewingChild) {
+            return depotAvailable > 0 ? issueBtn(bhcFilter, "Issue Stock") : upwardBtn;
+          }
+
+          // Combined or own-depot view. Restocking this office is the answer,
+          // but in the combined view the shortage may be entirely at facilities
+          // below while this depot is fine -- offer the dispatch too, aimed at
+          // the one that is short when there is only one.
+          let action = upwardBtn;
+          if (isCombined && fHealth && fHealth.lowChildCount > 0 && depotAvailable > 0) {
+            action += " " + issueBtn(
+              fHealth.lowChildCount === 1 ? fHealth.lowChildIds[0] : null,
+              fHealth.lowChildCount === 1 ? "Issue Stock" : "Issue to a Facility");
+          }
+          return action;
+        }
+
         window.filterAlerts = function(type) {
           ["all", "low", "expiry", "vials", "requests", "transit"].forEach(t => {
             const btn = document.getElementById(`alert-tab-${t}`);
@@ -8486,7 +8694,7 @@
               kind: "low",
               title: `Low Stock: ${esc(item.name)}`,
               desc: `Available stock is ${formatStockWithDoses(metrics.available, metrics.availableDoses, item)} (${note}).`,
-              action: `<button class="btn btn-sm btn-primary" onclick="closeModal('modal-alerts-hub'); quickReceive(${item.item_id});"><i class="fa-solid fa-plus"></i> Receive Batch</button>`
+              action: lowStockAction(item, bhcFilter, fHealth)
             };
           });
 
@@ -9416,6 +9624,33 @@
             createSearchableSelect({ elementId: "batch-item-id", placeholder: "Search or select item...", options: itemOpts });
           }
 
+          // 1b. Request Item Select. Same catalogue as the batch picker: the
+          //     item list is municipality-wide, so an office may ask for
+          //     anything in it whether or not it currently holds any.
+          const reqItemSel = document.getElementById("request-item-id");
+          if (reqItemSel) {
+            const curReqVal = reqItemSel.value;
+            reqItemSel.innerHTML = `<option value="">— Select Item —</option>` + activeItems.map(i => {
+              const label = i.name.length > 30 ? i.name.substring(0, 28) + '…' : i.name;
+              return `<option value="${i.item_id}">${esc(label)} (${esc(i.unit_of_measure)})</option>`;
+            }).join('');
+            if (curReqVal && activeItems.some(i => String(i.item_id) === String(curReqVal))) {
+              reqItemSel.value = curReqVal;
+            }
+            createSearchableSelect({
+              elementId: "request-item-id",
+              placeholder: "Search or select item...",
+              options: activeItems.map(i => ({
+                value: i.item_id,
+                name: i.name,
+                genericName: i.generic_name,
+                type: i.item_type,
+                label: `${i.name} (${i.unit_of_measure})`,
+                richChipHtml: `<span class="select-chip chip-type"><i class="fa-solid fa-tag"></i> ${esc(i.item_type.replace('_',' '))}</span> <span class="select-chip" style="background:#f1f5f9;color:#475569;"><i class="fa-solid fa-ruler-horizontal"></i> ${esc(i.unit_of_measure)}</span>`
+              }))
+            });
+          }
+
           // 2. Dispense Batch Select
           const batchSel = document.getElementById("dispense-batch-id");
           const activeBatches = batches.filter(b => {
@@ -9590,6 +9825,24 @@
           }
           openModal("modal-batch");
         };
+
+        // Ask the office above for stock. Called bare from the action bar and
+        // the requests card, or with an item id from a catalogue row, which is
+        // the moment an officer actually notices the shelf is short.
+        window.openRequestModal = function(itemId) {
+          if (!PortalScope.hasParent) {
+            showToast(`${PortalScope.facilityName || "This office"} is the highest office in the municipality — record a stock receipt instead of requesting one.`, "warning");
+            return;
+          }
+          const el = document.getElementById("request-item-id");
+          if (el && itemId) {
+            el.value = itemId;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          openModal("modal-request");
+        };
+
+        window.quickRequest = function(itemId) { openRequestModal(itemId); };
 
         // ── Dispense plan ────────────────────────────────────────────────────
         //
@@ -9901,6 +10154,56 @@
           }
         });
 
+        // Form Submit: Request Stock
+        //
+        // submit_inventory_stock_request resolves the requesting facility from
+        // the account itself and addresses the request to the office above it,
+        // so neither is passed here - the client cannot nominate a facility it
+        // does not belong to. No audit row is written from here either: since
+        // 20260826 trg_audit_inventory_stock_request covers the table.
+        document.getElementById("save-request-btn").addEventListener("click", async () => {
+          const itemId  = parseInt(document.getElementById("request-item-id").value);
+          const qty     = parseInt(document.getElementById("request-qty").value);
+          const reason  = document.getElementById("request-reason").value.trim();
+          const remarks = document.getElementById("request-remarks").value.trim();
+
+          clearFieldErrors("modal-request");
+
+          if (!itemId) return fieldError("request-item-id", "Choose which item you need.");
+          if (!Number.isFinite(qty) || qty <= 0) {
+            return fieldError("request-qty", "Enter how many units you need — a whole number above zero.");
+          }
+          if (!reason) {
+            return fieldError("request-reason", "Say why the stock is needed. The reviewing office reads this before approving.");
+          }
+
+          const btn = document.getElementById("save-request-btn");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div> Submitting...';
+
+          try {
+            const { error } = await db.rpc("submit_inventory_stock_request", {
+              p_requested_by: actorId,
+              p_item_id: itemId,
+              p_requested_quantity: qty,
+              p_reason: reason,
+              p_remarks: remarks || null
+            });
+            if (error) throw error;
+
+            const dest = PortalScope.parentFacilityName || "the office above";
+            showToast(`Request sent to ${dest} — ${qty} unit(s). You will be notified when it is reviewed.`, "success");
+            closeModal("modal-request");
+            document.getElementById("form-request").reset();
+            loadInventoryData();
+          } catch (err) {
+            showToast("Could not submit the request: " + err.message, "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Request';
+          }
+        });
+
         // Form Submit: Receive Batch
         document.getElementById("save-batch-btn").addEventListener("click", async () => {
           const itemId = parseInt(document.getElementById("batch-item-id").value);
@@ -9910,7 +10213,15 @@
           const expDate = document.getElementById("batch-expiration-date").value;
           const mfg = document.getElementById("batch-manufacturer").value.trim();
           const facilityVal = document.getElementById("batch-facility-id").value;
-          const facilityId = (facilityVal === "central" || !facilityVal) ? null : parseInt(facilityVal);
+          // "central" is this dropdown's word for "the depot this portal runs",
+          // which is the municipal warehouse (facility_id IS NULL) for the MHO but
+          // the RHU's own facility for an RHU. Resolving it to null unconditionally
+          // booked every RHU's consignment into the municipal warehouse instead of
+          // onto its own shelf. PortalScope knows which is which; line 3881 already
+          // does this same translation for the transfer picker.
+          const facilityId = (facilityVal === "central" || !facilityVal)
+            ? PortalScope.depotFacilityId
+            : parseInt(facilityVal);
 
           clearFieldErrors("modal-batch");
 
@@ -9985,7 +10296,10 @@
             closeModal("modal-batch");
 
             const filterDropdown = document.getElementById("global-bhc-filter");
-            const targetFilterVal = (facilityId === null || facilityId === 0) ? "central" : String(facilityId);
+            // The filter represents this portal's own depot as "central" whatever its
+            // real facility_id, so an RHU depot id must map back to that word or the
+            // dropdown is set to an option that does not exist.
+            const targetFilterVal = PortalScope.isDepot(facilityId) ? "central" : String(facilityId);
             if (filterDropdown && filterDropdown.value !== "all" && filterDropdown.value !== targetFilterVal) {
               filterDropdown.value = targetFilterVal;
             }
@@ -10246,6 +10560,58 @@
 
         function applyScopeLabels() {
           const depot = PortalScope.depotName;
+
+          // The requests table serves both tiers: an RHU reads what its
+          // barangay health centres asked for, the municipal office what its
+          // RHUs did. It was worded for the first case only.
+          const reqTitle = document.getElementById("requests-card-title");
+          if (reqTitle) {
+            reqTitle.innerHTML =
+              '<i class="fa-solid fa-clipboard-list" style="color:var(--brand-primary);margin-right:7px;"></i> Stock Requests from ' +
+              esc(PortalScope.childTypeLabelPlural);
+          }
+
+          const reqSubtitle = document.getElementById("requests-card-subtitle");
+          if (reqSubtitle) {
+            const base = `Review what your ${PortalScope.childTypeLabelPlural.toLowerCase()} asked for, ` +
+                         `approve a quantity, and dispatch it from ${depot}.`;
+            // An office with one above it also sees its own requests here,
+            // marked "Sent upward" and read-only.
+            reqSubtitle.textContent = PortalScope.hasParent
+              ? `${base} Requests you raised with ${PortalScope.parentFacilityName || "the office above"} appear here too.`
+              : base;
+          }
+
+          // Only an office with one above it can raise a request. The municipal
+          // office is the top of the hierarchy: it receives consignments, it
+          // does not ask anyone for them.
+          // An office with nothing above it never has an outgoing request, so
+          // the split is meaningless there. Cleared as well as hidden: a filter
+          // nobody can see must not still be narrowing the table.
+          const dirFilter = document.getElementById("requests-filter-direction");
+          if (dirFilter) {
+            if (!PortalScope.hasParent) dirFilter.value = "";
+            dirFilter.style.display = PortalScope.hasParent ? "" : "none";
+          }
+
+          document.querySelectorAll("[data-request-action]").forEach(btn => {
+            btn.style.display = PortalScope.hasParent ? "" : "none";
+            btn.title = PortalScope.hasParent
+              ? `Ask ${PortalScope.parentFacilityName || "the office above"} for stock`
+              : "";
+          });
+
+          const requestDest = document.getElementById("request-destination");
+          if (requestDest) {
+            requestDest.textContent = PortalScope.parentFacilityName || "the office above this one";
+          }
+
+          // The Receive Stock modal offers one destination, and it is disabled, so
+          // this label is the only thing telling the officer where the consignment
+          // is landing. Hardcoded as "Central Warehouse / Main RHU" it named the
+          // municipal shelf on every RHU portal.
+          const receiveOpt = document.querySelector('#batch-facility-id option[value="central"]');
+          if (receiveOpt) receiveOpt.textContent = depot + " (Primary Depot)";
 
           const title = document.getElementById("page-title-inventory");
           if (title) {

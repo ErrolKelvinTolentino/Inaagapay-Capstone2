@@ -45,6 +45,38 @@
   // 20260821_mho_tier.sql yet. Treating an un-migrated database as a single RHU
   // whose depot is the old central warehouse reproduces the previous behaviour
   // exactly, so the portal keeps working either way.
+  // Shown when the hierarchy exists but this account sits outside it. Without
+  // it the scope tests deny everything and the officer is left staring at empty
+  // tables with no idea why. Styled inline: this file is shared by every portal
+  // page and cannot assume any page stylesheet is loaded.
+  const UNASSIGNED_NOTICE_ID = "portal-scope-unassigned";
+
+  function renderUnassignedNotice() {
+    const existing = document.getElementById(UNASSIGNED_NOTICE_ID);
+
+    if (!PortalScope.unassigned) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing || !document.body) return;
+
+    const bar = document.createElement("div");
+    bar.id = UNASSIGNED_NOTICE_ID;
+    bar.setAttribute("role", "status");
+    bar.style.cssText = [
+      "position:sticky", "top:0", "z-index:9999",
+      "padding:10px 16px", "background:#fef3c7",
+      "border-bottom:1px solid #f59e0b", "color:#92400e",
+      "font-size:13px", "line-height:1.45", "text-align:center"
+    ].join(";");
+    bar.innerHTML =
+      '<strong>This account is not assigned to a health facility.</strong> ' +
+      'Records are hidden until it is, because there is no way to tell which ' +
+      'ones belong to you. Ask an administrator to assign it on the Facilities page.';
+
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+
   function fallbackScope(session) {
     const isMho = session && session.account_type === "mho";
     return {
@@ -184,7 +216,9 @@
     coversBhc(bhcId) {
       if (bhcId === undefined || bhcId === null || bhcId === "") return false;
       const list = scope.bhc_facilities || [];
-      if (list.length === 0) return true; // un-migrated database: show everything
+      // An empty list means two opposite things depending on whether the
+      // database answered at all -- see the note on inScope.
+      if (list.length === 0) return scope.ready !== true;
       return list.some((f) => String(f.facility_id) === String(bhcId));
     },
 
@@ -195,7 +229,12 @@
      */
     filterBhcList(list) {
       if (!Array.isArray(list)) return [];
-      if ((scope.bhc_facilities || []).length === 0) return list;
+      if ((scope.bhc_facilities || []).length === 0) {
+        // A resolved scope holding no health centres means precisely that: this
+        // office has none under it yet. Only an unresolved scope should fall
+        // through to the caller's whole list.
+        return scope.ready === true ? [] : list;
+      }
       return list.filter((b) => PortalScope.coversBhc(b.bhc_id ?? b.facility_id));
     },
 
@@ -207,15 +246,43 @@
       return String(facilityId) === String(scope.depot_facility_id);
     },
 
-    /** True when this portal may see rows for the given facility. */
+    /**
+     * True when this portal may see rows for the given facility.
+     *
+     * An empty scope list arrives for two reasons that need opposite answers:
+     *
+     *   the RPC never answered  -- 20260821_mho_tier.sql has not been applied
+     *     here. The portal predates the hierarchy and has to keep working, so
+     *     every facility stays visible, exactly as before that migration.
+     *
+     *   the RPC answered, empty -- the hierarchy exists and this account is
+     *     attached to no facility. Showing the whole municipality then is not
+     *     backwards compatibility; it is an unassigned account reading every
+     *     health centre's requests, transfers and stock, with the approve and
+     *     reject buttons live on all of them.
+     *
+     * `ready` is set only when the RPC actually answered, so it separates the
+     * two exactly. PortalScope.unassigned surfaces the second case rather than
+     * leaving an officer with a silently empty portal.
+     */
     inScope(facilityId) {
       if (facilityId === undefined || facilityId === null || facilityId === 0) {
         // Depot rows. The municipal warehouse belongs to the MHO alone.
         return scope.depot_facility_id === null;
       }
       const ids = scope.scope_facility_ids || [];
-      if (ids.length === 0) return true; // un-migrated database: show everything
+      if (ids.length === 0) return scope.ready !== true;
       return ids.map(String).includes(String(facilityId));
+    },
+
+    /**
+     * The database knows the hierarchy but places this account nowhere in it.
+     * Every scope test above therefore denies, which is right but reads as a
+     * broken portal unless somebody says why.
+     */
+    get unassigned() {
+      return scope.ready === true &&
+             (scope.scope_facility_ids || []).length === 0;
     },
 
     /**
@@ -397,6 +464,7 @@
         el.style.display = PortalScope.isRhu ? "" : "none";
       });
 
+      renderUnassignedNotice();
       injectFacilitiesNav();
     },
   };

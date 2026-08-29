@@ -183,6 +183,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
           reason: request.reason,
           remarks: request.remarks,
           adminRemarks: request.adminRemarks,
+          approvedQuantity: request.approvedQuantity,
           status: _displayStatus(request.status),
           submittedAt: request.requestedAt,
           completedAt: request.completedAt,
@@ -654,6 +655,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         break;
       case live.InventoryNotificationKind.lowStock:
         AppSnackbar.warning(context, notification.message);
+        break;
+      case live.InventoryNotificationKind.other:
+        AppSnackbar.info(context, notification.message);
         break;
     }
 
@@ -2221,7 +2225,10 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${request.itemName} • ${request.quantity} ${request.unit}',
+                  request.isPartiallyApproved
+                      ? '${request.itemName} • ${request.approvedQuantity} of '
+                          '${request.quantity} ${request.unit}'
+                      : '${request.itemName} • ${request.quantity} ${request.unit}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -3239,10 +3246,18 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '${request.quantity} ${request.unit} requested',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      request.isPartiallyApproved
+                          ? '${request.approvedQuantity} of ${request.quantity} '
+                              '${request.unit} approved'
+                          : '${request.quantity} ${request.unit} requested',
+                      style: TextStyle(
+                        color: request.isPartiallyApproved
+                            ? AppColors.warning
+                            : AppColors.textSecondary,
                         fontSize: 12,
+                        fontWeight: request.isPartiallyApproved
+                            ? FontWeight.w700
+                            : FontWeight.w400,
                       ),
                     ),
                   ],
@@ -5331,9 +5346,16 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'DOSE TRACE',
-                              style: TextStyle(
+                            Text(
+                              // Only a batch some of which has actually gone
+                              // into a patient has a dose trail. One that has
+                              // only been received and moved has a delivery
+                              // history, and calling that DOSE TRACE sends the
+                              // midwife looking for doses that were never given.
+                              administered.isEmpty
+                                  ? 'BATCH HISTORY'
+                                  : 'DOSE TRACE',
+                              style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 0.6,
@@ -5371,17 +5393,24 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                           label: 'Movements',
                           value: '${rows.length}',
                         ),
-                        const SizedBox(width: 8),
-                        _doseTraceStat(
-                          label: 'Doses given',
-                          value: '${administered.fold<int>(0, (sum, r) => sum + r.dosesMoved)}',
-                        ),
-                        const SizedBox(width: 8),
-                        _doseTraceStat(
-                          label: 'Named patients',
-                          value:
-                              '${administered.where((r) => r.hasPatient).length}',
-                        ),
+                        // Both of these can only be zero until a dose has been
+                        // given from this batch. Showing "0 doses given, 0 named
+                        // patients" on a delivery reads as something missing
+                        // rather than something that has not happened yet.
+                        if (administered.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          _doseTraceStat(
+                            label: 'Doses given',
+                            value:
+                                '${administered.fold<int>(0, (sum, r) => sum + r.dosesMoved)}',
+                          ),
+                          const SizedBox(width: 8),
+                          _doseTraceStat(
+                            label: 'Named patients',
+                            value:
+                                '${administered.where((r) => r.hasPatient).length}',
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -5579,23 +5608,25 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                 : '${row.batchNumber} · expires ${_shortDate(row.batchExpiration!)}, '
                     '${row.batchExpiration!.year}',
           ),
-          _doseTraceField(
-            icon: Icons.badge_outlined,
-            label: 'Given to',
-            // The chart number, never the name — see the note at the foot of
-            // this sheet and the comment on inventory_dose_ledger.
-            value: row.patientLabel,
-            // An administration with no resolvable patient is a genuine gap in
-            // the trail and is labelled as one. A receipt or a transfer has no
-            // patient by nature, so it says so plainly instead.
-            missingText: row.isAdministration
-                ? 'Not linked to a patient record'
-                : 'Not a patient movement',
-            emphasise: row.hasPatient,
-          ),
+          // Only an administration has a recipient. A delivery from the RHU
+          // does not, and a row reading "Given to: not a patient movement" is
+          // answering a question nobody asked -- the movement type at the top
+          // of the card already says it arrived.
+          if (row.isAdministration)
+            _doseTraceField(
+              icon: Icons.badge_outlined,
+              label: 'Given to',
+              // The chart number, never the name — see the note at the foot of
+              // this sheet and the comment on inventory_dose_ledger.
+              value: row.patientLabel,
+              // An administration with no resolvable patient is a genuine gap
+              // in the trail and is labelled as one.
+              missingText: 'Not linked to a patient record',
+              emphasise: row.hasPatient,
+            ),
           _doseTraceField(
             icon: Icons.person_outline_rounded,
-            label: 'Given by',
+            label: row.isAdministration ? 'Given by' : 'Recorded by',
             value: row.performedByName,
             missingText: 'System / not recorded',
           ),
@@ -7440,6 +7471,7 @@ class StockRequest {
     required this.reason,
     required this.remarks,
     required this.adminRemarks,
+    required this.approvedQuantity,
     required this.status,
     required this.submittedAt,
     this.completedAt,
@@ -7456,6 +7488,7 @@ class StockRequest {
       reason: '',
       remarks: '',
       adminRemarks: '',
+      approvedQuantity: null,
       status: '',
       submittedAt: DateTime.fromMillisecondsSinceEpoch(0),
       isEmpty: true,
@@ -7470,6 +7503,17 @@ class StockRequest {
   final String reason;
   final String remarks;
   final String adminRemarks;
+  final int? approvedQuantity;
+
+  /// The reviewing office cut the quantity down.
+  ///
+  /// A midwife who asked for 100 and was sent 30 otherwise reads "Approved"
+  /// beside "100 units" and plans a month around stock that is not coming.
+  bool get isPartiallyApproved =>
+      approvedQuantity != null && approvedQuantity! < quantity;
+
+  /// What is actually coming, which is the requested amount unless it was cut.
+  int get effectiveQuantity => approvedQuantity ?? quantity;
   String status;
   final DateTime submittedAt;
   DateTime? completedAt;

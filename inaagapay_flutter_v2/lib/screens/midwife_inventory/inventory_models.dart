@@ -354,6 +354,7 @@ class InventoryStockRequestRecord {
     required this.reason,
     required this.remarks,
     required this.adminRemarks,
+    required this.approvedQuantity,
     required this.status,
     required this.requestedAt,
     required this.completedAt,
@@ -383,6 +384,14 @@ class InventoryStockRequestRecord {
       reason: _asString(json['reason'], fallback: 'Stock replenishment'),
       remarks: _asString(json['remarks']),
       adminRemarks: _asString(json['admin_remarks']),
+      // Null carries meaning: the reviewer approved the whole requested
+      // quantity. Only a number below `quantity` is a cut, and only that is
+      // worth telling the midwife about. A database older than
+      // 20260806_inventory_audit_fixes.sql has no such column, so the key is
+      // simply absent and this stays null -- the display is unchanged there.
+      approvedQuantity: json['approved_quantity'] == null
+          ? null
+          : _asInt(json['approved_quantity']),
       status: status,
       requestedAt: _asTimestamp(
             json['requested_at'] ?? json['submitted_at'] ?? json['created_at'],
@@ -403,12 +412,18 @@ class InventoryStockRequestRecord {
   final String reason;
   final String remarks;
   final String adminRemarks;
+  final int? approvedQuantity;
   final String status;
   final DateTime requestedAt;
   final DateTime? completedAt;
 }
 
-enum InventoryNotificationKind { approved, rejected, issued, lowStock }
+/// `other` is not a fallback for "we could not read this" -- it is what an
+/// inventory notification gets when it is a kind nobody has written a rule for
+/// yet. Without it, any title outside the four below vanished from the feed AND
+/// from the unread badge, which is how "BHC received issued stocks" and "Stock
+/// request update" became invisible.
+enum InventoryNotificationKind { approved, rejected, issued, lowStock, other }
 
 class InventoryNotificationRecord {
   const InventoryNotificationRecord({
@@ -448,6 +463,12 @@ class InventoryNotificationRecord {
       kind = InventoryNotificationKind.issued;
     } else if (normalizedTitle.contains('low stock')) {
       kind = InventoryNotificationKind.lowStock;
+    } else if (_asString(json['type']).toLowerCase() == 'inventory') {
+      // The database stamped this as an inventory notification, so it belongs
+      // in this feed whatever it is called. Dropping it here was silently
+      // under-counting the badge: the title rules below cover four wordings and
+      // the migrations write more than four.
+      kind = InventoryNotificationKind.other;
     } else {
       kind = null;
     }
@@ -478,6 +499,9 @@ class InventoryNotificationRecord {
         InventoryNotificationKind.rejected => 'Stock request rejected',
         InventoryNotificationKind.issued => 'Stocks issued to your health center',
         InventoryNotificationKind.lowStock => 'BHC stock is now low',
+        // Its own title is the best description available, and is what the
+        // database wrote deliberately.
+        InventoryNotificationKind.other => title.isEmpty ? 'Inventory update' : title,
       };
 
   InventoryNotificationRecord copyWith({bool? isRead}) {

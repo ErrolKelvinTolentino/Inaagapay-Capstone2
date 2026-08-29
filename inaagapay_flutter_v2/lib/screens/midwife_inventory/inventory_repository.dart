@@ -453,7 +453,11 @@ class InventoryRepository {
       final response = await _client
           .from('notifications')
           .select(
-            'notification_id, account_id, title, message, is_read, created_at',
+            // `type` is what makes a row an inventory notification at all.
+            // It was documented as the durable signal and then never selected,
+            // so classification fell back to matching four English titles.
+            'notification_id, account_id, title, message, type, is_read, '
+            'created_at',
           )
           .eq('account_id', context.accountId)
           .order('created_at', ascending: false)
