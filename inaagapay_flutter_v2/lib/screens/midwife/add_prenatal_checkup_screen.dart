@@ -198,11 +198,11 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   // ── AI Remarks (Option C) ─────────────────────────────────────────────────
   bool _generatingAiRemarks = false;
   String _remarksSource = 'midwife_authored'; // midwife_authored | ai_generated_approved | ai_generated_edited
-  String? _aiOriginalRemarksEn;   // original AI English text (for audit)
-  String? _aiOriginalRemarksFil;  // original AI Filipino text (for audit)
-  String _remarksLanguage = 'english'; // toggle for bilingual AI remarks
-  String _aiRemarksEnglish = '';   // stored AI English text
-  String _aiRemarksFilipino = '';  // stored AI Filipino text
+  // Remarks are written once, in Tagalog. Mothers read this text in the record
+  // view, so there is one version of it to write, edit and store — no second
+  // language to keep in sync and no toggle to get wrong.
+  String? _aiOriginalRemarks;      // original AI Tagalog text (for audit)
+  String _aiRemarks = '';          // stored AI Tagalog text
   String? _aiRemarksModel;         // AI model used
   double? _initialSessionWeight;   // Locked baseline weight for session calculation
 
@@ -803,9 +803,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
       return _stripAiSectionHeaders(cleanedAiText);
     }
 
-    final en = _buildRuleBasedAssessmentText(snapshot);
-    final fil = _buildRuleBasedAssessmentTextFilipino(snapshot);
-    return '=== FILIPINO ===\n$fil\n\n=== ENGLISH ===\n$en';
+    return _buildRuleBasedAssessmentTextFilipino(snapshot);
   }
 
   String _stripAiSectionHeaders(String text) {
@@ -946,71 +944,27 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     return buf.toString();
   }
 
-  Map<String, String> _parseBilingualText(String text) {
-    String filipino = '';
-    String english = '';
+  /// Pulls the Tagalog summary out of an AI response.
+  ///
+  /// The prompt asks for Tagalog only, so normally the whole response *is* the
+  /// summary. The old section markers are still honoured because a model can
+  /// slip a heading in and because records saved before this change stored both
+  /// languages in one column. If only English came back, this returns an empty
+  /// string so the caller can fall back to the rule-based Tagalog text rather
+  /// than showing a mother a summary she cannot read.
+  String _extractTagalogText(String text) {
+    const filTag = '=== FILIPINO ===';
+    const enTag = '=== ENGLISH ===';
+    final filipinoIndex = text.indexOf(filTag);
+    final englishIndex = text.indexOf(enTag);
 
-    final filipinoIndex = text.indexOf('=== FILIPINO ===');
-    final englishIndex = text.indexOf('=== ENGLISH ===');
-
-    if (filipinoIndex != -1 && englishIndex != -1) {
-      if (filipinoIndex < englishIndex) {
-        filipino = text
-            .substring(filipinoIndex + '=== FILIPINO ==='.length, englishIndex)
-            .trim();
-        english =
-            text.substring(englishIndex + '=== ENGLISH ==='.length).trim();
-      } else {
-        english = text
-            .substring(englishIndex + '=== ENGLISH ==='.length, filipinoIndex)
-            .trim();
-        filipino =
-            text.substring(filipinoIndex + '=== FILIPINO ==='.length).trim();
-      }
-    } else if (filipinoIndex != -1) {
-      filipino =
-          text.substring(filipinoIndex + '=== FILIPINO ==='.length).trim();
-      english = filipino;
-    } else if (englishIndex != -1) {
-      english = text.substring(englishIndex + '=== ENGLISH ==='.length).trim();
-      filipino = english;
-    } else {
-      english = text.trim();
-      filipino = _translateRuleTextToFilipino(text);
+    if (filipinoIndex != -1) {
+      final start = filipinoIndex + filTag.length;
+      final end = englishIndex > filipinoIndex ? englishIndex : text.length;
+      return text.substring(start, end).trim();
     }
-
-    return {'filipino': filipino, 'english': english};
-  }
-
-  String _translateRuleTextToFilipino(String text) {
-    final isLow =
-        text.contains('everything is looking good') || text.contains('maayos') || text.contains('commonly expected');
-    final currentBpMatch = RegExp(r'(\d+/\d+)').firstMatch(text);
-    final currentBp = currentBpMatch?.group(1);
-
-    final buf = StringBuffer();
-    if (isLow) {
-      buf.write(
-          'Sa prenatal checkup ng ina ngayon, maayos at nasa karaniwang antas ang lahat ng vital signs. ');
-      if (currentBp != null) {
-        buf.write(
-            'Ang blood pressure na $currentBp mmHg ay nasa magandang antas para sa kalusugan ng ina. ');
-      }
-      buf.write(
-          'Ang sapat na pahinga at masustansyang pagkain ay nakakatulong sa kalusugan ng ina at ng sanggol. ');
-    } else {
-      buf.write(
-          'May ilang detalye sa prenatal checkup ng ina na kailangang masubaybayan nang mabuti ng healthcare personnel. ');
-      if (currentBp != null) {
-        buf.write(
-            'Ang blood pressure ng ina ay naitala sa $currentBp mmHg sa bisitang ito. ');
-      }
-      buf.write(
-          'Inirerekomenda ang masusing pagsubaybay at pagsunod sa mga payo sa pangangalaga. ');
-    }
-    buf.write(
-        'Ang patuloy na prenatal checkup ay inirerekomenda upang suportahan ang kalusugan ng ina sa buong pagbubuntis.');
-    return buf.toString();
+    if (englishIndex != -1) return '';
+    return text.trim();
   }
 
   void _syncEditableRiskState(_RiskSnapshot snapshot, String mergedText) {
@@ -1240,11 +1194,12 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
 
     return '''[CRITICAL INSTRUCTIONS - ANATOMY & STRUCTURE MANDATE]
 
-You must structure BOTH the Tagalog and English assessments using this EXACT 3-part formula:
+LANGUAGE MANDATE: Write the ENTIRE output in Tagalog. Do NOT produce an English version and do NOT add language headings. Keep clinical terms in English exactly as they appear here (blood pressure, fetal heart rate, edema, mmHg, bpm, kg, AOG, BMI) — rural mothers know these terms in English and translating them causes confusion. Everything around those terms is Tagalog. The example sentences below are written in English only to show you the required STRUCTURE; your output must be Tagalog.
+
+You must structure the Tagalog assessment using this EXACT 3-part formula:
 
 HEADER:
-- English header: "Checkup Summary — Week $aogWeekStr AOG"
-- Tagalog header: "Buod ng Checkup — Linggo $aogWeekStr ng AOG"
+- "Buod ng Checkup — Linggo $aogWeekStr ng AOG"
 
 SENTENCE 1: THE REASSURANCE ANCHOR
 - Lead ONLY with vitals/findings that are WITHIN EXPECTED RANGE, including ACTUAL NUMBERS (e.g. "Fetal heart rate (${_fetalBeatCtrl.text.trim().isEmpty ? '140 bpm' : '${_fetalBeatCtrl.text.trim()} bpm'}) is within expected range this visit.").
@@ -1265,34 +1220,21 @@ CRITICAL SAFETY & MIDWIFE POV RULES:
 - If Blood pressure is RAISED or Edema is Moderate/Severe:
   * Sentence 1 (Anchor): Lead ONLY with passed vitals (e.g. "Fetal heart rate is within expected range this visit.").
   * Sentence 2 (Flagged Items): Plainly state findings: "Blood pressure was recorded at $sysVal/$diaVal mmHg (raised reading), weight gain is +2.0 kg (above expected), and moderate swelling was observed — these findings require close monitoring and doctor consultation."
-- KEEP EACH TRANSLATED SECTION CONCISE AND UNDER 280 CHARACTERS TOTAL.
+- KEEP THE SUMMARY CONCISE AND UNDER 280 CHARACTERS TOTAL.
 - Never say "pre-pregnancy weight not provided" or "interpretation is limited".
 - Do NOT use diagnostic or alarmist language.
 - Do NOT use bullet points, disclaimer footers, or extra headers.
 
-OUTPUT FORMAT REQUIREMENTS:
-=== FILIPINO ===
+OUTPUT FORMAT REQUIREMENTS (Tagalog only, no language headings):
 Buod ng Checkup — Linggo $aogWeekStr ng AOG
-
-[Sentence 1: Reassurance Anchor with actual numbers of WITHIN RANGE vitals]
-[Sentence 2: Flagged items with comparison, normalization, and soft action OR smooth progress confirmation]
-
-=== ENGLISH ===
-Checkup Summary — Week $aogWeekStr AOG
 
 [Sentence 1: Reassurance Anchor with actual numbers of WITHIN RANGE vitals]
 [Sentence 2: Flagged items with comparison, normalization, and soft action OR smooth progress confirmation]
 
 GOOD EXAMPLE OUTPUT (BP 120/90 mmHg - Elevated Diastolic):
-=== FILIPINO ===
 Buod ng Checkup — Linggo $aogWeekStr ng AOG
 
 Ang fetal heart rate (120 bpm) ay nasa karaniwang inaasahang antas sa bisitang ito. Ang blood pressure ay naitala sa 120/90 mmHg (mataas ang diastolic), at ang pagdagdag ng timbang ay bahagyang nauna (+2.0 kg kumpara sa inaasahang 0–1.2 kg) — pareho itong magandang masubaybayan sa susunod na checkup.
-
-=== ENGLISH ===
-Checkup Summary — Week $aogWeekStr AOG
-
-Fetal heart rate (120 bpm) is within expected range this visit. Blood pressure was recorded at 120/90 mmHg (elevated diastolic), and weight gain is a bit ahead of pace (+2.0 kg vs. an expected 0–1.2 kg) — both are worth monitoring closely at your next checkup.
 
 TODAY'S CHECKUP
 - Weight: ${_weightCtrl.text.trim()} kg
@@ -1305,7 +1247,7 @@ TODAY'S CHECKUP
 ${symptomLines.isEmpty ? '- none' : symptomLines.join('\n')}
 - Remarks: ${_remarksCtrl.text.trim().isEmpty ? 'none' : _remarksCtrl.text.trim()}
 
-IMPORTANT: Your response must consist ONLY of the two sections labeled with "=== FILIPINO ===" and "=== ENGLISH ===". No other text or labels.''';
+IMPORTANT: Your response must be ONE Tagalog summary — the header line followed by the two sentences. No English version, no language labels, no other text.''';
   }
 
   Future<void> _refreshRiskPreview({bool force = false}) async {
@@ -2352,15 +2294,11 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
             ? 'edited'
             : 'skipped';
 
-    // Build bilingual AI text for storage (original AI output)
-    final originalAiText = (_aiOriginalRemarksEn != null || _aiOriginalRemarksFil != null)
-        ? '=== FILIPINO ===\n${_aiOriginalRemarksFil ?? ''}\n\n=== ENGLISH ===\n${_aiOriginalRemarksEn ?? ''}'
-        : '';
+    // Original AI output, kept for the audit trail.
+    final originalAiText = _aiOriginalRemarks ?? '';
 
-    // Build final text (what the midwife actually submitted)
-    final finalAiText = hasAiRemarks
-        ? '=== FILIPINO ===\n$_aiRemarksFilipino\n\n=== ENGLISH ===\n$_aiRemarksEnglish'
-        : remarksText;
+    // What the midwife actually submitted.
+    final finalAiText = hasAiRemarks ? _aiRemarks : remarksText;
 
     final wasEdited = _remarksSource == 'ai_generated_edited';
 
@@ -3641,19 +3579,33 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     final notesCtrl = TextEditingController(text: existing?.notes ?? '');
     String selectedRisk = selectedType?.riskCategory ?? existing?.riskCategory ?? 'normal';
 
-    final List<Map<String, String>> commonSymptoms = [
-      {'name': 'Nausea / Morning Sickness', 'risk': 'normal'},
-      {'name': 'Fatigue / Tiredness', 'risk': 'normal'},
-      {'name': 'Mild Headache', 'risk': 'normal'},
-      {'name': 'Backache', 'risk': 'normal'},
-      {'name': 'Dizziness', 'risk': 'warning'},
-      {'name': 'Swelling / Edema', 'risk': 'warning'},
-      {'name': 'Heartburn', 'risk': 'normal'},
-      {'name': 'Vaginal Bleeding', 'risk': 'danger'},
-      {'name': 'Severe Abdominal Pain', 'risk': 'danger'},
-      {'name': 'High Fever', 'risk': 'danger'},
-      {'name': 'Decreased Fetal Movement', 'risk': 'danger'},
-    ];
+    // The pills are the catalogue, not a second list of their own.
+    //
+    // They used to be eleven hardcoded names, and six of them existed nowhere
+    // in `symptom_types`: "Backache" against the catalogue's "Back Pain",
+    // "Nausea / Morning Sickness" against "Nausea", "Decreased Fetal Movement"
+    // against "Reduced Fetal Movement", and so on.
+    //
+    // Tapping one of those six did nothing useful. `selectedType` is only
+    // assigned when `indexWhere` finds a match, so an unmatched tap left it
+    // holding the *previous* selection — and the dialog reads its title from
+    // `selectedType`, not from the pill. That is why tapping one chip showed
+    // "Severe Itching": the name on screen was whatever had been chosen
+    // before, not what was pressed.
+    //
+    // Saving it was worse. `_resolveSymptomTypeId` looks the name up in the
+    // catalogue, fails, and falls through to the "Other" row — so a symptom
+    // the midwife had deliberately named was filed as Other, with the real
+    // name surviving only inside the free-text note.
+    //
+    // Building the chips from `_symptomTypes` makes both impossible: every
+    // chip carries a real id, so every tap matches by construction and the
+    // two lists cannot drift apart again. "Other" is left out — it is the
+    // fallback, not something to offer as a one-tap choice — and stays
+    // available in the dropdown below.
+    final List<SymptomType> commonSymptoms = _symptomTypes
+        .where((st) => !st.name.toLowerCase().contains('other'))
+        .toList();
 
     await showDialog<bool>(
       context: context,
@@ -3720,8 +3672,8 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                               spacing: 8,
                               runSpacing: 8,
                               children: commonSymptoms.map((sym) {
-                                final name = sym['name']!;
-                                final risk = sym['risk']!;
+                                final name = sym.name;
+                                final risk = sym.riskCategory;
                                 final isSelected = symptomName.toLowerCase() == name.toLowerCase();
 
                                 Color chipColor;
@@ -3748,17 +3700,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   onPressed: () {
+                                    // The chip is a catalogue row, so this
+                                    // assigns directly. No lookup, nothing to
+                                    // fail, no path that leaves the previous
+                                    // selection in place.
                                     setDialogState(() {
-                                      if (_symptomTypes.isNotEmpty) {
-                                        final matchIndex = _symptomTypes.indexWhere(
-                                          (st) => st.name.toLowerCase() == name.toLowerCase(),
-                                        );
-                                        if (matchIndex != -1) {
-                                          selectedType = _symptomTypes[matchIndex];
-                                        }
-                                      }
-                                      customNameCtrl.text = name;
-                                      selectedRisk = risk;
+                                      selectedType = sym;
+                                      customNameCtrl.text = sym.name;
+                                      selectedRisk = sym.riskCategory;
                                     });
                                   },
                                 );
@@ -4360,19 +4309,20 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
 
       if (!mounted) return;
 
-      // Parse bilingual response
-      final parsed = _parseBilingualText(aiText);
-      final englishText = parsed['english'] ?? aiText;
-      final filipinoText = parsed['filipino'] ?? '';
+      // The prompt asks for Tagalog only. If the model answered in English
+      // anyway, fall back to the rule-based Tagalog text, which carries the
+      // same numbers.
+      final extracted = _extractTagalogText(aiText);
+      final tagalogText = extracted.isNotEmpty
+          ? extracted
+          : _buildRuleBasedAssessmentTextFilipino(draft);
 
       setState(() {
-        _aiRemarksEnglish = englishText;
-        _aiRemarksFilipino = filipinoText;
-        _aiOriginalRemarksEn = englishText;
-        _aiOriginalRemarksFil = filipinoText;
-        _aiRemarksModel = 'Groq';
+        _aiRemarks = tagalogText;
+        _aiOriginalRemarks = tagalogText;
+        _aiRemarksModel = extracted.isNotEmpty ? 'Groq' : 'Rule Engine';
         _remarksSource = 'ai_generated_approved';
-        _remarksCtrl.text = _remarksLanguage == 'english' ? englishText : filipinoText;
+        _remarksCtrl.text = tagalogText;
         // Sync risk snapshot for persistence
         _riskSnapshot = draft.copyWith(
           aiAssessment: aiText,
@@ -4384,16 +4334,13 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       if (!mounted) return;
       // Fallback to rule-based text
       final draft = _buildRuleBasedRiskSnapshot();
-      final en = _buildRuleBasedAssessmentText(draft);
       final fil = _buildRuleBasedAssessmentTextFilipino(draft);
       setState(() {
-        _aiRemarksEnglish = en;
-        _aiRemarksFilipino = fil;
-        _aiOriginalRemarksEn = en;
-        _aiOriginalRemarksFil = fil;
+        _aiRemarks = fil;
+        _aiOriginalRemarks = fil;
         _aiRemarksModel = 'Rule Engine';
         _remarksSource = 'ai_generated_approved';
-        _remarksCtrl.text = _remarksLanguage == 'english' ? en : fil;
+        _remarksCtrl.text = fil;
         _riskSnapshot = draft;
       });
       _showMessage(
@@ -4411,40 +4358,18 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
       // Reset AI state when midwife deletes everything
       setState(() {
         _remarksSource = 'midwife_authored';
-        _aiRemarksEnglish = '';
-        _aiRemarksFilipino = '';
-        _aiOriginalRemarksEn = null;
-        _aiOriginalRemarksFil = null;
+        _aiRemarks = '';
+        _aiOriginalRemarks = null;
       });
       return;
     }
 
     if (_remarksSource != 'midwife_authored') {
       setState(() => _remarksSource = 'ai_generated_edited');
-      // Save edits strictly to the active language version so English & Tagalog remain distinct
-      if (_remarksLanguage == 'english') {
-        _aiRemarksEnglish = _remarksCtrl.text;
-      } else {
-        _aiRemarksFilipino = _remarksCtrl.text;
-      }
+      // The midwife's edits are the summary from here on; the original AI text
+      // stays in _aiOriginalRemarks for the audit trail.
+      _aiRemarks = _remarksCtrl.text;
     }
-  }
-
-  void _switchRemarksLanguage(String lang) {
-    if (lang == _remarksLanguage) return;
-    if (_remarksSource != 'midwife_authored') {
-      if (_remarksLanguage == 'english') {
-        _aiRemarksEnglish = _remarksCtrl.text;
-      } else {
-        _aiRemarksFilipino = _remarksCtrl.text;
-      }
-    }
-    setState(() {
-      _remarksLanguage = lang;
-      if (_remarksSource != 'midwife_authored') {
-        _remarksCtrl.text = lang == 'english' ? _aiRemarksEnglish : _aiRemarksFilipino;
-      }
-    });
   }
 
   Widget _buildStep4() {
@@ -4591,19 +4516,14 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
                       ),
                     ),
                     const Spacer(),
-                    // Bilingual toggle
-                    Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: AppColors.bgSecondary,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _langToggleChip('English', 'english'),
-                          _langToggleChip('Tagalog', 'filipino'),
-                        ],
+                    // One summary, in Tagalog. The mother reads this exact
+                    // text in her record, so there is nothing to switch.
+                    Text(
+                      'Tagalog',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary.withValues(alpha: 0.9),
                       ),
                     ),
                   ],
@@ -4704,27 +4624,6 @@ IMPORTANT: Your response must consist ONLY of the two sections labeled with "===
     );
   }
 
-  Widget _langToggleChip(String label, String lang) {
-    final isActive = _remarksLanguage == lang;
-    return GestureDetector(
-      onTap: () => _switchRemarksLanguage(lang),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: isActive ? AppColors.brandPrimary : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: isActive ? Colors.white : AppColors.textSecondary,
-          ),
-        ),
-      ),
-    );
-  }
 
   List<String> _getDetectedRiskFactors() {
     final factors = <String>[];

@@ -129,13 +129,53 @@ class RecordDetailScreen extends StatefulWidget {
   /// know the review state, in which case no attribution line is rendered.
   final bool? isMidwifeApproved;
 
+  /// Returns the Tagalog assessment out of whatever was stored.
+  ///
+  /// New records hold one Tagalog summary and nothing else, so the whole text
+  /// comes straight back. Records saved before that change kept both languages
+  /// in the same column under `=== FILIPINO ===` / `## English` headings — for
+  /// those the Tagalog half is pulled out, and the English half is shown only
+  /// when no Tagalog was ever written.
+  ///
+  /// This is the one rule that decides what a mother reads, so it is exposed
+  /// for testing rather than left buried in the State.
+  static String tagalogAssessmentText(String fullText) {
+    final normalized = fullText.replaceAll('\r\n', '\n');
+
+    // Matches both "=== ENGLISH ===" and "## English" style headings
+    final englishMatch = RegExp(
+      r'(?:===|##)\s*English\s*(?:===)?\s*([\s\S]*?)(?=(?:===|##)\s*Filipino\s*(?:===)?|$)',
+      caseSensitive: false,
+    ).firstMatch(normalized);
+
+    final filipinoMatch = RegExp(
+      r'(?:===|##)\s*Filipino\s*(?:===)?\s*([\s\S]*?)(?=(?:===|##)\s*English\s*(?:===)?|$)',
+      caseSensitive: false,
+    ).firstMatch(normalized);
+
+    final englishText = englishMatch?.group(1)?.trim();
+    final filipinoText = filipinoMatch?.group(1)?.trim();
+
+    // No language sections at all: the text is already the summary.
+    if (englishText == null && filipinoText == null) return fullText;
+
+    final filipino = (filipinoText ?? '').isNotEmpty ? filipinoText : null;
+    final english = (englishText ?? '').isNotEmpty ? englishText : null;
+    return filipino ?? english ?? fullText;
+  }
+
   @override
   State<RecordDetailScreen> createState() => _RecordDetailScreenState();
 }
 
 class _RecordDetailScreenState extends State<RecordDetailScreen> {
   final Set<String> _expandedLabInsightAspects = <String>{};
-  bool _showAiInFilipino = LanguageService.isFilipino;
+  /// Which language the *labels around* the assessment are written in. It
+  /// follows the app's language setting; there is no in-page switch any more.
+  ///
+  /// The assessment text itself is always Tagalog — it is written once, in
+  /// Tagalog, by the midwife, and the mother reads that same sentence.
+  final bool _showAiInFilipino = LanguageService.isFilipino;
 
   /// Attachments once they have arrived. Seeded with whatever the caller
   /// already had, then filled in when [RecordDetailScreen.pendingImages]
@@ -606,7 +646,6 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       // resolve to the same neutral ink: a printed record should not colour
       // one finding differently from another.
       const brandPink = borderLight;
-      const brandText = textPrimary;
       const successColor = textSecondary;
       const warningColor = textSecondary;
       const errorColor = textSecondary;
@@ -2221,85 +2260,10 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                     ),
                 ],
               ),
+              // The English/Filipino switch is gone. The assessment is written
+              // once, in Tagalog, and that is the sentence everyone reads — so
+              // there was never a second version for the switch to reveal.
               const SizedBox(height: 12),
-              // Language toggle for AI insights
-              Align(
-                alignment: Alignment.center,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                        color: _aiCardBorder.withValues(alpha: 0.25), width: 1.5),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _showAiInFilipino = false;
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: !_showAiInFilipino
-                                ? AppColors.brandPrimary
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            'English',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: !_showAiInFilipino
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                              color: !_showAiInFilipino
-                                  ? Colors.white
-                                  : AppColors.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _showAiInFilipino = true;
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: _showAiInFilipino
-                                ? AppColors.brandPrimary
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            'Filipino',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: _showAiInFilipino
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                              color: _showAiInFilipino
-                                  ? Colors.white
-                                  : AppColors.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
               if (isPrenatal)
                 _buildPrenatalAiInsights(_getAiTextForLanguage(aiText))
               else if (widget.useStructuredAiInsights)
@@ -2331,34 +2295,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     );
   }
 
-  /// Extract the language-appropriate section from AI text.
-  /// If the text has ## English / ## Filipino sections, returns the appropriate one.
-  /// Otherwise returns the full text.
-  String _getAiTextForLanguage(String fullText) {
-    final normalized = fullText.replaceAll('\r\n', '\n');
-
-    // Matches both "=== ENGLISH ===" and "## English" style headings
-    final englishMatch = RegExp(
-      r'(?:===|##)\s*English\s*(?:===)?\s*([\s\S]*?)(?=(?:===|##)\s*Filipino\s*(?:===)?|$)',
-      caseSensitive: false,
-    ).firstMatch(normalized);
-    
-    final filipinoMatch = RegExp(
-      r'(?:===|##)\s*Filipino\s*(?:===)?\s*([\s\S]*?)(?=(?:===|##)\s*English\s*(?:===)?|$)',
-      caseSensitive: false,
-    ).firstMatch(normalized);
-
-    final englishText = englishMatch?.group(1)?.trim();
-    final filipinoText = filipinoMatch?.group(1)?.trim();
-
-    // If no language sections found, return full text
-    if (englishText == null && filipinoText == null) return fullText;
-
-    if (_showAiInFilipino) {
-      return filipinoText ?? englishText ?? fullText;
-    }
-    return englishText ?? filipinoText ?? fullText;
-  }
+  String _getAiTextForLanguage(String fullText) =>
+      RecordDetailScreen.tagalogAssessmentText(fullText);
 
   /// Extract recommendation lines from AI text
   List<String> _extractRecommendations(String aiText) {
