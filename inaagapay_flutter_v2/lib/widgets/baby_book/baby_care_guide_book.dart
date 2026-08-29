@@ -452,14 +452,28 @@ class _GuidePaperPage extends StatelessWidget {
           ),
         ],
       ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(width: 6, color: data.accent),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 17),
+      // The spine is painted behind the content rather than measured beside
+      // it.
+      //
+      // It used to be a 6px Container in a Row inside an IntrinsicHeight, so
+      // the whole page was laid out twice — and an intrinsic pass around an
+      // ExpansionTile that animates its height overflowed by a couple of
+      // pixels every time the source note opened. A Positioned fill stretches
+      // the spine without any second measurement.
+      //
+      // Not a left BorderSide either: a Border with a radius has to be one
+      // colour, so an accent edge and a cream edge cannot share one box.
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 6,
+            child: ColoredBox(color: data.accent),
+          ),
+          Padding(
+                padding: const EdgeInsets.fromLTRB(26, 20, 20, 17),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -627,9 +641,7 @@ class _GuidePaperPage extends StatelessWidget {
                   ],
                 ),
               ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }

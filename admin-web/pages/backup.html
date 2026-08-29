@@ -598,8 +598,7 @@
           ).toUpperCase() || "A";
         document.getElementById("logout-btn").addEventListener("click", () => {
           if (confirm("Logout?")) {
-            localStorage.removeItem(SESSION_KEY); PortalScope.clear();
-            window.location.href = "../index.html";
+            localStorage.removeItem(SESSION_KEY); window.PortalScope?.clear(); if (window.navigateTo) { window.navigateTo("../index.html"); } else { window.location.href = "../index.html"; }
           }
         });
         document

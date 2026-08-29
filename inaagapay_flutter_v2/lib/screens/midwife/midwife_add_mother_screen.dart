@@ -626,7 +626,8 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -634,12 +635,16 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
             children: [
               const Icon(Icons.info_outline, size: 40, color: AppColors.brandPrimary),
               const SizedBox(height: 16),
-              const Text(
-                'BMI Estimation Reference',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.brandText,
+              const FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'BMI Estimation Reference',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.brandText,
+                  ),
+                  maxLines: 1,
                 ),
               ),
               const SizedBox(height: 16),
@@ -1927,12 +1932,13 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       builder: (ctx) {
         return Dialog(
           backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
           child: Container(
             constraints:
-                BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             child: StatefulBuilder(
               builder: (dialogCtx, setDialogState) {
                 String? phoneWarning;
@@ -2011,20 +2017,25 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                           icon: const Icon(Icons.close,
                               color: AppColors.brandText),
                           onPressed: () => Navigator.pop(dialogCtx, false),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                         ),
-                        const Expanded(
-                          child: Center(
-                            child: Text(
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: const Text(
                               'Add Emergency Contact',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18,
                                 color: AppColors.brandText,
                               ),
+                              maxLines: 1,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 48),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -2252,13 +2263,13 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       builder: (ctx) {
         return Dialog(
           backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
           child: Container(
-            width: MediaQuery.of(ctx).size.width * 0.9,
             constraints:
-                BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             child: StatefulBuilder(
               builder: (dialogCtx, setDialogState) {
                 final inputName = nameCtrl.text.trim();
@@ -2278,20 +2289,25 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                           icon: const Icon(Icons.close,
                               color: AppColors.brandText),
                           onPressed: () => Navigator.pop(dialogCtx, false),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                         ),
-                        const Expanded(
-                          child: Center(
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
                             child: Text(
-                              'Medical Condition',
-                              style: TextStyle(
+                              editIndex != null ? 'Edit Medical Condition' : 'Medical Condition',
+                              style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18,
                                 color: AppColors.brandText,
                               ),
+                              maxLines: 1,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 48),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -2554,13 +2570,13 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       builder: (ctx) {
         return Dialog(
           backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
           child: Container(
-            width: MediaQuery.of(ctx).size.width * 0.9,
             constraints:
-                BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             child: StatefulBuilder(
               builder: (dialogCtx, setDialogState) {
                 final inputName = allergenCtrl.text.trim();
@@ -2578,20 +2594,25 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                           icon: const Icon(Icons.close,
                               color: AppColors.brandText),
                           onPressed: () => Navigator.pop(dialogCtx, false),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                         ),
-                        const Expanded(
-                          child: Center(
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
                             child: Text(
-                              'Add Allergy',
-                              style: TextStyle(
+                              editIndex != null ? 'Edit Allergy' : 'Add Allergy',
+                              style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18,
                                 color: AppColors.brandText,
                               ),
+                              maxLines: 1,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 48),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -2845,12 +2866,13 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       builder: (ctx) {
         return Dialog(
           backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
           child: Container(
             constraints:
-                BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             child: StatefulBuilder(
               builder: (dialogCtx, setS) {
                 bool allValid = true;
@@ -2894,9 +2916,14 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                           icon: const Icon(Icons.close,
                               color: AppColors.brandText),
                           onPressed: () => Navigator.pop(dialogCtx, false),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                         ),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: Center(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
                             child: Text(
                               editIndex != null
                                   ? 'Edit Past Pregnancy'
@@ -2906,10 +2933,10 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                                 fontSize: 18,
                                 color: AppColors.brandText,
                               ),
+                              maxLines: 1,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 48),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -3003,100 +3030,115 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                               ),
                             ],
                             const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: () => setS(() => isPregnancyDateEstimated = false),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                                      decoration: BoxDecoration(
-                                        color: !isPregnancyDateEstimated
-                                            ? AppColors.brandPrimary.withValues(alpha: 0.08)
-                                            : Colors.white,
-                                        border: Border.all(
+                            IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: () => setS(() => isPregnancyDateEstimated = false),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                                        decoration: BoxDecoration(
                                           color: !isPregnancyDateEstimated
-                                              ? AppColors.brandPrimary
-                                              : AppColors.borderPrimary,
-                                          width: 1.5,
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          SizedBox(
-                                            height: 20,
-                                            width: 20,
-                                            child: Radio<bool>(
-                                              value: false,
-                                              groupValue: isPregnancyDateEstimated,
-                                              activeColor: AppColors.brandPrimary,
-                                              onChanged: (val) => setS(() => isPregnancyDateEstimated = false),
-                                            ),
+                                              ? AppColors.brandPrimary.withValues(alpha: 0.08)
+                                              : Colors.white,
+                                          border: Border.all(
+                                            color: !isPregnancyDateEstimated
+                                                ? AppColors.brandPrimary
+                                                : AppColors.borderPrimary,
+                                            width: 1.5,
                                           ),
-                                          const SizedBox(width: 8),
-                                          const Expanded(
-                                            child: Text(
-                                              'Exact Date',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColors.textPrimary,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            SizedBox(
+                                              height: 20,
+                                              width: 20,
+                                              child: Radio<bool>(
+                                                value: false,
+                                                groupValue: isPregnancyDateEstimated,
+                                                activeColor: AppColors.brandPrimary,
+                                                onChanged: (val) => setS(() => isPregnancyDateEstimated = false),
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(width: 6),
+                                            const Expanded(
+                                              child: FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                alignment: Alignment.centerLeft,
+                                                child: Text(
+                                                  'Exact Date',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: AppColors.textPrimary,
+                                                  ),
+                                                  maxLines: 1,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: () => setS(() => isPregnancyDateEstimated = true),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                                      decoration: BoxDecoration(
-                                        color: isPregnancyDateEstimated
-                                            ? AppColors.brandPrimary.withValues(alpha: 0.08)
-                                            : Colors.white,
-                                        border: Border.all(
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: () => setS(() => isPregnancyDateEstimated = true),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                                        decoration: BoxDecoration(
                                           color: isPregnancyDateEstimated
-                                              ? AppColors.brandPrimary
-                                              : AppColors.borderPrimary,
-                                          width: 1.5,
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          SizedBox(
-                                            height: 20,
-                                            width: 20,
-                                            child: Radio<bool>(
-                                              value: true,
-                                              groupValue: isPregnancyDateEstimated,
-                                              activeColor: AppColors.brandPrimary,
-                                              onChanged: (val) => setS(() => isPregnancyDateEstimated = true),
-                                            ),
+                                              ? AppColors.brandPrimary.withValues(alpha: 0.08)
+                                              : Colors.white,
+                                          border: Border.all(
+                                            color: isPregnancyDateEstimated
+                                                ? AppColors.brandPrimary
+                                                : AppColors.borderPrimary,
+                                            width: 1.5,
                                           ),
-                                          const SizedBox(width: 8),
-                                          const Expanded(
-                                            child: Text(
-                                              'Estimated Date',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColors.textPrimary,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            SizedBox(
+                                              height: 20,
+                                              width: 20,
+                                              child: Radio<bool>(
+                                                value: true,
+                                                groupValue: isPregnancyDateEstimated,
+                                                activeColor: AppColors.brandPrimary,
+                                                onChanged: (val) => setS(() => isPregnancyDateEstimated = true),
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(width: 6),
+                                            const Expanded(
+                                              child: FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                alignment: Alignment.centerLeft,
+                                                child: Text(
+                                                  'Estimated Date',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: AppColors.textPrimary,
+                                                  ),
+                                                  maxLines: 1,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                             const SizedBox(height: 20),
                             Column(
@@ -3126,11 +3168,17 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                                           color: Colors.grey),
                                       const SizedBox(width: 12),
                                       const Expanded(
-                                        child: Text(
-                                          'Number of Fetuses',
-                                          style: TextStyle(
-                                              fontSize: 15,
-                                              color: AppColors.brandText),
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            'Number of Fetuses',
+                                            style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w500,
+                                                color: AppColors.brandText),
+                                            maxLines: 1,
+                                          ),
                                         ),
                                       ),
                                       IconButton(
@@ -5088,43 +5136,34 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionLabel('Body Measurements'),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: AppInputField(
-                hintText: 'Height (cm)',
-                controller: _heightCtrl,
-                isRequired: true,
-                leadingIcon: Icons.straighten_outlined,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  LengthLimitingTextInputFormatter(5)
-                ],
-                errorText: _heightError,
-                onChanged: (_) => _validateStepInline(4),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: AppInputField(
-                hintText: 'Weight (kg)',
-                controller: _weightCtrl,
-                isRequired: true,
-                leadingIcon: Icons.monitor_weight_outlined,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  LengthLimitingTextInputFormatter(5)
-                ],
-                errorText: _weightError,
-                onChanged: (_) => _validateStepInline(4),
-              ),
-            ),
+        AppInputField(
+          hintText: 'Height (cm)',
+          controller: _heightCtrl,
+          isRequired: true,
+          leadingIcon: Icons.straighten_outlined,
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+            LengthLimitingTextInputFormatter(5)
           ],
+          errorText: _heightError,
+          onChanged: (_) => _validateStepInline(4),
+        ),
+        const SizedBox(height: 14),
+        AppInputField(
+          hintText: 'Weight (kg)',
+          controller: _weightCtrl,
+          isRequired: true,
+          leadingIcon: Icons.monitor_weight_outlined,
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+            LengthLimitingTextInputFormatter(5)
+          ],
+          errorText: _weightError,
+          onChanged: (_) => _validateStepInline(4),
         ),
         if (_heightWarning != null || _weightWarning != null) ...[
           const SizedBox(height: 12),
@@ -5206,10 +5245,10 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
           child: Text(
             'Knowing pre-pregnancy weight helps accurately calculate the mother\'s pre-pregnancy BMI to determine correct weekly weight gain guidelines and monitor healthy fetal development.',
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 13,
               color: AppColors.textSecondary,
               fontStyle: FontStyle.italic,
-              height: 1.4,
+              height: 1.45,
             ),
           ),
         ),
@@ -5376,7 +5415,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                   const SizedBox(height: 6),
                   Text(
                     'Estimated pre-pregnancy weight: ${(_bmiEstimation!['estimatedWeight'] as num).toStringAsFixed(1)} kg',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
                   ),
                 ],
                 const SizedBox(height: 8),
@@ -5385,10 +5424,10 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                       ? 'Since the mother is ≤13 weeks pregnant, current weight was used as a close approximation of pre-pregnancy weight.'
                       : 'Pre-pregnancy weight was estimated by working backwards from current weight using IOM 2009 weight gain guidelines for the estimated BMI category.',
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 12.5,
                     color: AppColors.textSecondary,
                     fontStyle: FontStyle.italic,
-                    height: 1.3,
+                    height: 1.4,
                   ),
                 ),
               ],
@@ -6371,12 +6410,23 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
             child: Row(
               children: [
                 if (_step > 0) ...[
-                  Expanded(
-                    child: MainButton(
-                      label: 'Back',
-                      leftIcon: Icons.arrow_back_ios_new_rounded,
-                      isWhiteVariant: true,
+                  SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: OutlinedButton(
                       onPressed: _submitting ? null : _goBack,
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.brandPrimary,
+                        side: const BorderSide(color: AppColors.brandPrimary, width: 1.2),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                        padding: EdgeInsets.zero,
+                      ),
+                      child: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 18,
+                        color: AppColors.brandPrimary,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),

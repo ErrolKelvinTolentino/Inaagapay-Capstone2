@@ -100,7 +100,7 @@ class AnalyticsCard extends StatelessWidget {
           child: Text(
             metric.title.toUpperCase(),
             style: const TextStyle(
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.5,
               color: Color(0xFF5A5A5A),
@@ -523,8 +523,10 @@ class _PriorityRow extends StatelessWidget {
                   children: [
                     Text(
                       priority.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
                       ),

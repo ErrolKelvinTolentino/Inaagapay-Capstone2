@@ -1,0 +1,400 @@
+/* =====================================================
+   InaAgapay Admin Portal — Sign-in experience
+   Light / Pastel / Flutter v2 Theme
+   ===================================================== */
+
+:root {
+  --login-ink: #2D2D2D;
+  --login-muted: #8A8A8A;
+  --login-brand: #FF68A5;
+  --login-brand-dark: #E6398D;
+  --login-border: #F0F0F0;
+  --login-focus: rgba(255, 104, 165, 0.2);
+}
+
+body {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  padding: clamp(18px, 4vw, 56px);
+  color: var(--login-ink);
+  background:
+    linear-gradient(105deg, rgba(255, 245, 248, 0.55) 0%, rgba(255, 240, 245, 0.45) 42%, rgba(255, 248, 251, 0.35) 100%),
+    url("../images/login-background.png") center 42% / cover no-repeat fixed;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(255, 104, 165, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(255, 248, 251, 0.04), rgba(255, 240, 245, 0.18));
+}
+
+.login-wrapper {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(390px, 0.8fr);
+  width: min(1160px, 100%);
+  max-width: none;
+  min-height: min(720px, calc(100svh - clamp(36px, 8vw, 112px)));
+  overflow: hidden;
+  border: 1px solid rgba(255, 104, 165, 0.12);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 28px 80px rgba(255, 104, 165, 0.1);
+}
+
+.login-left {
+  min-width: 0;
+  padding: clamp(38px, 5vw, 64px);
+  color: var(--login-ink);
+  background:
+    linear-gradient(150deg, rgba(255, 245, 248, 0.75), rgba(255, 228, 238, 0.6)),
+    linear-gradient(180deg, transparent 35%, rgba(255, 240, 245, 0.15));
+  backdrop-filter: blur(3px);
+}
+
+.login-left::before,
+.login-left::after {
+  border: 1px solid rgba(255, 104, 165, 0.1);
+  background: rgba(255, 104, 165, 0.04);
+}
+
+.left-brand img {
+  width: auto;
+  height: 52px !important;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 104, 165, 0.15);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 24px rgba(255, 104, 165, 0.08);
+}
+
+.left-content {
+  max-width: 520px;
+  padding: clamp(34px, 7vh, 72px) 0 24px;
+}
+
+.login-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 104, 165, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 104, 165, 0.08);
+  color: var(--login-brand-dark);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.left-content h1 {
+  max-width: 480px;
+  margin-bottom: 16px;
+  color: var(--login-ink);
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.left-content > p {
+  max-width: 470px;
+  color: var(--login-muted);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.tier-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 520px;
+  margin-top: 28px;
+  gap: 12px;
+}
+
+.tier {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid rgba(255, 104, 165, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 2px 8px rgba(255, 104, 165, 0.05);
+  backdrop-filter: blur(8px);
+}
+
+.tier-icon {
+  background: rgba(255, 104, 165, 0.1);
+  color: var(--login-brand);
+}
+
+.tier-text strong {
+  color: var(--login-ink);
+}
+
+.tier-text span {
+  color: var(--login-muted);
+}
+
+.left-footer {
+  align-items: center;
+}
+
+.left-chip {
+  border: 1px solid rgba(255, 104, 165, 0.15);
+  background: rgba(255, 104, 165, 0.06);
+  color: var(--login-brand-dark);
+}
+
+.login-right {
+  width: auto;
+  min-width: 0;
+  padding: clamp(38px, 5vw, 64px);
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(16px);
+}
+
+.login-form-header {
+  margin-bottom: 30px;
+}
+
+.login-form-header img {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 22px;
+  padding: 7px;
+  border: 1px solid #f3d7e4;
+  border-radius: 14px;
+  background: #fff7fb;
+}
+
+.form-kicker {
+  margin-bottom: 8px;
+  color: var(--login-brand);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.login-form-header h2 {
+  margin-bottom: 8px;
+  color: var(--login-ink);
+  font-size: 30px;
+  letter-spacing: -0.035em;
+}
+
+.login-form-header p {
+  color: var(--login-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.form-label {
+  margin-bottom: 8px;
+  color: #2D2D2D;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.input-wrap input {
+  height: 52px;
+  padding-left: 44px;
+  border: 1px solid var(--login-border);
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  font-size: 15px;
+}
+
+.input-wrap input::placeholder {
+  color: #b0b0b0;
+}
+
+.input-wrap input:hover {
+  border-color: #e0e0e0;
+}
+
+.input-wrap input:focus {
+  border-color: var(--login-brand);
+  box-shadow: 0 0 0 4px var(--login-focus);
+}
+
+.input-wrap i:first-child,
+.pwd-toggle {
+  color: var(--login-brand);
+}
+
+.pwd-toggle {
+  right: 10px;
+}
+
+.btn-login {
+  height: 52px;
+  margin-top: 10px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, var(--login-brand), var(--login-brand-dark));
+  box-shadow: 0 10px 22px rgba(255, 104, 165, 0.3);
+}
+
+.btn-login:hover:not(:disabled) {
+  filter: none;
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(255, 104, 165, 0.35);
+}
+
+.alert-error {
+  border-color: #f1c9d8;
+  background: #fff6f9;
+  box-shadow: none;
+}
+
+.app-hint {
+  margin-top: 22px;
+  padding: 15px;
+  border: 1px solid var(--login-border);
+  border-radius: 13px;
+  background: #FFF8FB;
+  color: var(--login-muted);
+}
+
+.app-hint i {
+  color: var(--login-brand);
+}
+
+.login-footer-note {
+  color: var(--login-muted);
+}
+
+:focus-visible {
+  outline: 3px solid var(--login-brand);
+  outline-offset: 3px;
+}
+
+@media (max-width: 860px) {
+  body {
+    align-items: flex-start;
+    padding: 18px;
+    background-position: 60% center;
+  }
+
+  .login-wrapper {
+    display: flex;
+    max-width: 620px;
+    min-height: auto;
+    flex-direction: column-reverse;
+    border-radius: 22px;
+  }
+
+  .login-right,
+  .login-left {
+    width: 100%;
+    padding: 36px 32px;
+  }
+
+  .login-left {
+    min-height: 460px;
+  }
+
+  .left-content {
+    padding: 40px 0 18px;
+  }
+
+  .left-content h1 {
+    font-size: clamp(30px, 9vw, 42px);
+  }
+}
+
+@media (max-width: 520px) {
+  body {
+    padding: 0;
+    background: #FFF8FB;
+  }
+
+  .login-wrapper {
+    min-height: 100svh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .login-right,
+  .login-left {
+    padding: 30px 22px;
+  }
+
+  .login-left {
+    min-height: 520px;
+    background:
+      linear-gradient(150deg, rgba(255, 245, 248, 0.6), rgba(255, 228, 238, 0.5)),
+      url("../images/login-background.png") 62% center / cover no-repeat;
+  }
+
+  .tier-list {
+    grid-template-columns: 1fr;
+  }
+
+  .login-form-header h2 {
+    font-size: 27px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* ── Smooth Page Transitions (Flutter v2 Fluid Experience) ── */
+@keyframes pageEntrance {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes pageExit {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes contentEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+body {
+  animation: pageEntrance 0.22s ease-out both;
+}
+
+body.page-exiting {
+  animation: pageExit 0.16s ease-in forwards !important;
+  pointer-events: none !important;
+}
+
+.login-wrapper {
+  animation: contentEntrance 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}

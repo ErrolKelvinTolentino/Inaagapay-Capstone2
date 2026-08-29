@@ -6,7 +6,6 @@
 
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/small_info_box.dart';
 import '../../services/language_service.dart';
 import '../../data/pregnancy_growth_data.dart';
 import '../../models/baby_growth_milestone.dart';
@@ -15,6 +14,11 @@ import '../../models/pregnancy_growth_stage.dart';
 import '../../services/baby_book_repository.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/baby_book/baby_growth_milestones_section.dart';
+import '../../services/auth_storage.dart';
+import '../../widgets/profile_section.dart';
+import '../../services/asset_pdf_download_service.dart';
+import '../../widgets/baby_book/references_panel.dart';
+import 'package:flutter/foundation.dart';
 import '../../widgets/pregnancy_growth_journey.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -744,6 +748,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     _data = _trimesterForWeek(widget.week);
     _loadPersonalizedData();
     _loadBabyMilestones();
+    _loadBhcRegistration();
   }
 
   /// The Baby Book sections need a CurrentPregnancyState, which this page
@@ -760,6 +765,68 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       );
 
   List<BabyGrowthMilestone> _babyMilestones = const [];
+
+  /// Whether a barangay health centre has this mother on its books.
+  ///
+  /// Gates the risk banner. Starts false and is only raised once the answer
+  /// comes back — the wrong way to fail is to show a risk status to someone
+  /// nobody has assessed.
+  bool _isBhcRegistered = false;
+
+  /// Which guide PDF is currently downloading, by file name.
+  String? _downloadingGuide;
+
+  /// Reads whether she is registered, cache first so the banner does not
+  /// flicker in on every visit.
+  Future<void> _loadBhcRegistration() async {
+    final cached = await AuthStorage.wasBhcRegistered();
+    if (mounted && cached != _isBhcRegistered) {
+      setState(() => _isBhcRegistered = cached);
+    }
+
+    final motherId = await AuthStorage.getMotherId();
+    if (motherId == null) return;
+    try {
+      final row = await SupabaseService.client
+          .from('mothers')
+          .select('assigned_bhc_id')
+          .eq('mother_id', motherId)
+          .maybeSingle();
+      final registered = row != null && row['assigned_bhc_id'] != null;
+      await AuthStorage.saveBhcRegistered(registered);
+      if (mounted && registered != _isBhcRegistered) {
+        setState(() => _isBhcRegistered = registered);
+      }
+    } catch (e) {
+      // She keeps whatever the cache said. Guessing "registered" would show a
+      // risk status nobody assigned.
+      if (kDebugMode) debugPrint('BHC registration check failed: $e');
+    }
+  }
+
+  Future<void> _downloadGuidePdf({
+    required String assetPath,
+    required String fileName,
+  }) async {
+    if (_downloadingGuide != null) return;
+    setState(() => _downloadingGuide = fileName);
+    try {
+      await downloadAssetPdf(assetPath: assetPath, fileName: fileName);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(LanguageService.translate(
+            'The guide could not be downloaded. Please try again.',
+            'Hindi na-download ang gabay. Pakisubukan muli.',
+          )),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _downloadingGuide = null);
+    }
+  }
 
   Future<void> _loadBabyMilestones() async {
     if (widget.pregnancyId == 0) return;
@@ -898,17 +965,6 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     return language == AppLanguage.filipino ? filipino : english;
   }
 
-  String _localizedTrimesterName(int index, AppLanguage language) {
-    return language == AppLanguage.filipino
-        ? _trimesterNameFilipino[index]
-        : _trimesterContent[index].name;
-  }
-  String _localizedFetalCount(int count, AppLanguage language) {
-    if (language == AppLanguage.filipino) {
-      return count > 1 ? '$count na sanggol' : '1 sanggol';
-    }
-    return count > 1 ? '$count babies' : '1 baby';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -949,246 +1005,59 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     );
   }
 
-  String _getMonthText(int week, AppLanguage language) {
-    int month = 1;
-    if (week <= 4) {
-      month = 1;
-    } else if (week <= 8) {
-      month = 2;
-    } else if (week <= 13) {
-      month = 3;
-    } else if (week <= 17) {
-      month = 4;
-    } else if (week <= 22) {
-      month = 5;
-    } else if (week <= 27) {
-      month = 6;
-    } else if (week <= 31) {
-      month = 7;
-    } else if (week <= 35) {
-      month = 8;
-    } else {
-      month = 9;
-    }
 
-    return language == AppLanguage.filipino ? 'Buwan $month' : 'Month $month';
-  }
 
+
+  /// The Baby Book's cover card, standing in for the page header.
+  ///
+  /// The solid pink SliverAppBar said Week 11, Month 3, First Trimester, the
+  /// mother's name, the week range, "28% Completed" and the weeks left — and
+  /// then the Overview tab opened with a card saying all of it again, in a
+  /// different layout. Two headers for one pregnancy, disagreeing on nothing
+  /// but their design.
+  ///
+  /// The cover card wins because it is the one the Baby Book already uses, so
+  /// the page a mother reaches from "Mother and Baby Book" now looks like the
+  /// book it is named after. The back arrow rides on top of it, since a pushed
+  /// page still needs a way out.
   Widget _buildSliverHeader(AppLanguage language) {
-    final trimesterIndex = _trimesterIndexForWeek(widget.week);
-    final monthText = _getMonthText(widget.week, language);
-    return SliverAppBar(
-      expandedHeight: 220,
-      collapsedHeight: 70,
-      pinned: true,
-      backgroundColor: AppColors.brandPrimary,
-      elevation: 4,
-      shadowColor: Colors.black.withValues(alpha: 0.1),
-      iconTheme: const IconThemeData(color: AppColors.textOnColor),
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () => Navigator.pop(context),
-      ),
-      flexibleSpace: LayoutBuilder(
-        builder: (context, constraints) {
-          final topPadding = MediaQuery.paddingOf(context).top;
-          final isCollapsed =
-              constraints.maxHeight <= topPadding + kToolbarHeight + 16;
-
-          return FlexibleSpaceBar(
-            titlePadding: const EdgeInsets.only(left: 56, bottom: 16),
-            title: AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: isCollapsed ? 1 : 0,
-              child: Text(
-                '${_translate('Week', 'Linggo', language)} ${widget.week} • $monthText • ${_localizedTrimesterName(trimesterIndex, language)}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.textOnColor,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            background: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.brandPrimary,
-                    Color(0xFFE05275), // soft dark pink
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              padding: EdgeInsets.fromLTRB(20, topPadding + 40, 20, 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.25),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Icon(_data.icon,
-                            color: Colors.white, size: 26),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${_translate('Week', 'Linggo', language)} ${widget.week} • $monthText',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.9),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.firstName.isNotEmpty
-                                  ? '${_localizedTrimesterName(trimesterIndex, language)}, ${widget.firstName}'
-                                  : _localizedTrimesterName(
-                                      trimesterIndex, language),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.textOnColor,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _data.weeks,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  _buildProgressBar(language),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildProgressBar(AppLanguage language) {
-    final progress = (widget.week / 40).clamp(0.0, 1.0);
-    final weeksLeftLabel = _translate('w left', 'natitirang linggo', language);
-    final monthText = _getMonthText(widget.week, language);
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.paddingOf(context).top + 10,
+          16,
+          10,
+        ),
+        child: Stack(
           children: [
-            Text(
-              '$monthText • ${(progress * 100).round()}% Completed',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
+            // The inset is the back arrow's height plus a gap, so the card's
+            // first line starts below it rather than under it.
+            PregnancyCoverCard(
+              pregnancy: _pregnancyState,
+              contentTopInset: 44,
             ),
-            Text(
-              '${widget.weeksLeft} $weeksLeftLabel',
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 11,
+            Positioned(
+              top: 8,
+              left: 8,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.22),
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: IconButton(
+                  tooltip: _translate('Back', 'Bumalik', language),
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back_rounded,
+                      color: Colors.white, size: 20),
+                  constraints:
+                      const BoxConstraints(minWidth: 38, minHeight: 38),
+                  padding: EdgeInsets.zero,
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Stack(
-          alignment: Alignment.centerLeft,
-          children: [
-            Container(
-              height: 10,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(5),
-              ),
-            ),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final totalWidth = constraints.maxWidth;
-                final currentWidth = totalWidth * progress;
-                return Container(
-                  height: 10,
-                  width: currentWidth,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFFFD1D8), Color(0xFFFF8FA3)],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                );
-              },
-            ),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final totalWidth = constraints.maxWidth;
-                final leftOffset = (totalWidth * progress) - 10;
-                return Positioned(
-                  left: leftOffset.clamp(0.0, totalWidth - 20),
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0x3D000000), // Hex equivalent for Colors.black24/black with 0.24 opacity
-                          blurRadius: 4,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.favorite,
-                        color: AppColors.brandPrimary,
-                        size: 10,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ],
+      ),
     );
   }
 
@@ -1237,105 +1106,29 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
   }
 
   Widget _buildOverviewTab(AppLanguage language) {
+    // Only the trimester index survives: the headline, summary and weekly fact
+    // belonged to the cards this tab no longer draws. The Baby Book's growth
+    // journey says what is happening this month, from the same catalogue, and
+    // says it once.
     final trimesterIndex = _trimesterIndexForWeek(widget.week);
-    final headline = language == AppLanguage.filipino
-        ? _trimesterHeadlineFilipino[trimesterIndex]
-        : _data.headline;
-    final summary = language == AppLanguage.filipino
-        ? _trimesterSummaryFilipino[trimesterIndex]
-        : _data.summary;
-    final weeklyFact = language == AppLanguage.filipino
-        ? _weeklyFactsFilipino[widget.week] ??
-            'Ang iyong sanggol ay lumalago nang malakas ngayong linggo.'
-        : _weeklyFacts[widget.week] ?? 'Your baby is growing strong this week.';
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _Card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                headline,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                summary,
-                style: const TextStyle(
-                  fontSize: 13.5,
-                  color: AppColors.textSecondary,
-                  height: 1.6,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFDF2F4),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFFCD8DE)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.brandPrimary.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.auto_awesome,
-                  color: AppColors.brandPrimary,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _translate('THIS WEEK\'S FACT', 'NGAYONG LINGGONG KATOTOHANAN', language),
-                      style: const TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.brandPrimary,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      weeklyFact,
-                      style: const TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        _buildInfoGrid(language),
-        const SizedBox(height: 12),
-        _buildSecondaryStatsRow(language),
-        const SizedBox(height: 12),
-        _buildRiskSummaryCard(language),
+        // The cover card is the page header now, so it is not drawn again
+        // here — see _buildSliverHeader.
+
+        // Shown only to a mother her barangay health centre has registered.
+        //
+        // A risk level is an assessment a midwife makes from a record. Without
+        // a health centre there is no record and no one has made one, so the
+        // banner was reporting a status nobody had assigned — and "HIGH RISK
+        // STATUS" in red is the last thing to show a mother on the strength of
+        // a default value.
+        if (_isBhcRegistered) ...[
+          const SizedBox(height: 12),
+          _buildRiskSummaryCard(language),
+        ],
 
         // The Baby Book's month browser: illustration, approximate length and
         // weight, size comparison, and what is developing this month. Placed
@@ -1358,201 +1151,43 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           onToggleCompleted: _persistMilestoneMark,
         ),
 
-        const SizedBox(height: 20),
-        _SectionHeader(
-          title: _translate('Trimester Journey', 'Paglalakbay ng Trimester', language),
-          icon: Icons.timeline_rounded,
-        ),
-        const SizedBox(height: 10),
-        _buildTrimesterTimeline(language),
-        const SizedBox(height: 16),
-        _SectionHeader(
-          title: _translate('Medical Visits This Trimester', 'Mga Medikal na Pagbisita ngayong Trimester', language),
-          icon: Icons.medical_services_outlined,
-        ),
-        const SizedBox(height: 10),
-        _buildMedicalVisitsChecklist(language),
-
-        if (trimesterIndex == 2) ...[
-          const SizedBox(height: 16),
-          _SectionHeader(
-            title: _translate('Hospital Bag Essentials', 'Mga Kailangan sa Bag ng Ospital', language),
-            icon: Icons.backpack_outlined,
-          ),
-          const SizedBox(height: 10),
-          _buildHospitalBagChecklist(language),
-        ],
+        // Trimester Journey, Medical Visits This Trimester and the Hospital
+        // Bag checklist used to sit here.
+        //
+        // The first restated the trimester the header already names. The other
+        // two were static checklists of what a pregnancy generally involves,
+        // which is the same job the Pregnancy Milestones section above does —
+        // except that section reads the real catalogue and knows which items
+        // have actually happened, while these did not.
         const SizedBox(height: 16),
         _buildEmotionalNote(language, trimesterIndex),
+
+        // References last, and folded away.
+        //
+        // It sat above the note, which put a bibliography between a mother and
+        // the one paragraph on the page written to reassure her. Sources are
+        // the least urgent thing here and belong at the foot of the page.
+        const SizedBox(height: 16),
+        ReferencesPanel(
+          onDownloadDoh: () => _downloadGuidePdf(
+            assetPath: 'assets/pdf/DOH.pdf',
+            fileName: 'DOH-Mother-and-Baby-Book.pdf',
+          ),
+          onDownloadWho: () => _downloadGuidePdf(
+            assetPath: 'assets/pdf/WHO.pdf',
+            fileName: 'WHO-Home-Based-Records-Guide.pdf',
+          ),
+          downloadingDoh: _downloadingGuide == 'DOH-Mother-and-Baby-Book.pdf',
+          downloadingWho:
+              _downloadingGuide == 'WHO-Home-Based-Records-Guide.pdf',
+        ),
+
         const SizedBox(height: 24),
       ],
     );
   }
 
-  Widget _buildInfoGrid(AppLanguage language) {
-    return Column(
-      children: [
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: SmallInfoBox(
-                  icon: Icons.calendar_month,
-                  title: _translate('Due Date', 'Araw ng Pagbubuntis', language),
-                  value: widget.dueDate,
-                  iconColor: AppColors.brandPrimary,
-                  borderColor: AppColors.borderPrimary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SmallInfoBox(
-                  icon: Icons.timer_outlined,
-                  title: _translate('Weeks Left', 'Natitirang Linggo', language),
-                  value: '${widget.weeksLeft} ${_translate('weeks', 'linggo', language)}',
-                  iconColor: const Color(0xFF1ABC9C),
-                  borderColor: AppColors.borderPrimary,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: SmallInfoBox(
-                  icon: Icons.straighten_rounded,
-                  title: _translate('Estimated Baby Size', 'Tinatayang Sukat', language),
-                  value: widget.babySize,
-                  iconColor: const Color(0xFFF39C12),
-                  borderColor: AppColors.borderPrimary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SmallInfoBox(
-                  icon: Icons.monitor_weight_outlined,
-                  title: _translate('Estimated Baby Weight', 'Tinatayang Timbang', language),
-                  value: widget.babyWeight,
-                  iconColor: const Color(0xFF3498DB),
-                  borderColor: AppColors.borderPrimary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildSecondaryStatsRow(AppLanguage language) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFF5E8ED)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF9EBEA),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.health_and_safety_outlined,
-                      color: _riskColor(widget.riskLevel),
-                      size: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _translate('Risk Level', 'Antas ng Panganib', language),
-                          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.riskLevel.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: _riskColor(widget.riskLevel),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFF5E8ED)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF5EEF8),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.child_care,
-                      color: AppColors.brandPrimary,
-                      size: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _translate('Fetal Count', 'Bilang ng Sanggol', language),
-                          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _localizedFetalCount(widget.fetalCount, language),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildRiskSummaryCard(AppLanguage language) {
     if (widget.riskLevel.isEmpty) return const SizedBox.shrink();
@@ -1562,11 +1197,28 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     final isMedium = riskLevel == 'MEDIUM';
     final badgeColor = _riskColor(riskLevel);
 
-    final List<Color> gradientColors = isHigh
-        ? [AppColors.error, const Color(0xFFD32F2F)]
+    // The midwife's palette, not a saturated warning banner.
+    //
+    // ProfileRiskCard states a high-risk pregnancy on pale rose with a soft
+    // border and deep rose text. This card was a solid red-to-crimson gradient
+    // with white type — the visual language of an emergency — for a status
+    // that means "your midwife will want to see you more often". Same
+    // information, told the way the clinician's own screen tells it.
+    final Color surface = isHigh
+        ? const Color(0xFFFFF1F2)
         : isMedium
-            ? [AppColors.warning, const Color(0xFFE67E22)]
-            : [AppColors.success, const Color(0xFF27AE60)];
+            ? const Color(0xFFFFF8EA)
+            : const Color(0xFFF0FDF4);
+    final Color outline = isHigh
+        ? const Color(0xFFFECDD3)
+        : isMedium
+            ? const Color(0xFFFFE1A3)
+            : const Color(0xFFBBF7D0);
+    final Color ink = isHigh
+        ? const Color(0xFF9F1239)
+        : isMedium
+            ? const Color(0xFF8A632D)
+            : const Color(0xFF15803D);
 
     final riskFactors = _personalizedWarnings.isNotEmpty
         ? _personalizedWarnings
@@ -1575,20 +1227,20 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     String riskNote = '';
     if (isHigh) {
       riskNote = _translate(
-        'High risk alert. Requires regular midwife monitoring and safety actions.',
-        'Mataas ang panganib. Kailangan ng regular na pagsubaybay ng midwife at mga ligtas na hakbang.',
+        'Tap to see what your midwife is watching.',
+        'I-tap para makita kung ano ang binabantayan ng iyong midwife.',
         language,
       );
     } else if (isMedium) {
       riskNote = _translate(
-        'Moderate risk detected. Keep monitoring your symptoms and attend all visits.',
-        'May katamtamang panganib. Ipagpatuloy ang pagsubaybay sa mga sintomas at pagdalo sa checkup.',
+        'Tap to see what to keep an eye on.',
+        'I-tap para makita kung ano ang dapat bantayan.',
         language,
       );
     } else {
       riskNote = _translate(
-        'Low risk. Pregnancy is progressing normally. Continue standard prenatal care.',
-        'Mababa ang panganib. Maayos ang takbo ng pagbubuntis. Ipagpatuloy ang karaniwang prenatal care.',
+        'Keep going to your checkups as usual.',
+        'Ipagpatuloy lang ang mga karaniwang checkup.',
         language,
       );
     }
@@ -1601,32 +1253,29 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
         borderRadius: BorderRadius.circular(18),
         child: Ink(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: gradientColors,
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: surface,
             borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: badgeColor.withValues(alpha: 0.2),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            border: Border.all(color: outline),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: Colors.white24,
+                decoration: BoxDecoration(
+                  color: ink.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  isHigh ? Icons.warning_rounded : isMedium ? Icons.warning_amber_rounded : Icons.check_circle_rounded,
-                  color: Colors.white,
+                  // An outlined mark rather than a filled warning triangle.
+                  // The triangle is the icon an app uses when something has
+                  // gone wrong right now.
+                  isHigh
+                      ? Icons.info_outline_rounded
+                      : isMedium
+                          ? Icons.info_outline_rounded
+                          : Icons.check_circle_outline_rounded,
+                  color: ink,
                   size: 24,
                 ),
               ),
@@ -1635,40 +1284,48 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // No "Prenatal Risk Summary" eyebrow. It labelled the card
+                    // with the name of a clinical artefact before saying
+                    // anything, and the line beneath it says what this is.
                     Text(
-                      _translate('Prenatal Risk Summary', 'Buod ng Panganib', language),
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
+                      // Named for what happens next, not for a risk tier.
+                      // "HIGH RISK STATUS" is a label a mother carries around
+                      // all day; "needs closer monitoring" is a plan, and it
+                      // is the same thing the record actually means.
                       _translate(
-                        isHigh ? 'HIGH RISK STATUS' : isMedium ? 'MODERATE RISK STATUS' : 'LOW RISK STATUS',
-                        isHigh ? 'MATAAS NA PANGANIB' : isMedium ? 'KATAMTAMANG PANGANIB' : 'MABABANG PANGANIB',
+                        isHigh
+                            ? 'Your pregnancy needs closer monitoring'
+                            : isMedium
+                                ? 'A few things to keep an eye on'
+                                : 'Your pregnancy is on track',
+                        isHigh
+                            ? 'Kailangan ng mas malapit na pagbantay ang iyong pagbubuntis'
+                            : isMedium
+                                ? 'May ilang bagay na dapat bantayan'
+                                : 'Maayos ang takbo ng iyong pagbubuntis',
                         language,
                       ),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
+                      style: TextStyle(
+                        color: ink,
+                        fontSize: 16.5,
+                        height: 1.3,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
+                        letterSpacing: -0.2,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
                       riskNote,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: 11,
+                        color: ink.withValues(alpha: 0.85),
+                        fontSize: 12.5,
+                        height: 1.4,
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 24),
+              Icon(Icons.chevron_right_rounded, color: ink, size: 24),
             ],
           ),
         ),
@@ -1867,329 +1524,11 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
 
 
 
-  Widget _buildTrimesterTimeline(AppLanguage language) {
-    const trimesters = [
-      ('1st', 'Weeks 1–13', 0, '🔬 Embryo'),
-      ('2nd', 'Weeks 14–27', 1, '💓 Heartbeat'),
-      ('3rd', 'Weeks 28–40', 2, '👶 Full Term'),
-    ];
-    final currentIdx = _trimesterIndexForWeek(widget.week);
-
-    return _Card(
-      child: Row(
-        children: trimesters.asMap().entries.map((entry) {
-          final idx = entry.key;
-          final trimester = entry.value;
-          final isActive = idx == currentIdx;
-          final isPast = idx < currentIdx;
-          return Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? AppColors.brandPrimary
-                              : isPast
-                                  ? AppColors.brandPrimary.withValues(alpha: 0.1)
-                                  : const Color(0xFFF5E8ED),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isActive
-                                ? AppColors.brandPrimary
-                                : isPast
-                                    ? AppColors.brandPrimary.withValues(alpha: 0.25)
-                                    : AppColors.borderPrimary,
-                            width: isActive ? 2 : 1,
-                          ),
-                          boxShadow: [
-                            if (isActive)
-                              BoxShadow(
-                                color: AppColors.brandPrimary.withValues(alpha: 0.25),
-                                blurRadius: 6,
-                                offset: const Offset(0, 3),
-                              ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Text(
-                            trimester.$1,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: isActive
-                                  ? AppColors.textOnColor
-                                  : isPast
-                                      ? AppColors.brandPrimary
-                                      : AppColors.textSecondary,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        trimester.$2,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                          color: isActive ? AppColors.brandPrimary : AppColors.textSecondary,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        trimester.$4,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                          color: isActive ? AppColors.textPrimary : AppColors.textSecondary.withValues(alpha: 0.7),
-                        ),
-                      ),
-                      if (isActive) ...[
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.brandPrimary.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            _translate('HERE', 'NITO', language),
-                            style: const TextStyle(
-                              fontSize: 7.5,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.brandPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (idx < 2)
-                  Expanded(
-                    child: Container(
-                      height: 3,
-                      margin: const EdgeInsets.only(bottom: 45),
-                      decoration: BoxDecoration(
-                        color: isPast
-                            ? AppColors.brandPrimary.withValues(alpha: 0.4)
-                            : const Color(0xFFF5E8ED),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildMedicalVisitsChecklist(AppLanguage language) {
-    return _Card(
-      child: Column(
-        children: _data.medicalVisits.asMap().entries.map((entry) {
-          final index = entry.key;
-          final visitText = entry.value;
-          
-          bool isPast = false;
-          bool isCurrent = false;
-          
-          if (widget.week <= 13) {
-            if (index == 0 && widget.week >= 8) {
-              isPast = true;
-            } else if (index == 0 && widget.week < 8) {
-              isCurrent = true;
-            } else if (index == 1 && widget.week >= 12) {
-              isPast = true;
-            } else if (index == 1 && widget.week >= 8) {
-              isCurrent = true;
-            } else if (index == 2 && widget.week >= 13) {
-              isPast = true;
-            } else if (index == 2 && widget.week >= 11) {
-              isCurrent = true;
-            }
-          } else if (widget.week <= 27) {
-            if (index == 0 && widget.week >= 20) {
-              isPast = true;
-            } else if (index == 0 && widget.week >= 18) {
-              isCurrent = true;
-            }
-            if (index == 1 && widget.week >= 28) {
-              isPast = true;
-            } else if (index == 1 && widget.week >= 24) {
-              isCurrent = true;
-            }
-          } else {
-            if (index == 0 && widget.week >= 36) {
-              isPast = true;
-            } else if (index == 0 && widget.week >= 28) {
-              isCurrent = true;
-            }
-            if (index == 1 && widget.week >= 40) {
-              isPast = true;
-            } else if (index == 1 && widget.week >= 36) {
-              isCurrent = true;
-            }
-          }
-
-          return _buildVisitRow(
-            text: _translateContent(visitText, language),
-            isPast: isPast,
-            isCurrent: isCurrent,
-            isLast: index == _data.medicalVisits.length - 1,
-            language: language,
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildVisitRow({
-    required String text,
-    required bool isPast,
-    required bool isCurrent,
-    required bool isLast,
-    required AppLanguage language,
-  }) {
-    final statusColor = isPast
-        ? const Color(0xFF27AE60)
-        : isCurrent
-            ? AppColors.brandPrimary
-            : AppColors.textSecondary.withValues(alpha: 0.5);
-
-    final statusIcon = isPast
-        ? Icons.check_circle
-        : isCurrent
-            ? Icons.play_circle_filled
-            : Icons.radio_button_unchecked;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          children: [
-            Container(
-              width: 20,
-              height: 20,
-              decoration: const BoxDecoration(shape: BoxShape.circle),
-              child: Icon(statusIcon, color: statusColor, size: 18),
-            ),
-            if (!isLast)
-              Container(
-                width: 2,
-                height: 40,
-                color: isPast ? const Color(0xFF2ECE7A) : AppColors.borderPrimary,
-              ),
-          ],
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  text,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: (isCurrent || isPast) ? FontWeight.w600 : FontWeight.w400,
-                    color: isPast
-                        ? AppColors.textSecondary
-                        : isCurrent
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary.withValues(alpha: 0.7),
-                    decoration: isPast ? TextDecoration.lineThrough : null,
-                  ),
-                ),
-                if (isCurrent) ...[
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.brandPrimary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      _translate('RECOMMENDED FOR THIS WEEK', 'REKOMENDADO NGAYONG LINGGO', language),
-                      style: const TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.brandPrimary,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 
 
 
-  Widget _buildHospitalBagChecklist(AppLanguage language) {
-    return _Card(
-      child: Column(
-        children: _hospitalBagItems.map((item) {
-          final isChecked = _checkedTasks.contains(item);
 
-          return Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () {
-                setState(() {
-                  if (isChecked) {
-                    _checkedTasks.remove(item);
-                  } else {
-                    _checkedTasks.add(item);
-                  }
-                });
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      isChecked
-                          ? Icons.check_circle_rounded
-                          : Icons.radio_button_unchecked_rounded,
-                      color: isChecked ? const Color(0xFF27AE60) : AppColors.textSecondary.withValues(alpha: 0.7),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _translateContent(item, language),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isChecked ? AppColors.textSecondary : AppColors.textPrimary,
-                          decoration: isChecked ? TextDecoration.lineThrough : null,
-                          fontWeight: isChecked ? FontWeight.normal : FontWeight.w500,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
+
 
   Widget _buildEmotionalNote(AppLanguage language, int trimesterIndex) {
     return Container(
@@ -2255,47 +1594,376 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     );
   }
 
+  /// The illustration for the month she is in, from the same growth catalogue
+  /// the Overview tab draws from. Null when the week falls outside it.
+  ///
+  /// Drawn cropped rather than letterboxed: the artwork is a close view of a
+  /// belly with the baby at that stage, and filling the frame is what makes it
+  /// read at a glance. Fitting the whole image inside left it small in a band
+  /// of white.
+  String? get _stageIllustration =>
+      BabyBookRepository.stageForWeek(widget.week)?.imageAsset;
+
+  /// The week a development entry belongs to, read from its own text.
+  ///
+  /// The entries are written as "Week 8 – All major organs are forming", so
+  /// the number is already there; parsing it is what lets the rail know which
+  /// ones she has passed. Null for an entry that names no week, which is
+  /// treated as neither past nor current rather than guessed at.
+  int? _milestoneWeek(String milestone) {
+    final match = RegExp(r'week\s*(\d+)', caseSensitive: false)
+        .firstMatch(milestone);
+    if (match == null) return null;
+    return int.tryParse(match.group(1)!);
+  }
+
+  /// A list drawn as one card with a connected spine down its left edge.
+  ///
+  /// The Development Milestones rail turned out to be the right shape for
+  /// every list on this page: one container instead of a column of loose
+  /// boxes, and a thread showing the entries belong together. Symptoms, key
+  /// nutrients and foods to skip all reuse it, so the tabs stop looking like
+  /// four different designers took one each.
+  ///
+  /// [entries] carry their own icon and colour — a marker per row that says
+  /// what the row is about, rather than a tick repeated down the column.
+  Widget _buildContentRail(List<_RailEntry> entries) {
+    if (entries.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF5E8ED)),
+      ),
+      child: Column(
+        children: [
+          for (var index = 0; index < entries.length; index++)
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: 34,
+                    child: Column(
+                      children: [
+                        if (index == 0)
+                          const SizedBox(height: 14)
+                        else
+                          Expanded(
+                            child: Container(
+                              width: 2,
+                              color: const Color(0xFFF3E4EA),
+                            ),
+                          ),
+                        Container(
+                          width: 30,
+                          height: 30,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: entries[index].colour.withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                            border: entries[index].highlighted
+                                ? Border.all(
+                                    color: entries[index].colour, width: 1.5)
+                                : null,
+                          ),
+                          child: Icon(
+                            entries[index].icon,
+                            size: 16,
+                            color: entries[index].colour,
+                          ),
+                        ),
+                        if (index == entries.length - 1)
+                          const SizedBox(height: 14)
+                        else
+                          Expanded(
+                            child: Container(
+                              width: 2,
+                              color: const Color(0xFFF3E4EA),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        top: index == 0 ? 0 : 8,
+                        bottom: index == entries.length - 1 ? 0 : 8,
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: entries[index].highlighted
+                              ? entries[index].colour.withValues(alpha: 0.06)
+                              : const Color(0xFFFFFCFD),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: entries[index].highlighted
+                                ? entries[index].colour.withValues(alpha: 0.35)
+                                : const Color(0xFFF5E8ED),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              entries[index].title,
+                              style: const TextStyle(
+                                color: AppColors.headingSoft,
+                                fontSize: 15,
+                                height: 1.3,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (entries[index].body != null) ...[
+                              const SizedBox(height: 5),
+                              Text(
+                                entries[index].body!,
+                                style: const TextStyle(
+                                  color: AppColors.inputText,
+                                  fontSize: 13.5,
+                                  height: 1.45,
+                                ),
+                              ),
+                            ],
+                            if (entries[index].note != null) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF7FA),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(Icons.lightbulb_outline_rounded,
+                                        size: 17, color: AppColors.brandText),
+                                    const SizedBox(width: 9),
+                                    Expanded(
+                                      child: Text(
+                                        entries[index].note!,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: AppColors.inputText,
+                                          height: 1.45,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBabyDevelopmentRail(AppLanguage language) {
+    final entries = _data.babyDevelopment;
+    if (entries.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF5E8ED)),
+      ),
+      child: Column(
+        children: [
+          for (var index = 0; index < entries.length; index++)
+            Builder(builder: (context) {
+              final week = _milestoneWeek(entries[index]);
+              final isPast = week != null && week < widget.week;
+              final isNow = week != null &&
+                  (week == widget.week ||
+                      (week > widget.week - 2 && week <= widget.week));
+
+              final Color markerColour = isNow
+                  ? AppColors.brandPrimary
+                  : isPast
+                      ? const Color(0xFF4E9D8E)
+                      : const Color(0xFFD9CFD4);
+
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: 26,
+                      child: Column(
+                        children: [
+                          if (index == 0)
+                            const Spacer()
+                          else
+                            Expanded(
+                              child: Container(
+                                width: 2,
+                                color: const Color(0xFFFFD7E5),
+                              ),
+                            ),
+                          Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: markerColour,
+                              shape: BoxShape.circle,
+                              border: isNow
+                                  ? Border.all(color: Colors.white, width: 3)
+                                  : null,
+                              boxShadow: isNow
+                                  ? [
+                                      BoxShadow(
+                                        color: markerColour.withValues(
+                                            alpha: 0.3),
+                                        blurRadius: 0,
+                                        spreadRadius: 3,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: isPast
+                                ? const Icon(Icons.check_rounded,
+                                    size: 11, color: Colors.white)
+                                : null,
+                          ),
+                          if (index == entries.length - 1)
+                            const Spacer()
+                          else
+                            Expanded(
+                              child: Container(
+                                width: 2,
+                                color: const Color(0xFFFFD7E5),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          top: index == 0 ? 0 : 8,
+                          bottom: index == entries.length - 1 ? 0 : 8,
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isNow
+                                ? const Color(0xFFFFF4F8)
+                                : const Color(0xFFFFFCFD),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isNow
+                                  ? const Color(0xFFFFC7DB)
+                                  : const Color(0xFFF5E8ED),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _translateContent(entries[index], language),
+                                style: TextStyle(
+                                  color: isNow
+                                      ? AppColors.headingSoft
+                                      : AppColors.inputText,
+                                  fontSize: 13.5,
+                                  height: 1.45,
+                                  fontWeight: isNow
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
+                              ),
+                              if (isNow) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  _translate('Around now', 'Malapit na ngayon',
+                                      language),
+                                  style: const TextStyle(
+                                    color: AppColors.brandText,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBabyTab(AppLanguage language) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // The same container the growth journey's stage card uses — white,
+        // 24 radius, soft pink edge, one lifted shadow. The pink-on-pink panel
+        // was a third card style on a page that already has two.
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF0F3),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFFFD1D8)),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFFFDFEB)),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFFD1D8).withValues(alpha: 0.2),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                color: const Color(0xFF69243F).withValues(alpha: 0.06),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
           child: Column(
             children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFFD1D8).withValues(alpha: 0.5),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
+              // The month's illustration, the same artwork the Overview tab's
+              // growth journey draws.
+              //
+              // This was a 👶 emoji in a white circle — a generic cartoon
+              // where the other tab shows her baby at this stage. Using the
+              // same picture is most of what makes the two tabs read as one
+              // book rather than two designs.
+              if (_stageIllustration != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Image.asset(
+                    _stageIllustration!,
+                    height: 170,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stack) => const SizedBox(
+                      height: 72,
+                      child: Center(
+                        child: Text('👶', style: TextStyle(fontSize: 38)),
+                      ),
                     ),
-                  ],
-                ),
-                child: const Center(
-                  child: Text(
-                    '👶',
-                    style: TextStyle(fontSize: 38),
                   ),
                 ),
-              ),
               const SizedBox(height: 14),
               Text(
                 _translate('Your Baby this Week', 'Ang Iyong Sanggol Ngayong Linggo', language),
@@ -2352,14 +2020,14 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           icon: Icons.auto_awesome,
         ),
         const SizedBox(height: 10),
-        ..._data.babyDevelopment.map((milestone) {
-          final isCurrentWeek = milestone.toLowerCase().contains('week ${widget.week}');
-          return _buildMilestoneCard(
-            text: _translateContent(milestone, language),
-            isHighlighted: isCurrentWeek,
-            language: language,
-          );
-        }),
+        // A connected rail, not a stack of separate cards.
+        //
+        // These entries are a sequence — week 4, then 6, then 8 — and drawing
+        // them as loose boxes lost that, so a mother could not see at a glance
+        // which ones her baby has already passed. The rail borrows the visual
+        // grammar of the Pregnancy Milestones timeline on the Overview tab:
+        // a spine, a marker per entry, and the ones behind her marked done.
+        _buildBabyDevelopmentRail(language),
         const SizedBox(height: 20),
         _SectionHeader(
           title: _translate('Changes in Your Body', 'Mga Pagbabago sa Iyong Katawan', language),
@@ -2416,77 +2084,6 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     );
   }
 
-  Widget _buildMilestoneCard({
-    required String text,
-    required bool isHighlighted,
-    required AppLanguage language,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isHighlighted ? const Color(0xFFFFF4F6) : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isHighlighted ? const Color(0xFFFFD1D8) : const Color(0xFFF5E8ED),
-          width: isHighlighted ? 1.5 : 1.0,
-        ),
-        boxShadow: [
-          if (isHighlighted)
-            BoxShadow(
-              color: const Color(0xFFFFD1D8).withValues(alpha: 0.25),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            isHighlighted ? Icons.stars_rounded : Icons.fiber_manual_record_rounded,
-            size: isHighlighted ? 20 : 10,
-            color: isHighlighted ? AppColors.brandPrimary : AppColors.textSecondary.withValues(alpha: 0.7),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isHighlighted) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.brandPrimary,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      _translate('DEVELOPING THIS WEEK', 'NABUBUO NGAYONG LINGGO', language),
-                      style: const TextStyle(
-                        fontSize: 8,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                ],
-                Text(
-                  text,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textPrimary,
-                    fontWeight: isHighlighted ? FontWeight.w600 : FontWeight.w400,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildMotherChangesPanel(AppLanguage language) {
     return _Card(
@@ -2598,165 +2195,113 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
             icon: Icons.assignment_turned_in_outlined,
           ),
           const SizedBox(height: 10),
-          ..._personalizedSymptoms.map((symptom) => _buildSymptomTile(
-                name: symptom,
-                desc: _translate(
-                  'This symptom is officially recorded in your prenatal chart. Follow the care guidelines provided by your midwife.',
-                  'Ang sintomas na ito ay opisyal na nakatala sa iyong prenatal chart. Sundin ang mga tagubilin ng iyong midwife.',
+          _buildContentRail([
+            for (final symptom in _personalizedSymptoms)
+              _RailEntry(
+                icon: Icons.assignment_turned_in_outlined,
+                colour: AppColors.brandPrimary,
+                title: _translateContent(symptom, language),
+                note: _translate(
+                  'Recorded in your chart. Follow what your midwife told you about this.',
+                  'Nakatala ito sa iyong chart. Sundin ang bilin ng iyong midwife tungkol dito.',
                   language,
                 ),
-                icon: Icons.checklist_rounded,
-                isReported: true,
-                language: language,
-              )),
+                highlighted: true,
+              ),
+          ]),
           const SizedBox(height: 16),
         ],
         _SectionHeader(
-          title: _translate('Normal Physiological Changes', 'Mga Karaniwang Sintomas ng Trimester', language),
+          // "Normal Physiological Changes" is a phrase from a textbook. This
+          // says the same thing and also says the reassuring part out loud.
+          title: _translate('What many mothers feel now',
+              'Ang nararamdaman ng maraming ina ngayon', language),
           icon: Icons.spa_outlined,
         ),
         const SizedBox(height: 10),
-        ..._data.commonSymptoms.map((symptom) {
-          String whyItHappens = '';
-          final sName = symptom.name.toLowerCase();
-          if (sName.contains('morning') || sName.contains('nausea')) {
-            whyItHappens = _translate('Triggered by rising hCG hormone and estrogen levels in early pregnancy.', 'Sanhi ng tumataas na hCG hormone at estrogen sa unang yugto ng pagbubuntis.', language);
-          } else if (sName.contains('fatigue')) {
-            whyItHappens = _translate('Your body is producing more blood and using energy to build the placenta.', 'Ang iyong katawan ay gumagawa ng mas maraming dugo at gumagamit ng enerhiya para mabuo ang inunan.', language);
-          } else if (sName.contains('heartburn')) {
-            whyItHappens = _translate('Pregnancy hormones relax the valve between your stomach and esophagus.', 'Rinirelaks ng hormones ang balbula sa pagitan ng sikmura at esophagus, kaya umaakyat ang asido.', language);
-          } else if (sName.contains('back pain')) {
-            whyItHappens = _translate('As your baby grows, your center of gravity shifts and ligaments loosen.', 'Habang lumalaki ang sanggol, nagbabago ang sentro ng balanse at lumuluwag ang mga ligament.', language);
-          } else {
-            whyItHappens = _translate('A normal physiological response to gestational hormonal shifts.', 'Isang normal na tugon ng katawan sa mga pagbabago ng hormone sa pagbubuntis.', language);
-          }
-
-          return _buildSymptomTile(
-            name: symptom.name,
-            desc: symptom.tip,
-            why: whyItHappens,
-            icon: symptom.icon,
-            isReported: false,
-            language: language,
-          );
-        }),
+        _buildContentRail([
+          for (final symptom in _data.commonSymptoms)
+            _RailEntry(
+              // The symptom's own icon, in pink — a marker that says what the
+              // row is about, rather than a tick repeated down the column.
+              icon: symptom.icon,
+              colour: AppColors.brandText,
+              title: _translateContent(symptom.name, language),
+              body: _symptomExplanation(symptom.name, language),
+              note: _translateContent(symptom.tip, language),
+            ),
+        ]),
         const SizedBox(height: 20),
       ],
     );
   }
 
-  Widget _buildSymptomTile({
-    required String name,
-    required String desc,
-    String? why,
-    required IconData icon,
-    required bool isReported,
-    required AppLanguage language,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isReported ? AppColors.brandPrimary.withValues(alpha: 0.4) : const Color(0xFFF5E8ED),
-          width: isReported ? 1.5 : 1.0,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.01),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: isReported ? AppColors.brandPrimary.withValues(alpha: 0.12) : const Color(0xFFF0F3F7),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              icon,
-              size: 22,
-              color: isReported ? AppColors.brandPrimary : AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _translateContent(name, language),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                if (why != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    why,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary.withValues(alpha: 0.85),
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.lightbulb_outline_rounded, size: 16, color: AppColors.warning),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        _translateContent(desc, language),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  /// Why a common symptom happens, where there is something specific to say.
+  ///
+  /// Returns null rather than filler. Everything without a specific answer
+  /// used to get "A normal physiological response to gestational hormonal
+  /// shifts" — the same sentence under three cards in a row, which teaches a
+  /// mother to skip the line and takes the real explanations with it.
+  String? _symptomExplanation(String name, AppLanguage language) {
+    final sName = name.toLowerCase();
+    if (sName.contains('morning') || sName.contains('nausea')) {
+      return _translate(
+          'Caused by the pregnancy hormones rising in the early weeks.',
+          'Dulot ito ng pagtaas ng mga hormone sa unang mga linggo ng pagbubuntis.',
+          language);
+    }
+    if (sName.contains('fatigue')) {
+      return _translate(
+          'Your body is making more blood and building the placenta, which takes a lot of energy.',
+          'Gumagawa ang katawan mo ng mas maraming dugo at binubuo ang inunan, kaya marami itong kinukuhang lakas.',
+          language);
+    }
+    if (sName.contains('heartburn')) {
+      return _translate(
+          'Pregnancy hormones loosen the valve at the top of your stomach, so acid rises.',
+          'Lumuluwag ang balbula sa itaas ng sikmura dahil sa hormones, kaya umaakyat ang asido.',
+          language);
+    }
+    if (sName.contains('back pain')) {
+      return _translate(
+          'As your baby grows, your balance shifts and your joints loosen.',
+          'Habang lumalaki ang sanggol, nagbabago ang iyong balanse at lumuluwag ang mga kasukasuan.',
+          language);
+    }
+    return null;
   }
+
 
   Widget _buildNutritionTab(AppLanguage language) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // The app's own palette, not the teal-on-mint this card used — the
+        // only green surface in the mother's app, which made the tab look
+        // borrowed from somewhere else.
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: const Color(0xFFE8F8F5),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFA3E4D7)),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFF5E4EC)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFD1F2EB),
-                  shape: BoxShape.circle,
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[Color(0xFFFF8FBC), AppColors.brandPrimary],
+                  ),
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                child: const Icon(Icons.restaurant, color: Color(0xFF16A085), size: 22),
+                child: const Icon(Icons.restaurant_rounded,
+                    color: Colors.white, size: 23),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -2764,23 +2309,28 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _translate('Eating for Two', 'Pagkain para sa Dalawa', language),
+                      // "Eating for Two" is the phrase most often taken to
+                      // mean double portions, which is the opposite of the
+                      // advice underneath it.
+                      _translate('Eating well while pregnant',
+                          'Wastong pagkain habang buntis', language),
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                        color: Color(0xFF117A65),
+                        fontSize: 16.5,
+                        color: AppColors.headingSoft,
+                        letterSpacing: -0.2,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       _translate(
-                        'Quality is key. Focus on nutrient-dense foods rich in folic acid, iron, calcium, and protein. Avoid empty calorie cravings.',
-                        'Kwalidad ang mahalaga. Magpokus sa mga pagkain na mayaman sa folic acid, iron, calcium, at protina. Iwasan ang mga matatamis o walang sustansyang cravings.',
+                        'You do not need to eat twice as much — what matters is what you eat. Aim for foods rich in iron, calcium, folate and protein.',
+                        'Hindi mo kailangang kumain nang doble — ang mahalaga ay kung ano ang kinakain mo. Piliin ang mga pagkaing mayaman sa iron, calcium, folate at protina.',
                         language,
                       ),
                       style: const TextStyle(
-                        fontSize: 12.5,
-                        color: Color(0xFF16A085),
+                        fontSize: 13.5,
+                        color: AppColors.inputText,
                         height: 1.5,
                       ),
                     ),
@@ -2800,24 +2350,31 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           icon: Icons.food_bank_outlined,
         ),
         const SizedBox(height: 10),
-        ..._data.nutritionTips
-            .where((tip) {
-              if (_activeAllergies.isEmpty) return true;
-              final foodLower = tip.food.toLowerCase();
-              for (final allergen in _activeAllergies) {
-                if (foodLower.contains(allergen) || allergen.contains(foodLower.split('(').first.trim())) {
-                  return false;
-                }
+        // Teal markers: these are the foods to reach for. The rail below the
+        // "foods to skip" heading uses pink, so the two lists read as opposite
+        // advice at a glance rather than as two identical grids of cards.
+        _buildContentRail([
+          for (final tip in _data.nutritionTips.where((tip) {
+            if (_activeAllergies.isEmpty) return true;
+            final foodLower = tip.food.toLowerCase();
+            for (final allergen in _activeAllergies) {
+              if (foodLower.contains(allergen) ||
+                  allergen.contains(foodLower.split('(').first.trim())) {
+                return false;
               }
-              return true;
-            })
-            .map((tip) => _NutritionCard(
-              tip: tip,
-              language: language,
-            )),
+            }
+            return true;
+          }))
+            _RailEntry(
+              icon: tip.icon,
+              colour: const Color(0xFF3E9184),
+              title: _translateContent(tip.food, language),
+              body: _translateContent(tip.benefit, language),
+            ),
+        ]),
         const SizedBox(height: 20),
         _SectionHeader(
-          title: _translate('Foods to Avoid & Clinical Risk', 'Mga Pagkaing Iwasan at Klinikal na Panganib', language),
+          title: _translate('Foods to skip for now', 'Mga pagkaing iwasan muna', language),
           icon: Icons.block_outlined,
         ),
         const SizedBox(height: 10),
@@ -2872,65 +2429,151 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       ));
     }
 
+    // Not an alert.
+    //
+    // This was an orange panel headed "Active Allergy Alert" behind a warning
+    // triangle, for a fact her midwife recorded and she has lived with for
+    // years. Nothing is wrong; the list below simply has her allergens taken
+    // out of it. Stated calmly, in the app's palette, as what it is: the food
+    // list adjusted to her record.
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFFDF2E9),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF5CBA7)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.01),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF5E4EC)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 22),
-              const SizedBox(width: 10),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEDF4),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: const Icon(Icons.tune_rounded,
+                    color: AppColors.brandText, size: 20),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   _translate(
-                    'Active Allergy Alert',
-                    'Babala sa Aktibong Allergy',
+                    'Adjusted for your allergies',
+                    'Inayon sa iyong mga allergy',
                     language,
                   ),
                   style: const TextStyle(
                     fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                    color: Color(0xFFA04000),
+                    fontSize: 16,
+                    color: AppColors.headingSoft,
+                    letterSpacing: -0.2,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            _translate(
-              'Some nutritional recommendations were filtered out because of your recorded allergies: ${_activeAllergies.join(", ")}.',
-              'Ang ilang rekomendasyon sa pagkain ay na-filter dahil sa iyong mga naitala na allergy: ${_activeAllergies.join(", ")}.',
-              language,
-            ),
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+          const SizedBox(height: 12),
+          // The allergens themselves, as chips rather than buried in a
+          // sentence — this is the line she would check for a mistake.
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              for (final allergen in _activeAllergies)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7FA),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0xFFF7DCE7)),
+                  ),
+                  child: Text(
+                    allergen,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.brandText,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
           Text(
-            _translate('Clinician Recommended Substitutes:', 'Mga Inirerekomendang Kapalit ng Doktor:', language),
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF85929E)),
+            _translate(
+              'Foods you are allergic to have been left out of the list below.',
+              'Ang mga pagkaing ikaw ay allergic ay hindi kasama sa listahan sa ibaba.',
+              language,
+            ),
+            style: const TextStyle(
+              fontSize: 13.5,
+              color: AppColors.inputText,
+              height: 1.45,
+            ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 14),
+          Text(
+            // Not "Clinician Recommended Substitutes". No clinician chose
+            // these for her — they are general swaps the app applies from her
+            // recorded allergens, and claiming otherwise borrows an authority
+            // the list does not have.
+            _translate('What you can eat instead',
+                'Mga puwede mong kainin sa halip', language),
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w800,
+              color: AppColors.headingSoft,
+            ),
+          ),
+          const SizedBox(height: 8),
           ...substituteTips.map((tip) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  tip,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.45),
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.only(top: 7),
+                      decoration: const BoxDecoration(
+                        color: AppColors.brandPrimary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        // The stored strings start with a literal bullet,
+                        // which would sit beside the drawn one.
+                        tip.startsWith('•') ? tip.substring(1).trim() : tip,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          color: AppColors.inputText,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               )),
+          const SizedBox(height: 12),
+          Text(
+            _translate(
+              'These are general swaps. Your midwife can tell you what suits your pregnancy.',
+              'Mga karaniwang kapalit ito. Ang iyong midwife ang makakapagsabi kung ano ang bagay sa iyong pagbubuntis.',
+              language,
+            ),
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: AppColors.textSecondary,
+              height: 1.45,
+            ),
+          ),
         ],
       ),
     );
@@ -2940,73 +2583,41 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     final listToAvoid = [
       (
         _translate('Raw or undercooked meat and eggs', 'Hilaw o hindi lutong lubos na karne at itlog', language),
-        _translate('High risk of Listeriosis, Salmonella, and Toxoplasmosis, which can cross the placenta and lead to miscarriage.', 'Mataas na panganib ng Listeriosis, Salmonella, at Toxoplasmosis na maaaring tumawid sa placenta at magdulot ng pagkalaglag.', language)
+        _translate('These can carry germs that make you very sick and can reach your baby. Cook meat and eggs all the way through.', 'May mga mikrobyo ito na puwedeng magpasakit sa iyo at makaabot sa sanggol. Lutuin nang husto ang karne at itlog.', language)
       ),
       (
         _translate('High-mercury fish (shark, swordfish, king mackerel)', 'Isdang mataas sa mercury tulad ng pating, swordfish', language),
-        _translate('Mercury accumulates in fetal tissues and can severely damage the baby\'s developing brain and nervous system.', 'Naiipon ang mercury sa tisyu ng sanggol at maaaring makapinsala sa utak at nervous system nito.', language)
+        _translate('These fish hold a lot of mercury, which can harm your baby\'s growing brain. Smaller fish like tilapia, bangus and galunggong are fine.', 'Marami itong mercury na puwedeng makasama sa utak ng sanggol. Ayos lang ang maliliit na isda tulad ng tilapia, bangus at galunggong.', language)
       ),
       (
         _translate('Unpasteurized dairy and soft cheeses', 'Gatas na hindi pasteurized at malambot na keso', language),
-        _translate('May contain harmful bacteria like Listeria monocytogenes, causing severe neonatal infections.', 'Maaaring maglaman ng mapanganib na bacteria tulad ng Listeria na sanhi ng impeksyon sa bagong silang.', language)
+        _translate('These can carry germs that are dangerous for your baby. Boiled or pasteurised milk is safe.', 'May mga mikrobyo ito na delikado sa sanggol. Ligtas ang pinakuluang o pasteurised na gatas.', language)
       ),
       (
         _translate('Alcohol of any kind', 'Alak ng anumang uri', language),
-        _translate('Can cause Fetal Alcohol Syndrome (FAS), leading to lifelong mental and physical developmental disabilities.', 'Maaaring magdulot ng Fetal Alcohol Syndrome (FAS) na nagreresulta sa pangmatagalang problema sa pag-iisip at katawan.', language)
+        _translate('There is no amount that is known to be safe in pregnancy, so it is best skipped altogether.', 'Walang dami ng alak na alam na ligtas sa pagbubuntis, kaya mas mabuting iwasan ito nang tuluyan.', language)
       ),
       (
-        _translate('Excess caffeine (limit to 200mg/day)', 'Sobra sa caffeine (limitahan sa 200mg/araw)', language),
-        _translate('Caffeine crosses the placenta and high amounts can restrict fetal growth or lead to low birth weight.', 'Tumatawid ang caffeine sa placenta at ang labis nito ay maaaring maglimita sa paglaki ng sanggol.', language)
+        _translate('Too much coffee or tea', 'Sobrang kape o tsaa', language),
+        _translate('About two cups of coffee a day is the usual limit. More than that can slow your baby\'s growth.', 'Mga dalawang tasa ng kape sa isang araw ang karaniwang limitasyon. Ang sobra ay puwedeng makabagal sa paglaki ng sanggol.', language)
       ),
       (
         _translate('Processed junk food and excess sugar', 'Pinrosesong junk food at labis na asukal', language),
-        _translate('Lacks vitamins and minerals. Promotes excessive weight gain and increases risk of Gestational Diabetes.', 'Kulang sa sustansya. Nagdudulot ng labis na timbang at nagpapataas ng panganib sa Gestational Diabetes.', language)
+        _translate('These fill you up without feeding your baby, and too much sugar makes diabetes in pregnancy more likely.', 'Nakakabusog ito pero walang sustansya para sa sanggol, at ang sobrang asukal ay nagpapataas ng tsansa ng diabetes sa pagbubuntis.', language)
       ),
     ];
 
-    return _Card(
-      child: Column(
-        children: listToAvoid.map((item) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.only(top: 2),
-                  child: Icon(Icons.cancel_outlined, size: 16, color: AppColors.error),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.$1,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        item.$2,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
+    // Pink markers, matching the "skip" advice, against the teal of the
+    // recommended list above. Same rail, opposite colour.
+    return _buildContentRail([
+      for (final item in listToAvoid)
+        _RailEntry(
+          icon: Icons.do_not_disturb_on_outlined,
+          colour: AppColors.brandText,
+          title: item.$1,
+          body: item.$2,
+        ),
+    ]);
   }
 
   Widget _buildWarningsTab(AppLanguage language) {
@@ -3345,69 +2956,105 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       ),
     ];
 
-    return _Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.contact_phone_outlined, color: AppColors.brandPrimary, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                _translate('Direct Dial Contacts', 'Mga Numerong Matatawagan Agad', language),
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.textPrimary),
-              ),
-            ],
+    // The same card the profile's Personal Information uses, so a mother
+    // meets one container shape across the app rather than a new one per page.
+    //
+    // Its own heading replaces the hand-built title row, which is also what
+    // removes the black rule: that was a bare `Divider()` taking the theme
+    // default, and it drew the only hard line in the mother's app.
+    return ProfileCardSection(
+      title: _translate('Emergency contacts', 'Mga matatawagan sa emergency',
+          language),
+      icon: Icons.contact_phone_outlined,
+      children: [
+        Text(
+          _translate(
+            'Tap a contact to call. Your phone will open with the number ready.',
+            'Pindutin ang isang contact para tumawag. Bubuksan ng telepono mo ang numero.',
+            language,
           ),
-          const SizedBox(height: 4),
-          Text(
-            _translate(
-              'Tap on any row below to launch your phone dialer app with the number pre-filled.',
-              'Pindutin ang kahit aling hilera sa ibaba upang tawagan ang numero sa iyong telepono.',
-              language,
-            ),
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          style: const TextStyle(
+            fontSize: 13,
+            height: 1.45,
+            color: AppColors.inputText,
           ),
-          const Divider(height: 20),
-          ...contacts.map((contact) => InkWell(
-                onTap: () => _launchPhoneDialer(contact.$2),
-                borderRadius: BorderRadius.circular(12),
+        ),
+        const SizedBox(height: 14),
+        for (var index = 0; index < contacts.length; index++)
+          Padding(
+            padding: EdgeInsets.only(
+                bottom: index == contacts.length - 1 ? 0 : 10),
+            child: Material(
+              color: const Color(0xFFFFFAFC),
+              borderRadius: BorderRadius.circular(16),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => _launchPhoneDialer(contacts[index].$2),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 12, horizontal: 12),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        width: 42,
+                        height: 42,
+                        alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: AppColors.brandPrimary.withValues(alpha: 0.08),
-                          shape: BoxShape.circle,
+                          color: const Color(0xFFFFEDF4),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Icon(contact.$3, color: AppColors.brandPrimary, size: 18),
+                        child: Icon(contacts[index].$3,
+                            color: AppColors.brandText, size: 20),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: 13),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              contact.$1,
-                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                              contacts[index].$1,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                height: 1.3,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.headingSoft,
+                              ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 3),
                             Text(
-                              contact.$2,
-                              style: const TextStyle(fontSize: 12, color: AppColors.brandPrimary, fontWeight: FontWeight.w700),
+                              contacts[index].$2,
+                              style: const TextStyle(
+                                fontSize: 14.5,
+                                color: AppColors.brandText,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.2,
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      const Icon(Icons.phone_forwarded, size: 16, color: AppColors.textSecondary),
+                      const SizedBox(width: 8),
+                      // A filled call button rather than a faint grey glyph.
+                      // This is the one control on the page a mother may need
+                      // in a hurry, and it was the palest thing on the row.
+                      Container(
+                        width: 38,
+                        height: 38,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          color: AppColors.brandPrimary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.call_rounded,
+                            size: 18, color: Colors.white),
+                      ),
                     ],
                   ),
                 ),
-              )),
-        ],
-      ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -3495,67 +3142,11 @@ class _SectionHeader extends StatelessWidget {
               height: 1.2,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.3,
-              color: AppColors.textPrimary,
+              color: AppColors.headingSoft,
             ),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _NutritionCard extends StatelessWidget {
-  final _NutritionTip tip;
-  final AppLanguage language;
-
-  const _NutritionCard({required this.tip, required this.language});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF5E8ED)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.brandPrimary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(tip.icon, size: 22, color: AppColors.brandPrimary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _translateContent(tip.food, language),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _translateContent(tip.benefit, language),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -3571,3 +3162,34 @@ const _hospitalBagItems = [
   'Phone charger',
   'Cash for hospital fees',
 ];
+
+/// One row of a [_buildContentRail].
+///
+/// The icon and its colour travel with the entry rather than being fixed by
+/// the rail, which is what lets one widget draw a symptom list in pink, a
+/// nutrient list in teal, and a foods-to-skip list in rose without three
+/// copies of the layout.
+class _RailEntry {
+  final IconData icon;
+  final Color colour;
+  final String title;
+
+  /// The explanation, where there is one worth giving.
+  final String? body;
+
+  /// A practical line, shown in its own tinted strip.
+  final String? note;
+
+  /// Draws the marker ringed and tints the row — used for the entry that is
+  /// happening now, or one the mother has reported herself.
+  final bool highlighted;
+
+  const _RailEntry({
+    required this.icon,
+    required this.colour,
+    required this.title,
+    this.body,
+    this.note,
+    this.highlighted = false,
+  });
+}

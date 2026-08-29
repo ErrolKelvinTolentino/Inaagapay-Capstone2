@@ -54,12 +54,14 @@ class MidwifeStatisticsCard extends StatelessWidget {
             children: const [
               Icon(Icons.pregnant_woman, color: AppColors.brandPrimary, size: 22),
               SizedBox(width: 8),
-              Text(
-                'Active Pregnancies',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
+              Flexible(
+                child: Text(
+                  'Active Pregnancies',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
             ],
@@ -144,7 +146,7 @@ class _TrimesterCard extends StatelessWidget {
             title,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 11,
+              fontSize: 12.5,
               height: 1.3,
               color: AppColors.textSecondary,
             ),

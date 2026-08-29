@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/page_title.dart';
+import '../../services/language_service.dart';
 import '../../widgets/app_input_field.dart';
 import '../../models/due_date_mode.dart';
 
@@ -98,7 +99,8 @@ class _DueDateSetterState extends State<DueDateSetter> {
                 onTap: () => _selectDate(context),
                 child: AbsorbPointer(
                   child: AppInputField(
-                    hintText: 'Select Date',
+                    hintText: LanguageService.translate(
+                        'Select Date', 'Pumili ng Petsa'),
                     controller: _dateController,
                     leadingIcon: Icons.calendar_today,
                     readOnly: true,
@@ -108,7 +110,8 @@ class _DueDateSetterState extends State<DueDateSetter> {
               
               const SizedBox(height: 16),
               Text(
-                'You can always update this later',
+                LanguageService.translate('You can always update this later',
+                    'Puwede mo itong baguhin mamaya'),
                 style: TextStyle(
                   color: AppColors.textSecondary.withValues(alpha: 0.7),
                   fontSize: 12,
@@ -116,7 +119,7 @@ class _DueDateSetterState extends State<DueDateSetter> {
               ),
               const Spacer(),
               MainButton(
-                label: 'Continue',
+                label: LanguageService.translate('Continue', 'Magpatuloy'),
                 onPressed: _selectedDate != null
                     ? () {
                         Navigator.pushNamed(

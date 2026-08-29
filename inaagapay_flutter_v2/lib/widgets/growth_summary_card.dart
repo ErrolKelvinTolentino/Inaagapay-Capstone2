@@ -829,6 +829,11 @@ class _GrowthSummaryCardState extends State<GrowthSummaryCard> {
         tilePadding: EdgeInsets.zero,
         childrenPadding: const EdgeInsets.only(top: 2, bottom: 6),
         dense: true,
+        // The sibling tile two methods up sets a pink trailing icon; this one
+        // did not, so it fell back to the theme default and drew the only
+        // black chevron on the card, directly under a pink one.
+        iconColor: AppColors.brandPrimary,
+        collapsedIconColor: AppColors.brandPrimary,
         children: [
           Text(
             _t(

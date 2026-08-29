@@ -35,7 +35,11 @@ export function requireAuth(relativePath = '../index.html') {
 
 export function logout(relativePath = '../index.html') {
   clearSession();
-  window.location.href = relativePath;
+  if (typeof window.navigateTo === 'function') {
+    window.navigateTo(relativePath);
+  } else {
+    window.location.href = relativePath;
+  }
 }
 
 /* ── Initials ────────────────────────────────────── */

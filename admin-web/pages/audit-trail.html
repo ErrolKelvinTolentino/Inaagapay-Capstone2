@@ -19,14 +19,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
   </head>
-  <body>
+  <body class="audit-page">
     <div class="app-layout">
       <header class="app-header">
         <div class="header-brand">
-          <button class="header-sidebar-toggle" id="sidebar-toggle">
-            <i class="fa-solid fa-bars"></i>
+          <button class="header-sidebar-toggle" id="sidebar-toggle" aria-label="Toggle menu">
+            <i class="fa-solid fa-bars" aria-hidden="true"></i>
           </button>
-          <img src="../images/logo_icon.png" alt="InaAgapay" class="header-logo" />
+          <img src="../images/logo_icon.png" alt="" class="header-logo" aria-hidden="true" />
           <img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" />
         </div>
         <div class="header-right">
@@ -34,11 +34,12 @@
           <div class="header-user">
             <div class="header-avatar" id="header-avatar">A</div>
             <span class="header-user-name" id="header-user-name">Admin</span>
+            <i class="fa-solid fa-chevron-down profile-menu-chevron" aria-hidden="true"></i>
           </div>
         </div>
       </header>
 
-      <aside class="app-sidebar">
+      <aside class="app-sidebar" aria-label="Primary navigation">
         <span class="sidebar-section-label">Main Menu</span>
         <ul class="sidebar-nav">
           <li><a href="dashboard.html"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
@@ -59,11 +60,11 @@
         </div>
       </aside>
 
-      <main class="app-main">
+      <main class="app-main page-audit" id="main-content" tabindex="-1">
         <div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px; margin-bottom:20px;">
           <div class="page-title-block">
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-              <span class="badge" style="background:rgba(255,104,165,0.12); color:var(--brand-primary); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; border-radius:6px; padding:3px 8px;"><i class="fa-solid fa-shield-halved" style="margin-right:4px;"></i> System Security &amp; Compliance</span>
+              <span class="badge audit-context-badge"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Security &amp; compliance</span>
             </div>
             <h1 class="page-title" style="font-size:24px; font-weight:700; margin:0 0 4px; color:var(--text-primary);">Audit Trail &amp; Activity Log</h1>
             <p class="page-subtitle" style="margin:0; font-size:13px; color:var(--text-secondary);">Comprehensive immutable audit trail of clinical, inventory, security, and administrative actions across RHU and BHC facilities.</p>
@@ -80,34 +81,34 @@
 
         <div class="audit-stats-grid" id="audit-stats"></div>
 
-        <div class="card" style="border-radius:14px; border:1px solid var(--border-primary); box-shadow: 0 4px 16px rgba(0,0,0,0.03); overflow:hidden;">
-          <div class="toolbar" style="border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding:16px 20px; background:#fafbfc; display:flex; flex-direction:column; gap:12px;">
+        <div class="card audit-log-card" style="border-radius:14px; border:1px solid var(--border-primary); box-shadow: 0 4px 16px rgba(0,0,0,0.03); overflow:hidden;">
+          <div class="toolbar audit-toolbar" style="border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding:16px 20px; background:#fafbfc; display:flex; flex-direction:column; align-items:stretch; gap:12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-              <div style="font-size:13px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+              <div class="audit-toolbar-title" style="font-size:13px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
                 <i class="fa-solid fa-filter" style="color:var(--brand-primary);"></i> Filter &amp; Sort Activities
               </div>
               <div id="filter-active-count" style="font-size:11.5px; color:var(--text-secondary); font-weight:600;"></div>
             </div>
-            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+            <div class="audit-filter-row" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
               <div class="search-box" style="flex: 1 1 240px; min-width:220px; position:relative;">
                 <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-secondary); font-size:13px;"></i>
-                <input class="form-control" type="search" id="search-input" placeholder="Search actor, item, facility, action, notes..." style="padding-left:34px; border-radius:8px; border:1px solid #dcdfe4; height:38px; font-size:12.5px;" />
+                <input class="form-control audit-search-input" type="search" id="search-input" aria-label="Search activity records" placeholder="Search actor, item, facility, action, notes..." style="padding-left:34px; border-radius:10px; border:1px solid #dcdfe4; height:40px; font-size:12.5px;" />
               </div>
               <div class="filter-group" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-                <select class="form-select" id="filter-module" style="width: auto; border-radius:8px; border:1px solid #dcdfe4; height:38px; font-size:12px; padding:0 10px; font-weight:500;">
+                <select class="form-select audit-filter-select" id="filter-module" aria-label="Filter by module" style="width: auto; border-radius:10px; border:1px solid #dcdfe4; height:40px; font-size:12px; padding:0 32px 0 10px; font-weight:500;">
                   <option value="">All Areas / Modules</option>
                 </select>
-                <select class="form-select" id="filter-severity" style="width: auto; border-radius:8px; border:1px solid #dcdfe4; height:38px; font-size:12px; padding:0 10px; font-weight:500;">
+                <select class="form-select audit-filter-select" id="filter-severity" aria-label="Filter by importance" style="width: auto; border-radius:10px; border:1px solid #dcdfe4; height:40px; font-size:12px; padding:0 32px 0 10px; font-weight:500;">
                   <option value="">Any Importance</option>
                   <option value="critical">Critical</option>
                   <option value="warning">Needs Attention</option>
                   <option value="notice">Notable</option>
                   <option value="info">Routine</option>
                 </select>
-                <select class="form-select" id="filter-action" style="width: auto; border-radius:8px; border:1px solid #dcdfe4; height:38px; font-size:12px; padding:0 10px; font-weight:500;">
+                <select class="form-select audit-filter-select" id="filter-action" aria-label="Filter by activity" style="width: auto; border-radius:10px; border:1px solid #dcdfe4; height:40px; font-size:12px; padding:0 32px 0 10px; font-weight:500;">
                   <option value="">All Activities</option>
                 </select>
-                <select class="form-select" id="filter-actor" style="width: auto; border-radius:8px; border:1px solid #dcdfe4; height:38px; font-size:12px; padding:0 10px; font-weight:500;">
+                <select class="form-select audit-filter-select" id="filter-actor" aria-label="Filter by personnel" style="width: auto; border-radius:10px; border:1px solid #dcdfe4; height:40px; font-size:12px; padding:0 32px 0 10px; font-weight:500;">
                   <option value="">All Personnel</option>
                 </select>
 
@@ -115,34 +116,34 @@
                 <div class="date-range-picker-group" id="audit-date-picker-wrap">
                   <i class="fa-solid fa-calendar-days date-icon"></i>
                   <span class="date-label">From:</span>
-                  <input type="date" class="date-input" id="filter-date-from" title="Filter activities from this date" />
+                  <input type="date" class="date-input" id="filter-date-from" aria-label="Activity date from" title="Filter activities from this date" />
                   <span class="date-sep">to</span>
                   <span class="date-label">To:</span>
-                  <input type="date" class="date-input" id="filter-date-to" title="Filter activities up to this date" />
+                  <input type="date" class="date-input" id="filter-date-to" aria-label="Activity date to" title="Filter activities up to this date" />
                   <button type="button" class="date-clear-btn" id="audit-date-clear-btn" title="Clear date range" style="display:none;"><i class="fa-solid fa-xmark"></i></button>
                 </div>
 
                 <!-- Sort Control Group -->
                 <div class="sort-control-group">
                   <span class="sort-label"><i class="fa-solid fa-arrow-down-short-wide" style="color:var(--brand-primary);"></i> Sort:</span>
-                  <select class="sort-select" id="sort-column-select">
+                  <select class="sort-select" id="sort-column-select" aria-label="Sort activity records by">
                     <option value="timestamp">Date &amp; Time</option>
                     <option value="severity">Severity / Importance</option>
                     <option value="actor">Personnel Name</option>
                     <option value="module">Module Area</option>
                     <option value="action">Activity Event</option>
                   </select>
-                  <button type="button" class="sort-direction-btn active" id="sort-direction-toggle" title="Toggle Sort Direction (Ascending / Descending)">
+                  <button type="button" class="sort-direction-btn active" id="sort-direction-toggle" aria-label="Toggle sort direction" title="Toggle Sort Direction (Ascending / Descending)">
                     <i class="fa-solid fa-arrow-down-wide-short" id="sort-direction-icon"></i>
                   </button>
                 </div>
 
-                <button class="btn btn-secondary btn-sm" id="clear-filters-btn" style="height:38px; border-radius:8px; font-size:12px; padding:0 12px; font-weight:600;"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+                <button class="btn btn-secondary btn-sm" id="clear-filters-btn" style="height:40px; border-radius:10px; font-size:12px; padding:0 12px; font-weight:600;"><i class="fa-solid fa-rotate-left"></i> Reset</button>
               </div>
             </div>
 
             <!-- Quick Date Presets Bar -->
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px dashed #e2e8f0; padding-top:10px;">
+            <div class="date-presets-row" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px dashed #e2e8f0; padding-top:10px;">
               <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.3px;">Quick Date Range:</span>
               <div class="date-presets-bar" id="audit-date-presets">
                 <button type="button" class="date-preset-btn active" data-preset="all">All Time</button>
@@ -159,27 +160,28 @@
 
           <div class="table-wrap" style="border: none; border-radius: 0; overflow-x:auto;">
             <table class="data-table" style="width:100%; border-collapse:collapse;">
+              <caption class="sr-only">Filtered audit trail activity records</caption>
               <thead>
                 <tr>
-                  <th class="th-sortable sort-active" data-sort="timestamp" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                   <th scope="col" class="th-sortable sort-active" data-sort="timestamp" aria-sort="descending" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
                     Date &amp; Time <span class="sort-indicator"><i class="fa-solid fa-arrow-down-long"></i></span>
                   </th>
-                  <th class="th-sortable" data-sort="actor" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                   <th scope="col" class="th-sortable" data-sort="actor" aria-sort="none" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
                     Who Performed <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span>
                   </th>
-                  <th class="th-sortable" data-sort="action" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                   <th scope="col" class="th-sortable" data-sort="action" aria-sort="none" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
                     Activity Event <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span>
                   </th>
-                  <th class="th-sortable" data-sort="module" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                   <th scope="col" class="th-sortable" data-sort="module" aria-sort="none" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
                     Module Area <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span>
                   </th>
-                  <th style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                  <th scope="col" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
                     Target Record
                   </th>
-                  <th style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                  <th scope="col" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
                     Summary / Narrative
                   </th>
-                  <th style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary); text-align: center;">
+                  <th scope="col" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary); text-align: center;">
                     Full Note
                   </th>
                 </tr>
@@ -189,18 +191,18 @@
           </div>
           <div class="card-footer" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; border-top:1.5px solid var(--border-primary); padding:14px 20px; background:#ffffff;">
             <span class="pagination-info" id="page-info" style="font-size:12.5px; color:var(--text-secondary); font-weight:500;">Showing 0 of 0</span>
-            <div class="pagination" id="pagination" style="display:flex; align-items:center; gap:4px;"></div>
+            <nav class="pagination" id="pagination" aria-label="Audit trail pages" style="display:flex; align-items:center; gap:4px;"></nav>
           </div>
         </div>
       </main>
-      <footer class="app-footer"><span>&copy; 2026 InaAgapay</span><span>|</span><span>Admin Portal v2.0</span></footer>
+      <footer class="app-footer"><span>&copy; 2026 InaAgapay — Maternal &amp; Child Health Information System</span><span aria-hidden="true">|</span><span>Admin Portal v2.5</span></footer>
     </div>
 
     <div class="modal-overlay" id="detail-modal">
-      <div class="modal" style="max-width: 860px; border-radius:16px; overflow:hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.2);">
+      <div class="modal" style="max-width: 860px; border-radius:16px; overflow:hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.2);" role="dialog" aria-modal="true" aria-labelledby="audit-detail-title">
         <div class="modal-header" style="padding:16px 24px; border-bottom:1px solid var(--border-primary); background:#ffffff; display:flex; justify-content:space-between; align-items:center;">
-          <h2 class="modal-title" style="font-size:16px; font-weight:700; color:var(--brand-text); display:flex; align-items:center; gap:8px; margin:0;"><i class="fa-solid fa-clipboard-list" style="color: var(--brand-primary);"></i> Audit Event Record</h2>
-          <button class="modal-close" id="detail-modal-close"><i class="fa-solid fa-xmark"></i></button>
+          <h2 class="modal-title" id="audit-detail-title" style="font-size:16px; font-weight:700; color:var(--brand-text); display:flex; align-items:center; gap:8px; margin:0;"><i class="fa-solid fa-clipboard-list" style="color: var(--brand-primary);" aria-hidden="true"></i> Audit Event Record</h2>
+          <button class="modal-close" id="detail-modal-close" aria-label="Close audit record"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
         </div>
         <div class="modal-body" id="detail-body" style="max-height:72vh; overflow-y:auto; padding:20px 24px;"></div>
         <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end; padding:14px 24px; border-top:1px solid var(--border-primary); background:#fafafa;">
@@ -531,7 +533,7 @@
 
         /* ── Data ───────────────────────────────────────────────────────── */
 
-        let allLogs = [], filtered = [], page = 1, detailedMode = true;
+        let allLogs = [], filtered = [], renderedLogs = [], page = 1, detailedMode = true;
         const PAGE_SIZE = 20;
 
         const DETAIL_COLUMNS = [
@@ -655,24 +657,26 @@
 
         function renderStats(){
           const sev = { critical:0, warning:0, notice:0, info:0 };
-          const mods = {};
           allLogs.forEach(l => {
             sev[severityOf(l)]++;
-            const m = moduleOf(l);
-            mods[m] = (mods[m] || 0) + 1;
           });
 
-          const topModules = Object.entries(mods).sort((a,b) => b[1]-a[1]).slice(0,2);
+          const lastDayCutoff = Date.now() - (24 * 60 * 60 * 1000);
+          const lastDayCount = allLogs.filter((log) => {
+            const timestamp = toUTC(log.action_timestamp);
+            return timestamp && timestamp.getTime() >= lastDayCutoff;
+          }).length;
           const cards = [
-            { val: allLogs.length, lbl: 'Total Log Entries', color: 'var(--brand-primary)', bg: 'rgba(255,104,165,0.10)', icon: 'fa-solid fa-clipboard-list' },
-            { val: sev.critical,   lbl: 'Critical Security',  color: '#dc2626', bg: 'rgba(239,68,68,0.10)', icon: 'fa-solid fa-triangle-exclamation' },
-            { val: sev.warning,    lbl: 'Needs Attention',   color: '#d97706', bg: 'rgba(245,158,11,0.10)', icon: 'fa-solid fa-circle-exclamation' }
-          ].concat(topModules.map(([m,c]) => ({ val:c, lbl:`${m} Activity`, color:'#2563eb', bg:'rgba(37,99,235,0.10)', icon: `fa-solid ${moduleIcon(m)}` })));
+            { val: allLogs.length, lbl: 'Total Events', color: 'var(--brand-primary)', bg: 'var(--brand-primary-10)', icon: 'fa-solid fa-clipboard-list' },
+            { val: sev.critical, lbl: 'Critical', color: 'var(--error)', bg: 'var(--error-10)', icon: 'fa-solid fa-triangle-exclamation' },
+            { val: sev.warning, lbl: 'Needs Attention', color: 'var(--warning)', bg: 'var(--warning-10)', icon: 'fa-solid fa-circle-exclamation' },
+            { val: lastDayCount, lbl: 'Last 24 Hours', color: 'var(--info)', bg: 'var(--info-10)', icon: 'fa-solid fa-clock-rotate-left' }
+          ];
 
           document.getElementById('audit-stats').innerHTML = cards.map(c => `
             <div class="audit-stat-card">
               <div class="audit-stat-icon" style="background:${c.bg}; color:${c.color};">
-                <i class="${c.icon}"></i>
+                <i class="${c.icon}" aria-hidden="true"></i>
               </div>
               <div class="audit-stat-content">
                 <div class="audit-stat-val" style="color:${c.color};">${c.val}</div>
@@ -842,6 +846,7 @@
             const col = th.dataset.sort;
             const isCurrent = col === currentSortCol;
             th.classList.toggle('sort-active', isCurrent);
+            th.setAttribute('aria-sort', isCurrent ? (currentSortDir === 'asc' ? 'ascending' : 'descending') : 'none');
             const ind = th.querySelector('.sort-indicator');
             if (ind) {
               if (isCurrent) {
@@ -877,7 +882,7 @@
           if (from || to) {
             chips.push({
               label: 'Date Range',
-              val: `${from || 'Any'} &rarr; ${to || 'Today'}`,
+              val: `${from || 'Any'} → ${to || 'Today'}`,
               clear: () => {
                 document.getElementById('filter-date-from').value = '';
                 document.getElementById('filter-date-to').value = '';
@@ -898,8 +903,8 @@
             <span class="active-filters-label"><i class="fa-solid fa-sliders"></i> Active:</span>
             ${chips.map((c, i) => `
               <span class="filter-chip">
-                <span><strong>${esc(c.label)}:</strong> ${c.val}</span>
-                <button type="button" class="filter-chip-remove" data-chip-idx="${i}" title="Remove this filter"><i class="fa-solid fa-xmark"></i></button>
+                <span><strong>${esc(c.label)}:</strong> ${esc(c.val)}</span>
+                <button type="button" class="filter-chip-remove" data-chip-idx="${i}" aria-label="Remove ${esc(c.label)} filter" title="Remove this filter"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
               </span>
             `).join('')}
             <button type="button" class="filter-clear-all-link" id="chips-clear-all"><i class="fa-solid fa-rotate-left"></i> Clear all</button>
@@ -995,6 +1000,7 @@
         function renderTable(){
           // Apply active column sorting
           const sorted = sortLogs(filtered, currentSortCol, currentSortDir);
+          renderedLogs = sorted;
           const start = (page-1)*PAGE_SIZE;
           const slice = sorted.slice(start, start+PAGE_SIZE);
           const tbody = document.getElementById('audit-tbody');
@@ -1056,8 +1062,8 @@
                 </div>
               </td>
               <td style="padding:10px 14px; text-align:center; vertical-align:middle;">
-                <button class="btn btn-sm btn-secondary" onclick="showDetail(${start+idx})" title="Read full event note" style="height:28px; padding:0 10px; border-radius:6px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; border:1px solid #dcdfe4; background:#ffffff;">
-                  <i class="fa-solid fa-file-lines" style="color:var(--brand-primary);"></i> View Note
+                <button class="btn btn-sm btn-secondary" onclick="showDetail(${start+idx})" aria-label="View full note for ${esc(actionLabel(l.action))}" title="Read full event note" style="height:28px; padding:0 10px; border-radius:6px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; border:1px solid #dcdfe4; background:#ffffff;">
+                  <i class="fa-solid fa-file-lines" style="color:var(--brand-primary);" aria-hidden="true"></i> View Note
                 </button>
               </td>
             </tr>`;
@@ -1072,13 +1078,13 @@
           const total = Math.ceil(filtered.length/PAGE_SIZE);
           const pg = document.getElementById('pagination');
           if(total <= 1){ pg.innerHTML = ''; return; }
-          let html = `<button class="page-btn" onclick="gotoPage(${page-1})" ${page===1?'disabled':''}><i class="fa-solid fa-chevron-left"></i></button>`;
+          let html = `<button class="page-btn" aria-label="Previous page" onclick="gotoPage(${page-1})" ${page===1?'disabled':''}><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>`;
           for(let i=1; i<=total; i++){
             if(total>7 && i>2 && i<page-1){ html += '<span style="padding:0 4px;">…</span>'; i = page-1; continue; }
             if(total>7 && i>page+1 && i<total-1){ html += '<span style="padding:0 4px;">…</span>'; i = total-1; continue; }
-            html += `<button class="page-btn${i===page?' active':''}" onclick="gotoPage(${i})">${i}</button>`;
+            html += `<button class="page-btn${i===page?' active':''}" aria-label="Page ${i}" ${i===page?'aria-current="page"':''} onclick="gotoPage(${i})">${i}</button>`;
           }
-          html += `<button class="page-btn" onclick="gotoPage(${page+1})" ${page===total?'disabled':''}><i class="fa-solid fa-chevron-right"></i></button>`;
+          html += `<button class="page-btn" aria-label="Next page" onclick="gotoPage(${page+1})" ${page===total?'disabled':''}><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>`;
           pg.innerHTML = html;
         }
         window.gotoPage = (p) => { page = p; renderTable(); };
@@ -1364,7 +1370,7 @@
         let currentLog = null;
 
         window.showDetail = function(idx){
-          const log = filtered[idx];
+          const log = renderedLogs[idx];
           if(!log) return;
           currentLog = log;
           document.getElementById('detail-body').innerHTML = buildRecordHTML(log, { forPrint:false });
@@ -1647,7 +1653,15 @@
 
         // Table Header Click Sorting Wiring
         document.querySelectorAll('th.th-sortable').forEach(th => {
+          th.setAttribute('role', 'button');
+          th.setAttribute('tabindex', '0');
           th.addEventListener('click', () => {
+            const col = th.dataset.sort;
+            if (col) window.toggleSort(col);
+          });
+          th.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
             const col = th.dataset.sort;
             if (col) window.toggleSort(col);
           });
@@ -1670,8 +1684,7 @@
                 description: 'Logged out from the admin portal'
               });
             } catch (e) { console.warn(e); }
-            localStorage.removeItem(SESSION_KEY); PortalScope.clear();
-            window.location.href = '../index.html';
+            localStorage.removeItem(SESSION_KEY); window.PortalScope?.clear(); if (window.navigateTo) { window.navigateTo("../index.html"); } else { window.location.href = "../index.html"; }
           }
         });
 

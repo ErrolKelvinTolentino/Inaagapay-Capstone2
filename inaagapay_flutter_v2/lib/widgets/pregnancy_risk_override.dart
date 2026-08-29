@@ -47,25 +47,22 @@ class PregnancyRiskOverride extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            SizedBox(
-              width: 125,
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
               ),
             ),
-            Expanded(
-              child: Row(
-                children: [
-                  _option(context, 'low', 'Low Risk', AppColors.success),
-                  const SizedBox(width: 8),
-                  _option(context, 'high', 'High Risk', AppColors.error),
-                ],
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _option(context, 'low', 'Low', AppColors.success),
+                const SizedBox(width: 8),
+                _option(context, 'high', 'High', AppColors.error),
+              ],
             ),
           ],
         ),

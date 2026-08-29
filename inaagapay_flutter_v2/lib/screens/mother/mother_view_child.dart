@@ -9,6 +9,7 @@ import '../../widgets/records_display_card.dart';
 import '../../services/immunization_schedule.dart';
 import '../../widgets/status_indicator.dart';
 import '../../services/groq_service.dart';
+import '../../widgets/growth_summary_card.dart';
 import '../../services/growth_calculator.dart';
 import '../../services/language_service.dart';
 
@@ -388,9 +389,6 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
         ? '${(latestGrowth!['child_weight'] as num?)?.toStringAsFixed(1) ?? '0'} kg'
         : _t('Not recorded', 'Hindi naitala');
 
-    final latestBMI = _getLatestBMI();
-    final bmiStatus = latestBMI != null ? _bmiStatus(latestBMI) : null;
-
     return Scaffold(
       backgroundColor: AppColors.bgPrimary,
       appBar: PreferredSize(
@@ -463,21 +461,54 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
 
               // ── Growth & Development ──────────────────────────
               _buildSectionHeader(
-                title: _t('Growth & Development', 'Paglaki at Pag-unlad'),
+                title: _t('Your child\'s growth', 'Paglaki ng iyong anak'),
                 icon: Icons.trending_up,
-                onViewAll: () {
-                  widget.onViewGrowth();
-                },
               ),
               const SizedBox(height: 12),
 
               _buildGrowthAnalysisCard(),
 
+              // Kept beside the shared card rather than inside it.
+              //
+              // Logging a measurement at home is the mother's own action and
+              // has no equivalent on the midwife's profile, so it does not
+              // belong in the card they both draw. It used to sit inside this
+              // page's own growth card, and swapping that card out would have
+              // quietly removed the only way she can add a height and weight
+              // anywhere in the app — the growth page only reads.
+              if (childData != null) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Semantics(
+                    button: true,
+                    label: _t('Add a growth measurement',
+                        'Magdagdag ng sukat ng paglaki'),
+                    child: SizedBox(
+                      width: 52,
+                      height: 52,
+                      child: FloatingActionButton(
+                        key: const ValueKey<String>('add-growth-measurement'),
+                        heroTag: 'add-growth-measurement',
+                        onPressed: _showAddGrowthBottomSheet,
+                        tooltip:
+                            _t('Add a measurement', 'Magdagdag ng sukat'),
+                        backgroundColor: AppColors.brandPrimary,
+                        foregroundColor: Colors.white,
+                        elevation: 3,
+                        shape: const CircleBorder(),
+                        child: const Icon(Icons.add_rounded, size: 26),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+
               _buildSectionDivider(),
 
               // ── Immunization ───────────────────────────────────
               _buildSectionHeader(
-                title: _t('Immunization', 'Bakuna'),
+                title: _t('Immunization History', 'Kasaysayan ng Bakuna'),
                 icon: Icons.vaccines_outlined,
                 onViewAll: () {
                   widget.onViewVaccines();
@@ -620,529 +651,52 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
     );
   }
 
-  double? _getLatestBMI() {
-    if (latestGrowth == null) return null;
-    final heightCm = (latestGrowth!['child_height'] as num?)?.toDouble() ?? 0;
-    final weightKg = (latestGrowth!['child_weight'] as num?)?.toDouble() ?? 0;
-    if (heightCm <= 0 || weightKg <= 0) return null;
-    final heightM = heightCm / 100;
-    if (heightM <= 0) return null;
-    return weightKg / (heightM * heightM);
-  }
 
-  String _bmiStatus(double bmi) {
-    if (latestGrowth == null || childData == null) {
-      return 'Within standard range';
-    }
-    final sex = (childData!['sex'] as String?) ?? 'female';
-    final ageWeeks = _ageInWeeks(DateTime.parse(latestGrowth!['created_at']));
-    return GrowthCalculator.bandLabel(
-      GrowthCalculator.calculateBMIZScore(bmi, ageWeeks, sex),
-    );
-  }
 
-  Color _bmiStatusColor(String status) {
-    switch (status) {
-      case 'Below standard range':
-        return Colors.orange; // Yellow/Orange
-      case 'Within standard range':
-        return AppColors.success; // Green
-      case 'Above standard range':
-        return Colors.orange; // Yellow/Orange
-      default:
-        return AppColors.textSecondary;
-    }
-  }
 
   /// One colour, one plain sentence about what it means for her child.
-  Widget _referenceRow({
-    required Color colour,
-    required String label,
-    required String meaning,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 14,
-          height: 14,
-          margin: const EdgeInsets.only(top: 3),
-          decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: RichText(
-            text: TextSpan(
-              children: [
-                TextSpan(
-                  text: '$label — ',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.inputText,
-                  ),
-                ),
-                TextSpan(
-                  text: meaning,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    height: 1.45,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 
-  void _showReferenceDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: Colors.white,
-        title: Row(
-          children: [
-            const Icon(Icons.info_outline_rounded,
-                color: AppColors.brandPrimary, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                _t('What the colours mean', 'Ano ang ibig sabihin ng kulay'),
-                style: const TextStyle(
-                  fontSize: 16.5,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.inputText,
-                ),
-              ),
-            ),
-          ],
-        ),
-        // Explained by what she sees, not by the statistic underneath it.
-        //
-        // This opened with "Z-scores compare a child's measurements
-        // (BMI-for-age, weight-for-age, height-for-age) to expected values"
-        // and then defined each band as a number between -2 and +2. A mother
-        // tapping an info icon is asking what a colour on her child's card
-        // means; she is not asking to be taught a statistic, and the answer
-        // she needs does not require one.
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _t(
-                  'We compare your child with the sizes expected for other children of the same age and sex.',
-                  'Inihahambing namin ang iyong anak sa mga sukat na inaasahan sa ibang batang kasing-edad at kasing-kasarian.',
-                ),
-                style: const TextStyle(
-                    fontSize: 13.5, height: 1.5, color: AppColors.inputText),
-              ),
-              const SizedBox(height: 14),
-              _referenceRow(
-                colour: AppColors.success,
-                label: _t('Green', 'Berde'),
-                meaning: _t('The usual size for this age.',
-                    'Karaniwang sukat para sa edad na ito.'),
-              ),
-              const SizedBox(height: 10),
-              _referenceRow(
-                colour: AppColors.warning,
-                label: _t('Yellow', 'Dilaw'),
-                meaning: _t(
-                    'Smaller or bigger than usual. Worth showing your midwife — it does not mean something is wrong.',
-                    'Mas maliit o mas malaki kaysa karaniwan. Ipakita sa iyong midwife — hindi ito nangangahulugang may mali.'),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                _t(
-                  'Based on the World Health Organization Child Growth Standards. This is a guide for following your child\'s growth, not a diagnosis.',
-                  'Batay sa World Health Organization Child Growth Standards. Gabay ito sa pagsubaybay sa paglaki ng anak mo, hindi diagnosis.',
-                ),
-                style: TextStyle(
-                    fontSize: 11, height: 1.45, color: Colors.grey.shade600),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.brandPrimary,
-              shape: const StadiumBorder(),
-              textStyle:
-                  const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-            ),
-            child: Text(_t('Got it', 'Naiintindihan ko')),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildBMICard(double? bmi, String? status) {
-    final isAvailable = bmi != null;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.brandPrimary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.monitor_weight,
-                  color: AppColors.brandPrimary,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Row(
-                  children: [
-                    Text(
-                      _t('Body Mass Index', 'Body Mass Index'),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: _showReferenceDialog,
-                      child: const Icon(
-                        Icons.help_outline_rounded,
-                        color: AppColors.textSecondary,
-                        size: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isAvailable ? bmi.toStringAsFixed(1) : 'No data',
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.inputText,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      isAvailable ? 'kg/m²' : 'We need a height and weight first',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    // Classification label removed to avoid redundancy. Only badge chip remains.
-                  ],
-                ),
-              ),
-              if (isAvailable && status != null)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: _bmiStatusColor(status).withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    status,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: _bmiStatusColor(status),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Worked out from the last height and weight recorded for your child.',
-            style: TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildGrowthAnalysisCard() {
-    if (latestGrowth == null || childData == null) return const SizedBox.shrink();
 
-    final latestBMI = _getLatestBMI();
-    final latestHeight = (latestGrowth!['child_height'] as num?)?.toDouble() ?? 0.0;
-    final latestWeight = (latestGrowth!['child_weight'] as num?)?.toDouble() ?? 0.0;
-    final latestAgeWeeks = _ageInWeeks(DateTime.parse(latestGrowth!['created_at']));
-    final childSex = (childData!['sex'] as String?) ?? 'female';
 
-    final status = latestBMI != null ? _bmiStatus(latestBMI) : 'Within standard range';
-    final bmiColor = _bmiStatusColor(status);
-
-    final heightZ = GrowthCalculator.calculateHeightZScore(latestHeight, latestAgeWeeks, childSex);
-    final weightZ = GrowthCalculator.calculateWeightZScore(latestWeight, latestAgeWeeks, childSex);
-
-    final isWeightExpected = weightZ == null || (weightZ >= -1 && weightZ <= 1);
-    final isHeightExpected = heightZ == null || (heightZ >= -1 && heightZ <= 1);
-    final weightLabel = _describeZScoreLocal(weightZ);
-    final heightLabel = _describeZScoreLocal(heightZ);
-    final weightSuffix = isWeightExpected ? '' : ' ($weightLabel)';
-    final heightSuffix = isHeightExpected ? '' : ' ($heightLabel)';
-
-    final isLoggedByMother = aiAnalysisCategory == 'growth_mother';
-
-    return GestureDetector(
-      onTap: widget.onViewGrowth,
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
-          border: Border.all(color: Colors.grey.shade100),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Styled Header mimicking weight gain analysis
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: bmiColor.withValues(alpha: 0.08),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  topRight: Radius.circular(18),
-                ),
-              ),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.trending_up_rounded,
-                          color: bmiColor, size: 22),
-                      const SizedBox(width: 8),
-                      Text(
-                        _t('Growth Statistics', 'Statistika ng Paglaki'),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isLoggedByMother) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFEF3C7),
-                            borderRadius: BorderRadius.all(Radius.circular(12)),
-                          ),
-                          child: Text(
-                            _t('You added this', 'Ikaw ang naglagay'),
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFFB45309),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                      // Status badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: bmiColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: bmiColor.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          _t(status, status),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: bmiColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Detail rows
-                  _growthInfoRow(_t('Current Weight', 'Timbang'), '${latestWeight.toStringAsFixed(1)} kg$weightSuffix'),
-                  _growthInfoRow(_t('Current Length', 'Haba'), '${latestHeight.toStringAsFixed(1)} cm$heightSuffix'),
-                  _growthInfoRow(_t('Body size now', 'Sukat ng katawan ngayon'), '${latestBMI?.toStringAsFixed(1) ?? 'N/A'} kg/m²'),
-                  _growthInfoRow(_t('Age in Weeks', 'Edad (Linggo)'), _t('$latestAgeWeeks weeks old', '$latestAgeWeeks linggo gulang')),
-
-                  const SizedBox(height: 12),
-                  const Divider(height: 1),
-                  const SizedBox(height: 10),
-                  
-                  // Dynamic interpretation text matching add growth record wording
-                  Text(
-                    _getBmiExplanationForDash(latestBMI, latestWeight, latestHeight, latestAgeWeeks, childSex, status),
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: bmiColor,
-                      height: 1.4,
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _t('View History & Charts', 'Tingnan ang Kasaysayan at Tsart'),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.brandPrimary,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.brandPrimary),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _getBmiExplanationForDash(double? bmi, double weight, double height, int ageWeeks, String sex, String status) {
-    if (bmi == null) return '';
-    final heightZ = GrowthCalculator.calculateHeightZScore(height, ageWeeks, sex);
-    final weightZ = GrowthCalculator.calculateWeightZScore(weight, ageWeeks, sex);
-
-    const sd = GrowthCalculator.whoStandardSd;
-
-    if (status == 'Below standard range') {
-      if (weightZ != null && weightZ < -sd && heightZ != null && heightZ > sd) {
-        return 'Your child\'s weight is below and height is above the standard range for their age, which together lower the BMI.';
-      }
-      if (weightZ != null && weightZ < -sd) {
-        return 'Your child\'s weight is below the standard range for their age, contributing to the lower BMI.';
-      }
-      if (heightZ != null && heightZ > sd) {
-        return 'Your child\'s height is above the standard range for their age, which lowers the BMI relative to their frame.';
-      }
-      return 'Your child\'s weight is lower than typical for their height at this age, resulting in a lower BMI.';
-    } else if (status == 'Above standard range') {
-      if (weightZ != null && weightZ > sd && heightZ != null && heightZ < -sd) {
-        return 'Your child\'s weight is above and height is below the standard range for their age, which together raise the BMI.';
-      }
-      if (weightZ != null && weightZ > sd) {
-        return 'Your child\'s weight is above the standard range for their age, contributing to the higher BMI.';
-      }
-      if (heightZ != null && heightZ < -sd) {
-        return 'Your child\'s height is below the standard range for their age, which raises the BMI relative to their frame.';
-      }
-      return 'Your child\'s weight is higher than typical for their height at this age, resulting in a higher BMI.';
-    } else {
-      // BMI can sit inside the range while weight and height are both outside
-      // it — a small but proportionate child. Claiming "both within" would
-      // contradict the figures shown alongside this text.
-      final weightOut = weightZ != null && weightZ.abs() > sd;
-      final heightOut = heightZ != null && heightZ.abs() > sd;
-
-      if (weightOut || heightOut) {
-        return 'Your child\'s BMI is within the standard range because weight and height are in proportion, though ${weightOut && heightOut ? 'both are' : (weightOut ? 'weight-for-age is' : 'height-for-age is')} outside the standard range for this age. Your midwife will keep an eye on overall growth.';
-      }
-      return 'Your child\'s height and weight are both within the standard range for this age, resulting in a healthy BMI.';
-    }
-  }
-
-  Widget _growthInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-          ),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-          ),
-        ],
-      ),
-    );
-  }
 
   String? aiAnalysisCategory;
+
+  /// Input styling that matches [AppInputField], which the rest of the app's
+  /// forms use.
+  ///
+  /// Not `AppInputField` itself: that widget is fixed-height and single-line
+  /// with its own error slot, and these two fields sit inside a `Form` and
+  /// validate through it. Copying the look keeps the sheet in the same visual
+  /// language without a second validation path to keep in step.
+  InputDecoration _growthFieldDecoration({
+    required String hint,
+    required IconData icon,
+  }) {
+    OutlineInputBorder border(Color color) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(26),
+          borderSide: BorderSide(color: color, width: 1.5),
+        );
+
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(
+        color: AppColors.textSecondary,
+        fontSize: 14,
+      ),
+      prefixIcon: Icon(icon, color: AppColors.brandAccent),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      enabledBorder: border(Colors.transparent),
+      border: border(Colors.transparent),
+      focusedBorder: border(AppColors.brandPrimary),
+      errorBorder: border(AppColors.error),
+      focusedErrorBorder: border(AppColors.error),
+    );
+  }
 
   void _showAddGrowthBottomSheet() {
     final formKey = GlobalKey<FormState>();
@@ -1168,9 +722,12 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                 top: 20,
                 bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
               ),
+              // The tinted ground the app's other sheets and dialogs use. On
+              // white, the white input boxes below have nothing to sit on and
+              // read as bare underlines.
               decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                color: Color(0xFFFFF7FA),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
               ),
               child: Form(
                 key: formKey,
@@ -1193,19 +750,21 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                       _t('Log Growth Measurements', 'Itala ang Sukat ng Paglaki'),
                       style: const TextStyle(
                         fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.headingSoft,
+                        letterSpacing: -0.3,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
                     Text(
                       _t(
-                        'Self-recorded growth entries will update your progress history instantly.',
-                        'Ang sariling talang paglaki ay mag-a-update ng iyong progreso agad-agad.',
+                        'Measurements you take at home appear in the chart straight away.',
+                        'Ang mga sukat na kinuha mo sa bahay ay agad na lalabas sa tsart.',
                       ),
                       style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        height: 1.4,
+                        color: AppColors.inputText,
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -1213,17 +772,16 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                       _t('Height (cm)', 'Taas (cm)'),
                       style: const TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.headingSoft,
                       ),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: heightCtrl,
-                      decoration: InputDecoration(
-                        hintText: _t('e.g. 58.5', 'hal. 58.5'),
-                        prefixIcon: const Icon(Icons.height),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      decoration: _growthFieldDecoration(
+                        hint: _t('e.g. 58.5', 'hal. 58.5'),
+                        icon: Icons.height_rounded,
                       ),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       validator: (val) {
@@ -1238,17 +796,16 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                       _t('Weight (kg)', 'Timbang (kg)'),
                       style: const TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.headingSoft,
                       ),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: weightCtrl,
-                      decoration: InputDecoration(
-                        hintText: _t('e.g. 5.4', 'hal. 5.4'),
-                        prefixIcon: const Icon(Icons.monitor_weight_outlined),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      decoration: _growthFieldDecoration(
+                        hint: _t('e.g. 5.4', 'hal. 5.4'),
+                        icon: Icons.monitor_weight_outlined,
                       ),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       validator: (val) {
@@ -1333,12 +890,31 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.brandPrimary,
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(28)),
+                          elevation: 4,
+                          shadowColor:
+                              AppColors.brandPrimary.withValues(alpha: 0.4),
                         ),
                         child: isSavingLocal
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : Text(_t('Save Measurements', 'I-save ang mga Sukat'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            // Sized down: an unbounded indicator inside a 56pt
+                            // button expands to fill it and paints over its own
+                            // edges.
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.4,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              )
+                            : Text(
+                                _t('Save Measurements',
+                                    'I-save ang mga Sukat'),
+                                style: const TextStyle(
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.w800)),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1350,6 +926,92 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
         );
       },
     );
+  }
+
+  /// The same growth card the midwife's child profile draws.
+  ///
+  /// This page had its own card, and the two had drifted into saying different
+  /// things about the same child. It reported a single BMI figure — "Body size
+  /// now 14.3 kg/m²" — which is not one of the indicators child growth is
+  /// assessed on, and its insight only ever described height.
+  ///
+  /// The shared card carries weight-for-age, length/height-for-age and
+  /// weight-for-length, an insight covering all three, and the WHO MGRS 2006
+  /// attribution the numbers come from. A mother and her midwife looking at
+  /// the same child now read the same assessment.
+  ///
+  /// One difference is deliberate and built into the card: she sees the
+  /// approved AI narrative, written for a parent, where the midwife sees the
+  /// rule-based summary.
+  Widget _buildGrowthAnalysisCard() {
+    if (latestGrowth == null || childData == null) {
+      return const SizedBox.shrink();
+    }
+
+    return GrowthSummaryCard(
+      childFirstName: (childData!['first_name'] as String?) ?? '',
+      sex: ((childData!['sex'] as String?) ?? 'female').toLowerCase(),
+      measurements: _growthMeasurements(),
+      isFilipino:
+          LanguageService.selectedLanguage.value == AppLanguage.filipino,
+      aiInsight: aiAnalysis,
+      onViewHistory: widget.onViewGrowth,
+    );
+  }
+
+  /// Growth records mapped into the shared card's input, oldest first.
+  ///
+  /// Birth measurements are prepended as the week-0 point, the same as on the
+  /// midwife's profile. Without it the chart starts at the first clinic visit
+  /// and the reference band looks flat, because every plotted point shares
+  /// roughly one age.
+  List<GrowthMeasurement> _growthMeasurements() {
+    final out = <GrowthMeasurement>[];
+
+    final birthdateRaw = birthData?['birthdate']?.toString();
+    final birthWeight = (birthData?['birth_weight'] as num?)?.toDouble();
+    final birthLength = (birthData?['birth_length'] as num?)?.toDouble();
+    if (birthdateRaw != null &&
+        birthWeight != null &&
+        birthLength != null &&
+        birthWeight > 0 &&
+        birthLength > 0) {
+      final birthDate = DateTime.tryParse(birthdateRaw);
+      if (birthDate != null) {
+        out.add(GrowthMeasurement(
+          takenAt: birthDate,
+          heightCm: birthLength,
+          weightKg: birthWeight,
+          ageWeeks: 0,
+        ));
+      }
+    }
+
+    final sorted = List<Map<String, dynamic>>.from(growthRecords)
+      ..sort((a, b) {
+        final da = DateTime.tryParse(a['created_at']?.toString() ?? '');
+        final db = DateTime.tryParse(b['created_at']?.toString() ?? '');
+        if (da == null || db == null) return 0;
+        return da.compareTo(db);
+      });
+
+    for (final record in sorted) {
+      final height = (record['child_height'] as num?)?.toDouble();
+      final weight = (record['child_weight'] as num?)?.toDouble();
+      final createdAt = record['created_at']?.toString();
+      if (height == null || weight == null || createdAt == null) continue;
+      if (height <= 0 || weight <= 0) continue;
+
+      final takenAt = DateTime.tryParse(createdAt);
+      if (takenAt == null) continue;
+      out.add(GrowthMeasurement(
+        takenAt: takenAt,
+        heightCm: height,
+        weightKg: weight,
+        ageWeeks: _ageInWeeks(takenAt),
+      ));
+    }
+    return out;
   }
 
   String _describeZScoreLocal(double? zScore) {
@@ -1731,46 +1393,57 @@ $recordsSummary
     );
   }
 
+  /// [onViewAll] is optional now.
+  ///
+  /// The growth section drops it: the shared card already ends in "View
+  /// History & Charts", so a "View All" in the header was a second link to the
+  /// same page, sitting where a mother has not yet seen what she would be
+  /// leaving.
   Widget _buildSectionHeader({
     required String title,
     required IconData icon,
-    required VoidCallback onViewAll,
+    VoidCallback? onViewAll,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: AppColors.brandPrimary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+        Expanded(
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: AppColors.brandPrimary, size: 18),
               ),
-              child: Icon(icon, color: AppColors.brandPrimary, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.headingSoft,
+                  ),
+                ),
               ),
-            ),
-          ],
-        ),
-        TextButton(
-          onPressed: onViewAll,
-          child: Text(
-            _t('View All', 'Tingnan Lahat'),
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.brandPrimary,
-            ),
+            ],
           ),
         ),
+        if (onViewAll != null)
+          TextButton(
+            onPressed: onViewAll,
+            child: Text(
+              _t('View All', 'Tingnan Lahat'),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.brandPrimary,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -1791,105 +1464,5 @@ $recordsSummary
     );
   }
 
-  Widget _buildGrowthCards(String height, String weight) {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildGrowthDetailCard(
-            icon: Icons.height,
-            title: _t('Height', 'Taas'),
-            value: height,
-            color: AppColors.brandPrimary,
-            onTap: () {
-              widget.onViewGrowth();
-            },
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildGrowthDetailCard(
-            icon: Icons.monitor_weight,
-            title: _t('Weight', 'Timbang'),
-            value: weight,
-            color: AppColors.success,
-            onTap: () {
-              widget.onViewGrowth();
-            },
-          ),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildGrowthDetailCard({
-    required IconData icon,
-    required String title,
-    required String value,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    size: 14,
-                    color: AppColors.textSecondary,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

@@ -1,7 +1,7 @@
 /* =====================================================
    InaAgapay Admin Web — Common Security & Defense Module
    Provides: DB Session Verification, Idle Timeout,
-   Network Status Monitor, and DPA 2012 Masking Utilities
+   Network Status Monitor, Smooth Page Transitions, and DPA Utilities
    ===================================================== */
 
 (function () {
@@ -35,6 +35,90 @@
   window.isPortalAccount = function (s) {
     return !!s && PORTAL_ACCOUNT_TYPES.includes(s.account_type);
   };
+
+  // ── Smooth Page Transitions (Flutter v2 Fluid Experience) ──
+  function navigateTo(url, delay = 180) {
+    if (!url || typeof url !== "string") return;
+    if (
+      url.startsWith("#") ||
+      url.startsWith("javascript:") ||
+      url.startsWith("mailto:") ||
+      url.startsWith("tel:")
+    ) {
+      return;
+    }
+    if (document.body && document.body.classList.contains("page-exiting")) return;
+    if (document.body) document.body.classList.add("page-exiting");
+    setTimeout(() => {
+      window.location.href = url;
+    }, delay);
+  }
+  window.navigateTo = navigateTo;
+
+  // Intercept all internal navigation link clicks
+  document.addEventListener("click", (e) => {
+    const link = e.target.closest("a");
+    if (!link) return;
+
+    const href = link.getAttribute("href");
+    if (!href) return;
+
+    if (
+      href.startsWith("#") ||
+      href.startsWith("javascript:") ||
+      href.startsWith("mailto:") ||
+      href.startsWith("tel:")
+    ) {
+      return;
+    }
+
+    if (
+      link.target === "_blank" ||
+      link.hasAttribute("download") ||
+      e.ctrlKey ||
+      e.metaKey ||
+      e.shiftKey ||
+      e.altKey ||
+      e.button !== 0
+    ) {
+      return;
+    }
+
+    if (
+      link.getAttribute("role") === "tab" ||
+      link.hasAttribute("data-bs-toggle") ||
+      link.hasAttribute("data-tab")
+    ) {
+      return;
+    }
+
+    try {
+      const targetUrl = new URL(link.href, window.location.href);
+      if (targetUrl.origin !== window.location.origin) {
+        return;
+      }
+      if (targetUrl.href === window.location.href) {
+        return;
+      }
+      if (
+        targetUrl.pathname === window.location.pathname &&
+        targetUrl.search === window.location.search &&
+        targetUrl.hash
+      ) {
+        return;
+      }
+    } catch (_) {}
+
+    e.preventDefault();
+    navigateTo(link.href);
+  });
+
+  // Handle BFCache (Back/Forward restore)
+  window.addEventListener("pageshow", (event) => {
+    if (document.body && (event.persisted || document.body.classList.contains("page-exiting"))) {
+      document.body.classList.remove("page-exiting");
+    }
+  });
 
   // 1. RBAC Session Enforcement
   const isLoginPage = window.location.pathname.endsWith("index.html") || window.location.pathname.endsWith("/");
@@ -70,7 +154,11 @@
 
     localStorage.removeItem(SESSION_KEY);
     alert("Session Expired: You have been logged out due to 15 minutes of inactivity for security compliance.");
-    window.location.href = "../index.html";
+    if (window.navigateTo) {
+      window.navigateTo("../index.html");
+    } else {
+      window.location.href = "../index.html";
+    }
   }
 
   // Bind Activity Listeners for Idle Timer
@@ -189,7 +277,188 @@
     return /^(09|\+639)\d{9}$/.test(str);
   };
 
-  // 6. Custom RHU Confirmation Modal (Replaces browser confirm/alert popups)
+  // 6. Profile menu — the account control in the shared header opens the
+  // signed-in user's profile, settings, and help pages from every portal view.
+  function initProfileMenu() {
+    let headerUser = document.querySelector(".header-user");
+    if (!headerUser || document.querySelector(".profile-menu")) return;
+
+    // Use a native disclosure button so keyboard and assistive-technology
+    // behavior does not depend on a div pretending to be interactive.
+    if (headerUser.tagName !== "BUTTON") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = headerUser.className;
+      button.id = headerUser.id;
+      while (headerUser.firstChild) button.appendChild(headerUser.firstChild);
+      headerUser.replaceWith(button);
+      headerUser = button;
+    }
+
+    const displayName = [session?.first_name, session?.last_name].filter(Boolean).join(" ") || "Admin";
+    const email = session?.email_address || "Signed-in account";
+    const initials = ((session?.first_name?.[0] ?? "") + (session?.last_name?.[0] ?? "")).toUpperCase() || "A";
+
+    headerUser.id = headerUser.id || "header-user-btn";
+    headerUser.setAttribute("aria-haspopup", "menu");
+    headerUser.setAttribute("aria-expanded", "false");
+    headerUser.setAttribute("aria-label", `Open account menu for ${displayName}`);
+
+    const nameEl = headerUser.querySelector(".header-user-name");
+    const avatarEl = headerUser.querySelector(".header-avatar");
+    if (nameEl) nameEl.textContent = displayName;
+    if (avatarEl) {
+      avatarEl.textContent = initials;
+      avatarEl.setAttribute("aria-hidden", "true");
+    }
+    const existingChevron = headerUser.querySelector(".profile-menu-chevron, .fa-chevron-down, .fa-angle-down");
+    if (existingChevron) {
+      existingChevron.classList.add("profile-menu-chevron");
+      existingChevron.setAttribute("aria-hidden", "true");
+    } else {
+      const chevron = document.createElement("i");
+      chevron.className = "fa-solid fa-chevron-down profile-menu-chevron";
+      chevron.setAttribute("aria-hidden", "true");
+      headerUser.appendChild(chevron);
+    }
+
+    const userMenuWrap = document.createElement("div");
+    userMenuWrap.className = "header-user-menu";
+    headerUser.parentNode.insertBefore(userMenuWrap, headerUser);
+    userMenuWrap.appendChild(headerUser);
+
+    const menu = document.createElement("div");
+    menu.className = "profile-menu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Account menu");
+    menu.innerHTML = `
+      <div class="profile-menu-summary">
+        <strong>${window.escHtml(displayName)}</strong>
+        <span>${window.escHtml(email)}</span>
+      </div>
+      <a class="profile-menu-link" role="menuitem" href="profile.html">
+        <i class="fa-solid fa-user"></i><span>Profile</span>
+      </a>
+      <a class="profile-menu-link" role="menuitem" href="settings.html">
+        <i class="fa-solid fa-gear"></i><span>Settings</span>
+      </a>
+      <a class="profile-menu-link" role="menuitem" href="help.html">
+        <i class="fa-solid fa-circle-question"></i><span>Help &amp; Support</span>
+      </a>
+      <div class="profile-menu-divider" role="separator"></div>
+      <button class="profile-menu-link logout" role="menuitem" type="button" data-profile-action="logout">
+        <i class="fa-solid fa-right-from-bracket"></i><span>Log out</span>
+      </button>
+    `;
+    userMenuWrap.appendChild(menu);
+
+    function setOpen(isOpen) {
+      userMenuWrap.classList.toggle("open", isOpen);
+      headerUser.setAttribute("aria-expanded", String(isOpen));
+    }
+
+    headerUser.addEventListener("click", () => {
+      setOpen(!userMenuWrap.classList.contains("open"));
+    });
+    headerUser.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        headerUser.focus();
+      }
+    });
+    menu.addEventListener("click", (event) => {
+      const logout = event.target.closest("[data-profile-action=\"logout\"]");
+      if (logout) {
+        setOpen(false);
+        document.getElementById("logout-btn")?.click();
+        return;
+      }
+      if (event.target.closest("a")) setOpen(false);
+    });
+    document.addEventListener("click", (event) => {
+      if (!userMenuWrap.contains(event.target)) setOpen(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") setOpen(false);
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initProfileMenu);
+  } else {
+    initProfileMenu();
+  }
+
+  // 7. Responsive navigation — one shared drawer controller replaces the
+  // page-by-page toggle behavior while preserving each page's existing hooks.
+  function initResponsiveSidebar() {
+    const toggle = document.getElementById("sidebar-toggle");
+    const sidebar = document.querySelector(".app-sidebar");
+    if (!toggle || !sidebar || document.querySelector(".sidebar-backdrop")) return;
+
+    sidebar.id = sidebar.id || "primary-sidebar";
+    toggle.type = "button";
+    toggle.setAttribute("aria-controls", sidebar.id);
+    toggle.setAttribute("aria-expanded", "false");
+
+    const backdrop = document.createElement("button");
+    backdrop.type = "button";
+    backdrop.className = "sidebar-backdrop";
+    backdrop.setAttribute("aria-label", "Close navigation menu");
+    backdrop.setAttribute("aria-hidden", "true");
+    backdrop.tabIndex = -1;
+    document.body.appendChild(backdrop);
+
+    function syncDrawerState() {
+      const isOpen = sidebar.classList.contains("open");
+      toggle.setAttribute("aria-expanded", String(isOpen));
+      backdrop.classList.toggle("show", isOpen);
+      backdrop.setAttribute("aria-hidden", String(!isOpen));
+      document.body.classList.toggle("sidebar-open", isOpen && window.innerWidth <= 992);
+    }
+
+    function closeDrawer({ returnFocus = false } = {}) {
+      sidebar.classList.remove("open");
+      syncDrawerState();
+      if (returnFocus) toggle.focus();
+    }
+
+    // Capture the activation before legacy page handlers can toggle it a
+    // second time. This keeps older pages compatible with the shared control.
+    toggle.addEventListener("click", (event) => {
+      event.stopImmediatePropagation();
+      sidebar.classList.toggle("open");
+      syncDrawerState();
+    }, true);
+
+    backdrop.addEventListener("click", () => closeDrawer({ returnFocus: true }));
+    sidebar.addEventListener("click", (event) => {
+      if (event.target.closest("a") && window.innerWidth <= 992) closeDrawer();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && sidebar.classList.contains("open")) {
+        closeDrawer({ returnFocus: true });
+      }
+    });
+    window.addEventListener("resize", () => {
+      if (window.innerWidth > 992 && sidebar.classList.contains("open")) closeDrawer();
+      else syncDrawerState();
+    });
+
+    new MutationObserver(syncDrawerState).observe(sidebar, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    syncDrawerState();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initResponsiveSidebar);
+  } else {
+    initResponsiveSidebar();
+  }
+
+  // 8. Custom RHU Confirmation Modal (Replaces browser confirm/alert popups)
   window.openConfirmationModal = function (options) {
     const opts = Object.assign({
       title: "Confirm Action",
@@ -340,4 +609,3 @@
     _scrollLockObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
   }
 })();
-

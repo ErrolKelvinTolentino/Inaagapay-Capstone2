@@ -263,7 +263,18 @@ Future<void> showPregnancyGuideDisclaimer(BuildContext context) {
 class PregnancyCoverCard extends StatelessWidget {
   final CurrentPregnancyState pregnancy;
 
-  const PregnancyCoverCard({super.key, required this.pregnancy});
+  /// Extra room at the top of the card's text, for a control laid over it.
+  ///
+  /// Used where the card stands in for a page header and a back arrow sits in
+  /// its corner: without this the arrow lands on top of "CURRENT PREGNANCY".
+  /// Zero everywhere else, so the Baby Book's cover is unchanged.
+  final double contentTopInset;
+
+  const PregnancyCoverCard({
+    super.key,
+    required this.pregnancy,
+    this.contentTopInset = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -273,10 +284,10 @@ class PregnancyCoverCard extends StatelessWidget {
       key: const ValueKey<String>('current-pregnancy-picture-card'),
       assetPath: 'assets/images/current_pregnancy_card.png',
       semanticLabel: 'Pregnant mother holding her growing belly',
-      height: 250,
+      height: 262 + contentTopInset,
       imageKey: const ValueKey('current-pregnancy-card-artwork'),
       child: Padding(
-        padding: const EdgeInsets.all(17),
+        padding: EdgeInsets.fromLTRB(17, 17 + contentTopInset, 17, 17),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -307,7 +318,7 @@ class PregnancyCoverCard extends StatelessWidget {
                   : '${pregnancy.currentWeek} Weeks Pregnant',
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 25,
+                fontSize: 27.5,
                 height: 1.1,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.4,
@@ -318,7 +329,7 @@ class PregnancyCoverCard extends StatelessWidget {
               'Month ${pregnancy.currentMonth} • ${pregnancy.trimester}',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.92),
-                fontSize: 13.5,
+                fontSize: 15,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -368,7 +379,7 @@ class PregnancyCoverCard extends StatelessWidget {
                     'Estimated due date: ${babyBookFormatDate(pregnancy.estimatedDueDate)}',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.95),
-                      fontSize: 12.5,
+                      fontSize: 13.5,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

@@ -210,9 +210,12 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
                         // ── Immunization Roadmap ──
                         if (_allVaccines.isNotEmpty) ...[
                           _buildRoadmap(),
-                          const SizedBox(height: 16),
-                          const Divider(),
-                          const SizedBox(height: 16),
+                          // A bare Divider draws the theme's default rule,
+                          // which on this page came out as a hard black line
+                          // across the width — the only one in the mother's
+                          // app. The spacing already separates the roadmap
+                          // from the records below it.
+                          const SizedBox(height: 24),
                         ],
 
                         SmallDescription(
@@ -265,10 +268,18 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
                                     label: _t('Date Given', 'Petsa ng Pagbigay'),
                                     value: _formatDate(v.vaccinationDate),
                                   ),
+                                  // No "COMPLETED" beside the timeliness pill.
+                                  //
+                                  // Every card in this list is a dose that was
+                                  // given — it has a date on the line above —
+                                  // so the word restated the fact of the card
+                                  // and left "Very late" reading as a second,
+                                  // contradicting verdict beside it. The pill
+                                  // says the only thing that varies.
                                   RecordItem(
                                     leadingIcon: Icons.verified,
                                     label: _t('Status', 'Status'),
-                                    value: _t('COMPLETED', 'KUMPLETO'),
+                                    value: '',
                                     trailingWidget: () {
                                       final timeliness = _getStatusIcon(v);
                                       return timeliness == null

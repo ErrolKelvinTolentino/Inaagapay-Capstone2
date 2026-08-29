@@ -164,42 +164,44 @@ class ProfileHeaderCard extends StatelessWidget {
 
                     const SizedBox(height: 8),
 
-                    // Contact row
+                    // Contact info (separate rows for full visibility)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: chips != null && chips!.isNotEmpty
-                          ? Wrap(
-                              alignment: WrapAlignment.center,
-                              spacing: 8,
-                              runSpacing: 8,
+                          ? Column(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                for (final chip in chips!)
+                                for (int i = 0; i < chips!.length; i++) ...[
                                   _ContactChip(
-                                      icon: chip.icon, text: chip.text),
+                                      icon: chips![i].icon, text: chips![i].text),
+                                  if (i < chips!.length - 1)
+                                    const SizedBox(height: 6),
+                                ],
                               ],
                             )
-                          : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (phone != null && phone!.isNotEmpty) ...[
-                            _ContactChip(
-                              icon: Icons.phone_outlined,
-                              text: phone!,
+                          : Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (phone != null && phone!.isNotEmpty)
+                                  _ContactChip(
+                                    icon: Icons.phone_outlined,
+                                    text: phone!,
+                                  ),
+                                if (phone != null &&
+                                    phone!.isNotEmpty &&
+                                    email != null &&
+                                    email!.isNotEmpty &&
+                                    !email!.endsWith('@inaagapay.internal'))
+                                  const SizedBox(height: 6),
+                                if (email != null &&
+                                    email!.isNotEmpty &&
+                                    !email!.endsWith('@inaagapay.internal'))
+                                  _ContactChip(
+                                    icon: Icons.email_outlined,
+                                    text: email!,
+                                  ),
+                              ],
                             ),
-                            if (email != null &&
-                                email!.isNotEmpty &&
-                                !email!.endsWith('@inaagapay.internal'))
-                              const SizedBox(width: 12),
-                          ],
-                          if (email != null &&
-                              email!.isNotEmpty &&
-                              !email!.endsWith('@inaagapay.internal'))
-                            _ContactChip(
-                              icon: Icons.email_outlined,
-                              text: email!,
-                            ),
-                        ],
-                      ),
                     ),
 
                     const SizedBox(height: 16),
@@ -222,31 +224,30 @@ class _ContactChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Flexible(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: AppColors.bgSecondary,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 13, color: AppColors.brandPrimary),
-            const SizedBox(width: 5),
-            Flexible(
-              child: Text(
-                text,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-                overflow: TextOverflow.ellipsis,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.bgSecondary,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: AppColors.brandPrimary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

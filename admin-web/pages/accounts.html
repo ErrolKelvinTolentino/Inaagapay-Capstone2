@@ -149,7 +149,7 @@
                                 <button type="button" class="date-clear-btn" id="accounts-date-clear-btn" title="Clear date range" style="display:none;"><i class="fa-solid fa-xmark"></i></button>
                             </div>
                             <div class="sort-control-group">
-                                <span class="sort-control-label">Sort:</span>
+                                <span class="sort-label"><i class="fa-solid fa-arrow-down-short-wide" style="color:var(--brand-primary);"></i> Sort:</span>
                                 <select class="sort-select" id="accounts-sort-select">
                                     <option value="created_at">Registration Date</option>
                                     <option value="name">Account Name</option>
@@ -323,7 +323,7 @@
 
             document.getElementById("header-user-name").textContent = [session.first_name, session.last_name].filter(Boolean).join(" ") || "Admin";
             document.getElementById("header-avatar").textContent = ((session.first_name?.[0] ?? "") + (session.last_name?.[0] ?? "")).toUpperCase() || "A";
-            document.getElementById("logout-btn").addEventListener("click", () => { if (confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); PortalScope.clear(); window.location.href = "../index.html"; } });
+            document.getElementById("logout-btn").addEventListener("click", () => { if (confirm("Logout?")) { localStorage.removeItem(SESSION_KEY); PortalScope.clear(); if (window.navigateTo) { window.navigateTo("../index.html"); } else { window.location.href = "../index.html"; } } });
             document.getElementById("sidebar-toggle").addEventListener("click", () => document.querySelector(".app-sidebar").classList.toggle("open"));
 
             function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }

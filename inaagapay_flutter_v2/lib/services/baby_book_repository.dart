@@ -482,6 +482,30 @@ class BabyBookRepository {
     );
   }
 
+  /// The day a child was born, as it was written down.
+  ///
+  /// `birth_details` holds the birthplace, weight, length, delivery type and
+  /// APGAR score, and until now nothing in the Baby Book read any of it — the
+  /// most keepsake-like data in the schema, recorded and never shown.
+  ///
+  /// Returns null when there is no row, which is normal for a child added
+  /// before the birth record was filled in.
+  Future<Map<String, dynamic>?> loadBirthDetails(int childId) async {
+    try {
+      return await SupabaseService.client
+          .from('birth_details')
+          .select(
+              'birthdate, birth_weight, birth_length, birthplace_facility, '
+              'birthplace_city_municipality, birthplace_province, '
+              'delivery_type, apgar_score')
+          .eq('child_id', childId)
+          .maybeSingle();
+    } catch (e) {
+      if (kDebugMode) debugPrint('loadBirthDetails failed: $e');
+      return null;
+    }
+  }
+
   /// Removes a mother's own record that a prenatal milestone happened.
   ///
   /// This deletes only the `baby_book_milestones` row, which is the Baby

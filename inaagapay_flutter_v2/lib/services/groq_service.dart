@@ -714,6 +714,15 @@ CRITICAL RULES:
   /// Calls the Groq text-to-speech endpoint and returns concatenated WAV bytes.
   /// Uses canopylabs/orpheus-v1-english with "diana" voice.
   /// Handles the 200-char limit by splitting into sentence chunks automatically.
+  /// Which Orpheus persona reads Ate's messages.
+  ///
+  /// Female, because Ate is written as an older sister throughout the app.
+  /// The English model offers three female voices — autumn, diana, hannah —
+  /// and three male ones — austin, daniel, troy. Change this one line to try
+  /// another; the device fallback picks a female voice separately, in
+  /// mother_chatbot_page.
+  static const String _ttsVoice = 'autumn';
+
   static const int _ttsMaxChunkChars = 190; // safely under the 200-char limit
   static const int _wavHeaderSize = 44; // standard WAV header bytes
 
@@ -754,7 +763,7 @@ CRITICAL RULES:
             body: jsonEncode({
               'model': 'canopylabs/orpheus-v1-english',
               'input': '[cheerful] $chunk',
-              'voice': 'autumn',
+              'voice': _ttsVoice,
               'response_format': 'wav',
             }),
           )
@@ -769,6 +778,21 @@ CRITICAL RULES:
           errMsg = response.body;
         }
         _log('❌ Groq TTS chunk $i failed (${response.statusCode}): $errMsg');
+
+        // The one failure that is not a bug and not an outage.
+        //
+        // Orpheus is a gated model: it is current and supported — it is the
+        // replacement for the deprecated playai-tts — but an org has to accept
+        // its terms once in the Groq console before any request succeeds.
+        // Until then every call returns 400 with the same message, which is
+        // indistinguishable from a real fault unless it is named.
+        if (errMsg.toLowerCase().contains('terms acceptance')) {
+          _log('   ↳ ACTION NEEDED, not a code fault: accept the model terms '
+              'once at https://console.groq.com/playground?model='
+              'canopylabs%2Forpheus-v1-english using the account that owns '
+              'this API key. Text-to-speech stays unavailable until then.');
+        }
+
         throw Exception('Groq TTS Error (${response.statusCode}): $errMsg');
       }
 

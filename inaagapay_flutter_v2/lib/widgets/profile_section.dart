@@ -181,6 +181,7 @@ class ProfileInfoRow extends StatelessWidget {
   /// pill beside it, which otherwise wraps the label onto a second line and
   /// leaves the pill floating under it.
   final int labelFlex;
+  final int valueFlex;
 
   const ProfileInfoRow({
     super.key,
@@ -191,6 +192,7 @@ class ProfileInfoRow extends StatelessWidget {
     this.valueColor,
     this.icon,
     this.labelFlex = 2,
+    this.valueFlex = 3,
   });
 
   @override
@@ -215,8 +217,9 @@ class ProfileInfoRow extends StatelessWidget {
                   ),
                 ),
           ),
+          const SizedBox(width: 6),
           Expanded(
-            flex: 3,
+            flex: valueFlex,
             child: valueWidget ??
                 Text(
                   value ?? '',

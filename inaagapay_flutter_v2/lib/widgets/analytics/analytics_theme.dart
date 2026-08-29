@@ -31,7 +31,7 @@ class AnalyticsTheme {
   );
 
   static const TextStyle periodStyle = TextStyle(
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: FontWeight.w500,
     color: AppColors.textSecondary,
   );
@@ -44,42 +44,42 @@ class AnalyticsTheme {
   );
 
   static const TextStyle captionStyle = TextStyle(
-    fontSize: 12,
+    fontSize: 13.5,
     color: AppColors.textSecondary,
     height: 1.3,
   );
 
   static const TextStyle bandLabelStyle = TextStyle(
-    fontSize: 12,
+    fontSize: 13,
     color: AppColors.textPrimary,
   );
 
   static const TextStyle bandValueStyle = TextStyle(
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
   );
 
   static const TextStyle axisStyle = TextStyle(
-    fontSize: 10,
+    fontSize: 11,
     color: AppColors.textSecondary,
     height: 1.2,
   );
 
   static const TextStyle insightStyle = TextStyle(
-    fontSize: 12.5,
+    fontSize: 13.5,
     height: 1.45,
     color: AppColors.textPrimary,
   );
 
   static const TextStyle footnoteStyle = TextStyle(
-    fontSize: 11,
+    fontSize: 12.5,
     height: 1.35,
     color: AppColors.textSecondary,
   );
 
   static const TextStyle actionStyle = TextStyle(
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: FontWeight.w600,
     color: AppColors.brandPrimary,
   );

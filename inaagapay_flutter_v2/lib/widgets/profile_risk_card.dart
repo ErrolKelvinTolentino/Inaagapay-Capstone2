@@ -831,30 +831,36 @@ class _ProfileRiskCardState extends State<ProfileRiskCard> {
               // The record type as a pill, so a row can be placed at a glance
               // without reading it: an ultrasound and a sugar test are
               // different kinds of evidence and should not look alike.
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(_iconForRecordType(factor.type),
-                        size: 11, color: const Color(0xFF475569)),
-                    const SizedBox(width: 5),
-                    Text(
-                      factor.type,
-                      style: const TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF475569),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(_iconForRecordType(factor.type),
+                          size: 11, color: const Color(0xFF475569)),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          factor.type,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF475569),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Text(
                 DateFormat('MMM d, yyyy').format(factor.date),
                 style: const TextStyle(

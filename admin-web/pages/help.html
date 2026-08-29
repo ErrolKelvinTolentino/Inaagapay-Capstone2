@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Help &amp; Support — InaAgapay Admin Portal</title>
+    <meta
+      name="description"
+      content="Task guidance, frequently asked questions, and support information for the InaAgapay admin portal."
+    />
+    <link rel="icon" type="image/png" href="../images/logo_icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="../styles/main.css" />
+  </head>
+  <body class="account-page help-page">
+
+    <div class="app-layout">
+      <header class="app-header">
+        <div class="header-brand">
+          <button class="header-sidebar-toggle" id="sidebar-toggle" aria-label="Toggle menu">
+            <i class="fa-solid fa-bars" aria-hidden="true"></i>
+          </button>
+          <img src="../images/logo_icon.png" alt="" class="header-logo" aria-hidden="true" />
+          <img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" />
+        </div>
+        <div class="header-right">
+          <span class="header-badge">RHU Portal</span>
+          <div class="header-user">
+            <div class="header-avatar" id="header-avatar">A</div>
+            <span class="header-user-name" id="header-user-name">Admin</span>
+            <i class="fa-solid fa-chevron-down profile-menu-chevron" aria-hidden="true"></i>
+          </div>
+        </div>
+      </header>
+
+      <aside class="app-sidebar" aria-label="Primary navigation">
+        <span class="sidebar-section-label">Main Menu</span>
+        <ul class="sidebar-nav">
+          <li><a href="dashboard.html"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i> Dashboard</a></li>
+          <li><a href="accounts.html"><i class="fa-solid fa-users" aria-hidden="true"></i> Account Management</a></li>
+          <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse" aria-hidden="true"></i> Midwife Assignment</a></li>
+          <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i> Inventory Management</a></li>
+          <li><a href="reports.html"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i> Reports &amp; Analytics</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">Patient Management</span>
+        <ul class="sidebar-nav">
+          <li><a href="patient-records.html"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> Patient Records</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-section-label">System</span>
+        <ul class="sidebar-nav">
+          <li><a href="audit-trail.html"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Audit Trail</a></li>
+          <li><a href="backup.html"><i class="fa-solid fa-database" aria-hidden="true"></i> Backup &amp; Restore</a></li>
+        </ul>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-footer-nav">
+          <button class="sidebar-logout" id="logout-btn">
+            <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i> Logout
+          </button>
+        </div>
+      </aside>
+
+      <main class="app-main help-main" id="main-content" tabindex="-1">
+        <section class="help-intro" aria-labelledby="help-title">
+          <div class="help-intro-copy">
+            <span class="page-eyebrow"><i class="fa-solid fa-life-ring" aria-hidden="true"></i> Portal guidance</span>
+            <h1 class="page-title" id="help-title">Help &amp; Support</h1>
+            <p class="page-subtitle">
+              Find the right workspace, resolve common access questions, and handle support requests without exposing health information.
+            </p>
+          </div>
+
+          <div class="help-search-panel">
+            <form class="help-search-form" id="help-search-form" role="search">
+              <label class="help-search-label" for="help-search-input">Search help topics</label>
+              <div class="help-search-control">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input
+                  class="form-control help-search-input"
+                  type="search"
+                  id="help-search-input"
+                  placeholder="Try “password”, “patient record”, or “session”"
+                  autocomplete="off"
+                  aria-describedby="help-search-results"
+                />
+                <button class="help-search-clear" type="reset">Clear</button>
+              </div>
+            </form>
+            <p class="help-search-results" id="help-search-results" role="status" aria-live="polite"></p>
+          </div>
+        </section>
+
+        <section class="help-section help-actions-section" aria-labelledby="help-actions-title">
+          <div class="section-heading-row">
+            <div>
+              <span class="section-kicker">Common tasks</span>
+              <h2 class="section-title" id="help-actions-title">Go directly to what you need</h2>
+            </div>
+            <p class="section-description">These links open the main operational areas available to your assigned office.</p>
+          </div>
+
+          <div class="help-actions-grid">
+            <a
+              href="dashboard.html"
+              class="help-action-card"
+              data-help-item
+              data-help-keywords="dashboard overview status activity health operations"
+            >
+              <span class="help-action-icon help-action-icon-pink"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i></span>
+              <span class="help-action-copy">
+                <strong>Review operations</strong>
+                <span>See current health indicators, inventory status, and recent activity.</span>
+              </span>
+              <i class="fa-solid fa-arrow-right help-action-arrow" aria-hidden="true"></i>
+            </a>
+
+            <a
+              href="patient-records.html"
+              class="help-action-card"
+              data-help-item
+              data-help-keywords="patient mother child pregnancy clinical records find search"
+            >
+              <span class="help-action-icon help-action-icon-blue"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></span>
+              <span class="help-action-copy">
+                <strong>Find a patient record</strong>
+                <span>Open maternal and child records within your assigned office scope.</span>
+              </span>
+              <i class="fa-solid fa-arrow-right help-action-arrow" aria-hidden="true"></i>
+            </a>
+
+            <a
+              href="inventory.html"
+              class="help-action-card"
+              data-help-item
+              data-help-keywords="inventory stock supplies batches expiry receive dispense"
+            >
+              <span class="help-action-icon help-action-icon-green"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i></span>
+              <span class="help-action-copy">
+                <strong>Manage health supplies</strong>
+                <span>Review stock levels, batches, movements, and supply requests.</span>
+              </span>
+              <i class="fa-solid fa-arrow-right help-action-arrow" aria-hidden="true"></i>
+            </a>
+
+            <a
+              href="reports.html"
+              class="help-action-card"
+              data-help-item
+              data-help-keywords="reports analytics trends indicators export pdf health center"
+            >
+              <span class="help-action-icon help-action-icon-purple"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>
+              <span class="help-action-copy">
+                <strong>Analyze health trends</strong>
+                <span>Compare indicators and prepare reports for authorized use.</span>
+              </span>
+              <i class="fa-solid fa-arrow-right help-action-arrow" aria-hidden="true"></i>
+            </a>
+          </div>
+        </section>
+
+        <section class="help-section help-faq-section" aria-labelledby="help-faq-title">
+          <div class="section-heading-row">
+            <div>
+              <span class="section-kicker">Quick answers</span>
+              <h2 class="section-title" id="help-faq-title">Frequently asked questions</h2>
+            </div>
+            <p class="section-description">Open a question to view its guidance. Search filters these answers instantly on this device.</p>
+          </div>
+
+          <div class="help-faq-groups">
+            <section class="help-faq-group" data-help-group aria-labelledby="faq-access-title">
+              <div class="help-faq-group-heading">
+                <span class="help-faq-group-icon"><i class="fa-solid fa-compass" aria-hidden="true"></i></span>
+                <div>
+                  <h3 id="faq-access-title">Access &amp; navigation</h3>
+                  <p>Finding pages and understanding office access.</p>
+                </div>
+              </div>
+
+              <details class="help-faq-item" data-help-item data-help-keywords="missing patient facility scope assigned office access">
+                <summary>
+                  <span>Why can’t I see a patient or facility?</span>
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </summary>
+                <div class="help-faq-answer">
+                  <p>
+                    The portal only shows records covered by your assigned office. If the record should be visible, ask your Municipal Health Office administrator to verify the facility assignment.
+                  </p>
+                </div>
+              </details>
+
+              <details class="help-faq-item" data-help-item data-help-keywords="profile settings help account menu header navigation">
+                <summary>
+                  <span>Where can I find my profile and settings?</span>
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </summary>
+                <div class="help-faq-answer">
+                  <p>
+                    Open your name in the top-right account menu. From there, you can open your Profile, Settings, or this Help &amp; Support page.
+                  </p>
+                </div>
+              </details>
+            </section>
+
+            <section class="help-faq-group" data-help-group aria-labelledby="faq-workflow-title">
+              <div class="help-faq-group-heading">
+                <span class="help-faq-group-icon"><i class="fa-solid fa-list-check" aria-hidden="true"></i></span>
+                <div>
+                  <h3 id="faq-workflow-title">Records &amp; workflows</h3>
+                  <p>Handling unexpected or incorrect operational data.</p>
+                </div>
+              </div>
+
+              <details class="help-faq-item" data-help-item data-help-keywords="incorrect wrong data record report update correction">
+                <summary>
+                  <span>What should I do if information looks incorrect?</span>
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </summary>
+                <div class="help-faq-answer">
+                  <p>
+                    Confirm that you are viewing the correct patient, facility, and date range. Do not create a duplicate record. Escalate the issue through your approved internal support channel if you cannot correct it through the normal workflow.
+                  </p>
+                </div>
+              </details>
+
+              <details class="help-faq-item" data-help-item data-help-keywords="audit trail activity log change history who updated record">
+                <summary>
+                  <span>How can I check who changed a record?</span>
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </summary>
+                <div class="help-faq-answer">
+                  <p>
+                    Open the Audit Trail and search by record, staff member, module, or date. Select View Note to review the recorded event details available to your account.
+                  </p>
+                  <a class="help-inline-link" href="audit-trail.html">Open Audit Trail <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+                </div>
+              </details>
+            </section>
+
+            <section class="help-faq-group" data-help-group aria-labelledby="faq-security-title">
+              <div class="help-faq-group-heading">
+                <span class="help-faq-group-icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
+                <div>
+                  <h3 id="faq-security-title">Account &amp; security</h3>
+                  <p>Password, session, and privacy guidance.</p>
+                </div>
+              </div>
+
+              <details class="help-faq-item" data-help-item data-help-keywords="password change update credentials security settings">
+                <summary>
+                  <span>How do I update my password?</span>
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </summary>
+                <div class="help-faq-answer">
+                  <p>Open Settings and choose Change password. Use a password that is unique to InaAgapay and do not share it with another staff member.</p>
+                  <a class="help-inline-link" href="change-password.html">Change password <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+                </div>
+              </details>
+
+              <details class="help-faq-item" data-help-item data-help-keywords="session expired timeout inactivity login sign in security">
+                <summary>
+                  <span>What should I do if my session expires?</span>
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </summary>
+                <div class="help-faq-answer">
+                  <p>
+                    Sign in again with your authorized MHO or RHU credentials. The portal signs you out after inactivity to protect sensitive health information on unattended devices.
+                  </p>
+                </div>
+              </details>
+            </section>
+          </div>
+        </section>
+
+        <section
+          class="help-guidance-card"
+          data-help-item
+          data-help-keywords="support escalation privacy data patient screenshot incident urgent administrator"
+          aria-labelledby="help-guidance-title"
+        >
+          <div class="help-guidance-icon"><i class="fa-solid fa-user-shield" aria-hidden="true"></i></div>
+          <div class="help-guidance-content">
+            <span class="section-kicker">Escalation &amp; privacy</span>
+            <h2 class="section-title" id="help-guidance-title">Report issues without exposing patient information</h2>
+            <p>
+              If a problem blocks patient care, prevents authorized access, or could affect data accuracy, contact your office’s authorized administrator through the approved internal support channel.
+            </p>
+            <ol class="help-guidance-steps">
+              <li>Record the page name, approximate time, and the action you were attempting.</li>
+              <li>Describe the error message without copying passwords, tokens, or patient clinical details.</li>
+              <li>Do not send patient names, record screenshots, or exported reports through unapproved messaging services.</li>
+            </ol>
+          </div>
+          <aside class="help-privacy-note" aria-label="Privacy reminder">
+            <i class="fa-solid fa-lock" aria-hidden="true"></i>
+            <div>
+              <strong>Privacy reminder</strong>
+              <span>Use only the minimum information needed to identify and resolve the issue.</span>
+            </div>
+          </aside>
+        </section>
+      </main>
+
+      <footer class="app-footer">
+        <span>&copy; 2026 InaAgapay — Maternal &amp; Child Health Information System</span>
+        <span aria-hidden="true">|</span>
+        <span>Admin Portal v2.5</span>
+      </footer>
+    </div>
+
+    <script src="common-security.js"></script>
+    <script src="portal-scope.js"></script>
+    <script src="account-pages.js"></script>
+    <script>
+      (function () {
+        const form = document.getElementById("help-search-form");
+        const input = document.getElementById("help-search-input");
+        const results = document.getElementById("help-search-results");
+        const items = Array.from(document.querySelectorAll("[data-help-item]"));
+        const groups = Array.from(document.querySelectorAll("[data-help-group]"));
+
+        if (!form || !input || !results || items.length === 0) return;
+
+        const normalize = (value) =>
+          String(value || "")
+            .toLocaleLowerCase("en-PH")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        function filterHelpTopics() {
+          const query = normalize(input.value);
+          let visibleCount = 0;
+
+          items.forEach((item) => {
+            const searchableText = normalize(
+              `${item.textContent} ${item.getAttribute("data-help-keywords") || ""}`,
+            );
+            const isVisible = !query || searchableText.includes(query);
+            item.hidden = !isVisible;
+            if (isVisible) visibleCount += 1;
+          });
+
+          groups.forEach((group) => {
+            const groupItems = Array.from(group.querySelectorAll("[data-help-item]"));
+            group.hidden = groupItems.length > 0 && groupItems.every((item) => item.hidden);
+          });
+
+          results.textContent = query
+            ? `${visibleCount} of ${items.length} help topics match “${input.value.trim()}”.`
+            : `Showing all ${items.length} help topics.`;
+        }
+
+        form.addEventListener("submit", (event) => event.preventDefault());
+        form.addEventListener("reset", () => window.setTimeout(filterHelpTopics, 0));
+        input.addEventListener("input", filterHelpTopics);
+        filterHelpTopics();
+      })();
+    </script>
+  </body>
+</html>

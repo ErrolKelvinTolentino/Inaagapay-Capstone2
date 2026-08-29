@@ -585,17 +585,31 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     );
 
     try {
-      // ── Brand colors for PDF ──
-      const brandPink = PdfColor.fromInt(0xFFFF68A5);
-      const brandAccent = PdfColor.fromInt(0xFFE6398D);
-      const brandText = PdfColor.fromInt(0xFFC73578);
-      const textPrimary = PdfColor.fromInt(0xFF2D2D2D);
-      const textSecondary = PdfColor.fromInt(0xFF8A8A8A);
-      const bgSecondary = PdfColor.fromInt(0xFFFFF5F8);
-      const successColor = PdfColor.fromInt(0xFF68CBB8);
-      const warningColor = PdfColor.fromInt(0xFFFFB562);
-      const errorColor = PdfColor.fromInt(0xFFE57373);
-      const borderLight = PdfColor.fromInt(0xFFF0F0F0);
+      // ── A document palette, not the app's ──
+      //
+      // This printed in six colours: a pink header box, pink section bars,
+      // pink labels, green for the weight panel, amber for the disclaimer and
+      // red for risk. On paper — and photocopied at a health centre, which is
+      // what happens to these — colour stops carrying meaning and only makes
+      // the page harder to read.
+      //
+      // One accent remains, for the wordmark and the rules under headings.
+      // Everything else is ink and grey, and structure is carried by weight
+      // and spacing the way a printed form does it.
+      const brandAccent = PdfColor.fromInt(0xFFC73578);
+      const textPrimary = PdfColor.fromInt(0xFF1F1F1F);
+      const textSecondary = PdfColor.fromInt(0xFF6B6B6B);
+      const bgSecondary = PdfColor.fromInt(0xFFF7F7F7);
+      const borderLight = PdfColor.fromInt(0xFFDDDDDD);
+
+      // Kept as names so the call sites below need no rewriting, but they all
+      // resolve to the same neutral ink: a printed record should not colour
+      // one finding differently from another.
+      const brandPink = borderLight;
+      const brandText = textPrimary;
+      const successColor = textSecondary;
+      const warningColor = textSecondary;
+      const errorColor = textSecondary;
 
       // ── Download images from network ──
       final List<Uint8List> imageDataList = [];
@@ -616,20 +630,23 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       final pdf = pw.Document();
 
       // Helper: Section Title widget
-      pw.Widget pdfSectionTitle(String title, {PdfColor color = brandAccent}) {
+      // A heading and a rule under it, the way a printed form does it — not a
+      // coloured bar down the left of every section.
+      pw.Widget pdfSectionTitle(String title, {PdfColor color = textPrimary}) {
         return pw.Container(
-          margin: const pw.EdgeInsets.only(top: 14, bottom: 6),
-          padding: const pw.EdgeInsets.only(left: 8, bottom: 4),
-          decoration: pw.BoxDecoration(
+          margin: const pw.EdgeInsets.only(top: 16, bottom: 8),
+          padding: const pw.EdgeInsets.only(bottom: 4),
+          decoration: const pw.BoxDecoration(
             border: pw.Border(
-              left: pw.BorderSide(color: color, width: 3),
+              bottom: pw.BorderSide(color: borderLight, width: 0.8),
             ),
           ),
           child: pw.Text(
-            title,
+            title.toUpperCase(),
             style: pw.TextStyle(
-              fontSize: 13,
+              fontSize: 10,
               fontWeight: pw.FontWeight.bold,
+              letterSpacing: 0.8,
               color: color,
             ),
           ),
@@ -713,11 +730,11 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       content.add(
         pw.Container(
           width: double.infinity,
-          padding: const pw.EdgeInsets.all(16),
-          decoration: pw.BoxDecoration(
-            color: bgSecondary,
-            borderRadius: pw.BorderRadius.circular(8),
-            border: pw.Border.all(color: brandPink, width: 1),
+          padding: const pw.EdgeInsets.only(bottom: 10),
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(
+              bottom: pw.BorderSide(color: brandAccent, width: 1.2),
+            ),
           ),
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -725,7 +742,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               pw.Text(
                 'INAAGAPAY',
                 style: pw.TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
                   color: brandAccent,
                   letterSpacing: 2,
@@ -735,25 +752,26 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               pw.Text(
                 'Maternal & Child Health Information System',
                 style: const pw.TextStyle(
-                  fontSize: 9,
+                  fontSize: 8.5,
                   color: textSecondary,
                 ),
               ),
-              pw.Divider(color: brandPink, thickness: 0.5, height: 16),
+              pw.SizedBox(height: 10),
               pw.Text(
                 widget.title.toUpperCase(),
                 style: pw.TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: pw.FontWeight.bold,
-                  color: brandText,
+                  color: textPrimary,
+                  letterSpacing: 0.5,
                 ),
               ),
               if (widget.subtitle != null && widget.subtitle!.trim().isNotEmpty) ...[
-                pw.SizedBox(height: 4),
+                pw.SizedBox(height: 3),
                 pw.Text(
                   widget.subtitle!.trim(),
                   style: const pw.TextStyle(
-                    fontSize: 10,
+                    fontSize: 9.5,
                     color: textSecondary,
                   ),
                 ),
@@ -762,6 +780,43 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           ),
         ),
       );
+
+      // ── WHOSE RECORD THIS IS ──
+      //
+      // The export carried no patient at all: a printout of a prenatal
+      // checkup that did not say whose checkup it was. On paper that is not a
+      // record, and a page that reaches a chart or a referral without a name
+      // on it is worse than no page.
+      final pdfPatient = widget.patient;
+      if (pdfPatient != null && !pdfPatient.isEmpty) {
+        content.add(pdfSectionTitle(_t('Patient', 'Pasyente')));
+        content.add(pdfDetailRow(_t('Name', 'Pangalan'), pdfPatient.name));
+        if ((pdfPatient.idLabel ?? '').trim().isNotEmpty) {
+          content.add(pdfDetailRow(
+              _t('Patient number', 'Numero ng pasyente'),
+              pdfPatient.idLabel!.trim()));
+        }
+        if ((pdfPatient.age ?? '').trim().isNotEmpty) {
+          content.add(
+              pdfDetailRow(_t('Age', 'Edad'), pdfPatient.age!.trim()));
+        }
+        if ((pdfPatient.obstetric ?? '').trim().isNotEmpty) {
+          content.add(pdfDetailRow(_t('Obstetric score', 'Obstetric score'),
+              pdfPatient.obstetric!.trim()));
+        }
+        if ((pdfPatient.bloodType ?? '').trim().isNotEmpty) {
+          content.add(pdfDetailRow(
+              _t('Blood type', 'Uri ng dugo'), pdfPatient.bloodType!.trim()));
+        }
+      }
+
+      // Who took the record. A clinical document has to be attributable, and
+      // this was on the screen and missing from the export.
+      final recordedBy = (widget.approvedByName ?? '').trim();
+      if (recordedBy.isNotEmpty) {
+        content.add(pdfDetailRow(
+            _t('Recorded by', 'Itinala ni'), recordedBy));
+      }
 
       // ── ATTACHED IMAGES ──
       if (imageDataList.isNotEmpty) {
@@ -819,7 +874,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
         final eval = widget.weightGainEval!;
         content.add(pdfSectionTitle(
           _t('Weight Gain Monitor', 'Pagsubaybay sa Timbang'),
-          color: const PdfColor.fromInt(0xFF4CAF50),
+          color: textPrimary,
         ));
         final weightBuf = StringBuffer();
         if (eval['status'] != null) weightBuf.writeln('Status: ${eval['status']}');
@@ -827,8 +882,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
         if (eval['message'] != null) weightBuf.writeln(eval['message']);
         content.add(pdfInfoBox(
           weightBuf.toString().trim(),
-          bg: const PdfColor.fromInt(0xFFE8F5E9),
-          border: const PdfColor.fromInt(0xFF66BB6A),
+          bg: bgSecondary,
+          border: borderLight,
         ));
       }
 
@@ -848,8 +903,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
             margin: const pw.EdgeInsets.only(bottom: 6),
             decoration: pw.BoxDecoration(
               color: isHighRisk
-                  ? const PdfColor.fromInt(0xFFFBE9E7)
-                  : const PdfColor.fromInt(0xFFE8F5E9),
+                  ? bgSecondary
+                  : bgSecondary,
               border: pw.Border.all(color: riskColor, width: 0.5),
               borderRadius: pw.BorderRadius.circular(6),
             ),
@@ -941,12 +996,21 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       // ── AI ANALYSIS ──
       if (widget.aiAnalysis != null && widget.aiAnalysis!.trim().isNotEmpty) {
         final aiText = _getAiTextForLanguage(widget.aiAnalysis!.trim());
-        content.add(pdfSectionTitle(
-          _tAi('AI Analysis', 'AI na Pagsusuri'),
-          color: brandText,
-        ));
+        content.add(pdfSectionTitle(_tAi('Remarks', 'Mga Tala')));
 
-        // AI badge
+        // How the remarks came to exist, printed.
+        //
+        // The export stamped every summary "AI Generated" regardless — which
+        // claims authorship of text a midwife wrote herself, and hides the
+        // case that matters most, where a midwife read the AI's draft and
+        // corrected it. The screen has recorded that distinction from
+        // `remarks_source` for a while; the printed copy, which is the one
+        // that ends up in a chart or a referral, did not carry it.
+        //
+        // Same rule as the screen, read from the same field, so a printout
+        // cannot claim something the app does not.
+        final pdfProvenance = _summaryProvenance().label;
+
         content.add(
           pw.Container(
             width: double.infinity,
@@ -954,31 +1018,25 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
             margin: const pw.EdgeInsets.only(bottom: 6),
             decoration: pw.BoxDecoration(
               color: bgSecondary,
-              border: pw.Border.all(
-                color: const PdfColor.fromInt(0xFFFF68A5),
-                width: 0.5,
-              ),
-              borderRadius: pw.BorderRadius.circular(8),
+              border: pw.Border.all(color: borderLight, width: 0.5),
+              borderRadius: pw.BorderRadius.circular(6),
             ),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  margin: const pw.EdgeInsets.only(bottom: 8),
-                  decoration: pw.BoxDecoration(
-                    color: const PdfColor.fromInt(0xFFFFE4EE),
-                    borderRadius: pw.BorderRadius.circular(8),
-                  ),
-                  child: pw.Text(
-                    _tAi('AI Generated', 'Gawa ng AI'),
-                    style: pw.TextStyle(
-                      fontSize: 8,
-                      fontWeight: pw.FontWeight.bold,
-                      color: brandText,
+                if (pdfProvenance.isNotEmpty)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 8),
+                    child: pw.Text(
+                      _tAi('Source: $pdfProvenance', 'Pinagmulan: $pdfProvenance'),
+                      style: pw.TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: pw.FontWeight.bold,
+                        letterSpacing: 0.3,
+                        color: textSecondary,
+                      ),
                     ),
                   ),
-                ),
                 pw.Text(
                   aiText,
                   style: const pw.TextStyle(
@@ -997,16 +1055,16 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
         if (recommendations.isNotEmpty) {
           content.add(pdfSectionTitle(
             _tAi('Recommendations', 'Mga Rekomendasyon'),
-            color: const PdfColor.fromInt(0xFF2E7D32),
+            color: textPrimary,
           ));
           content.add(
             pw.Container(
               width: double.infinity,
               padding: const pw.EdgeInsets.all(10),
               decoration: pw.BoxDecoration(
-                color: const PdfColor.fromInt(0xFFE8F5E9),
+                color: bgSecondary,
                 border: pw.Border.all(
-                  color: const PdfColor.fromInt(0xFF66BB6A),
+                  color: borderLight,
                   width: 0.5,
                 ),
                 borderRadius: pw.BorderRadius.circular(6),
@@ -1024,7 +1082,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                           style: pw.TextStyle(
                             fontSize: 10,
                             fontWeight: pw.FontWeight.bold,
-                            color: const PdfColor.fromInt(0xFF2E7D32),
+                            color: textPrimary,
                           ),
                         ),
                         pw.Expanded(
@@ -1053,9 +1111,9 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           width: double.infinity,
           padding: const pw.EdgeInsets.all(10),
           decoration: pw.BoxDecoration(
-            color: const PdfColor.fromInt(0xFFFFF8E1),
+            color: bgSecondary,
             border: pw.Border.all(
-              color: const PdfColor.fromInt(0xFFFFB562),
+              color: borderLight,
               width: 0.5,
             ),
             borderRadius: pw.BorderRadius.circular(6),
