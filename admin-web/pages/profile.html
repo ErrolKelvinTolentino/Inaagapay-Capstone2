@@ -3,20 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Profile — InaAgapay RHU Portal</title>
+    <title>My Profile — InaAgapay Admin Portal</title>
+    <meta
+      name="description"
+      content="Review the account identity, office access, and session details for the signed-in InaAgapay administrator."
+    />
     <link rel="icon" type="image/png" href="../images/logo_icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
     <link rel="stylesheet" href="../styles/main.css" />
   </head>
-  <body>
+  <body class="account-page profile-page">
+
     <div class="app-layout">
       <header class="app-header">
         <div class="header-brand">
-          <button class="header-sidebar-toggle" id="sidebar-toggle" aria-label="Toggle menu"><i class="fa-solid fa-bars"></i></button>
-          <img src="../images/logo_icon.png" alt="InaAgapay Logo" class="header-logo" />
+          <button class="header-sidebar-toggle" id="sidebar-toggle" aria-label="Toggle menu">
+            <i class="fa-solid fa-bars" aria-hidden="true"></i>
+          </button>
+          <img src="../images/logo_icon.png" alt="" class="header-logo" aria-hidden="true" />
           <img src="../images/inaagapay_name.png" alt="InaAgapay" class="header-logo-label" />
         </div>
         <div class="header-right">
@@ -24,64 +37,175 @@
           <div class="header-user">
             <div class="header-avatar" id="header-avatar">A</div>
             <span class="header-user-name" id="header-user-name">Admin</span>
-            <i class="fa-solid fa-chevron-down" style="font-size: 11px; color: var(--text-secondary)"></i>
+            <i class="fa-solid fa-chevron-down profile-menu-chevron" aria-hidden="true"></i>
           </div>
         </div>
       </header>
 
-      <aside class="app-sidebar">
+      <aside class="app-sidebar" aria-label="Primary navigation">
         <span class="sidebar-section-label">Main Menu</span>
         <ul class="sidebar-nav">
-          <li><a href="dashboard.html"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
-          <li><a href="accounts.html"><i class="fa-solid fa-users"></i> Account Management</a></li>
-          <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
-          <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
-          <li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li>
+          <li><a href="dashboard.html"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i> Dashboard</a></li>
+          <li><a href="accounts.html"><i class="fa-solid fa-users" aria-hidden="true"></i> Account Management</a></li>
+          <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse" aria-hidden="true"></i> Midwife Assignment</a></li>
+          <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i> Inventory Management</a></li>
+          <li><a href="reports.html"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i> Reports &amp; Analytics</a></li>
         </ul>
         <div class="sidebar-divider"></div>
         <span class="sidebar-section-label">Patient Management</span>
-        <ul class="sidebar-nav"><li><a href="patient-records.html"><i class="fa-solid fa-folder-open"></i> Patient Records</a></li></ul>
+        <ul class="sidebar-nav">
+          <li><a href="patient-records.html"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> Patient Records</a></li>
+        </ul>
         <div class="sidebar-divider"></div>
         <span class="sidebar-section-label">System</span>
         <ul class="sidebar-nav">
-          <li><a href="audit-trail.html"><i class="fa-solid fa-clipboard-list"></i> Audit Trail</a></li>
-          <li><a href="backup.html"><i class="fa-solid fa-database"></i> Backup &amp; Restore</a></li>
+          <li><a href="audit-trail.html"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Audit Trail</a></li>
+          <li><a href="backup.html"><i class="fa-solid fa-database" aria-hidden="true"></i> Backup &amp; Restore</a></li>
         </ul>
         <div class="sidebar-divider"></div>
-        <div class="sidebar-footer-nav"><button class="sidebar-logout" id="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button></div>
+        <div class="sidebar-footer-nav">
+          <button class="sidebar-logout" id="logout-btn">
+            <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i> Logout
+          </button>
+        </div>
       </aside>
 
-      <main class="app-main">
-        <div class="page-header">
+      <main class="app-main profile-main" id="main-content" tabindex="-1">
+        <div class="page-header profile-page-header">
           <div class="page-title-block">
-            <h1 class="page-title"><i class="fa-solid fa-user" style="color: var(--brand-primary); margin-right: 8px;"></i>My Profile</h1>
-            <p class="page-subtitle">View the account details associated with your InaAgapay portal access.</p>
+            <span class="page-eyebrow"><i class="fa-solid fa-id-badge" aria-hidden="true"></i> Account overview</span>
+            <h1 class="page-title">My Profile</h1>
+            <p class="page-subtitle">Review the identity and office scope connected to your current portal session.</p>
           </div>
         </div>
 
-        <div class="card" style="max-width: 760px;">
-          <div class="card-header" style="display: flex; align-items: center; gap: 16px;">
-            <div class="header-avatar" style="width: 56px; height: 56px; font-size: 20px;" id="profile-avatar">A</div>
-            <div>
-              <div class="card-title" data-account-name>Admin</div>
-              <div class="card-subtitle" data-account-role>Rural Health Unit administrator</div>
+        <section class="profile-identity-card" aria-labelledby="profile-identity-name">
+          <div class="profile-identity-main">
+            <div class="profile-avatar-large" id="profile-avatar" aria-hidden="true">A</div>
+            <div class="profile-identity-copy">
+              <span class="profile-identity-label">Signed-in administrator</span>
+              <h2 class="profile-identity-name" id="profile-identity-name" data-account-name>Admin</h2>
+              <p class="profile-identity-role" data-account-role>Rural Health Unit administrator</p>
+              <div class="profile-identity-meta">
+                <span class="profile-meta-chip">
+                  <i class="fa-solid fa-hospital" aria-hidden="true"></i>
+                  <span data-account-portal>Rural Health Unit</span>
+                </span>
+                <span class="profile-meta-chip profile-meta-chip-secure">
+                  <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                  Protected session
+                </span>
+              </div>
             </div>
           </div>
-          <div class="card-body" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px;">
-            <div class="info-row" style="padding: 0; border-bottom: none;"><div class="info-row-icon"><i class="fa-solid fa-envelope"></i></div><div class="info-row-content"><div class="info-row-label">Email address</div><div class="info-row-value" data-account-email>—</div></div></div>
-            <div class="info-row" style="padding: 0; border-bottom: none;"><div class="info-row-icon"><i class="fa-solid fa-hospital"></i></div><div class="info-row-content"><div class="info-row-label">Portal office</div><div class="info-row-value" data-account-portal>Rural Health Unit</div></div></div>
-            <div class="info-row" style="padding: 0; border-bottom: none;"><div class="info-row-icon"><i class="fa-solid fa-id-card"></i></div><div class="info-row-content"><div class="info-row-label">Account ID</div><div class="info-row-value" data-account-id>—</div></div></div>
-            <div class="info-row" style="padding: 0; border-bottom: none;"><div class="info-row-icon"><i class="fa-solid fa-clock"></i></div><div class="info-row-content"><div class="info-row-label">Current session started</div><div class="info-row-value" data-account-login>—</div></div></div>
+          <div class="profile-identity-actions" aria-label="Account actions">
+            <a href="settings.html" class="btn btn-primary btn-sm">
+              <i class="fa-solid fa-gear" aria-hidden="true"></i> Account settings
+            </a>
+            <a href="change-password.html" class="btn btn-secondary btn-sm">
+              <i class="fa-solid fa-key" aria-hidden="true"></i> Change password
+            </a>
           </div>
-        </div>
+        </section>
 
-        <div class="card" style="max-width: 760px; margin-top: 20px;">
-          <div class="card-header"><div class="card-title"><i class="fa-solid fa-shield-halved" style="color: var(--brand-primary); margin-right: 6px;"></i>Account protection</div><div class="card-subtitle">Your access is limited to the office scope assigned to this account.</div></div>
-          <div class="card-body"><a href="settings.html" class="btn btn-outline-pink btn-sm"><i class="fa-solid fa-gear"></i> Manage settings</a></div>
+        <div class="profile-content-grid">
+          <section class="card profile-details-card" aria-labelledby="profile-details-title">
+            <div class="card-header profile-card-header">
+              <div>
+                <span class="section-kicker">Account record</span>
+                <h2 class="card-title" id="profile-details-title">Profile details</h2>
+                <p class="card-subtitle">These values identify the account currently using this portal.</p>
+              </div>
+              <span class="profile-read-only-badge"><i class="fa-solid fa-eye" aria-hidden="true"></i> View only</span>
+            </div>
+            <div class="card-body">
+              <dl class="profile-details-grid">
+                <div class="profile-detail-item">
+                  <span class="profile-detail-icon"><i class="fa-solid fa-envelope" aria-hidden="true"></i></span>
+                  <div>
+                    <dt>Email address</dt>
+                    <dd data-account-email>—</dd>
+                  </div>
+                </div>
+                <div class="profile-detail-item">
+                  <span class="profile-detail-icon"><i class="fa-solid fa-hospital" aria-hidden="true"></i></span>
+                  <div>
+                    <dt>Assigned office</dt>
+                    <dd data-account-portal>Rural Health Unit</dd>
+                  </div>
+                </div>
+                <div class="profile-detail-item">
+                  <span class="profile-detail-icon"><i class="fa-solid fa-id-card" aria-hidden="true"></i></span>
+                  <div>
+                    <dt>Account ID</dt>
+                    <dd data-account-id>—</dd>
+                  </div>
+                </div>
+                <div class="profile-detail-item">
+                  <span class="profile-detail-icon"><i class="fa-solid fa-clock" aria-hidden="true"></i></span>
+                  <div>
+                    <dt>Current session started</dt>
+                    <dd data-account-login>—</dd>
+                  </div>
+                </div>
+              </dl>
+            </div>
+          </section>
+
+          <div class="profile-summary-stack">
+            <section class="card profile-summary-card profile-access-card" aria-labelledby="profile-access-title">
+              <div class="card-body">
+                <div class="profile-summary-heading">
+                  <span class="profile-summary-icon"><i class="fa-solid fa-building-shield" aria-hidden="true"></i></span>
+                  <div>
+                    <span class="section-kicker">Access summary</span>
+                    <h2 class="card-title" id="profile-access-title">Office-scoped access</h2>
+                  </div>
+                </div>
+                <p class="profile-summary-description">
+                  Records, facilities, reports, and inventory are limited to the office assigned to this account.
+                </p>
+                <dl class="profile-summary-list">
+                  <div>
+                    <dt>Current office</dt>
+                    <dd data-account-portal>Rural Health Unit</dd>
+                  </div>
+                  <div>
+                    <dt>Account role</dt>
+                    <dd data-account-role>Rural Health Unit administrator</dd>
+                  </div>
+                </dl>
+              </div>
+            </section>
+
+            <section class="card profile-summary-card profile-security-card" aria-labelledby="profile-security-title">
+              <div class="card-body">
+                <div class="profile-summary-heading">
+                  <span class="profile-summary-icon"><i class="fa-solid fa-lock" aria-hidden="true"></i></span>
+                  <div>
+                    <span class="section-kicker">Security summary</span>
+                    <h2 class="card-title" id="profile-security-title">Session protection</h2>
+                  </div>
+                </div>
+                <ul class="profile-security-list">
+                  <li><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Password-protected administrator account</span></li>
+                  <li><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Automatic sign-out after 15 minutes of inactivity</span></li>
+                  <li><i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Absolute session limit of 12 hours</span></li>
+                </ul>
+                <a class="profile-help-link" href="help.html">
+                  Review account and privacy guidance <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                </a>
+              </div>
+            </section>
+          </div>
         </div>
       </main>
 
-      <footer class="app-footer"><span>&copy; 2026 InaAgapay — Maternal &amp; Child Health Information System</span><span style="color: var(--border-primary)">|</span><span>Admin Portal v2.5</span></footer>
+      <footer class="app-footer">
+        <span>&copy; 2026 InaAgapay — Maternal &amp; Child Health Information System</span>
+        <span aria-hidden="true">|</span>
+        <span>Admin Portal v2.5</span>
+      </footer>
     </div>
 
     <script src="common-security.js"></script>

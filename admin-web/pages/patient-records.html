@@ -131,17 +131,17 @@
         <!-- Mothers Tab -->
         <div id="mothers-tab" class="tab-content-modern active">
           <div class="card">
-            <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding: 18px 20px;">
+            <div class="toolbar" style="display:flex; flex-direction:column; align-items:stretch; gap:12px; border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding: 18px 20px;">
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                <div class="search-box" style="position: relative; display: flex; align-items: center; width: 100%; max-width: 320px;">
+                <div class="search-box" style="position: relative; display: flex; align-items: center; flex: 1; min-width: 200px; max-width: 400px;">
                   <i class="fa-solid fa-magnifying-glass"></i>
                   <input type="search" id="search-mothers" class="form-control" placeholder="Search by name, email, or barangay..." />
                 </div>
-                <div class="filter-group" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                  <select class="form-select" id="filter-bhc-mothers" style="width: auto; min-width: 170px;">
+                <div class="filter-group" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex: 1; justify-content: flex-end;">
+                  <select class="form-select" id="filter-bhc-mothers" style="flex:1; min-width: 170px;">
                     <option value="">All Health Centers (BHCs)</option>
                   </select>
-                  <div class="date-range-picker-group" id="mothers-date-picker-wrap">
+                  <div class="date-range-picker-group" id="mothers-date-picker-wrap" style="flex:1; min-width:260px;">
                     <i class="fa-solid fa-calendar-days date-icon"></i>
                     <span class="date-label">Registered:</span>
                     <input type="date" class="date-input" id="mothers-date-from" title="Filter from registration date" />
@@ -191,25 +191,25 @@
         <!-- Pregnancies Tab -->
         <div id="pregnancies-tab" class="tab-content-modern">
           <div class="card">
-            <div class="toolbar" style="display:flex; flex-direction:column; gap:12px; border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding: 18px 20px;">
+            <div class="toolbar" style="display:flex; flex-direction:column; align-items:stretch; gap:12px; border-bottom: 1px solid var(--border-primary); margin-bottom: 0; padding: 18px 20px;">
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                <div class="search-box" style="position: relative; display: flex; align-items: center; width: 100%; max-width: 320px;">
+                <div class="search-box" style="position: relative; display: flex; align-items: center; flex: 1; min-width: 200px; max-width: 400px;">
                   <i class="fa-solid fa-magnifying-glass"></i>
                   <input type="search" id="search-pregnancies" class="form-control" placeholder="Search by mother's name..." />
                 </div>
-                <div class="filter-group" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                  <select class="form-select" id="filter-risk" style="width: auto; min-width: 140px;">
+                <div class="filter-group" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; flex: 1; justify-content: flex-end;">
+                  <select class="form-select" id="filter-risk" style="flex:1; min-width: 140px;">
                     <option value="">All Risk Levels</option>
                     <option value="low">🟢 Low Risk</option>
                     <option value="medium">🟡 Medium Risk</option>
                     <option value="high">🔴 High Risk</option>
                   </select>
-                  <select class="form-select" id="filter-pregnancy-status" style="width: auto; min-width: 140px;">
+                  <select class="form-select" id="filter-pregnancy-status" style="flex:1; min-width: 140px;">
                     <option value="">All Status</option>
                     <option value="ongoing">🔄 Ongoing</option>
                     <option value="ended">✅ Ended</option>
                   </select>
-                  <div class="date-range-picker-group" id="pregnancies-date-picker-wrap">
+                  <div class="date-range-picker-group" id="pregnancies-date-picker-wrap" style="flex:1; min-width:260px;">
                     <i class="fa-solid fa-calendar-days date-icon"></i>
                     <span class="date-label">Due / Start:</span>
                     <input type="date" class="date-input" id="pregnancies-date-from" title="Filter from date" />
@@ -466,9 +466,7 @@
         // The sidebar Logout button had no handler on this page, so it did nothing.
         document.getElementById("logout-btn")?.addEventListener("click", () => {
           if (confirm("Logout?")) {
-            localStorage.removeItem(SESSION_KEY);
-            PortalScope.clear();
-            window.location.href = "../index.html";
+            localStorage.removeItem(SESSION_KEY); window.PortalScope?.clear(); if (window.navigateTo) { window.navigateTo("../index.html"); } else { window.location.href = "../index.html"; }
           }
         });
 
@@ -827,7 +825,7 @@
             const name = [m.accounts?.first_name, m.accounts?.last_name].filter(Boolean).join(" ") || "—";
             const initials = name.charAt(0) || "?";
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern">${esc(initials)}</div><span style="font-weight:600;">${maskText(name)}</span></td></tr>
+              <td><div class="mother-info"><div class="avatar-modern">${esc(initials)}</div><span style="font-weight:600;">${maskText(name)}</span></div></td>
               <td>${maskText(m.accounts?.email_address)}</td>
               <td>${maskText(m.barangay)}</td>
               <td><span class="badge badge-admin">${esc(m.bhc?.bhc_name || "—")}</span></td>
@@ -912,7 +910,7 @@
             const riskClass = p.pregnancy_risk_level === 'low' ? 'badge-low' : (p.pregnancy_risk_level === 'medium' ? 'badge-medium' : 'badge-high');
             const statusClass = p.status === 'ongoing' ? 'badge-ongoing' : 'badge-ended';
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--warning);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></td></tr>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--warning);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></div></td>
               <td>${fmtDate(p.last_menstrual_period)}</td>
               <td>${fmtDate(p.expected_date_of_delivery)}</td>
               <td><span class="badge-modern ${riskClass}">${p.pregnancy_risk_level || "—"}</span></td>
@@ -944,7 +942,7 @@
             const bp = `${c.blood_pressure_systolic || "—"}/${c.blood_pressure_diastolic || "—"}`;
             const isHigh = (c.blood_pressure_systolic >= 140 || c.blood_pressure_diastolic >= 90);
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--info);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></td></tr>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--info);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></div></td>
               <td>${fmtDateTime(c.checkup_datetime)}</td>
               <td>${c.age_of_gestation || "—"} wks</td>
               <td>${c.checkup_weight || "—"} kg</td>
@@ -979,7 +977,7 @@
             const jsonUrls = JSON.stringify(imageUrls).replace(/"/g, '&quot;');
             const imgId = `us_${u.ultrasound_id}_${Date.now()}`;
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--brand-primary);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></td></tr>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--brand-primary);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></div></td>
               <td>${fmtDate(u.ultrasound_date)}</td>
               <td>${esc(u.ultrasound_location || "—")}</td>
               <td>${esc(u.health_worker_name || "—")}</td>
@@ -1029,7 +1027,7 @@
             const jsonUrls = JSON.stringify(imageUrls).replace(/"/g, '&quot;');
             const imgId = `lt_${l.lab_test_id}_${Date.now()}`;
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--warning);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></td></tr>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--warning);">${esc(name.charAt(0) || "?")}</div><span style="font-weight:600;">${maskText(name)}</span></div></td>
               <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">${esc(l.lab_test_type || "—")}</span></td>
               <td>${fmtDate(l.lab_test_date)}</td>
               <td>${esc(l.lab_test_location || "—")}</td>
@@ -1077,8 +1075,8 @@
             const motherName = [c.mothers?.accounts?.first_name, c.mothers?.accounts?.last_name].filter(Boolean).join(" ") || "—";
             const genderIcon = c.sex === 'male' ? 'fa-mars' : (c.sex === 'female' ? 'fa-venus' : 'fa-genderless');
             return `<tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--success);"><i class="fa-solid ${genderIcon}"></i></div><span style="font-weight:600;">${maskText(childName)}</span></td></tr>
-              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--brand-primary);">${esc(motherName.charAt(0) || "?")}</div><span>${maskText(motherName)}</span></td></tr>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--success);"><i class="fa-solid ${genderIcon}"></i></div><span style="font-weight:600;">${maskText(childName)}</span></div></td>
+              <td><div class="mother-info"><div class="avatar-modern" style="background:var(--brand-primary);">${esc(motherName.charAt(0) || "?")}</div><span>${maskText(motherName)}</span></div></td>
               <td><span class="badge-modern" style="background:var(--info-10);color:var(--info);">${c.sex || "—"}</span></td>
               <td>${fmtDate(c.birth_details?.birthdate)}</td>
               <td>${c.birth_details?.birth_weight || "—"} kg</td>
