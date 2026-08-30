@@ -7099,12 +7099,15 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   color: AppColors.textSecondary.withValues(alpha: 0.7),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  emptyText,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
+                Flexible(
+                  child: Text(
+                    emptyText,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],

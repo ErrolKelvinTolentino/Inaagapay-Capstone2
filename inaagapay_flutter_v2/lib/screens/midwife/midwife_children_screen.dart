@@ -1130,14 +1130,26 @@ class _ChildCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        '$age • $parentName',
+                        age,
                         style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
                         ),
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      if (parentName.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          parentName,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: AppColors.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ],
                   ),
                 ),
