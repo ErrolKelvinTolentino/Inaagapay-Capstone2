@@ -3,7 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class NotificationService {
   static final _client = Supabase.instance.client;
 
-  static Future<List<Map<String, dynamic>>> getNotifications(int accountId, {int limit = 50}) async {
+  static Future<List<Map<String, dynamic>>> getNotifications(int accountId,
+      {int limit = 50}) async {
     final result = await _client
         .from('notifications')
         .select()
@@ -25,8 +26,26 @@ class NotificationService {
   static Future<void> markAsRead(int notificationId) async {
     await _client
         .from('notifications')
-        .update({'is_read': true})
-        .eq('notification_id', notificationId);
+        .update({'is_read': true}).eq('notification_id', notificationId);
+  }
+
+  /// Flips is_read on every notification about one specific request or
+  /// transfer, keyed by the reference_type/reference_id pair
+  /// 20260909_notification_reference_ids.sql added. Used when the midwife
+  /// centre marks its own richer, derived alert read: the underlying raw row
+  /// -- suppressed from the list because the derived alert already covers it
+  /// -- should not sit unread forever just because nothing ever tapped it
+  /// directly.
+  static Future<void> markReferenceRead({
+    required String referenceType,
+    required int referenceId,
+    required bool isRead,
+  }) async {
+    await _client
+        .from('notifications')
+        .update({'is_read': isRead})
+        .eq('reference_type', referenceType)
+        .eq('reference_id', referenceId);
   }
 
   static Future<void> markAllAsRead(int accountId) async {
@@ -60,7 +79,8 @@ class NotificationService {
     });
   }
 
-  static RealtimeChannel subscribeToNotifications(int accountId, void Function(Map<String, dynamic>) onNew) {
+  static RealtimeChannel subscribeToNotifications(
+      int accountId, void Function(Map<String, dynamic>) onNew) {
     return _client
         .channel('notifications:$accountId')
         .onPostgresChanges(

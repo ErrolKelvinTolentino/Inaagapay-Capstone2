@@ -187,17 +187,17 @@ class AuthStorage {
     return val.split('|||');
   }
 
-  /// The unread count for the midwife notification centre badge.
+  /// Unread alert total for the bell, published by the notification centre.
+  /// Cached so the badge is right on the first frame instead of flashing zero
+  /// while the centre is still loading a stock snapshot.
   static Future<void> saveAlertUnreadCount(int accountId, int count) async {
     await _storage.write(
-      key: 'alert_unread_count_$accountId',
-      value: count.toString(),
-    );
+        key: 'alert_unread_count_$accountId', value: count.toString());
   }
 
   static Future<int> getAlertUnreadCount(int accountId) async {
     final val = await _storage.read(key: 'alert_unread_count_$accountId');
-    return val != null ? int.tryParse(val) ?? 0 : 0;
+    return int.tryParse(val ?? '') ?? 0;
   }
 
   static Future<void> saveHiddenMedicalConditions(List<String> list) async {

@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
-import '../../services/notification_service.dart';
+import '../../services/midwife_alert_badge.dart';
 import '../../services/push_notification_service.dart';
 import 'midwife_dashboard.dart';
 import 'midwife_mothers_screen.dart';
@@ -47,19 +47,34 @@ class _MidwifeShellState extends State<MidwifeShell> {
   @override
   void initState() {
     super.initState();
+    MidwifeAlertBadge.count.addListener(_onBadgeChanged);
     _loadUnreadCount();
   }
 
+  /// The bell badges what is waiting in the notification centre, because that
+  /// is the screen it opens. It used to badge NotificationService.getUnreadCount
+  /// instead -- unread rows in the notifications table -- which cannot see the
+  /// low-stock, expiry, transfer and clinical alerts the centre derives from
+  /// live data. The two numbers disagreed by however many of those were
+  /// outstanding.
   Future<void> _loadUnreadCount() async {
     try {
       final accountId = await AuthStorage.getUserId();
       if (accountId != null) {
-        final count = await NotificationService.getUnreadCount(accountId);
+        final count = await MidwifeAlertBadge.restore(accountId);
         if (mounted) {
           setState(() => _unreadAlertCount = count);
         }
       }
     } catch (_) {}
+  }
+
+  /// Marking an alert read inside the centre should move the bell immediately,
+  /// not on the next tab change.
+  void _onBadgeChanged() {
+    if (mounted && MidwifeAlertBadge.count.value != _unreadAlertCount) {
+      setState(() => _unreadAlertCount = MidwifeAlertBadge.count.value);
+    }
   }
 
   void _onTabSelected(int index) {
@@ -82,6 +97,7 @@ class _MidwifeShellState extends State<MidwifeShell> {
 
   @override
   void dispose() {
+    MidwifeAlertBadge.count.removeListener(_onBadgeChanged);
     _refreshNotifier.dispose();
     super.dispose();
   }

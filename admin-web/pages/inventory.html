@@ -518,6 +518,25 @@
       table.data-table tbody tr:hover td {
         background: rgba(255, 104, 165, 0.03);
       }
+      /* Reference / Notes is the one column holding prose rather than a
+         date, a badge or a number. Under the table-wide `white-space: nowrap`
+         above, a single sentence like "Issued: Central / Municipal Warehouse
+         to Baliwag RHU III - pending receipt confirmation" becomes one
+         unbreakable line, and because it is the widest cell in the table it
+         is what sets the table's minimum width. The table then runs far past
+         the viewport and this last column ends up off the right edge of the
+         screen -- .table-wrap does scroll, but the reader has to find a
+         scrollbar to discover a column exists at all.
+
+         So this column, and only this column, wraps. The bounds keep it from
+         collapsing to one word per line on a narrow screen or eating the
+         table on a wide one. */
+      table.data-table th.col-reference,
+      table.data-table td.col-reference {
+        white-space: normal;
+        min-width: 210px;
+        max-width: 340px;
+      }
       table.data-table .btn {
         height: 26px !important;
         padding: 0 10px !important;
@@ -1716,7 +1735,7 @@
                     <th class="th-sort" data-sort="tx:balance" tabindex="0" style="text-align: right">Balance After<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="tx:patient" tabindex="0">Given To<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="tx:user" tabindex="0">Performed By<i class="fa-solid fa-sort sort-ind"></i></th>
-                    <th>Reference / Notes</th>
+                    <th class="col-reference">Reference / Notes</th>
                   </tr>
                 </thead>
                 <tbody id="tx-tbody">
@@ -2842,6 +2861,19 @@
         // Data State
         let items = [];
         let batches = [];
+        // Every batch the query returned, in scope or not, keyed by batch_id.
+        //
+        // `batches` is deliberately narrowed to this office's own facilities
+        // because it feeds stock totals, valuation and expiry counts, where a
+        // neighbouring facility's stock would be double-counted. But a
+        // TRANSFER's source batch belongs to whoever sent it, which for every
+        // allocation arriving from the tier above is a facility outside that
+        // scope. Resolving the item through `batches` alone therefore failed
+        // on exactly the rows this office most needs to read, and fell back to
+        // the "Inventory item" / "—" / "Batch: #<id>" placeholder.
+        //
+        // Display only. Never use this for anything that counts stock.
+        let batchesById = new Map();
         let transactions = [];
         let stockRequests = [];
         let inventoryTransfers = [];
@@ -3857,8 +3889,19 @@
           // "unknown" — so the presence of the key is what decides, never its
           // value. Only a database without the column falls through.
           if ("source_facility_id" in transfer) return transfer.source_facility_id ?? null;
-          const batch = batches.find(b => String(b.batch_id) === String(transfer.source_batch_id));
+          const batch = transferSourceBatch(transfer);
           return batch ? batch.facility_id ?? null : null;
+        }
+
+        /** The batch a transfer was drawn from, resolved against every batch
+         *  loaded rather than only the in-scope ones. The source of an incoming
+         *  allocation sits at the SENDING facility, which is outside this
+         *  office's scope by definition, so looking it up in `batches` returns
+         *  nothing and the caller ends up rendering a placeholder. See
+         *  batchesById. */
+        function transferSourceBatch(transfer) {
+          if (!transfer) return null;
+          return batchesById.get(String(transfer.source_batch_id)) || null;
         }
 
         const DIRECTION_META = {
@@ -3955,7 +3998,7 @@
             .filter(transfer => {
               if (!isTransferInTransit(transfer)) return false;
               if (String(transfer.destination_facility_id) !== String(facilityId)) return false;
-              const source = batches.find(batch => batch.batch_id === transfer.source_batch_id);
+              const source = transferSourceBatch(transfer);
               return source?.item_id === itemId;
             })
             .reduce((sum, transfer) => sum + Number(transfer.quantity_issued || 0), 0);
@@ -3978,7 +4021,7 @@
             .filter(transfer => {
               if (!isTransferInTransit(transfer)) return false;
               if (placeKey(transferSourceFacilityId(transfer)) !== target) return false;
-              const source = batches.find(batch => batch.batch_id === transfer.source_batch_id);
+              const source = transferSourceBatch(transfer);
               return source?.item_id === itemId;
             })
             .reduce((sum, transfer) => sum + Number(transfer.quantity_issued || 0), 0);
@@ -4465,7 +4508,7 @@
 
           const allocatedTransfers = inventoryTransfers.filter(t => {
             if (t.status !== "pending_receipt") return false;
-            const source = batches.find(b => b.batch_id === t.source_batch_id);
+            const source = transferSourceBatch(t);
             if (!source || source.item_id !== itemId) return false;
             // Counted against the facility it LEFT: those units are already
             // gone from that shelf's on-hand figure and belong to nobody else
@@ -4652,6 +4695,13 @@
             const inScope = (facilityId) => PortalScope.inScope(facilityId);
             const batchInScope = new Map();
 
+            // Built from the UNFILTERED result, before the scope narrowing
+            // below. The query already returns every batch, so naming a
+            // transfer's source costs nothing extra. See batchesById.
+            batchesById = new Map(
+              (batchRes.data || []).map(b => [String(b.batch_id), b])
+            );
+
             batches = (batchRes.data || []).filter(b => {
               const ok = inScope(b.facility_id);
               batchInScope.set(b.batch_id, ok);
@@ -4809,7 +4859,7 @@
           // today — see the transit alerts in filterAlerts() for the same rule.
           const stuckTransferCount = (inventoryTransfers || []).filter(t => {
             if (t.status !== "pending_receipt") return false;
-            const source = batches.find(b => b.batch_id === t.source_batch_id);
+            const source = transferSourceBatch(t);
             const shelfLeft = source?.expiration_date
               ? calendarDaysBetween(new Date(), source.expiration_date) : null;
             if (shelfLeft !== null && shelfLeft <= 0) return true;
@@ -5526,7 +5576,7 @@
           const destName = t => transferEndpointName(t.destination_facility_id);
           const srcName = t => transferEndpointName(transferSourceFacilityId(t));
           const transferItem = t => {
-            const source = batches.find(b => b.batch_id === t.source_batch_id);
+            const source = transferSourceBatch(t);
             return source ? items.find(i => i.item_id === source.item_id) : null;
           };
 
@@ -5555,7 +5605,7 @@
             }
 
             if (q) {
-              const source = batches.find(b => b.batch_id === t.source_batch_id);
+              const source = transferSourceBatch(t);
               const item = transferItem(t);
               const hay = [
                 `#${t.transfer_id}`, t.transfer_id, srcName(t), destName(t),
@@ -5591,8 +5641,8 @@
           const paginatedTransfers = sorted.slice(startIdx, startIdx + state.pageSize);
 
           tbody.innerHTML = paginatedTransfers.map(transfer => {
-            const source = batches.find(b => b.batch_id === transfer.source_batch_id);
-            const item = source ? items.find(i => i.item_id === source.item_id) : null;
+            const source = transferSourceBatch(transfer);
+            const item = transferItem(transfer);
             const sourceFacilityId = transferSourceFacilityId(transfer);
             const direction = transferDirectionOf(transfer);
             const issued = transfer.issued_at ? new Date(transfer.issued_at).toLocaleString("en-PH") : "—";
@@ -5855,7 +5905,7 @@
                 <td style="text-align:right;">${balanceCell}</td>
                 <td>${patientCell}</td>
                 <td>${esc(t.performed_by_name || accountMap[t.performed_by] || "System / Admin")}</td>
-                <td style="font-size:12px;color:var(--text-secondary);vertical-align:middle;">
+                <td class="col-reference" style="font-size:12px;color:var(--text-secondary);vertical-align:middle;">
                   ${activityDetails}
                   <div style="margin-top:6px;">
                     <button class="action-pill-btn pill-pink" onclick="openMovementNarrative(${Number(t.transaction_id)})"
@@ -8767,7 +8817,7 @@
           const transitAlerts = (inventoryTransfers || [])
             .filter(t => t.status === "pending_receipt")
             .map(t => {
-              const source = batches.find(b => b.batch_id === t.source_batch_id);
+              const source = transferSourceBatch(t);
               const item = source ? items.find(i => i.item_id === source.item_id) : null;
               const from = transferEndpointName(transferSourceFacilityId(t));
               const to = transferEndpointName(t.destination_facility_id);
@@ -9339,7 +9389,7 @@
           const sourceName = transferEndpointName(sourceFacilityId);
           const destName = transferEndpointName(transfer.destination_facility_id);
           const direction = transferDirectionOf(transfer);
-          const batch = batches.find(b => String(b.batch_id) === String(transfer.source_batch_id));
+          const batch = transferSourceBatch(transfer);
           const item = batch ? items.find(i => String(i.item_id) === String(batch.item_id)) : null;
           const expected = transferExpectedDate(transfer);
           const reason = String(transfer.remarks || "").match(/Reason for move:\s*([^.]+)\./i);
