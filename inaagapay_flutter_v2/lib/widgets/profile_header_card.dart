@@ -27,6 +27,12 @@ class ProfileHeaderCard extends StatelessWidget {
   /// record was taken, who took it, and the facts a clinician reads first.
   final List<ProfileHeaderChip>? chips;
 
+  /// Optional callback when avatar is tapped (e.g. for changing profile picture).
+  final VoidCallback? onAvatarTap;
+
+  /// Whether to show the edit pencil badge on the avatar.
+  final bool showEditAvatarBadge;
+
   const ProfileHeaderCard({
     super.key,
     required this.fullName,
@@ -35,6 +41,8 @@ class ProfileHeaderCard extends StatelessWidget {
     this.profilePictureUrl,
     this.patientNumber,
     this.chips,
+    this.onAvatarTap,
+    this.showEditAvatarBadge = false,
   });
 
   @override
@@ -82,42 +90,82 @@ class ProfileHeaderCard extends StatelessWidget {
                 child: Column(
                   children: [
                     // Avatar
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.brandPrimary,
-                        border: Border.all(color: Colors.white, width: 3),
-                        boxShadow: [
-                          BoxShadow(
-                            color:
-                                AppColors.brandPrimary.withValues(alpha: 0.25),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
+                    GestureDetector(
+                      onTap: onAvatarTap,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.brandPrimary,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.brandPrimary
+                                      .withValues(alpha: 0.25),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                              image: profilePictureUrl != null &&
+                                      profilePictureUrl!.isNotEmpty
+                                  ? DecorationImage(
+                                      image: NetworkImage(profilePictureUrl!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                            ),
+                            child: profilePictureUrl == null ||
+                                    profilePictureUrl!.isEmpty
+                                ? Center(
+                                    child: Text(
+                                      initial,
+                                      style: const TextStyle(
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : null,
                           ),
-                        ],
-                        image: profilePictureUrl != null &&
-                                profilePictureUrl!.isNotEmpty
-                            ? DecorationImage(
-                                image: NetworkImage(profilePictureUrl!),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
-                      ),
-                      child: profilePictureUrl == null ||
-                              profilePictureUrl!.isEmpty
-                          ? Center(
-                              child: Text(
-                                initial,
-                                style: const TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.bold,
+                          if (showEditAvatarBadge || onAvatarTap != null)
+                            Positioned(
+                              bottom: -2,
+                              right: -2,
+                              child: Container(
+                                width: 26,
+                                height: 26,
+                                decoration: BoxDecoration(
                                   color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: AppColors.borderPrimary,
+                                    width: 1,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.1),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.edit,
+                                    size: 14,
+                                    color: AppColors.brandPrimary,
+                                  ),
                                 ),
                               ),
-                            )
-                          : null,
+                            ),
+                        ],
+                      ),
                     ),
 
                     const SizedBox(height: 10),

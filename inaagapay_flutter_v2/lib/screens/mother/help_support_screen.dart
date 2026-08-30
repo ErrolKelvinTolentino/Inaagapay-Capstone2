@@ -5,6 +5,7 @@ import '../../theme/app_colors.dart';
 import '../../services/language_service.dart';
 import '../../services/auth_storage.dart';
 import '../../widgets/main_button.dart';
+import '../../widgets/secondary_header.dart';
 
 class HelpSupportScreen extends StatefulWidget {
   const HelpSupportScreen({super.key});
@@ -137,15 +138,12 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       builder: (context, _, __) {
         return Scaffold(
           backgroundColor: AppColors.bgPrimaryOf(context),
-          appBar: AppBar(
-            backgroundColor: AppColors.cardColorOf(context),
-            foregroundColor: AppColors.textPrimaryOf(context),
-            title: Text(
-              _t('Help & Support', 'Tulong at Suporta'),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          appBar: PreferredSize(
+            preferredSize: const Size.fromHeight(56),
+            child: SecondaryHeader(
+              title: _t('Help & Support', 'Tulong at Suporta'),
+              onBack: () => Navigator.pop(context),
             ),
-            elevation: 0.5,
-            centerTitle: true,
           ),
           body: _isLoading
               ? const Center(

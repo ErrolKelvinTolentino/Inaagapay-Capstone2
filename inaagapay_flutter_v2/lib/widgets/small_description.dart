@@ -20,10 +20,12 @@ class SmallDescription extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color textColor = color ?? AppColors.textSecondary;
+    final isCenter = rowAlignment == MainAxisAlignment.center;
 
     return Row(
       mainAxisAlignment: rowAlignment,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: isCenter ? MainAxisSize.min : MainAxisSize.max,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         if (icon != null) ...[
           Icon(
@@ -33,16 +35,27 @@ class SmallDescription extends StatelessWidget {
           ),
           const SizedBox(width: 8),
         ],
-        Expanded(
-          child: Text(
-            text,
-            textAlign: textAlign,
-            style: TextStyle(
-              fontSize: 13,
-              color: textColor,
-            ),
-          ),
-        ),
+        isCenter
+            ? Flexible(
+                child: Text(
+                  text,
+                  textAlign: textAlign ?? TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: textColor,
+                  ),
+                ),
+              )
+            : Expanded(
+                child: Text(
+                  text,
+                  textAlign: textAlign,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: textColor,
+                  ),
+                ),
+              ),
       ],
     );
   }
