@@ -3,6 +3,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 
+import 'auth_storage.dart';
+
 class MotherProfileService {
   static SupabaseClient get client => Supabase.instance.client;
 
@@ -624,38 +626,157 @@ class MotherProfileService {
     }
   }
 
-  // Conclude pregnancy
+  /// Closes a pregnancy and files its outcome for each fetus.
+  ///
+  /// Three things about the order of writes here are deliberate, because the
+  /// first version got all three wrong and left records behind that nobody
+  /// could see or undo from the app:
+  ///
+  /// 1. **A delivery is a clinical encounter.** `deliveries.encounter_id` is
+  ///    NOT NULL and unique — it *is* the primary key — so the encounter row
+  ///    has to exist first. Inserting the delivery on its own failed with
+  ///    `null value in column "encounter_id" ... violates not-null constraint`
+  ///    every single time, which is why concluding a pregnancy never worked.
+  ///
+  /// 2. **The pregnancy is marked ended last.** It used to be marked first, so
+  ///    a failure anywhere after it left a pregnancy that was closed but had no
+  ///    outcome and no delivery — and the midwife had no screen to fix it from.
+  ///    Ending last means a failed attempt leaves the pregnancy exactly as it
+  ///    was, and the midwife can simply try again.
+  ///
+  /// 3. **Retrying does not duplicate.** Existing rows for the same fetus are
+  ///    updated rather than inserted again. `pregnancy_outcomes` drives the
+  ///    `trg_update_ob_history` trigger, which recomputes gravida/para/abortus
+  ///    on the mother by counting rows — so a second attempt used to raise her
+  ///    para by one more each time.
   static Future<bool> concludePregnancy(
       int pregnancyId,
       double? gestationalAgeAtEnd,
       List<Map<String, dynamic>> fetalOutcomes) async {
     try {
+      // Read what is needed before writing anything.
+      final pregnancy = await client
+          .from('pregnancies')
+          .select('mother_id')
+          .eq('pregnancy_id', pregnancyId)
+          .maybeSingle();
+
+      final motherId = (pregnancy?['mother_id'] as num?)?.toInt();
+      if (motherId == null) {
+        if (kDebugMode) {
+          print('Cannot conclude pregnancy $pregnancyId: no mother on file');
+        }
+        return false;
+      }
+
+      final recorder = await _currentMidwifeRecorder();
+
+      final existingOutcomes = await client
+          .from('pregnancy_outcomes')
+          .select('outcome_id, fetus_number')
+          .eq('pregnancy_id', pregnancyId);
+      final outcomeIdByFetus = <int, int>{
+        for (final row in (existingOutcomes as List))
+          if ((row['fetus_number'] as num?)?.toInt() != null)
+            (row['fetus_number'] as num).toInt():
+                (row['outcome_id'] as num).toInt(),
+      };
+
+      final existingDeliveries = await client
+          .from('deliveries')
+          .select('encounter_id, fetus_number')
+          .eq('pregnancy_id', pregnancyId);
+      final deliveryEncounterByFetus = <int, int>{
+        for (final row in (existingDeliveries as List))
+          if ((row['fetus_number'] as num?)?.toInt() != null)
+            (row['fetus_number'] as num).toInt():
+                (row['encounter_id'] as num).toInt(),
+      };
+
+      for (final f in fetalOutcomes) {
+        final fetusNumber = (f['fetus_number'] as num?)?.toInt() ?? 1;
+        final outcome = f['outcome']?.toString();
+
+        final outcomeFields = {
+          'outcome': outcome,
+          'outcome_date': f['outcome_date'],
+          'is_outcome_date_estimated': false,
+        };
+
+        final existingOutcomeId = outcomeIdByFetus[fetusNumber];
+        if (existingOutcomeId != null) {
+          await client
+              .from('pregnancy_outcomes')
+              .update(outcomeFields)
+              .eq('outcome_id', existingOutcomeId);
+        } else {
+          await client.from('pregnancy_outcomes').insert({
+            'pregnancy_id': pregnancyId,
+            'fetus_number': fetusNumber,
+            ...outcomeFields,
+          });
+        }
+
+        if (outcome != 'live_birth' && outcome != 'stillbirth') continue;
+
+        // The form only asks for one date. Falling back to it keeps the
+        // delivery row from being filed with no date at all.
+        final deliveryDate = f['delivery_date'] ?? f['outcome_date'];
+
+        final deliveryFields = {
+          'delivery_date': deliveryDate,
+          'place_of_delivery': f['place_of_delivery'],
+          'delivery_method': f['delivery_method'],
+          'is_delivery_date_estimated': false,
+        };
+
+        final existingEncounterId = deliveryEncounterByFetus[fetusNumber];
+        if (existingEncounterId != null) {
+          await client
+              .from('deliveries')
+              .update(deliveryFields)
+              .eq('encounter_id', existingEncounterId);
+          continue;
+        }
+
+        final encounter = await client
+            .from('clinical_encounters')
+            .insert({
+              'pregnancy_id': pregnancyId,
+              'mother_id': motherId,
+              'encounter_type': 'delivery',
+              'encounter_datetime': deliveryDate != null
+                  ? '${deliveryDate}T00:00:00'
+                  : DateTime.now().toIso8601String(),
+              if (recorder?['midwife_id'] != null)
+                'recorded_by': recorder!['midwife_id'],
+              if (recorder?['facility_id'] != null)
+                'facility_id': recorder!['facility_id'],
+            })
+            .select('encounter_id')
+            .maybeSingle();
+
+        final encounterId = (encounter?['encounter_id'] as num?)?.toInt();
+        if (encounterId == null) {
+          if (kDebugMode) {
+            print('Could not open a delivery encounter for fetus $fetusNumber');
+          }
+          return false;
+        }
+
+        await client.from('deliveries').insert({
+          'encounter_id': encounterId,
+          'pregnancy_id': pregnancyId,
+          'fetus_number': fetusNumber,
+          ...deliveryFields,
+        });
+      }
+
       await client.from('pregnancies').update({
         'status': 'ended',
         'gestational_age_at_end': gestationalAgeAtEnd,
         'ended_at': DateTime.now().toIso8601String(),
       }).eq('pregnancy_id', pregnancyId);
-
-      for (var f in fetalOutcomes) {
-        await client.from('pregnancy_outcomes').insert({
-          'pregnancy_id': pregnancyId,
-          'fetus_number': f['fetus_number'],
-          'outcome': f['outcome'],
-          'outcome_date': f['outcome_date'],
-          'is_outcome_date_estimated': false,
-        });
-
-        if (f['outcome'] == 'live_birth' || f['outcome'] == 'stillbirth') {
-          await client.from('deliveries').insert({
-            'pregnancy_id': pregnancyId,
-            'fetus_number': f['fetus_number'],
-            'delivery_date': f['delivery_date'],
-            'place_of_delivery': f['place_of_delivery'],
-            'delivery_method': f['delivery_method'],
-            'is_delivery_date_estimated': false,
-          });
-        }
-      }
 
       return true;
     } catch (e) {
@@ -663,6 +784,36 @@ class MotherProfileService {
         print('Error concluding pregnancy: $e');
       }
       return false;
+    }
+  }
+
+  /// The signed-in midwife, so the delivery encounter carries a name and a
+  /// health centre instead of appearing in the record as unattributed.
+  ///
+  /// Best-effort: a database where the posting column is missing, or a session
+  /// that cannot be resolved, files the encounter without attribution rather
+  /// than failing the conclusion.
+  static Future<Map<String, dynamic>?> _currentMidwifeRecorder() async {
+    try {
+      final accountId = await AuthStorage.getUserId();
+      if (accountId == null) return null;
+
+      final midwife = await client
+          .from('midwives')
+          .select('midwife_id, assigned_bhc_id')
+          .eq('account_id', accountId)
+          .maybeSingle();
+      if (midwife == null) return null;
+
+      return {
+        'midwife_id': (midwife['midwife_id'] as num?)?.toInt(),
+        'facility_id': (midwife['assigned_bhc_id'] as num?)?.toInt(),
+      };
+    } catch (e) {
+      if (kDebugMode) {
+        print('Delivery encounter will be unattributed: $e');
+      }
+      return null;
     }
   }
 

@@ -40,44 +40,68 @@ class InventoryRepository {
       );
     }
 
-    final context = await _contextForAccount(
-      accountId: savedAccountId,
-      expectedToken: savedToken,
-    );
-
-    if (context == null) {
-      throw const InventoryRepositoryException(
-        'This account is not assigned to a barangay health center yet, so it '
-        'has no stock to show. Ask the RHU to set the assignment.',
-      );
-    }
-
-    return context;
+    return _contextForAccount(accountId: savedAccountId);
   }
 
-  Future<MidwifeInventoryContext?> _contextForAccount({
+  /// Resolves the signed-in midwife's shelf, or says precisely what is missing.
+  ///
+  /// This used to return null for five unrelated reasons and the caller printed
+  /// one sentence for all of them: "not assigned to a barangay health center".
+  /// A superseded login token and a missing midwife row both read as a posting
+  /// problem, so the RHU was asked to fix an assignment that was already
+  /// correct. Each cause now names itself.
+  Future<MidwifeInventoryContext> _contextForAccount({
     required int accountId,
-    String? expectedToken,
   }) async {
     final account = await _client
         .from('accounts')
-        .select(
-          'account_id, account_type, status, first_name, last_name, '
-          'last_login_token',
-        )
+        .select('account_id, account_type, status, first_name, last_name')
         .eq('account_id', accountId)
         .maybeSingle();
 
-    if (account == null ||
-        account['account_type']?.toString().toLowerCase() != 'midwife' ||
-        account['status']?.toString().toLowerCase() != 'active') {
-      return null;
+    if (account == null) {
+      throw InventoryRepositoryException(
+        'This device is signed in as account #$accountId, which is no longer '
+        'in the system. Sign out and sign in again.',
+      );
     }
 
-    if (expectedToken != null &&
-        account['last_login_token']?.toString() != expectedToken) {
-      return null;
+    if (account['account_type']?.toString().toLowerCase() != 'midwife') {
+      throw const InventoryRepositoryException(
+        'The health center inventory is for midwife accounts. This account is '
+        'signed in with a different role.',
+      );
     }
+
+    if (account['status']?.toString().toLowerCase() != 'active') {
+      throw InventoryRepositoryException(
+        'This midwife account is '
+        '${account['status']?.toString().toLowerCase() ?? 'inactive'}, so its '
+        'stock is not available. Ask the RHU to reactivate it.',
+      );
+    }
+
+    // There was a session check here: reject the device unless its saved token
+    // equalled accounts.last_login_token. It was removed because that column
+    // cannot be written, so the check had no true positives — only lockouts.
+    //
+    // Sign-in is a custom lookup against the accounts table; the app never
+    // calls signInWithPassword, so there is no Supabase Auth session and
+    // auth.uid() is null. The policy governing the write is
+    //
+    //   CREATE POLICY "Users can update own account" ON public.accounts
+    //   FOR UPDATE USING (auth_id = auth.uid());
+    //
+    // which therefore matches no row. SupabaseService.login still generates a
+    // token, still hands it to the device, and still reports success — the
+    // UPDATE simply affects nothing and raises nothing. On this database the
+    // column is null for four of six midwives and holds a legacy value for the
+    // rest, so every midwife was refused her own health centre's stock.
+    //
+    // Reinstating this needs the token to be written first — a SECURITY DEFINER
+    // RPC at login, or an UPDATE policy that does not depend on auth.uid() —
+    // and until then it is a check in name only. What still gates the screen is
+    // the account itself: it must exist, be a midwife, and be active.
 
     final midwife = await _client
         .from('midwives')
@@ -85,8 +109,31 @@ class InventoryRepository {
         .eq('account_id', accountId)
         .maybeSingle();
 
-    final facilityId = _nullableInt(midwife?['assigned_bhc_id']);
-    if (facilityId == null) return null;
+    if (midwife == null) {
+      throw const InventoryRepositoryException(
+        'This account has no midwife record, so there is no health center to '
+        'draw stock from. Ask the RHU to complete the midwife profile.',
+      );
+    }
+
+    // The posting on the midwife row is authoritative — it is what the admin
+    // portal writes. facility_assignments is the older home for the same fact
+    // and is still the only place some accounts carry it, so it is read as a
+    // fallback exactly as SupabaseService.getMidwifeContext does.
+    //
+    // What is deliberately NOT copied from there is that method's last resort:
+    // defaulting to the first BHC in the table. A guess is survivable when it
+    // only labels a screen; here every dispense, write-off and stock request
+    // would post to a health centre the midwife does not work at.
+    var facilityId = _nullableInt(midwife['assigned_bhc_id']);
+    facilityId ??= await _postingFromAssignments(accountId);
+
+    if (facilityId == null) {
+      throw const InventoryRepositoryException(
+        'This account is not assigned to a barangay health center yet, so it '
+        'has no stock to show. Ask the RHU to set the assignment.',
+      );
+    }
 
     String facilityName = 'Barangay Health Center #$facilityId';
     String? supplierName;
@@ -126,13 +173,37 @@ class InventoryRepository {
 
     return MidwifeInventoryContext(
       accountId: accountId,
-      midwifeId: _nullableInt(midwife?['midwife_id']) ?? accountId,
+      midwifeId: _nullableInt(midwife['midwife_id']) ?? accountId,
       facilityId: facilityId,
       facilityName: facilityName,
       displayName: fullName.isEmpty ? 'Midwife' : fullName,
       isDemo: false,
       supplierName: supplierName,
     );
+  }
+
+  /// The most recent active posting on `facility_assignments`.
+  ///
+  /// Ordered and limited rather than `maybeSingle()`: an account with more than
+  /// one active row makes that throw a 406, and accounts with several rows are
+  /// exactly the ones this fallback exists for. A database without the table at
+  /// all simply has no fallback, which the caller reports as an unset posting.
+  Future<int?> _postingFromAssignments(int accountId) async {
+    try {
+      final rows = await _client
+          .from('facility_assignments')
+          .select('facility_id, assigned_at')
+          .eq('account_id', accountId)
+          .eq('is_active', true)
+          .order('assigned_at', ascending: false)
+          .limit(1);
+
+      final list = rows as List<dynamic>;
+      if (list.isEmpty) return null;
+      return _nullableInt((list.first as Map)['facility_id']);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<InventorySnapshot> loadSnapshot(

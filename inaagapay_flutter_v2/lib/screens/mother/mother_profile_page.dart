@@ -2566,12 +2566,30 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       return weeks < 0 ? null : double.parse(weeks.toStringAsFixed(1));
     }
 
+    // Disposing these right after the sheet's future completes was a crash:
+    // that future resolves the moment the route is popped, while the sheet is
+    // still on screen playing its exit animation and still rebuilding its text
+    // fields — which then threw "A TextEditingController was used after being
+    // disposed", followed by a `_dependents.isEmpty` assertion as the tree came
+    // down. _DisposeOnUnmount hands the job to the framework instead, which
+    // runs it once the sheet has actually left the tree.
+    void disposeControllers() {
+      for (final pc in placeControllers) {
+        pc.dispose();
+      }
+      for (final oc in outcomeDateControllers) {
+        oc.dispose();
+      }
+    }
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return StatefulBuilder(
+        return _DisposeOnUnmount(
+          onDispose: disposeControllers,
+          child: StatefulBuilder(
           builder: (ctx, setModal) {
             final gestAge = computeGestAge(outcomeDates);
 
@@ -2956,16 +2974,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               ),
             );
           },
+        ),
         );
       },
     );
-
-    for (final pc in placeControllers) {
-      pc.dispose();
-    }
-    for (final oc in outcomeDateControllers) {
-      oc.dispose();
-    }
   }
 
   Future<void> _startNewPregnancyDialog([List? pastPregnancies]) async {
@@ -8156,4 +8168,33 @@ class _MenuItem extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Runs [onDispose] when this subtree leaves the widget tree.
+///
+/// The point is timing. A modal sheet's future completes when the route is
+/// popped, not when the sheet is gone — its text fields keep rebuilding through
+/// the exit animation. Anything the sheet's fields still point at has to
+/// outlive that, and the framework already knows exactly when the tree is torn
+/// down, so the cleanup is hung off a State's dispose rather than guessed at
+/// with a delay.
+class _DisposeOnUnmount extends StatefulWidget {
+  const _DisposeOnUnmount({required this.onDispose, required this.child});
+
+  final VoidCallback onDispose;
+  final Widget child;
+
+  @override
+  State<_DisposeOnUnmount> createState() => _DisposeOnUnmountState();
+}
+
+class _DisposeOnUnmountState extends State<_DisposeOnUnmount> {
+  @override
+  void dispose() {
+    widget.onDispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
