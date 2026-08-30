@@ -951,7 +951,6 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
       try {
         final checkupDetails = await _fetchCheckupDetailsForSearch(
             checkupId, record['checkup_datetime'], motherId);
-        String? aiAnalysis = checkupDetails?['aiResponse'] as String?;
         String? riskLevel = checkupDetails?['riskLevel'] as String?;
         String riskFactors = checkupDetails?['riskFactors'] ?? '';
         String medicationPlansSummary =
@@ -965,16 +964,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         String symptomSummary =
             checkupDetails?['symptomSummary'] ?? 'None recorded';
 
-        if (aiAnalysis == null || aiAnalysis.trim().isEmpty) {
-          aiAnalysis =
-              await MotherProfileService.getCheckupAIAnalysis(checkupId);
-        }
-
-        if (aiAnalysis == null || aiAnalysis.trim().isEmpty) {
-          aiAnalysis = _generatePrenatalAIInsights(record);
-        } else {
-          aiAnalysis = aiAnalysis.trim();
-        }
+        final typedRemarks = record['remarks']?.toString().trim() ?? '';
+        final aiAnalysis = typedRemarks.isEmpty ? null : typedRemarks;
 
         final date = _formatDateTime(record['checkup_datetime']);
         final bpSys = _formatValue(record['blood_pressure_systolic']);
@@ -983,38 +974,21 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         final weight = _formatValue(record['checkup_weight']);
 
         double? height;
+        Map<String, dynamic>? motherData;
         try {
           final response = await SupabaseService.client
               .from('mothers')
-              .select('height')
+              .select('height, blood_type, accounts(first_name, last_name, birthdate)')
               .eq('mother_id', motherId)
               .maybeSingle();
           if (response != null) {
+            motherData = response;
             height = double.tryParse(response['height']?.toString() ?? '');
           }
         } catch (_) {}
 
         final heightText =
             height == null ? 'Not recorded' : '${height.toStringAsFixed(1)} cm';
-        String bmiText = '—';
-        String bmiStatus = '—';
-        try {
-          final w = double.tryParse(record['checkup_weight']?.toString() ?? '');
-          if (w != null && height != null && height > 0) {
-            final hm = height / 100;
-            final bmi = w / (hm * hm);
-            bmiText = bmi.toStringAsFixed(1);
-            if (bmi < 18.5) {
-              bmiStatus = 'Underweight';
-            } else if (bmi < 25) {
-              bmiStatus = 'Normal';
-            } else if (bmi < 30) {
-              bmiStatus = 'Overweight';
-            } else {
-              bmiStatus = 'Obese';
-            }
-          }
-        } catch (_) {}
 
         int fetalCount = 1;
         try {
@@ -1042,20 +1016,47 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           }
         }
 
+        RecordPatient? patient;
+        final motherMap = _allMothers.firstWhere(
+          (m) => m['mother_id'] == motherId,
+          orElse: () => <String, dynamic>{},
+        );
+        final acc = motherData?['accounts'] as Map<String, dynamic>?;
+        final mName = '${acc?['first_name'] ?? motherMap['first_name'] ?? ''} ${acc?['last_name'] ?? motherMap['last_name'] ?? ''}'.trim();
+        final birthStr = acc?['birthdate']?.toString();
+        String? ageText;
+        if (birthStr != null) {
+          final birth = DateTime.tryParse(birthStr);
+          if (birth != null) {
+            final yrs = (DateTime.now().difference(birth).inDays / 365.25).floor();
+            if (yrs > 0 && yrs < 120) ageText = '$yrs yrs';
+          }
+        }
+        final bloodType = motherData?['blood_type']?.toString().trim();
+
+        if (mName.isNotEmpty) {
+          patient = RecordPatient(
+            name: mName,
+            idLabel: motherMap['bhc_patient_id']?.toString(),
+            age: ageText,
+            bloodType: (bloodType == null || bloodType.isEmpty || bloodType == 'null') ? null : bloodType,
+          );
+        }
+
         _showRecordDetails(
           title: 'Prenatal Checkup',
           subtitle: date,
           icon: Icons.medical_services,
           approvedByName: midwifeName == '—' ? null : midwifeName,
           isMidwifeApproved: record['is_midwife_approved'] == true,
+          remarksSource: record['remarks_source']?.toString(),
+          patient: patient,
           rows: [
             MapEntry('Conducted by', midwifeName),
             MapEntry('Fetal Count', fetalCount.toString()),
             MapEntry('Age of Gestation', aog),
             MapEntry('Weight (kg)', weight),
             MapEntry('Height', heightText),
-            MapEntry('BMI', bmiText),
-            MapEntry('BMI Status', bmiStatus),
             MapEntry('Blood Pressure', '$bpSys/$bpDia'),
             MapEntry('Fetal Position', _formatValue(record['fetal_position'])),
             MapEntry(
@@ -1064,17 +1065,22 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 'Fetal Heart Beat', _formatValue(record['fetal_heart_beat'])),
             MapEntry('Symptoms', symptomSummary),
             MapEntry('Medication Plans', medicationPlansSummary),
-            MapEntry('Given Medications', givenMedicationsSummary),
-            MapEntry('Ferrous + FA', ferrousSummary),
-            MapEntry('Calcium', calciumSummary),
+            if (givenMedicationsSummary != 'None')
+              MapEntry('Given Medications', givenMedicationsSummary)
+            else ...[
+              if (ferrousSummary != 'Not given') MapEntry('Ferrous + FA', ferrousSummary),
+              if (calciumSummary != 'Not given') MapEntry('Calcium', calciumSummary),
+            ],
             MapEntry('TD Vaccine', _formatValue(record['td_vaccine_dose'])),
             MapEntry('Edema', _formatValue(record['edema'])),
-            MapEntry('Remarks', _formatValue(record['remarks'])),
             MapEntry('Next Schedule', _formatDate(record['next_schedule'])),
           ],
           aiAnalysis: aiAnalysis,
           riskLevel: riskLevel,
           riskFactors: riskFactors,
+          weightGainEval: (record['weight_gain'] as List?)?.isNotEmpty == true
+              ? (record['weight_gain'] as List).first as Map<String, dynamic>
+              : null,
         );
       } catch (e) {
         _closeLoadingOverlay();
@@ -1291,32 +1297,6 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     return buffer.toString();
   }
 
-  String _generatePrenatalAIInsights(Map<String, dynamic> checkup) {
-    final remarks = checkup['remarks']?.toString().toLowerCase() ?? '';
-    final buffer = StringBuffer();
-
-    buffer.write('Prenatal AI Insights:\n\n');
-
-    if (remarks.contains('normal') || remarks.contains('healthy')) {
-      buffer.write(
-          'Prenatal Status: Check-up metrics appear normal and within expected clinical limits.\n\n');
-    } else if (remarks.contains('high') ||
-        remarks.contains('risk') ||
-        remarks.contains('warning')) {
-      buffer.write(
-          'Risk Assessment: Borderline metrics or physical symptoms require careful clinical correlation.\n\n');
-    } else {
-      buffer.write(
-          'Diagnostic Context: Check-up results provide important standard tracking data.\n\n');
-    }
-
-    buffer.write('Clinical Notes:\n');
-    buffer.write('• Correlate findings with recent maternal vitals\n');
-    buffer.write('• Advise adherence to standard prenatal guidelines\n');
-
-    return buffer.toString();
-  }
-
   void _showRecordDetails({
     required String title,
     required List<MapEntry<String, String>> rows,
@@ -1332,6 +1312,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     String? ultrasoundClassification,
     String? approvedByName,
     bool? isMidwifeApproved,
+    String? remarksSource,
+    RecordPatient? patient,
   }) {
     Navigator.push(
       context,
@@ -1339,6 +1321,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         builder: (_) => RecordDetailScreen(
           approvedByName: approvedByName,
           isMidwifeApproved: isMidwifeApproved,
+          remarksSource: remarksSource,
+          patient: patient,
           title: title,
           rows: rows,
           icon: icon,
@@ -1433,18 +1417,22 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
               .eq('mother_id', motherId)
               .eq('start_date', checkupDateString);
 
-          final givenItems = <String>[];
+          final Map<String, int> consolidatedGiven = {};
           for (final row in (givenRows as List).cast<Map<String, dynamic>>()) {
             final name = row['given_medication_name']?.toString() ?? 'Unknown';
-            final quantity = row['quantity']?.toString() ?? '1';
-            givenItems.add('$name x$quantity');
+            final qty = int.tryParse(row['quantity']?.toString() ?? '1') ?? 1;
+            consolidatedGiven[name] = (consolidatedGiven[name] ?? 0) + qty;
+          }
+          final givenItems = <String>[];
+          consolidatedGiven.forEach((name, qty) {
+            givenItems.add('$name x$qty');
             if (name.toLowerCase().contains('ferrous')) {
-              ferrousQuantity = quantity;
+              ferrousQuantity = qty.toString();
             }
             if (name.toLowerCase().contains('calcium')) {
-              calciumQuantity = quantity;
+              calciumQuantity = qty.toString();
             }
-          }
+          });
           if (givenItems.isNotEmpty) givenMedications = givenItems.join('; ');
 
           final planItems = <String>[];

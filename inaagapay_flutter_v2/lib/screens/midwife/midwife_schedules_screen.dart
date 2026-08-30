@@ -332,11 +332,10 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
 
             schedules.add({
               'time': 'All Day',
-              // Named after what is being given. "Barangay Vaccine Day" told
-              // the midwife nothing she could plan around.
+              // Named after what is being given.
               'mother_name': vaccineName.isEmpty
                   ? 'Vaccine Drive'
-                  : '${_withoutTrailingVaccine(vaccineName)} Vaccine Drive',
+                  : vaccineName,
               'type': forChildren ? 'Children Immunization' : 'Immunization Day',
               // Where the drive sits relative to today, like every other row on
               // this screen. It used to read IMMUNIZATION, which the type line
@@ -375,18 +374,6 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
   /// poster page, its route and its data all still exist, so restoring the
   /// shortcut is this one flag.
   static const bool _showTarpaulinPosterCard = false;
-
-  /// Drops a trailing "Vaccine" from a vaccine's name.
-  ///
-  /// Most rows in the vaccines table already carry it — "BCG Vaccine",
-  /// "Hepatitis B Vaccine" — and appending " Vaccine Drive" to those produced
-  /// "BCG Vaccine Vaccine Drive" on the card.
-  static String _withoutTrailingVaccine(String name) {
-    final trimmed = name.trim();
-    return trimmed
-        .replaceFirst(RegExp(r'\s+vaccine$', caseSensitive: false), '')
-        .trim();
-  }
 
   /// Where a booked visit sits relative to today.
   ///
@@ -1070,8 +1057,9 @@ class ScheduleCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    /// 👤 MOTHER NAME
+                    /// 👤 MOTHER NAME / VACCINE TITLE
                     Expanded(
                       child: Text(
                         motherName,
@@ -1079,11 +1067,12 @@ class ScheduleCard extends StatelessWidget {
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textPrimary,
+                          height: 1.3,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        softWrap: true,
                       ),
                     ),
+                    const SizedBox(width: 8),
 
                     /// 🏷️ STATUS BADGE
                     Container(
@@ -1247,6 +1236,7 @@ class ImmunizationDayCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     /// 👤 BHC TITLE
                     Expanded(
@@ -1256,11 +1246,12 @@ class ImmunizationDayCard extends StatelessWidget {
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
                           color: AppColors.textPrimary,
+                          height: 1.3,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        softWrap: true,
                       ),
                     ),
+                    const SizedBox(width: 8),
 
                     /// 🏷️ "Immunization Day" — the category, on the right.
                     ///

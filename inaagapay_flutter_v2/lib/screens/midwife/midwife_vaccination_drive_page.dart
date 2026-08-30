@@ -363,26 +363,26 @@ class _MidwifeVaccinationDrivePageState
                     'far enough past their last dose for the next one to '
                     'count. The series runs to TD5; TD2 is what protects the '
                     'baby at birth.',
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.4,
-              color: AppColors.textSecondaryOf(context),
+            style: const TextStyle(
+              fontSize: 13.5,
+              height: 1.45,
+              color: Color(0xFF5A5A5A),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           if (_loadingRecipients)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Row(children: [
                 SizedBox(
-                    width: 16,
-                    height: 16,
+                    width: 18,
+                    height: 18,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: AppColors.brandPrimary)),
                 SizedBox(width: 12),
                 Text('Checking records…',
                     style: TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary)),
+                        fontSize: 13.5, color: AppColors.textSecondary)),
               ]),
             )
           else if (_recipients.isEmpty)
@@ -390,7 +390,7 @@ class _MidwifeVaccinationDrivePageState
               'Nobody is due on this date — either their series is complete, '
               'or their last dose is too recent for the next one to count yet. '
               'Try a later date.',
-              style: TextStyle(fontSize: 13, color: AppColors.success),
+              style: TextStyle(fontSize: 13.5, color: AppColors.success),
             )
           else ...[
             Row(
@@ -398,12 +398,12 @@ class _MidwifeVaccinationDrivePageState
                 Text(
                   '${_recipients.length}',
                   style: const TextStyle(
-                    fontSize: 26,
+                    fontSize: 28,
                     fontWeight: FontWeight.bold,
                     color: AppColors.brandPrimary,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     _selectedVaccine?.forChildren == true
@@ -414,34 +414,54 @@ class _MidwifeVaccinationDrivePageState
                             ? 'mother will be invited'
                             : 'mothers will be invited'),
                     style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary),
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF5A5A5A),
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             ..._recipients.take(12).map(_recipientRow),
             if (_recipients.length > 12)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text('+${_recipients.length - 12} more',
                     style: const TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary)),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSecondary)),
               ),
             if (unreachable > 0) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
+                  color: AppColors.warning.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: AppColors.warning.withValues(alpha: 0.3)),
                 ),
-                child: Text(
-                  '$unreachable ${unreachable == 1 ? 'mother has' : 'mothers have'} '
-                  'no phone number or email on file and cannot be messaged. '
-                  'They will need telling in person.',
-                  style: const TextStyle(
-                      fontSize: 11, height: 1.35, color: AppColors.textPrimary),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                        color: AppColors.warning, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '$unreachable ${unreachable == 1 ? 'mother has' : 'mothers have'} '
+                        'no phone number or email on file and cannot be messaged. '
+                        'They will need telling in person.',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.35,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -452,29 +472,78 @@ class _MidwifeVaccinationDrivePageState
   }
 
   Widget _recipientRow(DriveRecipient recipient) {
+    final isChild = recipient.isForChild;
+    final displayName = recipient.subjectName;
+    final subText = isChild ? 'Mother: ${recipient.name}' : null;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(
-            recipient.isUnreachable
-                ? Icons.phone_disabled_outlined
-                : Icons.pregnant_woman,
-            size: 16,
-            color: recipient.isUnreachable
-                ? AppColors.warning
-                : AppColors.brandPrimary,
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: (recipient.isUnreachable
+                      ? AppColors.warning
+                      : AppColors.brandPrimary)
+                  .withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              recipient.isUnreachable
+                  ? Icons.phone_disabled_outlined
+                  : (isChild
+                      ? Icons.child_care_rounded
+                      : Icons.pregnant_woman_rounded),
+              size: 18,
+              color: recipient.isUnreachable
+                  ? AppColors.warning
+                  : AppColors.brandPrimary,
+            ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Expanded(
-            child: Text(recipient.subjectName,
-                style: const TextStyle(fontSize: 13),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                if (subText != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subText,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-          Text(recipient.doseLabel,
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.textSecondary)),
+          if (recipient.isUnreachable)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'No contact',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.warning,
+                ),
+              ),
+            ),
         ],
       ),
     );
