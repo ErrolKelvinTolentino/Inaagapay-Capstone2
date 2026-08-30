@@ -154,7 +154,8 @@ class InventoryRepository {
           ? (parent.isEmpty ? null : parent.first as Map?)
           : parent as Map?;
       final parentName = parentMap?['name']?.toString().trim();
-      if (parentName != null && parentName.isNotEmpty) supplierName = parentName;
+      if (parentName != null && parentName.isNotEmpty)
+        supplierName = parentName;
     } catch (_) {
       try {
         final bhc = await _client
@@ -298,6 +299,11 @@ class InventoryRepository {
 
           final transferRows = _rows(workflowResults[1]);
           transfers = await _hydrateTransfers(transferRows);
+          // Both queries just answered, so the workflow tables plainly exist.
+          // Same healing as submitStockRequest / receiveTransfer -- a refresh
+          // is the moment this session finds out the earlier failure it
+          // remembered no longer applies.
+          _workflowRpcUnavailable = false;
         } on Object catch (error) {
           // source_facility_id arrives with 20260829. On a database without it
           // the OR filter above is rejected outright, so fall back to the
@@ -403,6 +409,10 @@ class InventoryRepository {
           'Supabase did not return the submitted stock request.',
         );
       }
+      // Proof the workflow works after all -- heals a stale latch from an
+      // earlier failure instead of leaving every workflow RPC disabled for
+      // the rest of the session once one of them has ever failed.
+      _workflowRpcUnavailable = false;
       return InventoryStockRequestRecord.fromJson(row);
     } catch (error) {
       if (_isMissingWorkflow(error)) {
@@ -444,6 +454,8 @@ class InventoryRepository {
           'Supabase did not return the received transfer.',
         );
       }
+      // Same healing as submitStockRequest above.
+      _workflowRpcUnavailable = false;
       return InventoryTransferRecord.fromJson(row);
     } catch (error) {
       if (_isMissingWorkflow(error)) {
@@ -469,6 +481,13 @@ class InventoryRepository {
     required String reason,
     required String operationKey,
     String? notes,
+
+    /// 'units' (whole sealed vials, the historical and still-default
+    /// meaning) or 'doses', which draws the open vial first and only
+    /// breaks further seals for the shortfall. See
+    /// 20260910_midwife_dose_level_dispense.sql. Ignored server-side for
+    /// anything other than a dispense.
+    String quantityKind = 'units',
   }) async {
     if (quantity <= 0) {
       throw const InventoryRepositoryException(
@@ -487,6 +506,7 @@ class InventoryRepository {
             InventoryStockActivityType.unusable => 'unusable',
           },
           'p_quantity': quantity,
+          'p_quantity_kind': quantityKind,
           'p_reason': reason.trim(),
           'p_operation_key': operationKey.trim(),
           'p_notes':
@@ -707,9 +727,7 @@ class InventoryRepository {
       if (row['success'] == false) {
         final reported = row['error']?.toString().trim() ?? '';
         throw InventoryRepositoryException(
-          reported.isEmpty
-              ? 'The open vial could not be discarded.'
-              : reported,
+          reported.isEmpty ? 'The open vial could not be discarded.' : reported,
         );
       }
 
@@ -772,14 +790,21 @@ class InventoryRepository {
     final text = error.toString().toLowerCase();
     final code =
         error is PostgrestException ? (error.code ?? '').toLowerCase() : '';
+    // `text.contains('does not exist')` used to be here too. It is not a
+    // schema-cache signal, it is a phrase Postgres uses in a wide range of
+    // unrelated error messages -- a bad foreign key, a stale id, a genuinely
+    // missing row -- any one of which would get relabelled "migration not
+    // installed" and then latch _workflowRpcUnavailable true for the rest of
+    // the session (see the reset calls added alongside this), disabling
+    // Dispense and Report Unusable Stock over an error that had nothing to do
+    // with a missing migration.
     return code == 'pgrst202' ||
         code == 'pgrst205' ||
         code == '42p01' ||
         code == '42883' ||
         text.contains('schema cache') ||
         text.contains('could not find the table') ||
-        text.contains('could not find the function') ||
-        text.contains('does not exist');
+        text.contains('could not find the function');
   }
 
   /// The database has not run 20260829 yet, so inventory_transfers has no

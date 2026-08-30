@@ -18,6 +18,7 @@ import '../../widgets/main_header.dart';
 import '../../widgets/overview_info.dart';
 import '../../widgets/secondary_header.dart';
 import '../../widgets/tab_button.dart';
+import '../../widgets/vial_dose_status.dart';
 import '../midwife/midwife_notification_center.dart';
 import 'inventory_models.dart' as live;
 import 'inventory_repository.dart';
@@ -55,6 +56,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
 
   int _selectedTab = 0;
   String _stockFilter = 'all';
+  String _stockSort = 'default';
   String _historyFilter = 'all';
   String _historySort = 'newest';
   String _historyDatePreset = 'all';
@@ -140,6 +142,16 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
           _isLoading = true;
         }
         _loadError = null;
+        // Re-believe the dispense/report workflow is available on every fresh
+        // load. This used to be set true once and only ever flipped to false
+        // -- one attempt that failed before a migration had landed disabled
+        // Dispense and Report Unusable Stock for the rest of the app session,
+        // with no way back except a full restart, even after the migration
+        // was actually applied. A real failure still disables them again
+        // within a few lines of here; this only removes the "stuck forever"
+        // half of that.
+        _stockActivityAvailable = true;
+        _stockActivityMessage = null;
       });
     }
 
@@ -1166,7 +1178,11 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
           _sectionHeading(
             'ACTIVE OPEN MULTI-DOSE VIALS',
             actionLabel: 'View batches',
-            onAction: () => setState(() => _selectedTab = 1),
+            // Used to jump to the My Stock tab, which lists one row per
+            // CATALOGUE ITEM -- there was nowhere on this page that actually
+            // browsed batches, so "View batches" landed on a screen with none
+            // to view. This opens one now.
+            onAction: () => _showBatchBrowserSheet(initialSegment: 'open'),
           ),
           const SizedBox(height: 12),
           _buildOpenVialsOverviewCard(),
@@ -1269,22 +1285,29 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                           ),
                         ),
                       ),
-                      if (isExpired)
-                        TextButton.icon(
-                          onPressed: () => _confirmDiscardOpenVial(item, b),
-                          icon:
-                              const Icon(Icons.delete_outline_rounded, size: 15),
-                          label: const Text('Discard'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppColors.error,
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            textStyle: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
+                      // Available on every open vial, not only one already
+                      // past its limit -- discard_open_vial_doses has never
+                      // required that; only the button used to hide it. See
+                      // the note on _confirmDiscardOpenVial.
+                      TextButton.icon(
+                        onPressed: () => _confirmDiscardOpenVial(
+                          item,
+                          b,
+                          expired: isExpired,
+                        ),
+                        icon:
+                            const Icon(Icons.delete_outline_rounded, size: 15),
+                        label: const Text('Discard'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.error,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          textStyle: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -1324,7 +1347,14 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                         Text(
                           isExpired
                               ? 'Overdue by ${_durationLabel(-timeLeft)} — discard now'
-                              : '${_durationLabel(timeLeft)} left of ${item.openVialShelfHours}h',
+                              // Both halves go through _durationLabel so the
+                              // sentence compares like with like. It used to
+                              // print the raw shelf-life hours, which read
+                              // "17d 15h left of 672h" -- two different units
+                              // in one breath, and 672h is not a number
+                              // anybody converts to four weeks on sight.
+                              : '${_durationLabel(timeLeft)} left of '
+                                  '${_durationLabel(Duration(hours: item.openVialShelfHours))}',
                           style: TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
@@ -1844,9 +1874,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
-                  outbound
-                      ? Icons.outbound_rounded
-                      : Icons.inventory_2_rounded,
+                  outbound ? Icons.outbound_rounded : Icons.inventory_2_rounded,
                   color: accent,
                 ),
               ),
@@ -2250,22 +2278,49 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         'expiring' => item.expiringSoonQuantity > 0,
         'expired' => item.expiredQuantity > 0,
         'low' => item.isLowStock,
+        'none' => item.totalAvailableDoses <= 0,
         _ => true,
       };
-    }).toList()
-      ..sort((first, second) {
-        if (first.expiredQuantity != second.expiredQuantity) {
-          return second.expiredQuantity.compareTo(first.expiredQuantity);
-        }
-        if ((first.expiringSoonQuantity > 0) !=
-            (second.expiringSoonQuantity > 0)) {
-          return first.expiringSoonQuantity > 0 ? -1 : 1;
-        }
-        if (first.isLowStock != second.isLowStock) {
-          return first.isLowStock ? -1 : 1;
-        }
-        return first.name.toLowerCase().compareTo(second.name.toLowerCase());
-      });
+    }).toList();
+    switch (_stockSort) {
+      // The triage order this screen has always opened with: expired stock
+      // first (it is blocking something right now), then anything expiring
+      // soon, then anything low, alphabetical after that. Untouched -- this
+      // is what "Smart order" in the sort sheet means, and stays the default.
+      case 'default':
+        visibleItems.sort((first, second) {
+          if (first.expiredQuantity != second.expiredQuantity) {
+            return second.expiredQuantity.compareTo(first.expiredQuantity);
+          }
+          if ((first.expiringSoonQuantity > 0) !=
+              (second.expiringSoonQuantity > 0)) {
+            return first.expiringSoonQuantity > 0 ? -1 : 1;
+          }
+          if (first.isLowStock != second.isLowStock) {
+            return first.isLowStock ? -1 : 1;
+          }
+          return first.name.toLowerCase().compareTo(second.name.toLowerCase());
+        });
+      case 'stock_asc':
+        visibleItems.sort(
+            (a, b) => a.totalAvailableDoses.compareTo(b.totalAvailableDoses));
+      case 'stock_desc':
+        visibleItems.sort(
+            (a, b) => b.totalAvailableDoses.compareTo(a.totalAvailableDoses));
+      case 'expiry_asc':
+        // No expiry on record reads as "furthest away", not "soonest" --
+        // otherwise a batch nobody has dated would jump to the top of a
+        // soonest-first list, which is the opposite of what that ordering
+        // promises.
+        visibleItems.sort((a, b) => (a.nearestExpiryDays ?? 999999)
+            .compareTo(b.nearestExpiryDays ?? 999999));
+      case 'expiry_desc':
+        visibleItems.sort((a, b) =>
+            (b.nearestExpiryDays ?? -1).compareTo(a.nearestExpiryDays ?? -1));
+      case 'name_asc':
+        visibleItems.sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    }
     final expiringCount =
         _inventory.where((item) => item.expiringSoonQuantity > 0).length;
     final expiredCount =
@@ -2336,8 +2391,100 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                 icon: Icons.warning_amber_rounded,
                 color: AppColors.warning,
               ),
+              const SizedBox(width: 8),
+              _buildStockFilterChip(
+                value: 'none',
+                label: 'No stock',
+                icon: Icons.remove_circle_outline_rounded,
+                color: AppColors.error,
+              ),
             ],
           ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            InkWell(
+              onTap: _showStockSortSheet,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: _stockSort != 'default'
+                      ? AppColors.brandPrimary.withValues(alpha: 0.08)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _stockSort != 'default'
+                        ? AppColors.brandPrimary
+                        : AppColors.borderPrimary,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.sort_rounded,
+                      size: 16,
+                      color: _stockSort != 'default'
+                          ? AppColors.brandPrimary
+                          : AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _stockSortLabel,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: _stockSort != 'default'
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                        color: _stockSort != 'default'
+                            ? AppColors.brandPrimary
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                    const Icon(Icons.arrow_drop_down_rounded,
+                        size: 18, color: AppColors.textSecondary),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Batches, not items: Opened Vials / Active (FEFO) / All Batches,
+            // reachable even when nothing is currently open -- the Overview
+            // tab's own link to this only ever appeared when an open vial
+            // existed, which left no way in on a quiet day.
+            InkWell(
+              onTap: () => _showBatchBrowserSheet(),
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.borderPrimary),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.qr_code_2_rounded,
+                        size: 16, color: AppColors.textSecondary),
+                    SizedBox(width: 8),
+                    Text(
+                      'Batches',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 18),
         Container(
@@ -2412,7 +2559,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         _buildStockOutActivityCard(),
         const SizedBox(height: 18),
         MainButton(
-          label: 'Request stocks from ${_liveContext?.supplierLabel ?? 'your RHU'}',
+          label:
+              'Request stocks from ${_liveContext?.supplierLabel ?? 'your RHU'}',
           leftIcon: Icons.add_shopping_cart_outlined,
           onPressed: _workflowAvailable ? _showRequestSheet : null,
         ),
@@ -3328,6 +3476,57 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     };
   }
 
+  String get _stockSortLabel {
+    return switch (_stockSort) {
+      'stock_asc' => 'Stock: Lowest first',
+      'stock_desc' => 'Stock: Highest first',
+      'expiry_asc' => 'Expiring soonest',
+      'expiry_desc' => 'Expiring latest',
+      'name_asc' => 'Item A → Z',
+      _ => 'Smart order',
+    };
+  }
+
+  void _showStockSortSheet() {
+    _showSortOptionsSheet(
+      title: 'SORT STOCK BY',
+      currentValue: _stockSort,
+      onSelected: (value) => setState(() => _stockSort = value),
+      options: const [
+        (
+          value: 'default',
+          label: 'Smart order (Default)',
+          icon: Icons.auto_awesome_rounded,
+        ),
+        (
+          value: 'stock_asc',
+          label: 'Stock: Lowest first',
+          icon: Icons.trending_down_rounded,
+        ),
+        (
+          value: 'stock_desc',
+          label: 'Stock: Highest first',
+          icon: Icons.trending_up_rounded,
+        ),
+        (
+          value: 'expiry_asc',
+          label: 'Expiring soonest',
+          icon: Icons.timer_outlined,
+        ),
+        (
+          value: 'expiry_desc',
+          label: 'Expiring latest',
+          icon: Icons.event_available_outlined,
+        ),
+        (
+          value: 'name_asc',
+          label: 'Item name: A to Z',
+          icon: Icons.sort_by_alpha_rounded,
+        ),
+      ],
+    );
+  }
+
   Future<void> _pickCustomDateRange() async {
     final now = DateTime.now();
     final picked = await showBrandedDateRangePicker(
@@ -3350,146 +3549,153 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
   }
 
   void _showHistorySortSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.bgPrimary,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.borderPrimary,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Row(
-                children: [
-                  Icon(Icons.sort_rounded, color: AppColors.brandPrimary),
-                  SizedBox(width: 8),
-                  Text(
-                    'SORT MOVEMENTS BY',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                      color: AppColors.brandText,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _buildSortOptionTile(
-                sheetContext: sheetContext,
-                value: 'newest',
-                label: 'Newest first (Default)',
-                icon: Icons.schedule_rounded,
-              ),
-              _buildSortOptionTile(
-                sheetContext: sheetContext,
-                value: 'oldest',
-                label: 'Oldest first',
-                icon: Icons.history_rounded,
-              ),
-              _buildSortOptionTile(
-                sheetContext: sheetContext,
-                value: 'name_asc',
-                label: 'Item name: A to Z',
-                icon: Icons.sort_by_alpha_rounded,
-              ),
-              _buildSortOptionTile(
-                sheetContext: sheetContext,
-                value: 'name_desc',
-                label: 'Item name: Z to A',
-                icon: Icons.sort_by_alpha_rounded,
-              ),
-              _buildSortOptionTile(
-                sheetContext: sheetContext,
-                value: 'qty_desc',
-                label: 'Quantity moved: Largest first',
-                icon: Icons.trending_up_rounded,
-              ),
-              _buildSortOptionTile(
-                sheetContext: sheetContext,
-                value: 'qty_asc',
-                label: 'Quantity moved: Smallest first',
-                icon: Icons.trending_down_rounded,
-              ),
-            ],
-          ),
-        );
-      },
+    _showSortOptionsSheet(
+      title: 'SORT MOVEMENTS BY',
+      currentValue: _historySort,
+      onSelected: (value) => setState(() => _historySort = value),
+      options: const [
+        (
+          value: 'newest',
+          label: 'Newest first (Default)',
+          icon: Icons.schedule_rounded,
+        ),
+        (value: 'oldest', label: 'Oldest first', icon: Icons.history_rounded),
+        (
+          value: 'name_asc',
+          label: 'Item name: A to Z',
+          icon: Icons.sort_by_alpha_rounded,
+        ),
+        (
+          value: 'name_desc',
+          label: 'Item name: Z to A',
+          icon: Icons.sort_by_alpha_rounded,
+        ),
+        (
+          value: 'qty_desc',
+          label: 'Quantity: Largest first',
+          icon: Icons.trending_up_rounded,
+        ),
+        (
+          value: 'qty_asc',
+          label: 'Quantity: Smallest first',
+          icon: Icons.trending_down_rounded,
+        ),
+      ],
     );
   }
 
-  Widget _buildSortOptionTile({
-    required BuildContext sheetContext,
-    required String value,
-    required String label,
-    required IconData icon,
+  /// One sort-choice sheet, shared by every "SORT ... BY" button on this page.
+  ///
+  /// This used to be two separately hand-written sheets, each a Column of
+  /// full-width rows with no scroll view and no SafeArea -- six rows of text
+  /// plus a header is taller than a Column sized to MainAxisSize.min can
+  /// promise it will fit, and on a shorter phone or with the system text
+  /// scale turned up it overflowed at the bottom by a few pixels, silently
+  /// clipping the last row's edge.
+  ///
+  /// Two changes fix that and read better: the options lay out as a two-
+  /// column grid of compact cards instead of six full-width rows, which
+  /// roughly halves the sheet's height on its own; and the whole thing sits
+  /// inside a SingleChildScrollView under a SafeArea, so if a longer list of
+  /// options, a larger text-scale setting, or a shorter device ever makes it
+  /// too tall again, it scrolls instead of overflowing -- the failure mode
+  /// changes from "clipped and silently wrong" to "scrollable," which is safe
+  /// on any screen this runs on.
+  void _showSortOptionsSheet({
+    required String title,
+    required String currentValue,
+    required List<({String value, String label, IconData icon})> options,
+    required ValueChanged<String> onSelected,
   }) {
-    final isSelected = _historySort == value;
-    return InkWell(
-      onTap: () {
-        Navigator.pop(sheetContext);
-        setState(() => _historySort = value);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.bgPrimary,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.85,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.borderPrimary,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Icon(Icons.sort_rounded,
+                          color: AppColors.brandPrimary),
+                      const SizedBox(width: 8),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                          color: AppColors.brandText,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  for (int i = 0; i < options.length; i += 2)
+                    Padding(
+                      padding: EdgeInsets.only(
+                          bottom: i + 2 < options.length ? 10 : 0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _SortOptionCard(
+                              option: options[i],
+                              isSelected: currentValue == options[i].value,
+                              onTap: () {
+                                Navigator.pop(sheetContext);
+                                onSelected(options[i].value);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: i + 1 < options.length
+                                ? _SortOptionCard(
+                                    option: options[i + 1],
+                                    isSelected:
+                                        currentValue == options[i + 1].value,
+                                    onTap: () {
+                                      Navigator.pop(sheetContext);
+                                      onSelected(options[i + 1].value);
+                                    },
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
       },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        margin: const EdgeInsets.only(bottom: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.brandPrimary.withValues(alpha: 0.08)
-              : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: isSelected
-              ? Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.3))
-              : Border.all(color: AppColors.borderPrimary),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 20,
-              color: isSelected
-                  ? AppColors.brandPrimary
-                  : AppColors.textSecondary,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected
-                      ? AppColors.brandPrimary
-                      : AppColors.textPrimary,
-                ),
-              ),
-            ),
-            if (isSelected)
-              const Icon(
-                Icons.check_circle_rounded,
-                size: 18,
-                color: AppColors.brandPrimary,
-              ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -3663,9 +3869,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
             Icon(
               icon,
               size: 20,
-              color: isSelected
-                  ? AppColors.brandPrimary
-                  : AppColors.textSecondary,
+              color:
+                  isSelected ? AppColors.brandPrimary : AppColors.textSecondary,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -3719,23 +3924,19 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
 
             final resolvedRange = reportPeriod == 'custom'
                 ? reportCustomRange
-                : MidwifeInventoryReportService.resolveDateRange(
-                    reportPeriod);
+                : MidwifeInventoryReportService.resolveDateRange(reportPeriod);
 
             final reportTransactions = _transactions.where((t) {
               final type = t.transactionType.toLowerCase();
               final typeMatch = switch (reportCategory) {
                 'dispense' => type == 'dispense' || t.isAdministration,
-                'replenishment' =>
-                  type == 'receipt' ||
-                      (type == 'transfer' &&
-                          (t.doseQuantity ?? t.quantity) > 0),
-                'unusable' =>
-                  type == 'expiry_disposal' ||
-                      type == 'discard' ||
-                      t.referenceType.toLowerCase().contains('unusable') ||
-                      t.referenceType.toLowerCase().contains('discard') ||
-                      t.referenceType.toLowerCase().contains('expired'),
+                'replenishment' => type == 'receipt' ||
+                    (type == 'transfer' && (t.doseQuantity ?? t.quantity) > 0),
+                'unusable' => type == 'expiry_disposal' ||
+                    type == 'discard' ||
+                    t.referenceType.toLowerCase().contains('unusable') ||
+                    t.referenceType.toLowerCase().contains('discard') ||
+                    t.referenceType.toLowerCase().contains('expired'),
                 'transfer' => type == 'transfer',
                 'adjustment' => type == 'adjustment',
                 _ => true,
@@ -3755,15 +3956,13 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
             return Container(
               decoration: const BoxDecoration(
                 color: AppColors.bgPrimary,
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(24)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
               padding: EdgeInsets.only(
                 left: 20,
                 right: 20,
                 top: 16,
-                bottom:
-                    MediaQuery.of(dialogContext).viewInsets.bottom + 24,
+                bottom: MediaQuery.of(dialogContext).viewInsets.bottom + 24,
               ),
               child: SingleChildScrollView(
                 child: Column(
@@ -3786,8 +3985,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.brandPrimary
-                                .withValues(alpha: 0.12),
+                            color:
+                                AppColors.brandPrimary.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(
@@ -3841,26 +4040,26 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                         _buildReportOptionChip(
                           label: 'This Week',
                           isSelected: reportPeriod == 'this_week',
-                          onTap: () => setModalState(
-                              () => reportPeriod = 'this_week'),
+                          onTap: () =>
+                              setModalState(() => reportPeriod = 'this_week'),
                         ),
                         _buildReportOptionChip(
                           label: 'Last Week',
                           isSelected: reportPeriod == 'last_week',
-                          onTap: () => setModalState(
-                              () => reportPeriod = 'last_week'),
+                          onTap: () =>
+                              setModalState(() => reportPeriod = 'last_week'),
                         ),
                         _buildReportOptionChip(
                           label: 'This Month',
                           isSelected: reportPeriod == 'this_month',
-                          onTap: () => setModalState(
-                              () => reportPeriod = 'this_month'),
+                          onTap: () =>
+                              setModalState(() => reportPeriod = 'this_month'),
                         ),
                         _buildReportOptionChip(
                           label: 'Last Month',
                           isSelected: reportPeriod == 'last_month',
-                          onTap: () => setModalState(
-                              () => reportPeriod = 'last_month'),
+                          onTap: () =>
+                              setModalState(() => reportPeriod = 'last_month'),
                         ),
                         _buildReportOptionChip(
                           label: 'Today',
@@ -3889,8 +4088,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                               lastDate: DateTime(now.year + 2),
                               initialDateRange: reportCustomRange ??
                                   DateTimeRange(
-                                    start: now.subtract(
-                                        const Duration(days: 30)),
+                                    start:
+                                        now.subtract(const Duration(days: 30)),
                                     end: now,
                                   ),
                               helpText: 'SELECT REPORT PERIOD',
@@ -3929,8 +4128,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                         _buildReportOptionChip(
                           label: 'Dispensed Only',
                           isSelected: reportCategory == 'dispense',
-                          onTap: () => setModalState(
-                              () => reportCategory = 'dispense'),
+                          onTap: () =>
+                              setModalState(() => reportCategory = 'dispense'),
                         ),
                         _buildReportOptionChip(
                           label: 'Replenishments Only',
@@ -3941,14 +4140,14 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                         _buildReportOptionChip(
                           label: 'Expired & Discards',
                           isSelected: reportCategory == 'unusable',
-                          onTap: () => setModalState(
-                              () => reportCategory = 'unusable'),
+                          onTap: () =>
+                              setModalState(() => reportCategory = 'unusable'),
                         ),
                         _buildReportOptionChip(
                           label: 'Transfers',
                           isSelected: reportCategory == 'transfer',
-                          onTap: () => setModalState(
-                              () => reportCategory = 'transfer'),
+                          onTap: () =>
+                              setModalState(() => reportCategory = 'transfer'),
                         ),
                         _buildReportOptionChip(
                           label: 'Adjustments',
@@ -4010,14 +4209,12 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                               foregroundColor: AppColors.textSecondary,
                               side: const BorderSide(
                                   color: AppColors.borderPrimary),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                             ),
                             child: const Text('Cancel',
-                                style:
-                                    TextStyle(fontWeight: FontWeight.w600)),
+                                style: TextStyle(fontWeight: FontWeight.w600)),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -4026,16 +4223,13 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                           child: ElevatedButton.icon(
                             onPressed: () async {
                               Navigator.pop(dialogContext);
-                              final facilityName =
-                                  _liveContext?.facilityName ??
-                                      'Barangay Health Center';
-                              final midwifeName = midwifeNameController
-                                      .text
-                                      .trim()
-                                      .isEmpty
-                                  ? (_liveContext?.displayName ??
-                                      'Midwife-in-Charge')
-                                  : midwifeNameController.text.trim();
+                              final facilityName = _liveContext?.facilityName ??
+                                  'Barangay Health Center';
+                              final midwifeName =
+                                  midwifeNameController.text.trim().isEmpty
+                                      ? (_liveContext?.displayName ??
+                                          'Midwife-in-Charge')
+                                      : midwifeNameController.text.trim();
 
                               await MidwifeInventoryReportService
                                   .previewAndPrintReport(
@@ -4053,13 +4247,11 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                               backgroundColor: AppColors.brandPrimary,
                               foregroundColor: Colors.white,
                               elevation: 0,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                               textStyle: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700),
+                                  fontSize: 13, fontWeight: FontWeight.w700),
                             ),
                           ),
                         ),
@@ -4090,9 +4282,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
           color: isSelected ? AppColors.brandPrimary : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected
-                ? AppColors.brandPrimary
-                : AppColors.borderPrimary,
+            color:
+                isSelected ? AppColors.brandPrimary : AppColors.borderPrimary,
           ),
         ),
         child: Row(
@@ -4110,10 +4301,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               label,
               style: TextStyle(
                 fontSize: 11,
-                fontWeight:
-                    isSelected ? FontWeight.w700 : FontWeight.w500,
-                color:
-                    isSelected ? Colors.white : AppColors.textPrimary,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? Colors.white : AppColors.textPrimary,
               ),
             ),
           ],
@@ -4179,15 +4368,13 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
       final type = t.transactionType.toLowerCase();
       final typeMatch = switch (_historyFilter) {
         'dispense' => type == 'dispense' || t.isAdministration,
-        'replenishment' =>
-          type == 'receipt' ||
-              (type == 'transfer' && (t.doseQuantity ?? t.quantity) > 0),
-        'unusable' =>
-          type == 'expiry_disposal' ||
-              type == 'discard' ||
-              t.referenceType.toLowerCase().contains('unusable') ||
-              t.referenceType.toLowerCase().contains('discard') ||
-              t.referenceType.toLowerCase().contains('expired'),
+        'replenishment' => type == 'receipt' ||
+            (type == 'transfer' && (t.doseQuantity ?? t.quantity) > 0),
+        'unusable' => type == 'expiry_disposal' ||
+            type == 'discard' ||
+            t.referenceType.toLowerCase().contains('unusable') ||
+            t.referenceType.toLowerCase().contains('discard') ||
+            t.referenceType.toLowerCase().contains('expired'),
         'transfer' => type == 'transfer',
         'adjustment' => type == 'adjustment',
         _ => true,
@@ -4287,16 +4474,15 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
             ),
             const SizedBox(width: 8),
             ElevatedButton.icon(
-              onPressed: () =>
-                  _showGenerateReportDialog(filteredTransactions),
+              onPressed: () => _showGenerateReportDialog(filteredTransactions),
               icon: const Icon(Icons.picture_as_pdf_rounded, size: 15),
               label: const Text('Generate Report'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.brandPrimary,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
                 textStyle: const TextStyle(
@@ -4559,8 +4745,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
   }
 
   Widget _buildHistoryTransparencyBanner() {
-    final facilityName =
-        _liveContext?.facilityName ?? 'Barangay Health Center';
+    final facilityName = _liveContext?.facilityName ?? 'Barangay Health Center';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -4760,9 +4945,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
       'discard' => 'Open Vial Discarded',
       'expiry_disposal' => 'Unusable / Expired Stock Written Off',
       'adjustment' => 'Stock Ledger Adjusted',
-      'transfer' => isOutbound
-          ? 'Stock Transferred Outward'
-          : 'Stock Transferred Inward',
+      'transfer' =>
+        isOutbound ? 'Stock Transferred Outward' : 'Stock Transferred Inward',
       _ when row.isAdministration => 'Dose Administered to Patient',
       _ => isIn ? 'Stock Added' : 'Stock Dispensed',
     };
@@ -5103,10 +5287,25 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
   /// The wasted doses are recorded against this facility, which is the point:
   /// the DOH wastage rate is only meaningful if spoilage is booked where it
   /// happened rather than quietly left on the shelf as usable stock.
+  /// Confirms and records discarding whatever is left in an open vial.
+  ///
+  /// discard_open_vial_doses itself has never required the vial to actually
+  /// be past its limit -- it only checks that there is something open to
+  /// discard. That was always a server-side truth; only the client hid the
+  /// button unless a vial had already expired, which meant the one place a
+  /// midwife could act on a vial she knew would not be finished today --
+  /// contaminated, the wrong dose drawn, a session cut short -- had no button
+  /// for it at all, and the doses sat open and uncounted until the shelf-life
+  /// clock did it for her automatically.
+  ///
+  /// [expired] picks which true story the confirmation tells: a vial already
+  /// past its limit cannot be used regardless of what she decides here, a
+  /// vial discarded early is a choice with real doses still on the table.
   Future<void> _confirmDiscardOpenVial(
     InventoryItem item,
-    live.InventoryBatchRecord batch,
-  ) async {
+    live.InventoryBatchRecord batch, {
+    bool expired = true,
+  }) async {
     final contextRecord = _liveContext;
     if (contextRecord == null) {
       AppSnackbar.error(
@@ -5121,12 +5320,17 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
       context: context,
       builder: (dialogContext) => ConfirmationDialogBox(
         title: 'Discard $doses open dose${doses == 1 ? '' : 's'}?',
-        subtitle:
-            'This ${item.name} vial (Batch ${batch.batchNumber}) passed its '
-            '${item.openVialShelfHours}-hour open-vial limit, so the remaining '
-            '$doses dose${doses == 1 ? '' : 's'} can no longer be given. '
-            'They will be recorded as wastage for this health center and the '
-            'vial closed. This cannot be undone.',
+        subtitle: expired
+            ? 'This ${item.name} vial (Batch ${batch.batchNumber}) passed its '
+                '${item.openVialShelfHours}-hour open-vial limit, so the remaining '
+                '$doses dose${doses == 1 ? '' : 's'} can no longer be given. '
+                'They will be recorded as wastage for this health center and the '
+                'vial closed. This cannot be undone.'
+            : 'This ${item.name} vial (Batch ${batch.batchNumber}) is still '
+                'within its ${item.openVialShelfHours}-hour limit, with '
+                '$doses usable dose${doses == 1 ? '' : 's'} left. Discarding '
+                'it now closes the vial early and records $doses dose'
+                '${doses == 1 ? '' : 's'} as wastage. This cannot be undone.',
         confirmText: 'Discard doses',
         cancelText: 'Keep for now',
         accentColor: AppColors.error,
@@ -5140,7 +5344,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
       final result = await _repository.discardOpenVialDoses(
         context: contextRecord,
         batchId: batch.batchId,
-        reason: 'Past the ${item.openVialShelfHours}h open-vial limit',
+        reason: expired
+            ? 'Past the ${item.openVialShelfHours}h open-vial limit'
+            : 'Discarded before reaching the open-vial limit',
       );
       if (!mounted) return;
 
@@ -5202,8 +5408,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         backgroundColor: Colors.transparent,
         builder: (sheetContext) {
           final maxHeight = MediaQuery.of(sheetContext).size.height * 0.86;
-          final administered =
-              rows.where((r) => r.isAdministration).toList();
+          final administered = rows.where((r) => r.isAdministration).toList();
 
           return Container(
             constraints: BoxConstraints(maxHeight: maxHeight),
@@ -5361,9 +5566,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         return _patientNames[normalized]!;
       }
     }
-    final patientNumMatch = RegExp(r'(?:PATIENT|MOTHER|CHILD)\s*#?(\d+)',
-            caseSensitive: false)
-        .firstMatch(trimmed);
+    final patientNumMatch =
+        RegExp(r'(?:PATIENT|MOTHER|CHILD)\s*#?(\d+)', caseSensitive: false)
+            .firstMatch(trimmed);
     if (patientNumMatch != null) {
       final num = patientNumMatch.group(1)!;
       final pad = num.padLeft(3, '0');
@@ -5391,8 +5596,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         return s.counterpartName!;
       }
     }
-    final match = RegExp(r'to\s+([A-Za-z0-9\s]+?)(?:\.|$)', caseSensitive: false)
-        .firstMatch(row.notes);
+    final match =
+        RegExp(r'to\s+([A-Za-z0-9\s]+?)(?:\.|$)', caseSensitive: false)
+            .firstMatch(row.notes);
     if (match != null && match.group(1)!.trim().isNotEmpty) {
       return match.group(1)!.trim();
     }
@@ -5407,8 +5613,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         return s.counterpartName!;
       }
     }
-    final match = RegExp(r'by\s+([A-Za-z0-9\s]+?)(?:\.|$)', caseSensitive: false)
-        .firstMatch(row.notes);
+    final match =
+        RegExp(r'by\s+([A-Za-z0-9\s]+?)(?:\.|$)', caseSensitive: false)
+            .firstMatch(row.notes);
     if (match != null && match.group(1)!.trim().isNotEmpty) {
       return match.group(1)!.trim();
     }
@@ -5700,6 +5907,11 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     String? notesError;
     bool isSubmitting = false;
     String? operationKey;
+    // Whole sealed vials by default -- the only thing this sheet has ever
+    // moved. 'doses' draws the open vial first and only breaks a further
+    // seal for the shortfall; offered only for a multi-dose dispense, never
+    // for Report Unusable Stock, which is always about the whole vial.
+    String quantityKind = 'units';
 
     // This sheet is taller than the screen. Setting an errorText on a field that
     // has scrolled out of view made Submit look like it did nothing at all, so
@@ -5738,6 +5950,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     void chooseDefaultBatch([TextEditingController? quantityController]) {
       final batches = batchesFor(selectedItem);
       selectedBatch = batches.isEmpty ? null : batches.first;
+      quantityKind = 'units';
       if (!isDispense && selectedBatch != null) {
         selectedReason = selectedBatch!.isExpiredOn() ? 'Expired' : 'Damaged';
         if (selectedReason == 'Expired') {
@@ -5770,11 +5983,63 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                     MediaQuery.viewInsetsOf(sheetContext).bottom;
                 final batchOptions = batchesFor(selectedItem);
                 final batch = selectedBatch;
+                // Whether this sheet may work in doses at all: only a
+                // dispense against a multi-dose item has an open vial to draw
+                // from. Report Unusable Stock forces 'units' regardless of
+                // quantityKind's last value -- the same rule the RPC itself
+                // enforces, kept in sync here so the field never shows a max
+                // the server would reject.
+                final canUseDoses = isDispense &&
+                    selectedItem != null &&
+                    selectedItem!.isMultiDose;
+                final effectiveKind = canUseDoses ? quantityKind : 'units';
+                final openDoses = batch?.dosesRemainingInOpenVial ?? 0;
+                final dpu = selectedItem?.dosesPerUnit ?? 1;
+                // Total doses this batch can actually supply: what is already
+                // drawn into the open vial, plus every sealed vial broken open
+                // in turn.
+                final maxDoses = batch == null
+                    ? 0
+                    : openDoses + batch.quantityRemaining * dpu;
+                final quantityCap = effectiveKind == 'doses'
+                    ? maxDoses
+                    : (batch?.quantityRemaining ?? 0);
+                final quantityUnitLabel = effectiveKind == 'doses'
+                    ? (quantityCap == 1 ? 'dose' : 'doses')
+                    : (selectedItem?.unit ?? 'units');
                 final parsedQuantity =
                     int.tryParse(quantityController.text.trim());
                 final afterQuantity = batch == null || parsedQuantity == null
                     ? null
-                    : batch.quantityRemaining - parsedQuantity;
+                    : quantityCap - parsedQuantity;
+                // Same open-vial-first split the confirmation dialog and the
+                // preview card both quote, computed once here so the two
+                // stay in sync and neither drifts from the backend's own
+                // order of operations.
+                final dosePlan = (isDispense &&
+                        effectiveKind == 'doses' &&
+                        batch != null &&
+                        parsedQuantity != null &&
+                        parsedQuantity > 0 &&
+                        afterQuantity != null &&
+                        afterQuantity >= 0)
+                    ? _doseDrawPlan(
+                        openBefore: openDoses,
+                        dosesPerUnit: dpu,
+                        quantity: parsedQuantity,
+                      )
+                    : null;
+                final dosePlanPhrase = dosePlan == null
+                    ? ''
+                    : dosePlan.unitsToBreak == 0
+                        ? ' Draws all $parsedQuantity from the open vial.'
+                        : dosePlan.fromOpen == 0
+                            ? ' Opens ${dosePlan.unitsToBreak} new '
+                                'vial${dosePlan.unitsToBreak == 1 ? '' : 's'} '
+                                '(no vial is currently open).'
+                            : ' Draws ${dosePlan.fromOpen} from the open vial, '
+                                'then opens ${dosePlan.unitsToBreak} new '
+                                'vial${dosePlan.unitsToBreak == 1 ? '' : 's'}.';
                 final fullBatchReport = !isDispense &&
                     ((selectedReason == 'Expired' &&
                             batch?.isExpiredOn() == true) ||
@@ -5792,7 +6057,20 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                         selectedReason != 'Expired');
 
                 Future<void> submitActivity() async {
-                  if (isSubmitting || !_stockActivityAvailable) return;
+                  if (isSubmitting) return;
+                  // The banner above already says this before the button is
+                  // even tapped. This is only a backstop for whatever reaches
+                  // the button anyway -- it used to return here with nothing
+                  // on screen at all, which read as the tap not registering.
+                  if (!_stockActivityAvailable) {
+                    AppSnackbar.warning(
+                      sheetContext,
+                      _stockActivityMessage ??
+                          'Dispensing is unavailable right now. Install the '
+                              'midwife stock-activity migration in Supabase.',
+                    );
+                    return;
+                  }
                   final contextRecord = _liveContext;
                   final quantity = int.tryParse(quantityController.text.trim());
                   final itemValid = selectedItem != null;
@@ -5800,7 +6078,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                   final quantityValid = quantity != null &&
                       quantity > 0 &&
                       batch != null &&
-                      quantity <= batch.quantityRemaining;
+                      quantity <= quantityCap;
                   final reasonValid = selectedReason != null;
                   final notesValid =
                       !requiresNotes || notesController.text.trim().isNotEmpty;
@@ -5819,7 +6097,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                     quantityError = !quantityValid
                         ? batch == null
                             ? 'Choose a batch first.'
-                            : 'Enter 1–${batch.quantityRemaining} ${selectedItem?.unit ?? 'units'}.'
+                            : 'Enter 1–$quantityCap $quantityUnitLabel.'
                         : !reportRuleValid
                             ? selectedReason == 'Recalled'
                                 ? 'A recall must cover the full remaining batch.'
@@ -5857,7 +6135,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                           ? 'Confirm stock dispense?'
                           : 'Confirm unusable stock report?',
                       subtitle: isDispense
-                          ? 'Purpose: $selectedReason. Deduct $quantity ${selectedItem!.unit} of ${selectedItem!.name} from Batch ${batch.batchNumber} (${_batchExpiryLabel(batch)}). Balance: ${batch.quantityRemaining} → $afterQuantity ${selectedItem!.unit}.${notesController.text.trim().isEmpty ? '' : ' Note: ${notesController.text.trim()}'}'
+                          ? 'Purpose: $selectedReason. Deduct $quantity $quantityUnitLabel of ${selectedItem!.name} from Batch ${batch.batchNumber} (${_batchExpiryLabel(batch)}). Balance: $quantityCap → $afterQuantity $quantityUnitLabel.$dosePlanPhrase${notesController.text.trim().isEmpty ? '' : ' Note: ${notesController.text.trim()}'}'
                           : 'Reason: $selectedReason. Remove $quantity ${selectedItem!.unit} of ${selectedItem!.name} from usable stock in Batch ${batch.batchNumber} (${_batchExpiryLabel(batch)}). Balance: ${batch.quantityRemaining} → $afterQuantity.${notesController.text.trim().isEmpty ? '' : ' Note: ${notesController.text.trim()}'}',
                       confirmText: isDispense ? 'Dispense' : 'Submit report',
                       cancelText: 'Review again',
@@ -5879,20 +6157,32 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                       reason: _stockActivityReasonCode(selectedReason!),
                       notes: notesController.text,
                       operationKey: requestOperationKey,
+                      quantityKind: effectiveKind,
                     );
                     if (!sheetContext.mounted) return;
                     FocusManager.instance.primaryFocus?.unfocus();
                     Navigator.of(sheetContext).pop(
                       isDispense
-                          ? '$quantity ${selectedItem!.unit} dispensed from Batch ${batch.batchNumber}. Admin inventory is now synchronized.'
+                          ? '$quantity $quantityUnitLabel dispensed from Batch ${batch.batchNumber}. Admin inventory is now synchronized.'
                           : 'Unusable stock reported. RHU Main can see the batch, reason, and updated balance.',
                     );
                   } catch (error) {
                     if (error is live.InventoryWorkflowUnavailableException &&
                         mounted) {
+                      // error.message is the generic guess written for the
+                      // one case this was built for -- the migration really
+                      // is not installed. error.cause is whatever Postgres
+                      // actually said, which is the only thing that can tell
+                      // the two apart if this fires for some other reason
+                      // instead. Both are shown, so the next time this
+                      // happens the real error is on screen rather than
+                      // requiring a live debugging session to recover.
+                      final detail = error.cause?.toString();
                       setState(() {
                         _stockActivityAvailable = false;
-                        _stockActivityMessage = error.message;
+                        _stockActivityMessage = detail == null || detail.isEmpty
+                            ? error.message
+                            : '${error.message}\n\nDetail: $detail';
                       });
                     }
                     if (mounted) AppSnackbar.error(context, error.toString());
@@ -5990,12 +6280,22 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                             ),
                             const SizedBox(height: 14),
                             _buildActivityFlowSteps(isDispense: isDispense),
+                            // Shown the moment the sheet opens, not discovered
+                            // after filling in the whole form and quitting
+                            // without ever being told why nothing happened.
+                            // The Confirm button below is disabled to match --
+                            // it used to stay tappable and simply do nothing.
+                            if (!_stockActivityAvailable) ...[
+                              const SizedBox(height: 14),
+                              _buildStockActivityBanner(),
+                            ],
                             const SizedBox(height: 14),
                             Expanded(
                               child: ListView(
                                 padding: const EdgeInsets.only(bottom: 8),
                                 children: [
-                                  _FormLabel('1. INVENTORY ITEM', key: itemFieldKey),
+                                  _FormLabel('1. INVENTORY ITEM',
+                                      key: itemFieldKey),
                                   const SizedBox(height: 7),
                                   AppDropdownField<InventoryItem>(
                                     value: selectedItem,
@@ -6018,20 +6318,18 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                                     },
                                   ),
                                   const SizedBox(height: 16),
-                                  _FormLabel('2. STOCK BATCH', key: batchFieldKey),
+                                  _FormLabel('2. STOCK BATCH',
+                                      key: batchFieldKey),
                                   const SizedBox(height: 7),
-                                  AppDropdownField<live.InventoryBatchRecord>(
-                                    value: selectedBatch,
+                                  _buildBatchPickerField(
+                                    item: selectedItem,
+                                    selected: selectedBatch,
+                                    options: batchOptions,
                                     hintText: selectedItem == null
                                         ? 'Choose an item first'
                                         : isDispense
                                             ? 'Earliest-expiring batch selected'
                                             : 'Choose a batch',
-                                    leadingIcon: Icons.qr_code_2_rounded,
-                                    options: batchOptions,
-                                    displayStringForOption: (option) => selectedItem != null && selectedItem!.isMultiDose
-                                        ? 'Batch ${option.batchNumber} • ${option.quantityRemaining} sealed${option.dosesRemainingInOpenVial > 0 ? ' + ${option.dosesRemainingInOpenVial} open doses' : ''} • ${_batchExpiryLabel(option)}'
-                                        : 'Batch ${option.batchNumber} • ${option.quantityRemaining} left • ${_batchExpiryLabel(option)}',
                                     errorText: batchError,
                                     onSelected: (value) {
                                       setModalState(() {
@@ -6097,13 +6395,25 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                                     },
                                   ),
                                   const SizedBox(height: 16),
-                                  _FormLabel('4. QUANTITY', key: quantityFieldKey),
+                                  _FormLabel('4. QUANTITY',
+                                      key: quantityFieldKey),
                                   const SizedBox(height: 7),
+                                  if (canUseDoses) ...[
+                                    _buildQuantityKindToggle(
+                                      quantityKind: quantityKind,
+                                      onChanged: (kind) => setModalState(() {
+                                        quantityKind = kind;
+                                        quantityError = null;
+                                        operationKey = null;
+                                      }),
+                                    ),
+                                    const SizedBox(height: 8),
+                                  ],
                                   AppInputField(
                                     controller: quantityController,
                                     hintText: batch == null
                                         ? 'Choose a batch first'
-                                        : 'Quantity (max ${batch.quantityRemaining})',
+                                        : 'Quantity (max $quantityCap $quantityUnitLabel)',
                                     leadingIcon: Icons.numbers_rounded,
                                     keyboardType: TextInputType.number,
                                     inputFormatters: [
@@ -6170,6 +6480,12 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                                       quantity: parsedQuantity,
                                       remaining: afterQuantity,
                                       isDispense: isDispense,
+                                      unitLabel: quantityUnitLabel,
+                                      beforeQuantity: quantityCap,
+                                      openDosesBefore:
+                                          effectiveKind == 'doses' ? openDoses : null,
+                                      dosesPerUnit:
+                                          effectiveKind == 'doses' ? dpu : null,
                                     ),
                                   ],
                                 ],
@@ -6179,13 +6495,25 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                             MainButton(
                               label: isSubmitting
                                   ? 'Saving activity...'
-                                  : isDispense
-                                      ? 'Review & dispense'
-                                      : 'Review & submit report',
+                                  : !_stockActivityAvailable
+                                      ? 'Migration required'
+                                      : isDispense
+                                          ? 'Review & dispense'
+                                          : 'Review & submit report',
                               leftIcon: isSubmitting
                                   ? Icons.sync_rounded
-                                  : Icons.fact_check_outlined,
-                              onPressed: isSubmitting ? null : submitActivity,
+                                  : !_stockActivityAvailable
+                                      ? Icons.lock_outline_rounded
+                                      : Icons.fact_check_outlined,
+                              // Reads honestly instead of staying tappable
+                              // over a guard that used to do nothing visible:
+                              // still routed through submitActivity, whose
+                              // own check shows the same reason again if
+                              // anything ever reaches it disabled.
+                              onPressed:
+                                  (isSubmitting || !_stockActivityAvailable)
+                                      ? null
+                                      : submitActivity,
                             ),
                           ],
                         ),
@@ -6269,6 +6597,695 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     );
   }
 
+  /// Doses vs whole vials, for a multi-dose dispense only. Report Unusable
+  /// Stock never shows this -- reporting is always about the whole vial, and
+  /// the RPC itself normalises back to 'units' for it regardless of what this
+  /// sheet would send.
+  Widget _buildQuantityKindToggle({
+    required String quantityKind,
+    required ValueChanged<String> onChanged,
+  }) {
+    Widget chip(String kind, String label, IconData icon) {
+      final selected = quantityKind == kind;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => onChanged(kind),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: BoxDecoration(
+              color: selected
+                  ? AppColors.brandPrimary.withValues(alpha: 0.1)
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color:
+                    selected ? AppColors.brandPrimary : AppColors.borderPrimary,
+                width: selected ? 1.4 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 15,
+                  color: selected
+                      ? AppColors.brandPrimary
+                      : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    color: selected
+                        ? AppColors.brandPrimary
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        chip('doses', 'Doses', Icons.colorize_rounded),
+        const SizedBox(width: 8),
+        chip('units', 'Whole vials', Icons.inventory_2_outlined),
+      ],
+    );
+  }
+
+  /// The STOCK BATCH field. Was an AppDropdownField whose selected value was
+  /// one long sentence -- "Batch X • 99 sealed + 9 open doses • Expires ..."
+  /// -- squeezed onto a single line and truncated on a narrow phone. Same
+  /// shape and chrome as AppDropdownField (56px stadium, white, brand-pink
+  /// border on error), but the facts about the batch render as their own
+  /// short chips instead of being run together, matching VialDoseStatus and
+  /// the sort sheet's cards elsewhere on this screen -- and the picker it
+  /// opens shows the same chips per batch, not a plain-text list.
+  Widget _buildBatchPickerField({
+    required InventoryItem? item,
+    required live.InventoryBatchRecord? selected,
+    required List<live.InventoryBatchRecord> options,
+    required String hintText,
+    required String? errorText,
+    required ValueChanged<live.InventoryBatchRecord> onSelected,
+  }) {
+    final hasError = errorText != null && errorText.isNotEmpty;
+    final canOpen = item != null && options.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: !canOpen
+              ? null
+              : () => _showBatchPickerSheet(
+                    item: item,
+                    options: options,
+                    selected: selected,
+                    onSelected: onSelected,
+                  ),
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 56),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: hasError ? AppColors.error : AppColors.borderPrimary,
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(15),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Icon(Icons.qr_code_2_rounded,
+                    color: AppColors.brandAccent),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: selected == null
+                      ? Text(
+                          hintText,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Batch ${selected.batchNumber}',
+                              style: const TextStyle(
+                                color: AppColors.inputText,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: _batchFactChips(item, selected),
+                            ),
+                          ],
+                        ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_drop_down,
+                    color: AppColors.textSecondary),
+              ],
+            ),
+          ),
+        ),
+        if (hasError)
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 6),
+            child: Text(
+              errorText,
+              style: const TextStyle(fontSize: 12, color: AppColors.error),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Sealed count, open-vial doses, and expiry, as the same short chips
+  /// wherever a batch is shown on this sheet -- the closed field and every
+  /// row in the picker it opens.
+  List<Widget> _batchFactChips(
+    InventoryItem? item,
+    live.InventoryBatchRecord batch,
+  ) {
+    final multiDose = item?.isMultiDose ?? false;
+    return [
+      StatusChip(
+        icon: Icons.inventory_2_outlined,
+        label: multiDose
+            ? '${batch.quantityRemaining} sealed'
+            : '${batch.quantityRemaining} left',
+      ),
+      if (multiDose && batch.dosesRemainingInOpenVial > 0)
+        StatusChip(
+          icon: Icons.colorize_rounded,
+          label: '+${batch.dosesRemainingInOpenVial} open doses',
+        ),
+      StatusChip(
+        icon: Icons.event_outlined,
+        label: _batchExpiryLabel(batch),
+      ),
+    ];
+  }
+
+  /// Every (item, batch) pair for this facility, for the given segment of
+  /// _showBatchBrowserSheet, already sorted the way that segment promises to
+  /// be sorted.
+  List<({InventoryItem item, live.InventoryBatchRecord batch})> _batchRowsFor(
+    String segment,
+  ) {
+    final rows = <({InventoryItem item, live.InventoryBatchRecord batch})>[];
+    for (final item in _inventory) {
+      for (final batch in item.batches) {
+        final include = switch (segment) {
+          'open' => batch.dosesRemainingInOpenVial > 0,
+          'active' => batch.isUsableOn(),
+          _ => true,
+        };
+        if (include) rows.add((item: item, batch: batch));
+      }
+    }
+
+    switch (segment) {
+      case 'open':
+        // Soonest to run out of time first -- an already-expired vial (no
+        // time left at all) leads, same urgency order as the Overview card.
+        rows.sort((a, b) {
+          final aLeft = a.batch.openVialTimeLeft(a.item.openVialShelfHours) ??
+              Duration.zero;
+          final bLeft = b.batch.openVialTimeLeft(b.item.openVialShelfHours) ??
+              Duration.zero;
+          return aLeft.compareTo(bLeft);
+        });
+      case 'active':
+        // FEFO: earliest-expiring first, the same order the dispense sheet
+        // draws from.
+        rows.sort((a, b) => (a.batch.expirationDate ?? DateTime(9999))
+            .compareTo(b.batch.expirationDate ?? DateTime(9999)));
+      default:
+        // All Batches is the audit view: usable stock first (earliest-expiry
+        // within that), everything already spent or written off after.
+        rows.sort((a, b) {
+          if (a.batch.isUsableOn() != b.batch.isUsableOn()) {
+            return a.batch.isUsableOn() ? -1 : 1;
+          }
+          return (a.batch.expirationDate ?? DateTime(9999))
+              .compareTo(b.batch.expirationDate ?? DateTime(9999));
+        });
+    }
+    return rows;
+  }
+
+  /// Opened Vials / Active Batches (FEFO) / All Batches -- every batch this
+  /// facility holds, browsable by what actually distinguishes them, rather
+  /// than the item-level totals My Stock shows. The Overview tab's "View
+  /// batches" link and the My Stock header's own Batches button both open
+  /// this; neither used to have anywhere real to send a midwife.
+  void _showBatchBrowserSheet({String initialSegment = 'open'}) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        var segment = initialSegment;
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final rows = _batchRowsFor(segment);
+            return SafeArea(
+              top: false,
+              child: FractionallySizedBox(
+                heightFactor: 0.88,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                  decoration: const BoxDecoration(
+                    color: AppColors.bgPrimary,
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(28)),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.borderPrimary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'STOCK BATCHES',
+                              style: const TextStyle(
+                                color: AppColors.brandText,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      SizedBox(
+                        height: 38,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: [
+                            _buildBatchSegmentChip(
+                              sheetContext: sheetContext,
+                              segment: segment,
+                              value: 'open',
+                              label: 'Opened Vials',
+                              icon: Icons.colorize_rounded,
+                              count: _batchRowsFor('open').length,
+                              onSelect: (v) => setSheetState(() => segment = v),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildBatchSegmentChip(
+                              sheetContext: sheetContext,
+                              segment: segment,
+                              value: 'active',
+                              label: 'Active (FEFO)',
+                              icon: Icons.inventory_2_outlined,
+                              count: _batchRowsFor('active').length,
+                              onSelect: (v) => setSheetState(() => segment = v),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildBatchSegmentChip(
+                              sheetContext: sheetContext,
+                              segment: segment,
+                              value: 'all',
+                              label: 'All Batches',
+                              icon: Icons.layers_outlined,
+                              count: _batchRowsFor('all').length,
+                              onSelect: (v) => setSheetState(() => segment = v),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: rows.isEmpty
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        segment == 'open'
+                                            ? Icons.check_circle_outline_rounded
+                                            : Icons.inbox_outlined,
+                                        size: 32,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        segment == 'open'
+                                            ? 'No open vials right now'
+                                            : 'No batches in this view',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : ListView.separated(
+                                padding:
+                                    const EdgeInsets.only(top: 4, bottom: 12),
+                                itemCount: rows.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 10),
+                                itemBuilder: (_, i) => _buildBatchBrowserRow(
+                                  sheetContext: sheetContext,
+                                  segment: segment,
+                                  item: rows[i].item,
+                                  batch: rows[i].batch,
+                                  onChanged: () => setSheetState(() {}),
+                                ),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildBatchSegmentChip({
+    required BuildContext sheetContext,
+    required String segment,
+    required String value,
+    required String label,
+    required IconData icon,
+    required int count,
+    required ValueChanged<String> onSelect,
+  }) {
+    final isSelected = segment == value;
+    return GestureDetector(
+      onTap: () => onSelect(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.brandPrimary : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color:
+                isSelected ? AppColors.brandPrimary : AppColors.borderPrimary,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon,
+                size: 14,
+                color: isSelected ? Colors.white : AppColors.textSecondary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                color: isSelected ? Colors.white : AppColors.textPrimary,
+              ),
+            ),
+            if (count > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.white.withValues(alpha: 0.25)
+                      : AppColors.bgSecondary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: isSelected ? Colors.white : AppColors.brandPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// One row in the batch browser. What it shows past the shared chips, and
+  /// what its action does, depends on which segment it is being shown in --
+  /// an open vial can be discarded; a batch shown for the record cannot be
+  /// acted on here, only traced.
+  Widget _buildBatchBrowserRow({
+    required BuildContext sheetContext,
+    required String segment,
+    required InventoryItem item,
+    required live.InventoryBatchRecord batch,
+    required VoidCallback onChanged,
+  }) {
+    final isExpiredVial =
+        segment == 'open' && batch.isExpiredOpenVial(item.openVialShelfHours);
+    final timeLeft = segment == 'open'
+        ? batch.openVialTimeLeft(item.openVialShelfHours)
+        : null;
+    final isUrgent = segment == 'open' &&
+        !isExpiredVial &&
+        timeLeft != null &&
+        timeLeft <= const Duration(hours: 1);
+    final accent = isExpiredVial
+        ? AppColors.error
+        : isUrgent
+            ? AppColors.warning
+            : AppColors.borderPrimary;
+
+    return InkWell(
+      onTap: () => _showDoseTraceSheet(
+        itemId: item.itemId,
+        itemName: item.name,
+        batchId: batch.batchId,
+        batchNumber: batch.batchNumber,
+      ),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: accent,
+            width: isExpiredVial || isUrgent ? 1.4 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Batch ${batch.batchNumber}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (segment != 'open') _buildBatchStatusBadge(batch),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                ..._batchFactChips(item, batch),
+                if (isExpiredVial)
+                  const StatusChip(
+                    icon: Icons.error_outline_rounded,
+                    label: 'Past open-vial limit',
+                  )
+                else if (isUrgent)
+                  StatusChip(
+                    icon: Icons.timer_outlined,
+                    label: '${_durationLabel(timeLeft)} left',
+                  ),
+              ],
+            ),
+            if (segment == 'open') ...[
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () async {
+                    await _confirmDiscardOpenVial(
+                      item,
+                      batch,
+                      expired: isExpiredVial,
+                    );
+                    onChanged();
+                  },
+                  icon: const Icon(Icons.delete_outline_rounded, size: 15),
+                  label: const Text('Discard'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    textStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBatchStatusBadge(live.InventoryBatchRecord batch) {
+    final expired = batch.isExpiredOn();
+    final (label, color) = switch (batch.status.toLowerCase()) {
+      _ when expired => ('Expired', AppColors.error),
+      'depleted' => ('Depleted', AppColors.textSecondary),
+      'discarded' => ('Discarded', AppColors.textSecondary),
+      'active' => ('Active', AppColors.success),
+      final other => (other, AppColors.textSecondary),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  void _showBatchPickerSheet({
+    required InventoryItem item,
+    required List<live.InventoryBatchRecord> options,
+    required live.InventoryBatchRecord? selected,
+    required ValueChanged<live.InventoryBatchRecord> onSelected,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.bgPrimary,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.8,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.borderPrimary,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Icon(Icons.qr_code_2_rounded,
+                          color: AppColors.brandPrimary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'SELECT BATCH • ${item.name}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.4,
+                          color: AppColors.brandText,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  for (final option in options)
+                    Padding(
+                      padding: EdgeInsets.only(
+                          bottom: option == options.last ? 0 : 10),
+                      child: _BatchOptionCard(
+                        batch: option,
+                        chips: _batchFactChips(item, option),
+                        isSelected: selected?.batchId == option.batchId,
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          onSelected(option);
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildSelectedBatchSummary({
     required InventoryItem item,
     required live.InventoryBatchRecord batch,
@@ -6276,6 +7293,22 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
   }) {
     final expired = batch.isExpiredOn();
     final color = expired ? AppColors.error : AppColors.info;
+
+    // The one case with real facts to show, not just a sentence: a
+    // multi-dose dispense, still within date. Its own card, in the white +
+    // brand-pink language the rest of the app already uses for "here is a
+    // figure that matters" rather than the plain info/warning tint every
+    // other branch here still uses.
+    if (!expired && isDispense && item.isMultiDose) {
+      return VialDoseStatus(
+        dosesPerUnit: item.dosesPerUnit,
+        sealedUnits: batch.quantityRemaining,
+        openVialDoses: batch.dosesRemainingInOpenVial,
+        unitLabel: item.unit,
+        expiryLabel: _batchExpiryLabel(batch),
+      );
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -6298,9 +7331,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               expired
                   ? '${_batchExpiryLabel(batch)}. This batch is blocked from dispensing.'
                   : isDispense
-                      ? (item.isMultiDose
-                          ? 'Multi-dose (${item.dosesPerUnit} doses/unit) • ${batch.quantityRemaining} sealed vials${batch.dosesRemainingInOpenVial > 0 ? ' • 💉 ${batch.dosesRemainingInOpenVial} doses in open vial' : ''} • ${_batchExpiryLabel(batch)}.'
-                          : 'Earliest-expiring batch • up to ${batch.quantityRemaining} ${item.unit} in this record • ${_batchExpiryLabel(batch)}.${item.quantity > batch.quantityRemaining ? ' Save once, then repeat for the next batch if more is needed.' : ''}')
+                      ? 'Earliest-expiring batch • up to ${batch.quantityRemaining} ${item.unit} in this record • ${_batchExpiryLabel(batch)}.${item.quantity > batch.quantityRemaining ? ' Save once, then repeat for the next batch if more is needed.' : ''}'
                       : '${batch.quantityRemaining} ${item.unit} remain in this batch • ${_batchExpiryLabel(batch)}.',
               style: const TextStyle(
                 color: AppColors.textPrimary,
@@ -6315,18 +7346,65 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     );
   }
 
+  /// Which doses this quantity will actually come from: the vial already
+  /// open first, sealed vials broken only for whatever is left over. Mirrors
+  /// the same open-vial-first, break-only-the-shortfall order the backend's
+  /// `dispense_stock_doses` uses, purely so the preview can say it out loud
+  /// instead of only ever showing one combined total that looks the same
+  /// whether it drew from an open vial or cracked a fresh seal.
+  ({int fromOpen, int unitsToBreak, int openDosesAfter})
+      _doseDrawPlan({
+    required int openBefore,
+    required int dosesPerUnit,
+    required int quantity,
+  }) {
+    final fromOpen = quantity < openBefore ? quantity : openBefore;
+    final shortfall = quantity - fromOpen;
+    final unitsToBreak =
+        shortfall <= 0 ? 0 : ((shortfall + dosesPerUnit - 1) ~/ dosesPerUnit);
+    final openDosesAfter = unitsToBreak > 0
+        ? (unitsToBreak * dosesPerUnit - shortfall)
+        : openBefore - fromOpen;
+    return (
+      fromOpen: fromOpen,
+      unitsToBreak: unitsToBreak,
+      openDosesAfter: openDosesAfter,
+    );
+  }
+
   Widget _buildMovementPreview({
     required InventoryItem item,
     required live.InventoryBatchRecord batch,
     required int quantity,
     required int remaining,
     required bool isDispense,
+    String? unitLabel,
+    int? beforeQuantity,
+    int? openDosesBefore,
+    int? dosesPerUnit,
   }) {
+    final label = unitLabel ?? item.unit;
+    final before = beforeQuantity ?? batch.quantityRemaining;
     final color = remaining < 0
         ? AppColors.error
         : isDispense
             ? AppColors.brandPrimary
             : AppColors.error;
+    // Only meaningful for a dose-mode dispense against a multi-dose item --
+    // a units-mode movement just removes whole sealed vials, nothing to draw
+    // from an open one.
+    final showDrawPlan = isDispense &&
+        remaining >= 0 &&
+        openDosesBefore != null &&
+        dosesPerUnit != null &&
+        dosesPerUnit > 0;
+    final plan = showDrawPlan
+        ? _doseDrawPlan(
+            openBefore: openDosesBefore,
+            dosesPerUnit: dosesPerUnit,
+            quantity: quantity,
+          )
+        : null;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(13),
@@ -6339,7 +7417,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            remaining < 0 ? 'QUANTITY TOO HIGH' : 'BALANCE PREVIEW',
+            remaining < 0 ? 'QUANTITY TOO HIGH' : 'BALANCE PREVIEW · NOT YET SAVED',
             style: TextStyle(
               color: color,
               fontSize: 10,
@@ -6353,14 +7431,14 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               Expanded(
                 child: _DetailValue(
                   label: 'BEFORE',
-                  value: '${batch.quantityRemaining} ${item.unit}',
+                  value: '$before $label',
                 ),
               ),
               Icon(Icons.arrow_forward_rounded, color: color, size: 18),
               Expanded(
                 child: _DetailValue(
                   label: isDispense ? 'AFTER DISPENSE' : 'AFTER REPORT',
-                  value: '$remaining ${item.unit}',
+                  value: '$remaining $label',
                   valueColor: color,
                 ),
               ),
@@ -6368,12 +7446,36 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
           ),
           const SizedBox(height: 7),
           Text(
-            '$quantity ${item.unit} will be recorded against Batch ${batch.batchNumber}.',
+            '$quantity $label will be recorded against Batch ${batch.batchNumber}.',
             style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 10,
             ),
           ),
+          if (plan != null && (plan.fromOpen > 0 || plan.unitsToBreak > 0)) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                if (plan.fromOpen > 0)
+                  StatusChip(
+                    icon: Icons.colorize_rounded,
+                    label: plan.unitsToBreak > 0
+                        ? 'Empties open vial: ${plan.fromOpen} dose${plan.fromOpen == 1 ? '' : 's'}'
+                        : 'From open vial: $openDosesBefore → ${plan.openDosesAfter} doses',
+                  ),
+                if (plan.unitsToBreak > 0)
+                  StatusChip(
+                    icon: Icons.inventory_2_outlined,
+                    label: 'Opens ${plan.unitsToBreak} new vial'
+                        '${plan.unitsToBreak == 1 ? '' : 's'} · '
+                        '${plan.openDosesAfter} dose'
+                        '${plan.openDosesAfter == 1 ? '' : 's'} left open after',
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -6403,16 +7505,15 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
 
   /// Items at or below their reorder level, worst first.
   List<InventoryItem> _itemsNeedingRestock() {
-    final needing = _inventory
-        .where((item) => item.quantity <= item.minimumStock)
-        .toList()
-      ..sort((a, b) {
-        // Nothing on the shelf outranks merely low.
-        final aOut = a.quantity <= 0 ? 0 : 1;
-        final bOut = b.quantity <= 0 ? 0 : 1;
-        if (aOut != bOut) return aOut - bOut;
-        return _restockShortfall(b).compareTo(_restockShortfall(a));
-      });
+    final needing =
+        _inventory.where((item) => item.quantity <= item.minimumStock).toList()
+          ..sort((a, b) {
+            // Nothing on the shelf outranks merely low.
+            final aOut = a.quantity <= 0 ? 0 : 1;
+            final bOut = b.quantity <= 0 ? 0 : 1;
+            if (aOut != bOut) return aOut - bOut;
+            return _restockShortfall(b).compareTo(_restockShortfall(a));
+          });
     return needing;
   }
 
@@ -6547,7 +7648,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
           color: isSelected ? AppColors.brandPrimary : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? AppColors.brandPrimary : AppColors.borderPrimary,
+            color:
+                isSelected ? AppColors.brandPrimary : AppColors.borderPrimary,
           ),
         ),
         child: Text(
@@ -6760,7 +7862,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                           ],
 
                           const SizedBox(height: 16),
-                          _FormLabel('Requested quantity', key: requestQuantityKey),
+                          _FormLabel('Requested quantity',
+                              key: requestQuantityKey),
                           const SizedBox(height: 7),
                           AppInputField(
                             controller: quantityController,
@@ -6793,7 +7896,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                                         quantityController.text.trim() ==
                                             preset.toString(),
                                     onTap: () => setModalState(() {
-                                      quantityController.text = preset.toString();
+                                      quantityController.text =
+                                          preset.toString();
                                       quantityError = null;
                                     }),
                                   ),
@@ -6802,7 +7906,8 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                           ],
 
                           const SizedBox(height: 16),
-                          _FormLabel('Reason for request', key: requestReasonKey),
+                          _FormLabel('Reason for request',
+                              key: requestReasonKey),
                           const SizedBox(height: 7),
                           // Preset first, free text second. A queue of requests
                           // the RHU can group is worth more than forty
@@ -7631,6 +8736,158 @@ class _StatusChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One cell of the two-column sort-choice grid in _showSortOptionsSheet:
+/// icon and a checkmark (when selected) on one line, the label below it,
+/// wrapping to two lines rather than truncating -- a card is free to be as
+/// tall as its longest label needs, which a single-line row with an ellipsis
+/// is not.
+class _SortOptionCard extends StatelessWidget {
+  const _SortOptionCard({
+    required this.option,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final ({String value, String label, IconData icon}) option;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.brandPrimary.withValues(alpha: 0.08)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color:
+                isSelected ? AppColors.brandPrimary : AppColors.borderPrimary,
+            width: isSelected ? 1.4 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  option.icon,
+                  size: 18,
+                  color: isSelected
+                      ? AppColors.brandPrimary
+                      : AppColors.textSecondary,
+                ),
+                const Spacer(),
+                if (isSelected)
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    size: 16,
+                    color: AppColors.brandPrimary,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              option.label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.25,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                color:
+                    isSelected ? AppColors.brandPrimary : AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One row in the batch picker: the batch number, then its facts as chips
+/// underneath rather than folded into the same sentence.
+class _BatchOptionCard extends StatelessWidget {
+  const _BatchOptionCard({
+    required this.batch,
+    required this.chips,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final live.InventoryBatchRecord batch;
+  final List<Widget> chips;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.brandPrimary.withValues(alpha: 0.08)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color:
+                isSelected ? AppColors.brandPrimary : AppColors.borderPrimary,
+            width: isSelected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.qr_code_2_rounded,
+              size: 18,
+              color:
+                  isSelected ? AppColors.brandPrimary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Batch ${batch.batchNumber}',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: isSelected
+                          ? AppColors.brandPrimary
+                          : AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(spacing: 6, runSpacing: 6, children: chips),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Padding(
+                padding: EdgeInsets.only(left: 4),
+                child: Icon(Icons.check_circle_rounded,
+                    size: 18, color: AppColors.brandPrimary),
+              ),
+          ],
+        ),
       ),
     );
   }
