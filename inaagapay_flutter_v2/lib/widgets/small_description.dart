@@ -24,23 +24,23 @@ class SmallDescription extends StatelessWidget {
     return Row(
       mainAxisAlignment: rowAlignment,
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min, // 🔑 THIS IS CRITICAL
       children: [
-        if (icon != null)
+        if (icon != null) ...[
           Icon(
             icon,
             size: 18,
             color: textColor,
           ),
-
-        if (icon != null) const SizedBox(width: 8),
-
-        Text(
-          text,
-          textAlign: textAlign,
-          style: TextStyle(
-            fontSize: 13,
-            color: textColor,
+          const SizedBox(width: 8),
+        ],
+        Expanded(
+          child: Text(
+            text,
+            textAlign: textAlign,
+            style: TextStyle(
+              fontSize: 13,
+              color: textColor,
+            ),
           ),
         ),
       ],

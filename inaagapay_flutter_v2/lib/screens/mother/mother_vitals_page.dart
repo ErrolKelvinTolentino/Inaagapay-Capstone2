@@ -37,6 +37,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
   int _fetalCount = 1;
   bool _isUnlinked = false;
   bool _isPrePregnancyWeightEstimated = false;
+  bool _isWeightHistoryExpanded = false;
 
   @override
   void initState() {
@@ -1005,24 +1006,26 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                 topRight: Radius.circular(16),
               ),
             ),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            child: Row(
               children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.monitor_weight_outlined,
-                        color: statusColor, size: 22),
-                    const SizedBox(width: 8),
-                    Text(
+                Icon(Icons.monitor_weight_outlined,
+                    color: statusColor, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
                       _t('How your weight is going', 'Kumusta ang timbang mo'),
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 // Status badge
                 Container(
                   padding:
@@ -1360,227 +1363,322 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                   const SizedBox(height: 16),
                   _buildWeightChart(),
                   const SizedBox(height: 24),
-                  // The section label used elsewhere in the app: a small brand
-                  // icon and quiet uppercase grey. It was a 20px grey glyph
-                  // beside bold near-black at 16pt — heavier than the two card
-                  // headings above it, so the least important thing on the
-                  // page shouted the loudest, and plain grey-on-grey at the
-                  // same time.
-                  Row(
-                    children: [
-                      const Icon(Icons.history_rounded,
-                          size: 14, color: AppColors.brandPrimary),
-                      const SizedBox(width: 6),
-                      Text(
-                        _t('Every weight you saved',
-                                'Lahat ng timbang na na-save mo')
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
-                          color: Color(0xFF5A5A5A),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (_allVitals.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.shade100),
-                      ),
-                      child: Column(
+                  InkWell(
+                    onTap: () => setState(() =>
+                        _isWeightHistoryExpanded = !_isWeightHistoryExpanded),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
                         children: [
-                          const Icon(Icons.favorite_border, size: 40, color: Colors.grey),
-                          const SizedBox(height: 8),
-                          Text(
-                            _t('No weight saved yet. Tap the pink button below to add your first one.', 
-                               'Wala pang naitalang vitals. Tapikin ang button sa ibaba upang magsimula!'),
-                            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                            textAlign: TextAlign.center,
+                          const Icon(Icons.history_rounded,
+                              size: 16, color: AppColors.brandPrimary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${_t('Every weight you saved', 'Lahat ng timbang na na-save mo').toUpperCase()} (${_allVitals.length})',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                                color: Color(0xFF5A5A5A),
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            _isWeightHistoryExpanded
+                                ? Icons.keyboard_arrow_up_rounded
+                                : Icons.keyboard_arrow_down_rounded,
+                            size: 22,
+                            color: AppColors.textSecondary,
                           ),
                         ],
                       ),
-                    )
-                  else
-                    ..._allVitals.map((v) {
-                      final double? weight = v['weight_kg'];
-                      final double? height = v['height_cm'] ?? _heightCm;
-                      final int? sys = v['bp_systolic'];
-                      final int? dia = v['bp_diastolic'];
-                      final double? aog = v['age_of_gestation'];
-                      final String notes = v['notes'] ?? '';
-                      final DateTime date = v['date'];
-                      final String formattedDate = DateFormat('MMMM d, yyyy · h:mm a').format(date);
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(16),
+                    ),
+                  ),
+                  if (_isWeightHistoryExpanded) ...[
+                    const SizedBox(height: 12),
+                    if (_allVitals.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(32),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: Colors.grey.shade100),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.02),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.favorite_border,
+                                size: 40, color: Colors.grey),
+                            const SizedBox(height: 8),
+                            Text(
+                              _t(
+                                  'No weight saved yet. Tap the pink button below to add your first one.',
+                                  'Wala pang naitalang vitals. Tapikin ang button sa ibaba upang magsimula!'),
+                              style: const TextStyle(
+                                  fontSize: 13, color: AppColors.textSecondary),
+                              textAlign: TextAlign.center,
                             ),
                           ],
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    formattedDate,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade500,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                _buildSourceBadge(v['source']),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                if (weight != null) ...[
-                                  Expanded(
-                                    child: Row(
-                                      children: [
-                                        const Icon(Icons.monitor_weight_outlined, size: 18, color: AppColors.brandPrimary),
-                                        const SizedBox(width: 8),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              _t('Weight', 'Timbang'),
-                                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                                            ),
-                                            Text(
-                                              '${weight.toStringAsFixed(1)} kg',
-                                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                if (height != null) ...[
-                                  Expanded(
-                                    child: Row(
-                                      children: [
-                                        const Icon(Icons.height, size: 18, color: AppColors.brandPrimary),
-                                        const SizedBox(width: 8),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              _t('Height', 'Taas'),
-                                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                                            ),
-                                            Text(
-                                              '${height.toStringAsFixed(1)} cm',
-                                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                 ],
-                                if (aog != null) ...[
-                                  Expanded(
-                                    child: Row(
-                                      children: [
-                                        const Icon(Icons.baby_changing_station, size: 18, color: AppColors.brandPrimary),
-                                        const SizedBox(width: 8),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              _t('Week', 'Linggo'),
-                                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                                            ),
-                                            Text(
-                                              '${aog.toStringAsFixed(1)} wks',
-                                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
+                      )
+                    else
+                      ..._allVitals.map((v) {
+                        final double? weight = v['weight_kg'];
+                        final double? height = v['height_cm'] ?? _heightCm;
+                        final int? sys = v['bp_systolic'];
+                        final int? dia = v['bp_diastolic'];
+                        final double? aog = v['age_of_gestation'];
+                        final String notes = v['notes'] ?? '';
+                        final DateTime date = v['date'];
+                        final String formattedDate =
+                            DateFormat('MMMM d, yyyy · h:mm a').format(date);
 
-                            // Blood pressure, on its own row because the row
-                            // above already carries three columns and a fourth
-                            // squeezes them on a phone. Only checkups have it —
-                            // she cannot log her own — so this appears on
-                            // official rows only.
-                            //
-                            // Shown as the plain reading with no interpretation.
-                            // Telling a mother her reading is "above threshold"
-                            // on a screen with no midwife present is alarming
-                            // without being actionable; the classification lives
-                            // on the midwife's side of the app.
-                            if (sys != null && dia != null) ...[
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.grey.shade100),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      formattedDate,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade500,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  _buildSourceBadge(v['source']),
+                                ],
+                              ),
                               const SizedBox(height: 12),
                               Row(
                                 children: [
-                                  const Icon(Icons.monitor_heart_outlined,
-                                      size: 18, color: AppColors.brandPrimary),
-                                  const SizedBox(width: 8),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _t('Blood Pressure', 'Presyon ng Dugo'),
-                                        style: const TextStyle(
-                                            fontSize: 11,
-                                            color: AppColors.textSecondary),
+                                  if (weight != null) ...[
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(6),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.brandPrimary
+                                                  .withValues(alpha: 0.08),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: const Icon(
+                                                Icons.monitor_weight_outlined,
+                                                size: 16,
+                                                color: AppColors.brandPrimary),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  _t('Weight', 'Timbang'),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                      fontSize: 10.5,
+                                                      color:
+                                                          AppColors.textSecondary),
+                                                ),
+                                                FittedBox(
+                                                  fit: BoxFit.scaleDown,
+                                                  alignment: Alignment.centerLeft,
+                                                  child: Text(
+                                                    '${weight.toStringAsFixed(1)} kg',
+                                                    style: const TextStyle(
+                                                      fontSize: 13.5,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: AppColors.textPrimary,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      Text(
-                                        '$sys/$dia mmHg',
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.textPrimary,
-                                        ),
+                                    ),
+                                  ],
+                                  if (height != null) ...[
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(6),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.brandPrimary
+                                                  .withValues(alpha: 0.08),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: const Icon(
+                                                Icons.height_rounded,
+                                                size: 16,
+                                                color: AppColors.brandPrimary),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  _t('Height', 'Taas'),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                      fontSize: 10.5,
+                                                      color:
+                                                          AppColors.textSecondary),
+                                                ),
+                                                FittedBox(
+                                                  fit: BoxFit.scaleDown,
+                                                  alignment: Alignment.centerLeft,
+                                                  child: Text(
+                                                    '${height.toStringAsFixed(1)} cm',
+                                                    style: const TextStyle(
+                                                      fontSize: 13.5,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: AppColors.textPrimary,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
+                                  if (aog != null && aog > 0) ...[
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(6),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.brandPrimary
+                                                  .withValues(alpha: 0.08),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: const Icon(
+                                                Icons.calendar_today_outlined,
+                                                size: 16,
+                                                color: AppColors.brandPrimary),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  _t('Week',
+                                                      'Linggo'),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                      fontSize: 10.5,
+                                                      color:
+                                                          AppColors.textSecondary),
+                                                ),
+                                                FittedBox(
+                                                  fit: BoxFit.scaleDown,
+                                                  alignment: Alignment.centerLeft,
+                                                  child: Text(
+                                                    '${aog.toStringAsFixed(1)} wks',
+                                                    style: const TextStyle(
+                                                      fontSize: 13.5,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: AppColors.textPrimary,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
-                            ],
-                            if (notes.isNotEmpty) ...[
-                              const Divider(height: 20, color: AppColors.borderPrimary),
-                              Text(
-                                notes,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.inputText,
-                                  fontStyle: FontStyle.italic,
+                              if (sys != null && dia != null) ...[
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.monitor_heart_outlined,
+                                        size: 18,
+                                        color: AppColors.brandPrimary),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _t('Blood Pressure',
+                                              'Presyon ng Dugo'),
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              color:
+                                                  AppColors.textSecondary),
+                                        ),
+                                        Text(
+                                          '$sys/$dia mmHg',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
-                              ),
+                              ],
+                              if (notes.isNotEmpty) ...[
+                                const Divider(
+                                    height: 20,
+                                    color: AppColors.borderPrimary),
+                                Text(
+                                  notes,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.inputText,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
-                        ),
-                      );
-                    }),
+                          ),
+                        );
+                      }),
+                  ],
                 ],
               ),
             ),

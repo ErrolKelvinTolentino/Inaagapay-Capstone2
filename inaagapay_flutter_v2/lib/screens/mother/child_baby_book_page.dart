@@ -496,17 +496,15 @@ class _ChildBabyBookPageState extends State<ChildBabyBookPage> {
                     Icon(facts[index].icon,
                         size: 20, color: AppColors.brandText),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        facts[index].label,
-                        style: const TextStyle(
-                          fontSize: 13.5,
-                          color: AppColors.inputText,
-                        ),
+                    Text(
+                      facts[index].label,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        color: AppColors.inputText,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Flexible(
+                    const SizedBox(width: 12),
+                    Expanded(
                       child: Text(
                         facts[index].value,
                         textAlign: TextAlign.right,

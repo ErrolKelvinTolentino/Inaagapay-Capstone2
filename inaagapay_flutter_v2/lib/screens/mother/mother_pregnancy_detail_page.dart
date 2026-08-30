@@ -5,8 +5,10 @@
 // Connects to Supabase for risk assessments, symptoms, and personalized data
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../theme/app_colors.dart';
 import '../../services/language_service.dart';
+import '../../widgets/secondary_header.dart';
 import '../../data/pregnancy_growth_data.dart';
 import '../../models/baby_growth_milestone.dart';
 import '../../models/milestone_template.dart';
@@ -736,6 +738,9 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
   // Personalized data from database
   List<String> _personalizedSymptoms = [];
   List<String> _personalizedWarnings = [];
+  List<String> _currentRiskFactors = [];
+  List<Map<String, dynamic>> _recordFindings = [];
+  List<String> _careRecommendations = [];
 
   List<String> _activeAllergies = [];
 
@@ -868,8 +873,6 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
   }
 
   Future<void> _loadPersonalizedData() async {
-
-
     try {
       final supabase = SupabaseService.client;
 
@@ -886,53 +889,246 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
             .toList();
       }
 
-      // Fetch risk assessment
-      final riskData = await supabase
+      // Fetch comprehensive risk assessments and factors
+      final riskAssessments = await supabase
           .from('pregnancy_risk_assessments')
-          .select('pregnancy_risk_id, risk_level')
-          .eq('pregnancy_id', widget.pregnancyId)
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
+          .select('pregnancy_risk_id, risk_level, notes')
+          .eq('pregnancy_id', widget.pregnancyId);
 
-      if (riskData != null) {
-        final riskId = riskData['pregnancy_risk_id'];
+      final List<String> allRiskFactors = [];
 
-        // Fetch risk factors
-        final List<dynamic>? factorsData = await supabase
-            .from('pregnancy_risk_factors')
-            .select('factor')
-            .eq('pregnancy_risk_id', riskId) as List<dynamic>?;
+      if (riskAssessments.isNotEmpty) {
+        final riskIds = riskAssessments
+            .map((r) => r['pregnancy_risk_id'] as int?)
+            .whereType<int>()
+            .toList();
 
-        if (factorsData != null) {
-          _personalizedWarnings =
-              factorsData.map((f) => f['factor'] as String).toList();
+        if (riskIds.isNotEmpty) {
+          final List<dynamic>? factorsData = await supabase
+              .from('pregnancy_risk_factors')
+              .select('factor, risk_influence')
+              .inFilter('pregnancy_risk_id', riskIds);
+
+          if (factorsData != null) {
+            for (final f in factorsData) {
+              final factor = f['factor']?.toString().trim() ?? '';
+              final influence = f['risk_influence']?.toString().trim() ?? '';
+              if (factor.isNotEmpty) {
+                final display =
+                    influence.isNotEmpty ? '$factor ($influence)' : factor;
+                if (!allRiskFactors.contains(display)) {
+                  allRiskFactors.add(display);
+                }
+              }
+            }
+          }
         }
       }
 
-
-
-      // Fetch active allergies for the mother (to filter nutrition tips)
+      // Fetch mother ID
       final motherRow = await supabase
           .from('pregnancies')
           .select('mother_id')
           .eq('pregnancy_id', widget.pregnancyId)
           .maybeSingle();
 
+      int? motherId;
       if (motherRow != null) {
-        final motherId = motherRow['mother_id'] as int;
+        motherId = motherRow['mother_id'] as int?;
+      }
+
+      // Medical conditions
+      if (motherId != null) {
+        final List<dynamic>? conditions = await supabase
+            .from('medical_conditions')
+            .select('condition_name, status')
+            .eq('mother_id', motherId);
+
+        if (conditions != null) {
+          for (final c in conditions) {
+            final name = c['condition_name']?.toString().trim() ?? '';
+            final status = c['status']?.toString().toLowerCase().trim() ?? '';
+            if (name.isNotEmpty &&
+                (status == 'active' || status == 'ongoing' || status.isEmpty)) {
+              final display = 'Condition: $name';
+              if (!allRiskFactors.contains(display)) {
+                allRiskFactors.add(display);
+              }
+            }
+          }
+        }
+      }
+
+      // Active allergies
+      if (motherId != null) {
         final allergyRows = await supabase
             .from('allergies')
-            .select('allergen')
+            .select('allergen, status')
             .eq('mother_id', motherId)
             .eq('status', 'active');
 
-        _activeAllergies = (allergyRows as List)
-            .cast<Map<String, dynamic>>()
+        final allergiesList =
+            (allergyRows as List).cast<Map<String, dynamic>>();
+        _activeAllergies = allergiesList
             .map((a) => (a['allergen'] as String? ?? '').toLowerCase())
             .where((a) => a.isNotEmpty)
             .toList();
+
+        for (final a in allergiesList) {
+          final allergen = a['allergen']?.toString().trim() ?? '';
+          if (allergen.isNotEmpty) {
+            final display = 'Allergy to $allergen';
+            if (!allRiskFactors.contains(display)) {
+              allRiskFactors.add(display);
+            }
+          }
+        }
       }
+
+      // Record findings from Checkups / Encounters
+      final List<Map<String, dynamic>> findings = [];
+
+      final List<dynamic>? encounters = await supabase
+          .from('clinical_encounters')
+          .select(
+              'checkup_datetime, created_at, bp_systolic, bp_diastolic, notes, diagnosis, risk_level')
+          .eq('pregnancy_id', widget.pregnancyId)
+          .order('checkup_datetime', ascending: false);
+
+      if (encounters != null) {
+        for (final enc in encounters) {
+          final dateStr =
+              enc['checkup_datetime'] ?? enc['created_at'] ?? '';
+          final date =
+              DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
+          final sys = enc['bp_systolic'] as int?;
+          final dia = enc['bp_diastolic'] as int?;
+          final notes = enc['notes']?.toString().trim() ?? '';
+          final diag = enc['diagnosis']?.toString().trim() ?? '';
+          final risk =
+              enc['risk_level']?.toString().toLowerCase().trim() ?? '';
+
+          if (risk == 'high' ||
+              (sys != null && sys >= 140) ||
+              (dia != null && dia >= 90) ||
+              notes.isNotEmpty ||
+              diag.isNotEmpty) {
+            String summary = '';
+            if (sys != null && dia != null && (sys >= 140 || dia >= 90)) {
+              summary =
+                  'Blood Pressure: $sys/$dia mmHg (Elevated reading)';
+            } else if (diag.isNotEmpty) {
+              summary = diag;
+            } else if (notes.isNotEmpty) {
+              summary = notes;
+            } else {
+              summary =
+                  'Recorded as needing closer monitoring during clinical check-up.';
+            }
+
+            findings.add({
+              'type': 'Prenatal Checkup',
+              'date': date,
+              'summary': summary,
+            });
+          }
+        }
+      }
+
+      // Ultrasounds
+      final List<dynamic>? ultrasounds = await supabase
+          .from('ultrasound_records')
+          .select(
+              'ultrasound_date, created_at, monitoring_classification, remarks')
+          .eq('pregnancy_id', widget.pregnancyId)
+          .order('ultrasound_date', ascending: false);
+
+      if (ultrasounds != null) {
+        for (final us in ultrasounds) {
+          final classification = us['monitoring_classification']
+                  ?.toString()
+                  .toLowerCase()
+                  .trim() ??
+              '';
+          final remarks = us['remarks']?.toString().trim() ?? '';
+          if (classification.contains('closer') ||
+              classification.contains('monitoring') ||
+              remarks.isNotEmpty) {
+            final dateStr = us['ultrasound_date'] ?? us['created_at'] ?? '';
+            final date =
+                DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
+            findings.add({
+              'type': 'Ultrasound',
+              'date': date,
+              'summary': remarks.isNotEmpty
+                  ? remarks
+                  : 'Requires closer monitoring based on scan findings.',
+            });
+          }
+        }
+      }
+
+      // Lab Tests
+      final List<dynamic>? labTests = await supabase
+          .from('lab_tests')
+          .select(
+              'lab_test_date, lab_test_type, created_at, result_summary, is_abnormal')
+          .eq('pregnancy_id', widget.pregnancyId)
+          .order('lab_test_date', ascending: false);
+
+      if (labTests != null) {
+        for (final lab in labTests) {
+          final isAbnormal = lab['is_abnormal'] == true;
+          final summary = lab['result_summary']?.toString().trim() ?? '';
+          if (isAbnormal || summary.isNotEmpty) {
+            final dateStr =
+                lab['lab_test_date'] ?? lab['created_at'] ?? '';
+            final date =
+                DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
+            final type =
+                lab['lab_test_type']?.toString().trim() ?? 'Lab Test';
+            findings.add({
+              'type': type,
+              'date': date,
+              'summary': summary.isNotEmpty
+                  ? summary
+                  : 'Abnormal test result marked for observation.',
+            });
+          }
+        }
+      }
+
+      // AI recommendations
+      final aiData = await supabase
+          .from('ai_responses')
+          .select('response')
+          .eq('reference_table', 'pregnancies')
+          .eq('reference_id', widget.pregnancyId)
+          .eq('response_type', 'recommendation')
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      List<String> careRecommendations = [];
+      if (aiData != null && aiData['response'] is String) {
+        final resp = aiData['response'] as String;
+        careRecommendations = resp
+            .split(RegExp(r'\n+'))
+            .map((s) =>
+                s.replaceAll(RegExp(r'^[-*•\d.]+\s*'), '').trim())
+            .where((s) =>
+                s.isNotEmpty &&
+                !s.toLowerCase().startsWith('disclaimer'))
+            .toList();
+      }
+
+      findings.sort((a, b) =>
+          (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+
+      _currentRiskFactors = allRiskFactors;
+      _personalizedWarnings = allRiskFactors;
+      _recordFindings = findings;
+      _careRecommendations = careRecommendations;
     } catch (e) {
       debugPrint('Error loading personalized data: $e');
     }
@@ -973,6 +1169,14 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       builder: (context, language, _) {
         return Scaffold(
           backgroundColor: AppColors.bgPrimary,
+          appBar: PreferredSize(
+            preferredSize: const Size.fromHeight(56),
+            child: SecondaryHeader(
+              title: _translate(
+                  'Mother and Baby Book', 'Mother and Baby Book', language),
+              onBack: () => Navigator.pop(context),
+            ),
+          ),
           body: ScrollConfiguration(
             behavior: ScrollConfiguration.of(context).copyWith(
               scrollbars: false,
@@ -1005,57 +1209,14 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     );
   }
 
-
-
-
-  /// The Baby Book's cover card, standing in for the page header.
-  ///
-  /// The solid pink SliverAppBar said Week 11, Month 3, First Trimester, the
-  /// mother's name, the week range, "28% Completed" and the weeks left — and
-  /// then the Overview tab opened with a card saying all of it again, in a
-  /// different layout. Two headers for one pregnancy, disagreeing on nothing
-  /// but their design.
-  ///
-  /// The cover card wins because it is the one the Baby Book already uses, so
-  /// the page a mother reaches from "Mother and Baby Book" now looks like the
-  /// book it is named after. The back arrow rides on top of it, since a pushed
-  /// page still needs a way out.
+  /// The Baby Book's cover card, now with the back button in the SecondaryHeader.
   Widget _buildSliverHeader(AppLanguage language) {
     return SliverToBoxAdapter(
       child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          MediaQuery.paddingOf(context).top + 10,
-          16,
-          10,
-        ),
-        child: Stack(
-          children: [
-            // The inset is the back arrow's height plus a gap, so the card's
-            // first line starts below it rather than under it.
-            PregnancyCoverCard(
-              pregnancy: _pregnancyState,
-              contentTopInset: 44,
-            ),
-            Positioned(
-              top: 8,
-              left: 8,
-              child: Material(
-                color: Colors.black.withValues(alpha: 0.22),
-                shape: const CircleBorder(),
-                clipBehavior: Clip.antiAlias,
-                child: IconButton(
-                  tooltip: _translate('Back', 'Bumalik', language),
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.arrow_back_rounded,
-                      color: Colors.white, size: 20),
-                  constraints:
-                      const BoxConstraints(minWidth: 38, minHeight: 38),
-                  padding: EdgeInsets.zero,
-                ),
-              ),
-            ),
-          ],
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: PregnancyCoverCard(
+          pregnancy: _pregnancyState,
+          contentTopInset: 0,
         ),
       ),
     );
@@ -1220,9 +1381,15 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
             ? const Color(0xFF8A632D)
             : const Color(0xFF15803D);
 
-    final riskFactors = _personalizedWarnings.isNotEmpty
-        ? _personalizedWarnings
-        : (widget.riskFactors ?? []);
+    final riskFactors = _currentRiskFactors.isNotEmpty
+        ? _currentRiskFactors
+        : (_personalizedWarnings.isNotEmpty
+            ? _personalizedWarnings
+            : (widget.riskFactors ?? []));
+
+    final careActions = _careRecommendations.isNotEmpty
+        ? _careRecommendations
+        : (widget.suggestedActions ?? []);
 
     String riskNote = '';
     if (isHigh) {
@@ -1249,7 +1416,15 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
-        onTap: () => _showSmartRiskSheet(language, riskLevel, badgeColor, riskFactors, riskNote),
+        onTap: () => _showSmartRiskSheet(
+          language,
+          riskLevel,
+          badgeColor,
+          riskFactors,
+          _recordFindings,
+          careActions,
+          riskNote,
+        ),
         borderRadius: BorderRadius.circular(18),
         child: Ink(
           decoration: BoxDecoration(
@@ -1267,9 +1442,6 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  // An outlined mark rather than a filled warning triangle.
-                  // The triangle is the icon an app uses when something has
-                  // gone wrong right now.
                   isHigh
                       ? Icons.info_outline_rounded
                       : isMedium
@@ -1284,14 +1456,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // No "Prenatal Risk Summary" eyebrow. It labelled the card
-                    // with the name of a clinical artefact before saying
-                    // anything, and the line beneath it says what this is.
                     Text(
-                      // Named for what happens next, not for a risk tier.
-                      // "HIGH RISK STATUS" is a label a mother carries around
-                      // all day; "needs closer monitoring" is a plan, and it
-                      // is the same thing the record actually means.
                       _translate(
                         isHigh
                             ? 'Your pregnancy needs closer monitoring'
@@ -1338,6 +1503,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     String riskLevel,
     Color badgeColor,
     List<String> riskFactors,
+    List<Map<String, dynamic>> recordFindings,
+    List<String> careActions,
     String riskNote,
   ) {
     showModalBottomSheet(
@@ -1346,9 +1513,9 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       backgroundColor: Colors.transparent,
       builder: (context) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.65,
+          initialChildSize: 0.72,
           minChildSize: 0.4,
-          maxChildSize: 0.9,
+          maxChildSize: 0.92,
           builder: (_, controller) {
             return Container(
               decoration: const BoxDecoration(
@@ -1374,7 +1541,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        _translate('Smart Risk Assessment', 'Pagsusuri ng Panganib', language),
+                        _translate('Smart Risk Assessment',
+                            'Pagsusuri ng Panganib', language),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -1393,12 +1561,17 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                     decoration: BoxDecoration(
                       color: badgeColor.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
+                      border: Border.all(
+                          color: badgeColor.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          riskLevel == 'HIGH' ? Icons.warning_rounded : riskLevel == 'MEDIUM' ? Icons.warning_amber_rounded : Icons.check_circle_rounded,
+                          riskLevel == 'HIGH'
+                              ? Icons.warning_rounded
+                              : riskLevel == 'MEDIUM'
+                                  ? Icons.warning_amber_rounded
+                                  : Icons.check_circle_rounded,
                           color: badgeColor,
                           size: 24,
                         ),
@@ -1430,11 +1603,12 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 22),
                   Text(
-                    _translate('Key Risk Factors & Findings', 'Mga Salik ng Panganib at Natuklasan', language),
+                    _translate('Key Risk Factors & Findings',
+                        'Mga Salik ng Panganib at Natuklasan', language),
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 14.5,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
                     ),
@@ -1448,56 +1622,176 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                             children: [
                               Padding(
                                 padding: const EdgeInsets.only(top: 6),
-                                child: Icon(Icons.circle, size: 6, color: badgeColor),
+                                child: Icon(Icons.circle,
+                                    size: 6, color: badgeColor),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
                                   f,
-                                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.textSecondary,
+                                    height: 1.4,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ))
+                        )),
                   ] else ...[
                     Text(
-                      _translate('No active risk factors detected during recent consultations.', 'Walang nakitang aktibong salik ng panganib sa mga nakaraang checkup.', language),
-                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                      _translate(
+                        'No active risk factors detected during recent consultations.',
+                        'Walang nakitang aktibong salik ng panganib sa mga nakaraang checkup.',
+                        language,
+                      ),
+                      style: const TextStyle(
+                          fontSize: 13, color: AppColors.textSecondary),
                     ),
                   ],
-                  const SizedBox(height: 24),
-                  if (widget.suggestedActions != null && widget.suggestedActions!.isNotEmpty) ...[
+                  const SizedBox(height: 22),
+                  Text(
+                    _translate('From Your Health Records',
+                        'Mula sa mga Tala ng Kalusugan', language),
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (recordFindings.isNotEmpty) ...[
+                    ...recordFindings.map((finding) {
+                      final type =
+                          finding['type']?.toString() ?? 'Health Record';
+                      final date = finding['date'] as DateTime? ??
+                          DateTime.now();
+                      final summary = finding['summary']?.toString() ?? '';
+                      final formattedDate =
+                          DateFormat('MMMM d, yyyy').format(date);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border:
+                              Border.all(color: AppColors.borderPrimary),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 9, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius:
+                                        BorderRadius.circular(999),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        type == 'Prenatal Checkup'
+                                            ? Icons.calendar_today_rounded
+                                            : type == 'Ultrasound'
+                                                ? Icons.monitor_heart_rounded
+                                                : Icons.biotech_rounded,
+                                        size: 11,
+                                        color: const Color(0xFF475569),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        type,
+                                        style: const TextStyle(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF475569),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  formattedDate,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade500,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              summary,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ] else ...[
                     Text(
-                      _translate('Recommended Care Plan Actions', 'Mga Rekomendasyon sa Pangangalaga', language),
+                      _translate(
+                        'No ultrasound, laboratory, or check-up entry is marked for closer monitoring.',
+                        'Walang tala ng ultrasound, laboratory, o check-up na minarkahan para sa masusing pagsubaybay.',
+                        language,
+                      ),
                       style: const TextStyle(
-                        fontSize: 14,
+                          fontSize: 13, color: AppColors.textSecondary),
+                    ),
+                  ],
+                  if (careActions.isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    Text(
+                      _translate('Recommended Care Plan Actions',
+                          'Mga Rekomendasyon sa Pangangalaga', language),
+                      style: const TextStyle(
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 10),
-                    ...widget.suggestedActions!.map((a) => Padding(
+                    ...careActions.map((a) => Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Padding(
                                 padding: EdgeInsets.only(top: 6),
-                                child: Icon(Icons.check, size: 10, color: AppColors.brandPrimary),
+                                child: Icon(Icons.check_circle_outline_rounded,
+                                    size: 14,
+                                    color: AppColors.brandPrimary),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
                                   a,
-                                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.textSecondary,
+                                    height: 1.4,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ))
+                        )),
                   ],
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 28),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -1510,7 +1804,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: Text(_translate('Understand & Close', 'Naiintindihan ko at Isara', language)),
+                      child: Text(_translate('Understand & Close',
+                          'Naiintindihan ko at Isara', language)),
                     ),
                   ),
                 ],

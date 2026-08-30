@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/app_input_field.dart';
 import '../../services/auth_storage.dart';
 import '../../services/language_service.dart';
 import '../../models/child_model.dart';
@@ -191,14 +190,6 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
   /// page, its route and its data all still exist.
   static const bool _showVaccinePosterRow = false;
 
-  String _childrenCountLabel() {
-    final count = _filteredChildren.length;
-    if (LanguageService.isFilipino) {
-      return '$count ${count == 1 ? 'Anak' : 'Mga Anak'}!';
-    }
-    return '$count Beautiful ${count == 1 ? 'Child' : 'Children'}!';
-  }
-
   void _openBabyBook(ChildModel child) {
     Navigator.push(
       context,
@@ -292,7 +283,7 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _childrenCountLabel(),
+                          _t('My Children', 'Aking mga Anak'),
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -301,13 +292,15 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _t('Tap a child to see their health records',
-                              'Pindutin ang anak para makita ang kanyang tala'),
+                          _t(
+                            'Track their growth, baby book, and health records',
+                            'Subaybayan ang paglaki, baby book, at talaan ng kalusugan',
+                          ),
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                             height: 1.3,
-                            color: AppColors.brandText.withValues(alpha: 0.7),
+                            color: AppColors.brandText.withValues(alpha: 0.75),
                           ),
                         ),
                       ],
@@ -317,23 +310,7 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
               ),
             ),
 
-            const SizedBox(height: 20),
-
-            // Search Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: AppInputField(
-                hintText: _t('Search child by name',
-                    'Hanapin ang pangalan ng anak'),
-                controller: _searchController,
-                leadingIcon: Icons.search,
-              ),
-            ),
-
-            // The "tap a child" hint moved into the banner, where it explains
-            // the list before she reaches it. Kept here as well it would have
-            // been the same sentence twice on one screen.
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
 
             // Children List
             Expanded(
@@ -431,18 +408,13 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
                                   // This page is her registered children.
                                   for (final child in _filteredChildren) ...[
                                     _ChildCard(
-                                      firstName: child.firstName,
-                                      lastName: child.lastName,
+                                      child: child,
                                       age: _localizedAge(child),
                                       onTap: () => _openChildProfile(child),
-                                      // The health record and the keepsake are
-                                      // different things and get different
-                                      // doors. Tapping the card opens her
-                                      // records; the book is its own row.
                                       onOpenBabyBook: () =>
                                           _openBabyBook(child),
                                     ),
-                                    const SizedBox(height: 12),
+                                    const SizedBox(height: 14),
                                   ],
 
                                   // Hidden for now, not deleted. The poster
@@ -543,136 +515,192 @@ class _VaccinePosterRow extends StatelessWidget {
 }
 
 class _ChildCard extends StatelessWidget {
-  final String firstName;
-  final String lastName;
+  final ChildModel child;
   final String age;
   final VoidCallback onTap;
-  final VoidCallback? onOpenBabyBook;
+  final VoidCallback onOpenBabyBook;
 
   const _ChildCard({
-    required this.firstName,
-    required this.lastName,
+    required this.child,
     required this.age,
     required this.onTap,
-    this.onOpenBabyBook,
+    required this.onOpenBabyBook,
   });
 
-  String get fullName => '$firstName $lastName'.trim();
+  String get fullName => '${child.firstName} ${child.lastName}'.trim();
 
   String get _initials {
-    final firstInitial = firstName.isNotEmpty ? firstName[0].toUpperCase() : '';
-    final lastInitial = lastName.isNotEmpty ? lastName[0].toUpperCase() : '';
+    final firstInitial =
+        child.firstName.isNotEmpty ? child.firstName[0].toUpperCase() : '';
+    final lastInitial =
+        child.lastName.isNotEmpty ? child.lastName[0].toUpperCase() : '';
     if (firstInitial.isNotEmpty && lastInitial.isNotEmpty) {
       return '$firstInitial$lastInitial';
     }
     return firstInitial.isNotEmpty ? firstInitial : 'C';
   }
 
+  String get _formattedBirthdate {
+    if (child.birthdate == null) return '';
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
+    ];
+    return '${months[child.birthdate!.month - 1]} ${child.birthdate!.day}, ${child.birthdate!.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 0),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: AppColors.brandPrimary.withValues(alpha: 0.12),
         ),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(30),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 20, 16),
-              child: Row(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // Child Avatar Circle
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: AppColors.brandPrimary.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      _initials,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.brandPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                // Child Name & Age
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        fullName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16.5,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        age,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (_formattedBirthdate.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  // Avatar - Pink background with pink text initials (matching mother list)
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: AppColors.brandPrimary.withValues(alpha: 0.3),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        _initials,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.brandPrimary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-
-                  // Child Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          fullName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          age,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Her keepsake, on its own target. Small, so the card still
-                  // reads as one thing, but a separate tap — the book and the
-                  // health record are different places to end up.
-                  if (onOpenBabyBook != null)
-                    IconButton(
-                      onPressed: onOpenBabyBook,
-                      tooltip: LanguageService.translate(
-                          'Baby Book', 'Baby Book'),
-                      visualDensity: VisualDensity.compact,
-                      icon: Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: AppColors.brandPrimary.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.auto_stories_rounded,
-                            size: 18, color: AppColors.brandPrimary),
-                      ),
-                    ),
-
-                  // Arrow
                   const Icon(
-                    Icons.chevron_right,
-                    size: 24,
-                    color: AppColors.textSecondary,
+                    Icons.cake_outlined,
+                    size: 16,
+                    color: AppColors.brandPrimary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Born on $_formattedBirthdate',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF5A5A5A),
+                    ),
                   ),
                 ],
               ),
+            ],
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: AppColors.borderPrimary),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onOpenBabyBook,
+                    icon: const Icon(Icons.auto_stories_rounded, size: 17),
+                    label: const Text('Baby Book'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.brandPrimary,
+                      side: BorderSide(
+                        color: AppColors.brandPrimary.withValues(alpha: 0.35),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: onTap,
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 17),
+                    label: const Text('View Info'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.brandPrimary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
+          ],
         ),
       ),
     );

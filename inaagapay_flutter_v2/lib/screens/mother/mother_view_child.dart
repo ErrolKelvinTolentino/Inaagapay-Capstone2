@@ -398,6 +398,19 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
           onBack: widget.onBackToChildren,
         ),
       ),
+      floatingActionButton: childData != null
+          ? FloatingActionButton(
+              key: const ValueKey<String>('add-growth-measurement'),
+              heroTag: 'add-growth-measurement',
+              onPressed: _showAddGrowthBottomSheet,
+              tooltip: _t('Add a measurement', 'Magdagdag ng sukat'),
+              backgroundColor: AppColors.brandPrimary,
+              foregroundColor: Colors.white,
+              elevation: 4,
+              shape: const CircleBorder(),
+              child: const Icon(Icons.add_rounded, size: 28),
+            )
+          : null,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -420,10 +433,11 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
 
               const SizedBox(height: 24),
 
-              // ── Parent / Guardian ──────────────────────────────
-              _buildGuardianCard(parentName, parentRelationship),
-
-              const SizedBox(height: 16),
+              // ── Guardian Details (Only if not mother herself) ───
+              if (hasGuardian) ...[
+                _buildGuardianCard(parentName, parentRelationship),
+                const SizedBox(height: 16),
+              ],
 
               // ── Birth Details ──────────────────────────────────
               RecordsDisplayCard(
@@ -467,42 +481,6 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
               const SizedBox(height: 12),
 
               _buildGrowthAnalysisCard(),
-
-              // Kept beside the shared card rather than inside it.
-              //
-              // Logging a measurement at home is the mother's own action and
-              // has no equivalent on the midwife's profile, so it does not
-              // belong in the card they both draw. It used to sit inside this
-              // page's own growth card, and swapping that card out would have
-              // quietly removed the only way she can add a height and weight
-              // anywhere in the app — the growth page only reads.
-              if (childData != null) ...[
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Semantics(
-                    button: true,
-                    label: _t('Add a growth measurement',
-                        'Magdagdag ng sukat ng paglaki'),
-                    child: SizedBox(
-                      width: 52,
-                      height: 52,
-                      child: FloatingActionButton(
-                        key: const ValueKey<String>('add-growth-measurement'),
-                        heroTag: 'add-growth-measurement',
-                        onPressed: _showAddGrowthBottomSheet,
-                        tooltip:
-                            _t('Add a measurement', 'Magdagdag ng sukat'),
-                        backgroundColor: AppColors.brandPrimary,
-                        foregroundColor: Colors.white,
-                        elevation: 3,
-                        shape: const CircleBorder(),
-                        child: const Icon(Icons.add_rounded, size: 26),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
 
               _buildSectionDivider(),
 
