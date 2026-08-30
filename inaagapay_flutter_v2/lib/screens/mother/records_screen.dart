@@ -16,6 +16,7 @@ import '../../widgets/full_screen_image_viewer.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../shared/record_detail_screen.dart';
+import '../../widgets/profile_widgets.dart';
 
 class RecordsScreen extends StatefulWidget {
   const RecordsScreen({super.key});
@@ -55,6 +56,10 @@ class _RecordsScreenState extends State<RecordsScreen>
   final Set<String> _expandedLabInsightAspects = <String>{};
   StateSetter? _recordDetailsModalSetState;
 
+  List<int> _currentPregnancyIds = [];
+  List<Map<String, dynamic>> _pastPregnancies = [];
+  List<Map<String, dynamic>> _pregnancyOutcomes = [];
+
   late final TextEditingController _searchController;
 
   // Pagination — show 5 records at a time
@@ -67,7 +72,7 @@ class _RecordsScreenState extends State<RecordsScreen>
   void initState() {
     super.initState();
     _searchController = TextEditingController();
-    _tabController = TabController(length: 1, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _loadMotherData();
   }
 
@@ -154,8 +159,20 @@ class _RecordsScreenState extends State<RecordsScreen>
 
       final pregnanciesResponse = await SupabaseService.client
           .from('pregnancies')
-          .select('pregnancy_id')
+          .select('pregnancy_id, status, expected_date_of_delivery, last_menstrual_period, fetal_count')
           .eq('mother_id', _motherId!);
+
+      _currentPregnancyIds = [];
+      _pastPregnancies = [];
+      
+      for (final p in pregnanciesResponse) {
+        if (p['status'] == 'ongoing') {
+          final pId = _toInt(p['pregnancy_id']);
+          if (pId != null) _currentPregnancyIds.add(pId);
+        } else {
+          _pastPregnancies.add(Map<String, dynamic>.from(p));
+        }
+      }
 
       if (pregnanciesResponse.isEmpty) {
         setState(() {
@@ -167,6 +184,22 @@ class _RecordsScreenState extends State<RecordsScreen>
             .map<int?>((p) => _toInt(p['pregnancy_id']))
             .whereType<int>()
             .toList();
+            
+        final pastPregnancyIds = _pastPregnancies
+            .map<int?>((p) => _toInt(p['pregnancy_id']))
+            .whereType<int>()
+            .toList();
+            
+        if (pastPregnancyIds.isNotEmpty) {
+          final outcomesResponse = await SupabaseService.client
+              .from('pregnancy_outcomes')
+              .select('*')
+              .inFilter('pregnancy_id', pastPregnancyIds);
+          _pregnancyOutcomes = List<Map<String, dynamic>>.from(outcomesResponse);
+        } else {
+          _pregnancyOutcomes = [];
+        }
+
         await _loadRecordsForPregnancies(pregnancyIds);
       }
     } catch (e) {
@@ -1247,58 +1280,67 @@ class _RecordsScreenState extends State<RecordsScreen>
     }
   }
 
-  List<Map<String, dynamic>> _getFilteredAndSortedRecords() {
+  List<Map<String, dynamic>> _getFilteredAndSortedRecords({
+    List<int>? pregnancyIds,
+    bool includeTdDoses = true,
+  }) {
     List<Map<String, dynamic>> allRecords = [];
 
     for (var checkup in _checkups) {
+      if (pregnancyIds != null && !pregnancyIds.contains(_toInt(checkup['pregnancy_id']))) continue;
       allRecords.add({
         ...checkup,
         'record_type': 'checkup',
-        'record_date': checkup['checkup_datetime'],
+        'record_date': checkup['created_at'] ?? checkup['checkup_datetime'],
       });
     }
 
     for (var ultrasound in _ultrasounds) {
+      if (pregnancyIds != null && !pregnancyIds.contains(_toInt(ultrasound['pregnancy_id']))) continue;
       allRecords.add({
         ...ultrasound,
         'record_type': 'ultrasound',
-        'record_date': ultrasound['ultrasound_date'],
+        'record_date': ultrasound['created_at'] ?? ultrasound['ultrasound_date'],
       });
     }
 
     for (var labTest in _labTests) {
+      if (pregnancyIds != null && !pregnancyIds.contains(_toInt(labTest['pregnancy_id']))) continue;
       allRecords.add({
         ...labTest,
         'record_type': 'labtest',
-        'record_date': labTest['lab_test_date'],
+        'record_date': labTest['created_at'] ?? labTest['lab_test_date'],
       });
     }
 
     for (var vital in _maternalVitals) {
+      if (pregnancyIds != null && !pregnancyIds.contains(_toInt(vital['pregnancy_id']))) continue;
       allRecords.add({
         ...vital,
         'record_type': 'maternal_vital',
-        'record_date': vital['recorded_at'],
+        'record_date': vital['created_at'] ?? vital['recorded_at'],
       });
     }
 
     // Td doses sit in the same list as everything else rather than on a page of
     // their own: a mother looking for "what happened in August" should not have
     // to know which kind of record it was before she can find it.
-    for (final dose in _tdDoses) {
-      // A dose can be on file without a date — a backfilled record from a
-      // card the mother brought in. It still belongs in her history, so it is
-      // carried with a null date and sorted to the end rather than dropped.
-      allRecords.add({
-        'record_type': 'td',
-        'record_date': dose.date?.toIso8601String(),
-        'td_dose_key': dose.doseKey,
-        'td_facility': dose.facilityName,
-        'td_source': dose.source,
-        'td_protection_until': dose.protectionUntil?.toIso8601String(),
-        'td_next_due': dose.nextDueDate?.toIso8601String(),
-        'td_remarks': dose.remarks,
-      });
+    if (includeTdDoses) {
+      for (final dose in _tdDoses) {
+        // A dose can be on file without a date — a backfilled record from a
+        // card the mother brought in. It still belongs in her history, so it is
+        // carried with a null date and sorted to the end rather than dropped.
+        allRecords.add({
+          'record_type': 'td',
+          'record_date': dose.date?.toIso8601String(),
+          'td_dose_key': dose.doseKey,
+          'td_facility': dose.facilityName,
+          'td_source': dose.source,
+          'td_protection_until': dose.protectionUntil?.toIso8601String(),
+          'td_next_due': dose.nextDueDate?.toIso8601String(),
+          'td_remarks': dose.remarks,
+        });
+      }
     }
 
     if (_selectedFilter != 'all') {
@@ -1366,9 +1408,11 @@ class _RecordsScreenState extends State<RecordsScreen>
     }
 
     allRecords.sort((a, b) {
-      final dateA = DateTime.tryParse(a['record_date'] ?? '');
-      final dateB = DateTime.tryParse(b['record_date'] ?? '');
-      if (dateA == null || dateB == null) return 0;
+      final dateA = DateTime.tryParse(a['record_date']?.toString() ?? '');
+      final dateB = DateTime.tryParse(b['record_date']?.toString() ?? '');
+      if (dateA == null && dateB == null) return 0;
+      if (dateA == null) return 1; // undated records always last
+      if (dateB == null) return -1;
       return _sortOrder == 'desc'
           ? dateB.compareTo(dateA)
           : dateA.compareTo(dateB);
@@ -1444,17 +1488,47 @@ class _RecordsScreenState extends State<RecordsScreen>
           );
         }
 
-        final allRecords = _getFilteredAndSortedRecords();
+        final currentRecords = _getFilteredAndSortedRecords(
+          pregnancyIds: _currentPregnancyIds,
+          includeTdDoses: true,
+        );
 
-        return _buildRecordsTab(allRecords);
+        return Column(
+          children: [
+            TabBar(
+              controller: _tabController,
+              dividerColor: Colors.transparent,
+              dividerHeight: 0,
+              labelColor: AppColors.brandPrimary,
+              unselectedLabelColor: AppColors.textSecondary,
+              indicatorColor: AppColors.brandPrimary,
+              indicatorWeight: 2.5,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+              tabs: [
+                Tab(text: _t('Current Records', 'Kasalukuyang Records')),
+                Tab(text: _t('Past Records', 'Nakaraang Records')),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildRecordsTab(currentRecords),
+                  _buildPastRecordsTab(),
+                ],
+              ),
+            ),
+          ],
+        );
       },
     );
   }
 
-  Widget _buildRecordsTab(List<Map<String, dynamic>> allRecords) {
+  Widget _buildRecordsTab(List<Map<String, dynamic>> allRecords, {bool showFilters = true, bool isNested = false}) {
     return Column(
       children: [
-        if (_isUnlinked && !_isUnlinkedBannerDismissed)
+        if (_isUnlinked && !_isUnlinkedBannerDismissed && showFilters)
           Container(
             width: double.infinity,
             margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -1501,154 +1575,168 @@ class _RecordsScreenState extends State<RecordsScreen>
               ],
             ),
           ),
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.white,
+        if (showFilters)
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.white,
+            child: Column(
+              children: [
+                AppInputField(
+                  hintText: _t('Search records...', 'Maghanap ng records...'),
+                  controller: _searchController,
+                  leadingIcon: Icons.search,
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                      _displayCount = _pageSize; // Reset on search change
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: AppDropdownField<String>(
+                        hintText: _t('All Records', 'Lahat ng Records'),
+                        value: _selectedFilter,
+                        options: const [
+                          'all',
+                          'checkup',
+                          'ultrasound',
+                          'labtest',
+                          'td',
+                          'maternal_vital'
+                        ],
+                        displayStringForOption: (value) {
+                          switch (value) {
+                            case 'all':
+                              return _t('All Records', 'Lahat ng Records');
+                            case 'checkup':
+                              return _t('Checkups Only', 'Checkups Lang');
+                            case 'ultrasound':
+                              return _t('Ultrasounds Only', 'Ultrasounds Lang');
+                            case 'labtest':
+                              return _t('Lab Tests Only', 'Lab Tests Lang');
+                            case 'td':
+                              return _t('Td Vaccines Only', 'Td Bakuna Lang');
+                            case 'maternal_vital':
+                              return _t('Self-logged Vitals Only', 'Sariling Vitals Lang');
+                            default:
+                              return '';
+                          }
+                        },
+                        onSelected: (value) {
+                          setState(() {
+                            _selectedFilter = value;
+                            _displayCount = _pageSize; // Reset on filter change
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: AppDropdownField<String>(
+                        hintText: _t('Newest First', 'Pinakabago Muna'),
+                        value: _sortOrder,
+                        options: const ['desc', 'asc'],
+                        displayStringForOption: (value) {
+                          switch (value) {
+                            case 'desc':
+                              return _t('Newest First', 'Pinakabago Muna');
+                            case 'asc':
+                              return _t('Oldest First', 'Pinakaluma Muna');
+                            default:
+                              return '';
+                          }
+                        },
+                        onSelected: (value) {
+                          setState(() {
+                            _sortOrder = value;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        isNested ?
+            _buildListView(allRecords, isNested: true)
+          : Expanded(
+            child: _buildListView(allRecords, isNested: false),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildListView(List<Map<String, dynamic>> allRecords, {required bool isNested}) {
+    if (allRecords.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 32),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              AppInputField(
-                hintText: _t('Search records...', 'Maghanap ng records...'),
-                controller: _searchController,
-                leadingIcon: Icons.search,
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
-                    _displayCount = _pageSize; // Reset on search change
-                  });
-                },
+              Icon(
+                _searchQuery.isNotEmpty
+                    ? Icons.search_off
+                    : Icons.folder_open,
+                size: 64,
+                color: AppColors.textSecondary.withValues(alpha: 0.5),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: AppDropdownField<String>(
-                      hintText: _t('All Records', 'Lahat ng Records'),
-                      value: _selectedFilter,
-                      options: const [
-                        'all',
-                        'checkup',
-                        'ultrasound',
-                        'labtest',
-                        'td',
-                        'maternal_vital'
-                      ],
-                      displayStringForOption: (value) {
-                        switch (value) {
-                          case 'all':
-                            return _t('All Records', 'Lahat ng Records');
-                          case 'checkup':
-                            return _t('Checkups Only', 'Checkups Lang');
-                          case 'ultrasound':
-                            return _t('Ultrasounds Only', 'Ultrasounds Lang');
-                          case 'labtest':
-                            return _t('Lab Tests Only', 'Lab Tests Lang');
-                          case 'td':
-                            return _t('Td Vaccines Only', 'Td Bakuna Lang');
-                          case 'maternal_vital':
-                            return _t('Self-logged Vitals Only', 'Sariling Vitals Lang');
-                          default:
-                            return '';
-                        }
-                      },
-                      onSelected: (value) {
-                        setState(() {
-                          _selectedFilter = value;
-                          _displayCount = _pageSize; // Reset on filter change
-                        });
-                      },
-                    ),
+              const SizedBox(height: 16),
+              Text(
+                _searchQuery.isNotEmpty
+                    ? _t('No matching records found',
+                        'Walang record na tumugma')
+                    : (_isUnlinked
+                        ? _t('Individual Mode (Unlinked)',
+                            'Indibidwal na Mode (Hindi Naka-link)')
+                        : _t('No records available',
+                            'Walang available na records')),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  _searchQuery.isNotEmpty
+                      ? _t('Try adjusting your search or filters',
+                          'Subukang baguhin ang paghahanap o filter')
+                      : (_isUnlinked
+                          ? _t(
+                              'To receive clinical midwife checkups, lab results, and ultrasound records, link your account to a Barangay Health Center (BHC). You can still log journals and add child records here.',
+                              'Upang makatanggap ng klinikal na checkup, lab test at ultrasound, i-link ang iyong account sa BHC. Maaari ka pa ring mag-tala ng journals at anak dito.')
+                          : _t('Your medical records will appear here',
+                              'Lalabas dito ang iyong medical records')),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    height: 1.3,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: AppDropdownField<String>(
-                      hintText: _t('Newest First', 'Pinakabago Muna'),
-                      value: _sortOrder,
-                      options: const ['desc', 'asc'],
-                      displayStringForOption: (value) {
-                        switch (value) {
-                          case 'desc':
-                            return _t('Newest First', 'Pinakabago Muna');
-                          case 'asc':
-                            return _t('Oldest First', 'Pinakaluma Muna');
-                          default:
-                            return '';
-                        }
-                      },
-                      onSelected: (value) {
-                        setState(() {
-                          _sortOrder = value;
-                        });
-                      },
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
         ),
-        Expanded(
-          child: allRecords.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _searchQuery.isNotEmpty
-                            ? Icons.search_off
-                            : Icons.folder_open,
-                        size: 64,
-                        color: AppColors.textSecondary.withValues(alpha: 0.5),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _searchQuery.isNotEmpty
-                            ? _t('No matching records found',
-                                'Walang record na tumugma')
-                            : (_isUnlinked
-                                ? _t('Individual Mode (Unlinked)',
-                                    'Indibidwal na Mode (Hindi Naka-link)')
-                                : _t('No records available',
-                                    'Walang available na records')),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Text(
-                          _searchQuery.isNotEmpty
-                              ? _t('Try adjusting your search or filters',
-                                  'Subukang baguhin ang paghahanap o filter')
-                              : (_isUnlinked
-                                  ? _t(
-                                      'To receive clinical midwife checkups, lab results, and ultrasound records, link your account to a Barangay Health Center (BHC). You can still log journals and add child records here.',
-                                      'Upang makatanggap ng klinikal na checkup, lab test at ultrasound, i-link ang iyong account sa BHC. Maaari ka pa ring mag-tala ng journals at anak dito.')
-                                  : _t('Your medical records will appear here',
-                                      'Lalabas dito ang iyong medical records')),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            height: 1.3,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadMotherData,
-                  color: AppColors.brandPrimary,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: allRecords.length <= _displayCount
-                        ? allRecords.length
-                        : _displayCount + 1, // +1 for the Load More button
-                    itemBuilder: (context, index) {
+      );
+    }
+    
+    Widget listView = ListView.builder(
+      shrinkWrap: isNested,
+      physics: isNested ? const NeverScrollableScrollPhysics() : null,
+      padding: isNested ? EdgeInsets.zero : const EdgeInsets.all(16),
+      itemCount: allRecords.length <= _displayCount || isNested
+          ? allRecords.length
+          : _displayCount + 1, // +1 for the Load More button
+      itemBuilder: (context, index) {
                       // Show "Load More" button at the end
                       if (index == _displayCount &&
                           allRecords.length > _displayCount) {
@@ -1709,9 +1797,8 @@ class _RecordsScreenState extends State<RecordsScreen>
                       final dateCreated = _formatDateTime(
                           record['recorded_at'] ??
                               record['created_at'] ??
-                              record['createdAt'] ??
                               record['checkup_datetime'] ??
-                              (isTd ? record['record_date'] : null));
+                              record['record_date']);
 
                       final titleText = isCheckup
                           ? _t('Prenatal Checkup', 'Prenatal Checkup')
@@ -2361,10 +2448,158 @@ class _RecordsScreenState extends State<RecordsScreen>
                       ),
                     );
                     },
-                  ),
-                ),
+    );
+
+    if (isNested) {
+      return listView;
+    }
+    return RefreshIndicator(
+      onRefresh: _loadMotherData,
+      color: AppColors.brandPrimary,
+      child: listView,
+    );
+  }
+
+  String _formatOutcome(String? outcome) {
+    if (outcome == null) return '-';
+    switch (outcome.toLowerCase()) {
+      case 'live_birth':
+        return 'Live Birth';
+      case 'stillbirth':
+        return 'Stillbirth';
+      case 'miscarriage':
+        return 'Miscarriage';
+      case 'abortion':
+        return 'Abortion';
+      case 'ectopic':
+        return 'Ectopic';
+      default:
+        return outcome;
+    }
+  }
+
+  Widget _buildOutcomeBadge(String outcomeStr) {
+    final lower = outcomeStr.toLowerCase();
+    final isLiveBirth = lower.contains('live birth') || lower.contains('live_birth');
+
+    final bgColor = isLiveBirth
+        ? const Color(0xFFE6F4EA)
+        : const Color(0xFFF1F3F4);
+
+    final textColor = isLiveBirth
+        ? const Color(0xFF137333)
+        : const Color(0xFF5F6368);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: textColor.withValues(alpha: 0.2), width: 1),
+      ),
+      child: Text(
+        outcomeStr,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: textColor,
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildPastRecordsTab() {
+    if (_pastPregnancies.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  color: AppColors.bgSecondary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.history_edu_rounded,
+                    size: 56, color: AppColors.brandPrimary),
+              ),
+              const SizedBox(height: 20),
+              Headline(text: _t('No Past Pregnancies', 'Walang Nakaraang Pagbubuntis')),
+              const SizedBox(height: 8),
+              Text(
+                _t('Past pregnancy records will appear here', 'Lalabas dito ang mga nakaraang record'),
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final sortedPast = List<Map<String, dynamic>>.from(_pastPregnancies);
+    sortedPast.sort((a, b) {
+      final da = DateTime.tryParse(a['expected_date_of_delivery']?.toString() ?? '');
+      final db = DateTime.tryParse(b['expected_date_of_delivery']?.toString() ?? '');
+      if (da == null && db == null) return (_toInt(b['pregnancy_id']) ?? 0).compareTo(_toInt(a['pregnancy_id']) ?? 0);
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return db.compareTo(da);
+    });
+
+    return RefreshIndicator(
+      onRefresh: _loadMotherData,
+      color: AppColors.brandPrimary,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: sortedPast.length,
+        itemBuilder: (context, index) {
+          final p = sortedPast[index];
+          final pregnancyId = _toInt(p['pregnancy_id']);
+          
+          final outcomesForPregnancy = _pregnancyOutcomes
+              .where((o) => _toInt(o['pregnancy_id']) == pregnancyId)
+              .toList();
+              
+          String primaryOutcomeStr = 'Past Pregnancy';
+          if (outcomesForPregnancy.isNotEmpty) {
+            primaryOutcomeStr = outcomesForPregnancy
+                .map((o) => _formatOutcome(o['outcome'] as String?))
+                .join(', ');
+          } else {
+             if (p['status'] != null && p['status'] != 'ongoing') {
+               primaryOutcomeStr = p['status'];
+             }
+          }
+
+          final records = _getFilteredAndSortedRecords(
+            pregnancyIds: pregnancyId != null ? [pregnancyId] : [],
+            includeTdDoses: false,
+          );
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 20),
+            child: ProfileCardSection(
+              title: 'PAST PREGNANCY #${sortedPast.length - index}',
+              icon: Icons.history_edu_rounded,
+              actionButton: _buildOutcomeBadge(primaryOutcomeStr),
+              children: [
+                if (records.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      _t('No records found for this pregnancy.', 'Walang nakitang record para sa pagbubuntis na ito.'),
+                      style: const TextStyle(color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+                    ),
+                  )
+                else
+                  _buildListView(records, isNested: true),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 

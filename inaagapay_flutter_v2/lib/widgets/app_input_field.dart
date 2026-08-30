@@ -56,10 +56,16 @@ class _AppInputFieldState extends State<AppInputField> {
     }
 
     return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
+      onEnter: (_) {
+        if (mounted) setState(() => _isHovered = true);
+      },
+      onExit: (_) {
+        if (mounted) setState(() => _isHovered = false);
+      },
       child: Focus(
-        onFocusChange: (focused) => setState(() => _isFocused = focused),
+        onFocusChange: (focused) {
+          if (mounted) setState(() => _isFocused = focused);
+        },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
