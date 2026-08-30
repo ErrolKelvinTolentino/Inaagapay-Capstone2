@@ -25,22 +25,22 @@ class StatusIndicator extends StatelessWidget {
     final _StatusStyle style = _statusStyle(status);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: style.backgroundColor,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (style.icon != null) ...[
-            Icon(style.icon, size: 14, color: Colors.white),
-            const SizedBox(width: 6),
+            Icon(style.icon, size: 12, color: Colors.white),
+            const SizedBox(width: 4),
           ],
           Text(
             style.label,
             style: const TextStyle(
-              fontSize: 13,
+              fontSize: 11.5,
               fontWeight: FontWeight.w600,
               color: Colors.white,
             ),

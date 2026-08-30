@@ -80,10 +80,6 @@ class _AddGrowthStep1State extends State<AddGrowthStep1> {
   /// a failure names its cause instead of being a generic "try again".
   String? _lastSaveError;
 
-  /// True when the fields were seeded from the previous visit's measurements.
-  /// Drives the reminder to replace them with today's readings.
-  bool _prefilledFromPrevious = false;
-
   @override
   void initState() {
     super.initState();
@@ -144,8 +140,6 @@ class _AddGrowthStep1State extends State<AddGrowthStep1> {
         if (lastWeight != null && lastWeight > 0) {
           _weightController.text = lastWeight.toStringAsFixed(1);
         }
-        _prefilledFromPrevious =
-            _heightController.text.isNotEmpty || _weightController.text.isNotEmpty;
       }
 
       if (mounted) {
@@ -911,7 +905,45 @@ $recordsSummary
     super.dispose();
   }
 
+  String _formatAge(DateTime? birthdate) {
+    if (birthdate == null) return '$_ageInWeeks weeks old';
+    final now = DateTime.now();
+    int years = now.year - birthdate.year;
+    int months = now.month - birthdate.month;
+    int days = now.day - birthdate.day;
+
+    if (days < 0) {
+      months -= 1;
+      final prevMonthDate = DateTime(now.year, now.month, 0);
+      days += prevMonthDate.day;
+    }
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+
+    if (years > 0) {
+      final monthPart = months > 0 ? ', $months month${months != 1 ? 's' : ''}' : '';
+      return '$years year${years != 1 ? 's' : ''}$monthPart old';
+    } else if (months > 0) {
+      final weeks = days ~/ 7;
+      final weekPart = weeks > 0 ? ', $weeks week${weeks != 1 ? 's' : ''}' : '';
+      return '$months month${months != 1 ? 's' : ''}$weekPart old';
+    } else {
+      if (days >= 7) {
+        final weeks = days ~/ 7;
+        return '$weeks week${weeks != 1 ? 's' : ''} old';
+      } else if (days > 0) {
+        return '$days day${days != 1 ? 's' : ''} old';
+      } else {
+        return 'Newborn';
+      }
+    }
+  }
+
   Widget _stepTitle() {
+    if (_step == 0) return const SizedBox.shrink();
+
     const labels = [
       'Growth Record',
       'AI Growth Review',
@@ -960,7 +992,7 @@ $recordsSummary
     final childName =
         '${_childData?['first_name'] ?? ''} ${_childData?['last_name'] ?? ''}'
             .trim();
-    final ageText = '$_ageInWeeks weeks old';
+    final ageText = _formatAge(_birthdate);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1076,41 +1108,6 @@ $recordsSummary
           ),
         ],
 
-        if (_prefilledFromPrevious) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.warning.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.warning.withValues(alpha: 0.3),
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.edit_note_rounded,
-                    size: 16, color: AppColors.warning),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'These are the last recorded measurements, filled in to save typing. '
-                    'Replace them with today\'s readings before saving.',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      height: 1.4,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-
-
-
         const SizedBox(height: 16),
 
         // BMI Display
@@ -1193,16 +1190,16 @@ $recordsSummary
               if (_bmiZScore != null && _bmiController.text.isNotEmpty) ...[
                 if (_getBmiExplanation() != null) ...[
                   const SizedBox(height: 12),
-                  Divider(height: 1, color: _bmiCategoryColor.withValues(alpha: 0.2)),
+                  Divider(height: 1, color: AppColors.borderPrimary),
                   const SizedBox(height: 10),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
                       _getBmiExplanation()!,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: _bmiCategoryColor,
+                        color: Color(0xFF5A5A5A),
                         height: 1.4,
                       ),
                     ),
@@ -1733,10 +1730,11 @@ $recordsSummary
                         const AlwaysStoppedAnimation<Color>(AppColors.brandPrimary),
                     minHeight: 3,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                    child: _stepTitle(),
-                  ),
+                  if (_step > 0)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                      child: _stepTitle(),
+                    ),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.symmetric(horizontal: 20),

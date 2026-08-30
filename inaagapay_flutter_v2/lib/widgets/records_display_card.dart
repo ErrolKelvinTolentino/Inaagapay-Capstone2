@@ -107,6 +107,53 @@ class RecordItem {
   });
 
   Widget build() {
+    if (trailingWidget != null) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 28,
+                child: Icon(leadingIcon, size: 18, color: AppColors.brandPrimary),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      subLabel != null && subLabel!.isNotEmpty
+                          ? '$label - $subLabel'
+                          : label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              trailingWidget!,
+            ],
+          ),
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: Padding(
@@ -156,10 +203,6 @@ class RecordItem {
                 textAlign: TextAlign.right,
               ),
             ),
-            if (trailingWidget != null) ...[
-              const SizedBox(width: 8),
-              trailingWidget!,
-            ],
           ],
         ),
       ),

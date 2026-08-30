@@ -152,35 +152,65 @@ class StockStatusCard extends StatelessWidget {
 
     return Container(
       margin: margin ?? const EdgeInsets.only(top: 8, bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: c.bg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.border),
+        color: tone == StockTone.ready
+            ? AppColors.brandPrimary.withValues(alpha: 0.04)
+            : c.bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: tone == StockTone.ready
+              ? AppColors.brandPrimary.withValues(alpha: 0.2)
+              : c.border,
+        ),
       ),
       child: Row(
         children: [
-          Icon(resolvedIcon, size: 16, color: c.fg),
-          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: tone == StockTone.ready
+                  ? AppColors.brandPrimary.withValues(alpha: 0.1)
+                  : c.fg.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              resolvedIcon,
+              size: 16,
+              color: tone == StockTone.ready ? AppColors.brandPrimary : c.fg,
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: c.fg,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF5A5A5A),
                 height: 1.35,
               ),
             ),
           ),
           if (trailing != null) ...[
             const SizedBox(width: 8),
-            Text(
-              trailing!,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: c.fg.withValues(alpha: 0.85),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: tone == StockTone.ready
+                    ? AppColors.brandPrimary.withValues(alpha: 0.1)
+                    : c.fg.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                trailing!,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: tone == StockTone.ready
+                      ? AppColors.brandPrimary
+                      : c.fg,
+                ),
               ),
             ),
           ],

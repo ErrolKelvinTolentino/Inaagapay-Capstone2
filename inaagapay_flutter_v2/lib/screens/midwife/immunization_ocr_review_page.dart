@@ -10,6 +10,7 @@ import '../../widgets/secondary_header.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/dialog_box.dart';
 import '../../widgets/confirmation_dialog_box.dart';
+import '../../widgets/branded_date_picker.dart';
 import '../../services/sms_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/auth_storage.dart';
@@ -151,7 +152,7 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
   }
 
   Future<void> _selectDate(ReviewItem item) async {
-    final picked = await showDatePicker(
+    final picked = await showBrandedDatePicker(
       context: context,
       initialDate: item.vaccinationDate ?? DateTime.now(),
       firstDate: DateTime(2000),
@@ -163,6 +164,160 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
         item.vaccinationDate = picked;
       });
     }
+  }
+
+  void _showVaccinePickerSheet(ReviewItem item) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final filtered = widget.allVaccines.where((v) {
+              final name = (v['vaccine_name']?.toString() ?? '').toLowerCase();
+              final dose = (v['dose_number']?.toString() ?? '');
+              final q = searchQuery.toLowerCase().trim();
+              if (q.isEmpty) return true;
+              return name.contains(q) || dose.contains(q);
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.72,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.borderPrimary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Select Vaccine',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Choose the corresponding vaccine record in the system',
+                    style:
+                        TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    onChanged: (q) => setSheetState(() => searchQuery = q),
+                    decoration: InputDecoration(
+                      hintText: 'Search vaccine...',
+                      hintStyle: const TextStyle(
+                          fontSize: 13, color: AppColors.textSecondary),
+                      prefixIcon: const Icon(Icons.search,
+                          color: AppColors.brandAccent, size: 20),
+                      filled: true,
+                      fillColor: AppColors.bgSecondary,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide:
+                            const BorderSide(color: AppColors.borderPrimary),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide:
+                            const BorderSide(color: AppColors.borderPrimary),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(
+                            color: AppColors.brandPrimary, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const Divider(
+                          height: 1, color: AppColors.borderPrimary),
+                      itemBuilder: (ctx, idx) {
+                        final v = filtered[idx];
+                        final id = v['vaccine_id'] as int;
+                        final name = v['vaccine_name']?.toString() ?? '';
+                        final dose = v['dose_number']?.toString() ?? '';
+                        final isSelected = item.matchedVaccineId == id;
+                        final isAlreadyTaken =
+                            widget.takenVaccineIds.contains(id);
+
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.brandPrimary
+                                      .withValues(alpha: 0.15)
+                                  : AppColors.brandPrimary
+                                      .withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.vaccines_outlined,
+                              color: AppColors.brandPrimary,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            '$name (Dose $dose)',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          subtitle: isAlreadyTaken
+                              ? const Text(
+                                  'Already recorded for this child',
+                                  style: TextStyle(
+                                      fontSize: 11.5, color: AppColors.success),
+                                )
+                              : null,
+                          trailing: isSelected
+                              ? const Icon(Icons.check_circle_rounded,
+                                  color: AppColors.brandPrimary, size: 22)
+                              : const Icon(Icons.chevron_right_rounded,
+                                  color: AppColors.textSecondary),
+                          onTap: () {
+                            setState(() {
+                              item.matchedVaccineId = id;
+                              item.alreadyTaken = isAlreadyTaken;
+                            });
+                            Navigator.pop(ctx);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   String _getRecommendedAgeText(ReviewItem item) {
@@ -484,21 +639,29 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
                 children: [
                   // Instruction Card
                   Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    color: AppColors.brandPrimary.withValues(alpha: 0.08),
+                    margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: AppColors.brandPrimary.withValues(alpha: 0.15),
+                      ),
+                    ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
-                        Icon(Icons.info_outline, color: AppColors.brandPrimary, size: 20),
+                        Icon(Icons.info_outline_rounded,
+                            color: AppColors.brandPrimary, size: 18),
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             'Below are the vaccines detected from the card photo. Please review the vaccine matches, dates, and select which ones to record.',
                             style: TextStyle(
                               fontSize: 12,
-                              color: AppColors.inputText,
-                              height: 1.45,
+                              color: AppColors.textSecondary,
+                              height: 1.4,
                             ),
                           ),
                         ),
@@ -592,39 +755,47 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
 
   Widget _buildSectionHeader(String title, String disclaimer, Color color, {IconData? icon}) {
     return Padding(
-      padding: const EdgeInsets.only(top: 16, bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, color: color, size: 18),
-                const SizedBox(width: 6),
+      padding: const EdgeInsets.only(top: 14, bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, color: color, size: 16),
+                  const SizedBox(width: 6),
+                ],
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                ),
               ],
+            ),
+            if (disclaimer.isNotEmpty) ...[
+              const SizedBox(height: 3),
               Text(
-                title.toUpperCase(),
+                disclaimer,
                 style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                  letterSpacing: 0.5,
+                  fontSize: 11,
+                  color: color.withValues(alpha: 0.85),
+                  height: 1.3,
                 ),
               ),
             ],
-          ),
-          if (disclaimer.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              disclaimer,
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textSecondary,
-                height: 1.3,
-              ),
-            ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -632,21 +803,21 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
   Widget _buildStatusTag(ReviewItem item) {
     if (item.alreadyTaken) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
         decoration: BoxDecoration(
-          color: AppColors.success.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(8),
+          color: AppColors.success.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle_rounded, color: AppColors.success, size: 10),
+            Icon(Icons.check_circle_rounded, color: AppColors.success, size: 11),
             SizedBox(width: 4),
             Text(
               'Already recorded',
               style: TextStyle(
-                fontSize: 8,
-                fontWeight: FontWeight.w700,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
                 color: AppColors.success,
               ),
             ),
@@ -659,16 +830,16 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
         item.vaccinationDate != null &&
         item.vaccinationDate!.isBefore(widget.childBirthdate!)) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
         decoration: BoxDecoration(
-          color: AppColors.error.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
+          color: AppColors.error.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: const Text(
           'Invalid Date',
           style: TextStyle(
-            fontSize: 8,
-            fontWeight: FontWeight.w700,
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
             color: AppColors.error,
           ),
         ),
@@ -679,32 +850,32 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
       final warningMsg = _getAgeValidationWarning(item);
       if (warningMsg != null) {
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
           decoration: BoxDecoration(
-            color: AppColors.warning.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+            color: AppColors.warning.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: const Text(
             'Outside Rec. Age',
             style: TextStyle(
-              fontSize: 8,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFFB78103),
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF9A5B18),
             ),
           ),
         );
       } else {
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
           decoration: BoxDecoration(
-            color: AppColors.success.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+            color: AppColors.success.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: const Text(
             'Schedule Match',
             style: TextStyle(
-              fontSize: 8,
-              fontWeight: FontWeight.w700,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
               color: AppColors.success,
             ),
           ),
@@ -714,16 +885,16 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
 
     if (item.matchedVaccineId == null) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
         decoration: BoxDecoration(
-          color: Colors.grey.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
+          color: Colors.grey.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: const Text(
           'Unmatched',
           style: TextStyle(
-            fontSize: 8,
-            fontWeight: FontWeight.w700,
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
             color: AppColors.textSecondary,
           ),
         ),
@@ -736,24 +907,17 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
   Widget _buildReviewCard(ReviewItem item) {
     final warningMsg = _getAgeValidationWarning(item);
 
-    // Map system dropdown values using all vaccines in the system
-    final optionList = widget.allVaccines.map((v) {
-      final id = v['vaccine_id'] as int;
-      final name = v['vaccine_name']?.toString() ?? '';
-      final dose = v['dose_number']?.toString() ?? '';
-      final notes = v['notes']?.toString() ?? '';
-      final isAlreadyTaken = widget.takenVaccineIds.contains(id);
-
-      final parts = <String>['$name (Dose $dose)'];
-      if (notes.isNotEmpty) parts.add(notes);
-      if (isAlreadyTaken) parts.add('(Already Recorded)');
-
-      return MapEntry(id, parts.join(' - '));
-    }).toList();
+    final selectedVaccine = widget.allVaccines.firstWhere(
+      (v) => v['vaccine_id'] == item.matchedVaccineId,
+      orElse: () => <String, dynamic>{},
+    );
+    final selectedVaccineText = selectedVaccine.isNotEmpty
+        ? '${selectedVaccine['vaccine_name']} (Dose ${selectedVaccine['dose_number']})'
+        : 'Select vaccine match *';
 
     final dateText = item.vaccinationDate != null
         ? DateFormat('yyyy-MM-dd').format(item.vaccinationDate!)
-        : 'Select Date';
+        : 'Select Date *';
 
     return Opacity(
       opacity: item.isSelected ? 1.0 : 0.6,
@@ -797,35 +961,36 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
                   },
                 ),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.psychology_alt_rounded,
-                              color: AppColors.brandPrimary, size: 14),
-                          const SizedBox(width: 4),
-                          const Text(
-                            'Extracted Raw Info:',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${item.vaccineNameRaw} (Dose ${item.doseNumberRaw})',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
                             ),
-                          ),
-                          const Spacer(),
-                          _buildStatusTag(item),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '"${item.vaccineNameRaw}" (Dose ${item.doseNumberRaw}) • Date: ${item.dateRaw}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.inputText,
+                            if (item.dateRaw.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Date on card: ${item.dateRaw}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      _buildStatusTag(item),
                     ],
                   ),
                 ),
@@ -833,48 +998,51 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
             ),
 
             if (item.isSelected) ...[
-              const SizedBox(height: 12),
-              const Divider(height: 1),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
 
-              // Match Dropdown
-              const Text(
-                'Map to System Vaccine *',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.bgSecondary,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.borderPrimary),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<int>(
-                    isExpanded: true,
-                    hint: const Text('Select vaccine match'),
-                    value: optionList.any((opt) => opt.key == item.matchedVaccineId) ? item.matchedVaccineId : null,
-                    onChanged: (id) {
-                      setState(() {
-                        item.matchedVaccineId = id;
-                        // check already taken
-                        item.alreadyTaken = id != null && widget.takenVaccineIds.contains(id);
-                      });
-                    },
-                    items: optionList.map((opt) {
-                      return DropdownMenuItem<int>(
-                        value: opt.key,
+              // Match Dropdown Input Field
+              GestureDetector(
+                onTap: () => _showVaccinePickerSheet(item),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: item.matchedVaccineId != null
+                          ? AppColors.borderPrimary
+                          : AppColors.error.withValues(alpha: 0.5),
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.vaccines_outlined,
+                          color: AppColors.brandAccent, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
                         child: Text(
-                          opt.value,
-                          style: const TextStyle(fontSize: 12.5),
+                          selectedVaccineText,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            color: item.matchedVaccineId != null
+                                ? AppColors.textPrimary
+                                : AppColors.textSecondary,
+                          ),
                         ),
-                      );
-                    }).toList(),
+                      ),
+                      const Icon(Icons.keyboard_arrow_down_rounded,
+                          color: AppColors.textSecondary),
+                    ],
                   ),
                 ),
               ),
@@ -887,93 +1055,98 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
                 children: [
                   // Date Picker
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Vaccination Date *',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        GestureDetector(
-                          onTap: () => _selectDate(item),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                            decoration: BoxDecoration(
-                              color: AppColors.bgSecondary,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppColors.borderPrimary),
+                    child: GestureDetector(
+                      onTap: () => _selectDate(item),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                              color: AppColors.borderPrimary, width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.03),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_today_rounded,
-                                    color: AppColors.brandPrimary, size: 16),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    dateText,
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      color: item.vaccinationDate != null
-                                          ? AppColors.textPrimary
-                                          : AppColors.textSecondary,
-                                    ),
-                                  ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.calendar_month_rounded,
+                                color: AppColors.brandAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                dateText,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: item.vaccinationDate != null
+                                      ? AppColors.textPrimary
+                                      : AppColors.textSecondary,
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
 
                   // Remarks
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Remarks (optional)',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textSecondary,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                            color: AppColors.borderPrimary, width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          decoration: BoxDecoration(
-                            color: AppColors.bgSecondary,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.borderPrimary),
-                          ),
-                          child: TextField(
-                            onChanged: (val) {
-                              item.remarks = val;
-                            },
-                            controller: TextEditingController.fromValue(
-                              TextEditingValue(
-                                text: item.remarks,
-                                selection: TextSelection.collapsed(offset: item.remarks.length),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.notes_rounded,
+                              color: AppColors.brandAccent, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              onChanged: (val) {
+                                item.remarks = val;
+                              },
+                              controller: TextEditingController.fromValue(
+                                TextEditingValue(
+                                  text: item.remarks,
+                                  selection: TextSelection.collapsed(
+                                      offset: item.remarks.length),
+                                ),
+                              ),
+                              style: const TextStyle(
+                                  fontSize: 13, color: AppColors.textPrimary),
+                              decoration: const InputDecoration(
+                                hintText: 'Remarks',
+                                hintStyle: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.textSecondary),
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding:
+                                    EdgeInsets.symmetric(vertical: 14),
                               ),
                             ),
-                            style: const TextStyle(fontSize: 12.5),
-                            decoration: const InputDecoration(
-                              hintText: 'Add remarks',
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(vertical: 14),
-                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -981,7 +1154,8 @@ class _ImmunizationOcrReviewPageState extends State<ImmunizationOcrReviewPage> {
               if (warningMsg != null) ...[
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: warningMsg.contains('birthdate')
                         ? AppColors.error.withValues(alpha: 0.1)

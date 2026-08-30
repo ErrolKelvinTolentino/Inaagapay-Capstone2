@@ -16,7 +16,6 @@ import '../../widgets/confirmation_dialog_box.dart';
 import '../../services/groq_service.dart';
 import '../../services/immunization_schedule.dart';
 import '../../services/sms_service.dart';
-import '../../services/notification_service.dart';
 import 'add_immunization_choice.dart';
 import 'immunization_ocr_review_page.dart';
 import '../../services/auth_storage.dart';
@@ -76,7 +75,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
   // ── Multi-dose & Open Vial Tracking ────────────────────────────────────────
   int _dosesPerUnit = 1;
   int _openVialShelfHours = 6;
-  int _sealedVialsCount = 0;
   Map<String, dynamic>? _activeOpenVialBatch;
   Map<String, dynamic>? _nextSealedBatch;
   bool _isOpenVialExpired = false;
@@ -128,46 +126,111 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
   Future<ImageSource?> _showOcrSourcePicker() {
     return showModalBottomSheet<ImageSource>(
       context: context,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-                width: 40,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                    color: AppColors.borderPrimary,
-                    borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 16),
-            const Text('Scan Card',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 4),
-            const Text('Choose an image source to extract immunization records',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: const CircleAvatar(
-                  backgroundColor: Color(0x1AFF68A5),
-                  child: Icon(Icons.camera_alt_outlined,
-                      color: AppColors.brandPrimary)),
-              title: const Text('Camera'),
-              subtitle: const Text('Take a photo of the card'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const CircleAvatar(
-                  backgroundColor: Color(0x1AFF68A5),
-                  child: Icon(Icons.photo_library_outlined,
-                      color: AppColors.brandPrimary)),
-              title: const Text('Gallery'),
-              subtitle: const Text('Choose an existing photo'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-            const SizedBox(height: 8),
-          ],
+                  color: AppColors.borderPrimary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Scan Card',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Choose an image source to extract immunization records',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.borderPrimary),
+                ),
+                child: ListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.camera_alt_outlined,
+                        color: AppColors.brandPrimary, size: 22),
+                  ),
+                  title: const Text(
+                    'Camera',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                  subtitle: const Text(
+                    'Take a photo of the card',
+                    style:
+                        TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.textSecondary),
+                  onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.borderPrimary),
+                ),
+                child: ListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.photo_library_outlined,
+                        color: AppColors.brandPrimary, size: 22),
+                  ),
+                  title: const Text(
+                    'Gallery',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                  subtitle: const Text(
+                    'Choose an existing photo',
+                    style:
+                        TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.textSecondary),
+                  onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -285,7 +348,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
                             ),
                             Text(
                               dialogState == 'loading'
-                                  ? 'Uploading and analysing with Groq...'
+                                  ? 'Uploading and analyzing immunization card...'
                                   : 'An error occurred during scanning',
                               style: const TextStyle(color: Colors.white70, fontSize: 11),
                             ),
@@ -408,7 +471,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           const CircularProgressIndicator(color: AppColors.brandPrimary, strokeWidth: 3),
           const SizedBox(height: 16),
           const Text(
-            'Analysing with Groq AI...',
+            'Analyzing image...',
             style: TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 14,
@@ -422,7 +485,7 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           ),
           const SizedBox(height: 20),
           _scanStep(number: 1, label: 'Image uploaded', done: true),
-          _scanStep(number: 2, label: 'Groq reading document...', loading: true),
+          _scanStep(number: 2, label: 'Reading document data...', loading: true),
           _scanStep(number: 3, label: 'Mapping vaccine matches'),
         ],
       );
@@ -610,7 +673,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           setState(() {
             _bhcStockCount = 0;
             _stockTracked = false;
-            _sealedVialsCount = 0;
             _activeOpenVialBatch = null;
             _nextSealedBatch = null;
             _isOpenVialExpired = false;
@@ -631,7 +693,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           setState(() {
             _bhcStockCount = 0;
             _stockTracked = false;
-            _sealedVialsCount = 0;
             _activeOpenVialBatch = null;
             _nextSealedBatch = null;
             _isOpenVialExpired = false;
@@ -671,7 +732,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           setState(() {
             _bhcStockCount = 0;
             _stockTracked = false;
-            _sealedVialsCount = 0;
             _activeOpenVialBatch = null;
             _nextSealedBatch = null;
             _isOpenVialExpired = false;
@@ -761,7 +821,6 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           _stockTracked = true;
           _dosesPerUnit = dosesPerUnit;
           _openVialShelfHours = shelfHours;
-          _sealedVialsCount = sealedVials;
           _activeOpenVialBatch = activeOpenVial;
           _nextSealedBatch = nextSealed;
           _isOpenVialExpired = openVialExpired;
@@ -777,28 +836,12 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           // reports a shortage in the outcome dialog if there is one.
           _bhcStockCount = 0;
           _stockTracked = false;
-          _sealedVialsCount = 0;
           _activeOpenVialBatch = null;
           _nextSealedBatch = null;
           _isOpenVialExpired = false;
           _bhcStockLoading = false;
         });
       }
-    }
-  }
-
-  String _formatVialOpened(dynamic openedAtVal) {
-    if (openedAtVal == null) return 'Recently';
-    final openedAt = DateTime.tryParse(openedAtVal.toString());
-    if (openedAt == null) return 'Recently';
-    final diff = DateTime.now().difference(openedAt);
-    if (diff.inMinutes < 60) {
-      final mins = diff.inMinutes.clamp(1, 60);
-      return '$mins min${mins == 1 ? '' : 's'} ago';
-    } else if (diff.inHours < 24) {
-      return '${diff.inHours} hr${diff.inHours == 1 ? '' : 's'} ago';
-    } else {
-      return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
     }
   }
 
@@ -1788,23 +1831,14 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     }
     final discard = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Discard changes?'),
-        content: const Text(
-            'You have unsaved immunization data. Are you sure you want to go back?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Discard',
-              style: TextStyle(color: AppColors.error),
-            ),
-          ),
-        ],
+      builder: (_) => ConfirmationDialogBox(
+        title: 'Discard changes?',
+        subtitle:
+            'You have unsaved immunization data. Are you sure you want to go back?',
+        cancelText: 'Cancel',
+        confirmText: 'Discard',
+        onCancel: () => Navigator.pop(context, false),
+        onConfirm: () => Navigator.pop(context, true),
       ),
     );
     if (discard == true && mounted) {
@@ -1844,20 +1878,14 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
     }
 
     final isMultiDose = _dosesPerUnit > 1;
-    final sealedLabel =
-        _sealedVialsCount > 0 ? '+$_sealedVialsCount sealed' : null;
 
     // An open vial is drawn down before any seal is broken, so when there is
     // one it is the only fact that matters.
     if (isMultiDose && _activeOpenVialBatch != null && !_isOpenVialExpired) {
       final openDoses =
           (_activeOpenVialBatch!['doses_remaining_in_open_vial'] as num?)?.toInt() ?? 0;
-      final batchNumber = _activeOpenVialBatch!['batch_number']?.toString();
-      final batchSuffix = batchNumber != null ? ' (Batch #$batchNumber)' : '';
+      final batchNumber = _activeOpenVialBatch!['batch_number']?.toString() ?? 'N/A';
 
-      // A reconstituted BCG vial lasts six hours. Knowing the vial is nearly out
-      // of time is the difference between using the rest of it this session and
-      // throwing it away, so it is worth the line — but only near the end.
       final openedAt =
           DateTime.tryParse(_activeOpenVialBatch!['vial_opened_at']?.toString() ?? '');
       final hoursOpen =
@@ -1868,43 +1896,33 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
 
       return StockStatusCard(
         tone: nearingLimit ? StockTone.caution : StockTone.ready,
-        icon: Icons.colorize_rounded,
-        trailing: sealedLabel,
-        message: nearingLimit
-            ? 'The open vial$batchSuffix was opened ${_formatVialOpened(openedAt)} '
-                'and expires after $_openVialShelfHours h. This dose leaves '
-                '${openDoses - 1} in it — use them soon.'
-            : 'This dose comes from the open vial$batchSuffix — '
-                '${openDoses - 1} of $_dosesPerUnit will be left in it.',
+        icon: Icons.inventory_2_outlined,
+        message: 'Batch #$batchNumber ($openDoses doses)',
       );
     }
 
     // The expired vial is written off by the RPC before the dose is drawn.
     if (isMultiDose && _isOpenVialExpired) {
-      final nextBatchNum = _nextSealedBatch?['batch_number']?.toString();
+      final nextBatchNum = _nextSealedBatch?['batch_number']?.toString() ?? 'N/A';
       return StockStatusCard(
         tone: StockTone.caution,
-        trailing: sealedLabel,
-        message: 'The previous open vial expired and will be discarded. A fresh '
-            'vial${nextBatchNum != null ? ' from Batch #$nextBatchNum' : ''} '
-            'will be opened for this dose.',
+        icon: Icons.inventory_2_outlined,
+        message: 'Batch #$nextBatchNum ($_bhcStockCount doses)',
       );
     }
 
     if (isMultiDose) {
-      final nextBatchNum = _nextSealedBatch?['batch_number']?.toString();
+      final nextBatchNum = _nextSealedBatch?['batch_number']?.toString() ?? 'N/A';
       return StockStatusCard(
-        trailing: '$_bhcStockCount doses',
-        message: 'A sealed vial'
-            '${nextBatchNum != null ? ' from Batch #$nextBatchNum' : ''} will be '
-            'opened — ${_dosesPerUnit - 1} doses stay open afterwards.',
+        icon: Icons.inventory_2_outlined,
+        message: 'Batch #$nextBatchNum ($_bhcStockCount doses)',
       );
     }
 
-    final singleBatchNum = _nextSealedBatch?['batch_number']?.toString();
+    final singleBatchNum = _nextSealedBatch?['batch_number']?.toString() ?? 'N/A';
     return StockStatusCard(
-      message: '$_bhcStockCount unit${_bhcStockCount == 1 ? '' : 's'} in stock'
-          '${singleBatchNum != null ? ' (Batch #$singleBatchNum)' : ''}.',
+      icon: Icons.inventory_2_outlined,
+      message: 'Batch #$singleBatchNum ($_bhcStockCount unit${_bhcStockCount == 1 ? '' : 's'})',
     );
   }
 
@@ -1926,14 +1944,16 @@ class _AddImmunizationPageState extends State<AddImmunizationPage> {
           child: SecondaryHeader(
             title: 'Add Immunization',
             onBack: _confirmDiscardAndPop,
-            trailing: TextButton.icon(
-              onPressed: _startOcrFlow,
-              icon: const Icon(Icons.document_scanner_outlined, size: 18),
-              label: const Text('Scan'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.brandPrimary,
-              ),
-            ),
+            trailing: _isOutside
+                ? TextButton.icon(
+                    onPressed: _startOcrFlow,
+                    icon: const Icon(Icons.document_scanner_outlined, size: 18),
+                    label: const Text('Scan'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.brandPrimary,
+                    ),
+                  )
+                : null,
           ),
         ),
         body: SafeArea(
