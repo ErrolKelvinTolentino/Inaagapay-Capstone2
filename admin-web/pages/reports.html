@@ -159,6 +159,92 @@
       .badge-med-risk { background: #fff3e0; color: #e65100; font-weight: 700; }
       .badge-low-risk { background: #e8f5e9; color: #2e7d32; font-weight: 700; }
 
+      /* ── Vaccination drive analytics ── */
+      .drive-filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 12px;
+        padding: 14px 16px;
+        background: var(--bg-secondary);
+        border: 1px dashed var(--border-primary);
+        border-radius: var(--radius-card-sm);
+        margin-bottom: 18px;
+      }
+
+      .drive-filter-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+      .drive-filter-field > label {
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: var(--text-secondary);
+      }
+      .drive-filter-field .form-select,
+      .drive-filter-field .form-control { height: 36px; border-radius: 8px; font-size: 12.5px; width: 100%; }
+
+      .drive-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .drive-kpi {
+        padding: 14px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-card-sm);
+        text-align: center;
+      }
+      .drive-kpi-value { font-size: 22px; font-weight: 700; line-height: 1.15; }
+      .drive-kpi-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-top: 3px;
+      }
+
+      .drive-charts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      @media (max-width: 560px) { .drive-charts-grid { grid-template-columns: 1fr; } }
+
+      .drive-chart-box {
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-card-sm);
+        padding: 14px;
+        background: var(--card-bg);
+      }
+      .drive-chart-title {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--brand-text);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .drive-chart-box .chart-container { height: 200px; }
+
+      #tbody-drives tr.drive-row { cursor: pointer; }
+      #tbody-drives tr.drive-row:hover { background: var(--bg-secondary); }
+      #tbody-drives tr.drive-row.is-selected { background: var(--brand-primary-10); }
+
+      .drive-notice {
+        padding: 14px 16px;
+        border-radius: var(--radius-card-sm);
+        font-size: 13px;
+        line-height: 1.5;
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        color: #92400e;
+      }
+
       /* Print stylesheet */
       @media print {
         .app-sidebar, .app-header, .reports-controls-bar, .app-footer { display: none !important; }
@@ -214,8 +300,8 @@
       <main class="app-main">
         <div class="page-header">
           <div class="page-title-block">
-            <h1 class="page-title"><i class="fa-solid fa-chart-pie" style="color: var(--brand-primary); margin-right: 8px;"></i>Reports &amp; BHC Analytics</h1>
-            <p class="page-subtitle">Comprehensive maternal health indicators, BHC performance insights, and immunization compliance across all health centers.</p>
+            <h1 class="page-title"><i class="fa-solid fa-chart-pie" style="color: var(--brand-primary); margin-right: 8px;"></i><span id="page-title-text">Reports &amp; BHC Analytics</span></h1>
+            <p class="page-subtitle" id="page-subtitle-text">Comprehensive maternal health indicators, BHC performance insights, and immunization compliance across all health centers.</p>
           </div>
           <div class="page-actions">
             <a href="inventory.html#tab-transactions" class="btn btn-outline-pink btn-sm"><i class="fa-solid fa-boxes-stacked"></i> Inventory Reports</a>
@@ -236,7 +322,7 @@
           </div>
           <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;">
             <div class="reports-filter-item" style="flex:1; min-width:200px;">
-              <span class="reports-filter-label" style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-secondary);"><i class="fa-solid fa-hospital-user" style="color:var(--brand-primary);"></i> Health Center:</span>
+              <span class="reports-filter-label" style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-secondary);"><i class="fa-solid fa-hospital-user" style="color:var(--brand-primary);"></i> <span id="filter-bhc-label">Health Center:</span></span>
               <select id="filter-bhc-select" class="form-select" style="flex:1; min-width: 180px; height:38px; border-radius:8px; font-size:12.5px;">
                 <option value="all">All Health Centers (System-wide)</option>
               </select>
@@ -339,7 +425,7 @@
           <!-- Chart 2: BHC Workload & Patient Distribution -->
           <div class="chart-card">
             <div class="chart-card-header">
-              <div class="chart-card-title"><i class="fa-solid fa-chart-column" style="color: var(--brand-primary);"></i> Patient Distribution per Health Center</div>
+              <div class="chart-card-title"><i class="fa-solid fa-chart-column" style="color: var(--brand-primary);"></i> <span id="chart-bhc-title">Patient Distribution per Health Center</span></div>
               <span class="badge badge-midwife" id="chart-bhc-label">BHC Comparison</span>
             </div>
             <div class="chart-container">
@@ -435,7 +521,7 @@
                 <thead>
                   <tr>
                     <th>Mother Name</th>
-                    <th>BHC</th>
+                    <th id="high-risk-col-facility">BHC</th>
                     <th>Risk Level</th>
                     <th>Expected Delivery</th>
                   </tr>
@@ -476,12 +562,19 @@
         <div class="card">
           <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
             <div>
-              <h3 class="card-title"><i class="fa-solid fa-table-list" style="color: var(--brand-primary); margin-right: 6px;"></i> BHC Comparative Health Analytics Breakdown</h3>
-              <p class="small-description">Overall performance metrics and maternal patient loads across each Barangay Health Center</p>
+              <h3 class="card-title"><i class="fa-solid fa-table-list" style="color: var(--brand-primary); margin-right: 6px;"></i> <span id="bhc-table-title">BHC Comparative Health Analytics Breakdown</span></h3>
+              <p class="small-description" id="bhc-table-desc">Overall performance metrics and maternal patient loads across each Barangay Health Center</p>
             </div>
-            <div class="search-box" style="max-width: 260px;">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input type="text" id="bhc-table-search" class="form-control" placeholder="Search health center..." />
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <!-- Municipal office only: four RHUs, or the health centres beneath them. -->
+              <div class="date-presets-bar" id="bhc-group-toggle" style="display:none;">
+                <button type="button" class="date-preset-btn active" data-group="rhu">By RHU</button>
+                <button type="button" class="date-preset-btn" data-group="bhc">By health centre</button>
+              </div>
+              <div class="search-box" style="max-width: 260px;">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="bhc-table-search" class="form-control" placeholder="Search health center..." />
+              </div>
             </div>
           </div>
 
@@ -489,7 +582,7 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th class="th-sortable sort-active" data-bhc-sort="name">Health Center (BHC) <span class="sort-indicator"><i class="fa-solid fa-arrow-down-long"></i></span></th>
+                  <th class="th-sortable sort-active" data-bhc-sort="name"><span id="bhc-table-col-name">Health Center (BHC)</span> <span class="sort-indicator"><i class="fa-solid fa-arrow-down-long"></i></span></th>
                   <th class="th-sortable" data-bhc-sort="barangay">Location / Barangay <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
                   <th class="th-sortable" data-bhc-sort="midwives" style="text-align:center;">Assigned Midwives <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
                   <th class="th-sortable" data-bhc-sort="mothers" style="text-align:center;">Active Mothers <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
@@ -503,6 +596,175 @@
                 <tr><td colspan="8" style="text-align:center; padding:36px;"><div class="spinner" style="margin:0 auto 12px;"></div>Loading BHC Comparative Analytics...</td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- ── Vaccination Drive Analytics ── -->
+        <div class="card" id="drive-analytics-card" style="margin-top:24px;">
+          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div>
+              <h3 class="card-title"><i class="fa-solid fa-syringe" style="color: var(--brand-primary); margin-right: 6px;"></i> Vaccination Drive Analytics</h3>
+              <p class="small-description">Turnout for every drive that has been held: who was invited, who came, and how many doses that took. Uses the <strong>Health Center</strong> and <strong>date range</strong> chosen at the top of this page — the date range is read against the drive date.</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="badge badge-teal" id="drive-count-badge">0 Drives</span>
+              <button class="btn btn-secondary btn-sm" id="drive-export-btn" title="Download the filtered drives as CSV"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+            </div>
+          </div>
+
+          <div class="card-body" style="padding:16px 20px;">
+            <!-- Missing-migration notice, shown only when the analytics view is absent -->
+            <div class="drive-notice" id="drive-missing-notice" style="display:none;"></div>
+
+            <div id="drive-analytics-body">
+              <!-- Drive-specific filters. Facility and date range come from the bar above. -->
+              <div class="drive-filter-grid">
+                <div class="drive-filter-field">
+                  <label for="drive-filter-vaccine"><i class="fa-solid fa-vial" style="color:var(--brand-primary);"></i> Vaccine</label>
+                  <select id="drive-filter-vaccine" class="form-select">
+                    <option value="all">All vaccines</option>
+                  </select>
+                </div>
+                <div class="drive-filter-field">
+                  <label for="drive-filter-audience"><i class="fa-solid fa-users" style="color:var(--brand-primary);"></i> Given to</label>
+                  <select id="drive-filter-audience" class="form-select">
+                    <option value="all">Children &amp; mothers</option>
+                    <option value="child">Children only</option>
+                    <option value="mother">Mothers only</option>
+                  </select>
+                </div>
+                <div class="drive-filter-field">
+                  <label for="drive-filter-status"><i class="fa-solid fa-calendar-check" style="color:var(--brand-primary);"></i> Drive status</label>
+                  <select id="drive-filter-status" class="form-select">
+                    <option value="held">Held (past &amp; today)</option>
+                    <option value="all">All drives</option>
+                    <option value="completed">Completed only</option>
+                    <option value="upcoming">Upcoming only</option>
+                  </select>
+                </div>
+                <div class="drive-filter-field">
+                  <label for="drive-filter-specific"><i class="fa-solid fa-crosshairs" style="color:var(--brand-primary);"></i> Specific drive</label>
+                  <select id="drive-filter-specific" class="form-select">
+                    <option value="all">All drives in range</option>
+                  </select>
+                </div>
+                <div class="drive-filter-field">
+                  <label for="drive-search"><i class="fa-solid fa-magnifying-glass" style="color:var(--brand-primary);"></i> Search</label>
+                  <input type="text" id="drive-search" class="form-control" placeholder="Barangay, centre or vaccine…" />
+                </div>
+              </div>
+
+              <!-- Totals across the drives currently in view -->
+              <div class="drive-kpi-grid">
+                <div class="drive-kpi">
+                  <div class="drive-kpi-value" style="color:var(--brand-primary);" id="drive-kpi-count">0</div>
+                  <div class="drive-kpi-label">Drives in View</div>
+                </div>
+                <div class="drive-kpi">
+                  <div class="drive-kpi-value" style="color:#2563eb;" id="drive-kpi-invited">0</div>
+                  <div class="drive-kpi-label">Invited</div>
+                </div>
+                <div class="drive-kpi">
+                  <div class="drive-kpi-value" style="color:#059669;" id="drive-kpi-attended">0</div>
+                  <div class="drive-kpi-label">Came</div>
+                </div>
+                <div class="drive-kpi">
+                  <div class="drive-kpi-value" style="color:#d97706;" id="drive-kpi-noshow">0</div>
+                  <div class="drive-kpi-label">No-shows</div>
+                </div>
+                <div class="drive-kpi">
+                  <div class="drive-kpi-value" style="color:#7c3aed;" id="drive-kpi-walkins">0</div>
+                  <div class="drive-kpi-label">Walk-ins</div>
+                </div>
+                <div class="drive-kpi" title="Everyone who was invited to a drive that has already been held, against everyone who came. Upcoming drives are excluded — they have an invitation list and nobody through the door yet.">
+                  <div class="drive-kpi-value" style="color:var(--brand-primary);" id="drive-kpi-turnout">—</div>
+                  <div class="drive-kpi-label">Overall Turnout</div>
+                </div>
+                <div class="drive-kpi">
+                  <div class="drive-kpi-value" style="color:#0f766e;" id="drive-kpi-doses">0</div>
+                  <div class="drive-kpi-label">Doses Given</div>
+                </div>
+              </div>
+
+              <!-- Says why the attendance figures above cover fewer drives than
+                   the table below, whenever an upcoming drive is in view. -->
+              <div id="drive-kpi-note" style="display:none; margin:-6px 0 16px; font-size:12px; color:var(--text-secondary); display:flex; align-items:center; gap:6px;"></div>
+
+              <div class="drive-charts-grid">
+                <div class="drive-chart-box">
+                  <div class="drive-chart-title"><i class="fa-solid fa-chart-column" style="color:var(--brand-primary);"></i> Invited vs. came, per drive</div>
+                  <div class="chart-container"><canvas id="chart-drive-turnout"></canvas></div>
+                </div>
+                <div class="drive-chart-box">
+                  <div class="drive-chart-title"><i class="fa-solid fa-chart-line" style="color:var(--info);"></i> Turnout over time</div>
+                  <div class="chart-container"><canvas id="chart-drive-trend"></canvas></div>
+                </div>
+                <div class="drive-chart-box">
+                  <div class="drive-chart-title"><i class="fa-solid fa-syringe" style="color:var(--success);"></i> Doses given, by vaccine</div>
+                  <div class="chart-container"><canvas id="chart-drive-vaccine"></canvas></div>
+                </div>
+                <div class="drive-chart-box">
+                  <div class="drive-chart-title"><i class="fa-solid fa-venus-mars" style="color:#8b5cf6;"></i> Who attended</div>
+                  <div class="chart-container"><canvas id="chart-drive-demographics"></canvas></div>
+                </div>
+              </div>
+
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th class="th-sortable sort-active" data-drive-sort="date">Drive Date <span class="sort-indicator"><i class="fa-solid fa-arrow-down-long"></i></span></th>
+                      <th class="th-sortable" data-drive-sort="facility">Barangay / Health Center <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                      <th class="th-sortable" data-drive-sort="vaccine">Vaccine <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                      <th class="th-sortable" data-drive-sort="audience">Given To <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                      <th class="th-sortable" data-drive-sort="invited" style="text-align:center;">Invited <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                      <th class="th-sortable" data-drive-sort="attended" style="text-align:center;">Came <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                      <th class="th-sortable" data-drive-sort="noshow" style="text-align:center;">No-shows <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                      <th class="th-sortable" data-drive-sort="walkins" style="text-align:center;">Walk-ins <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                      <th class="th-sortable" data-drive-sort="turnout" style="text-align:center;">Turnout <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                      <th class="th-sortable" data-drive-sort="doses" style="text-align:center;">Doses <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                      <th class="th-sortable" data-drive-sort="units" style="text-align:center;" title="Whole units that left the shelf, and how many of them were multi-dose vials broken open. Fewer units than doses is correct for a multi-dose vaccine.">Stock Used <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                      <th class="th-sortable" data-drive-sort="sex" style="text-align:center;" title="Boys and girls who attended. A maternal drive is all women.">Boys / Girls <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                      <th class="th-sortable" data-drive-sort="status" style="text-align:center;">Status <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-drives">
+                    <tr><td colspan="13" style="text-align:center; padding:28px; color:var(--text-secondary);">Loading vaccination drives…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Roster for one drive. Opened by picking a drive above or clicking a row. -->
+              <div id="drive-roster-panel" style="display:none; margin-top:18px; border:1px solid var(--border-primary); border-radius:var(--radius-card-sm); overflow:hidden;">
+                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:12px 16px; background:var(--bg-secondary); border-bottom:1px solid var(--border-primary);">
+                  <div>
+                    <div style="font-size:13.5px; font-weight:700; color:var(--brand-text);" id="drive-roster-title">Drive roster</div>
+                    <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">
+                      Patients are listed by health-centre chart number only. Look the number up in Patient Records for the name.
+                    </div>
+                  </div>
+                  <button class="btn btn-secondary btn-sm" id="drive-roster-close"><i class="fa-solid fa-xmark"></i> Close</button>
+                </div>
+                <div class="table-wrap" style="max-height:320px; overflow-y:auto;">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Chart No.</th>
+                        <th>Patient</th>
+                        <th>Invited</th>
+                        <th>Reminded</th>
+                        <th>Outcome</th>
+                        <th style="text-align:center;">Doses</th>
+                        <th>Date Given</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-drive-roster">
+                      <tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-secondary);">Select a drive.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -614,6 +876,10 @@
             // figures, so resolve it before any of them are computed.
             await PortalScope.refresh(db);
             PortalScope.applyChrome();
+            // Every heading, label and comparison unit on this page depends on
+            // which office is reading it, so the tier is settled before any of
+            // them are drawn.
+            applyTierWording();
 
             await loadAllBaseData();
             populateBhcDropdown();
@@ -682,6 +948,13 @@
           } catch (e) {
             console.warn("Inventory stock read failed:", e.message || e);
           }
+
+          // 7. Vaccination drives, already aggregated by the database.
+          await loadDriveAnalytics();
+
+          // 8. Childhood immunization coverage, per child, against the DOH
+          //    first-year schedule.
+          await loadImmunizationCoverage();
         }
 
         /* ── Date Constraints & Presets Helpers ───────────────────────── */
@@ -792,11 +1065,141 @@
           renderReports();
         }
 
+        /* ══════════════════════════════════════════════════════════════════
+           TIER
+
+           One page serves the Municipal Health Office and the four Rural Health
+           Units. What differs is not what may be done but what the reader is
+           looking at: an RHU compares the barangay health centres beneath it,
+           the MHO compares four RHUs — each of which is a branch, not a shelf.
+
+           Everything tier-specific is resolved here rather than hardcoded, so
+           a municipal officer is never told they are reading a "BHC Portal".
+           ══════════════════════════════════════════════════════════════════ */
+
+        const isMho = () => !!(window.PortalScope && PortalScope.isMho);
+
+        // The unit the comparison table and workload chart have as their rows.
+        // For the MHO that is the Rural Health Unit; for an RHU, its own health
+        // centres. An MHO can switch to health-centre detail — see the toggle.
+        let bhcGroupBy = "auto";
+
+        function groupingUnit() {
+          if (!isMho()) return "bhc";
+          return bhcGroupBy === "bhc" ? "bhc" : "rhu";
+        }
+
+        function applyTierWording() {
+          const mho = isMho();
+          const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+
+          set("page-title-text", mho ? "Reports & Municipal Analytics" : "Reports & BHC Analytics");
+          set("page-subtitle-text", mho
+            ? "Maternal health indicators, Rural Health Unit performance and immunization compliance across every health centre in the municipality."
+            : "Comprehensive maternal health indicators, BHC performance insights, and immunization compliance across all health centers.");
+          set("filter-bhc-label", mho ? "Facility:" : "Health Center:");
+          set("chart-bhc-title", mho ? "Patient Distribution per Rural Health Unit" : "Patient Distribution per Health Center");
+          set("high-risk-col-facility", "Health Center");
+
+          const badge = document.getElementById("chart-bhc-label");
+          if (badge) badge.textContent = mho ? "RHU Comparison" : "BHC Comparison";
+
+          const search = document.getElementById("bhc-table-search");
+          if (search) search.placeholder = mho ? "Search RHU or barangay…" : "Search health center…";
+
+          updateGroupingWording();
+        }
+
+        function updateGroupingWording() {
+          const byRhu = groupingUnit() === "rhu";
+          const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+
+          set("bhc-table-title", byRhu
+            ? "Rural Health Unit Comparative Breakdown"
+            : "Health Center Comparative Health Analytics Breakdown");
+          set("bhc-table-desc", byRhu
+            ? "Patient loads and performance for each Rural Health Unit, totalled across every barangay health centre reporting to it."
+            : (isMho()
+                ? "Every barangay health centre in the municipality, listed individually."
+                : "Overall performance metrics and maternal patient loads across each Barangay Health Center"));
+          set("bhc-table-col-name", byRhu ? "Rural Health Unit" : "Health Center (BHC)");
+        }
+
+        /**
+         * The facilities the comparison table has one row for.
+         *
+         * An RHU row stands for a whole branch, so its id is matched with
+         * coversFacility rather than by equality — the mothers and midwives are
+         * filed against the leaf health centres, never against the RHU itself.
+         */
+        function groupingRows() {
+          if (groupingUnit() === "bhc") {
+            return allBhcs.map(b => ({ id: b.bhc_id, name: b.bhc_name, sub: b.barangay || "" }));
+          }
+          return (PortalScope.childFacilities || []).map(f => ({
+            id: f.facility_id,
+            name: f.name,
+            sub: f.barangay || f.facility_code || "",
+          }));
+        }
+
+        /** True when a record filed against `bhcId` belongs under `selectedId`. */
+        function inSelectedScope(bhcId, selectedId) {
+          if (selectedId === "all") return true;
+          if (bhcId === null || bhcId === undefined || bhcId === "") return false;
+          if (String(bhcId) === String(selectedId)) return true;
+          // A Rural Health Unit selection has to reach the health centres
+          // beneath it; the leaf case above already covers an RHU account.
+          return PortalScope.coversFacility
+            ? PortalScope.coversFacility(selectedId, bhcId)
+            : false;
+        }
+
         function populateBhcDropdown() {
           const sel = document.getElementById("filter-bhc-select");
           if (!sel) return;
-          sel.innerHTML = '<option value="all">All Health Centers (System-wide)</option>' +
-            allBhcs.map(b => `<option value="${esc(b.bhc_id)}">${esc(b.bhc_name)}</option>`).join("");
+          const previous = sel.value;
+
+          const option = (id, label) => `<option value="${esc(id)}">${esc(label)}</option>`;
+
+          if (isMho()) {
+            // Two groups, because they are different KINDS of choice. Picking an
+            // RHU selects everything beneath it; picking a health centre selects
+            // one shelf. Offering only the leaves — which is what this page used
+            // to do — left the municipal officer unable to ask the one question
+            // the office exists to ask.
+            const rhus = PortalScope.childFacilities || [];
+            sel.innerHTML =
+              option("all", "Whole municipality") +
+              (rhus.length
+                ? '<optgroup label="Rural Health Units (with everything beneath)">' +
+                  rhus.map(f => option(f.facility_id, f.name)).join("") + "</optgroup>"
+                : "") +
+              (allBhcs.length
+                ? '<optgroup label="Individual health centres">' +
+                  allBhcs.map(b => option(b.bhc_id, b.bhc_name)).join("") + "</optgroup>"
+                : "");
+          } else {
+            sel.innerHTML = option("all", "All Health Centers (System-wide)") +
+              allBhcs.map(b => option(b.bhc_id, b.bhc_name)).join("");
+          }
+
+          // Survive a re-populate (the live-refresh reload calls this again).
+          if (previous && sel.querySelector(`option[value="${CSS.escape(previous)}"]`)) {
+            sel.value = previous;
+          }
+          renderGroupingToggle();
+        }
+
+        // MHO only: drill from the four RHUs down to the nine health centres.
+        function renderGroupingToggle() {
+          const host = document.getElementById("bhc-group-toggle");
+          if (!host) return;
+          if (!isMho()) { host.style.display = "none"; return; }
+          host.style.display = "";
+          host.querySelectorAll("button").forEach(btn => {
+            btn.classList.toggle("active", btn.dataset.group === groupingUnit());
+          });
         }
 
         // Helper to check if a timestamp or date string is within the selected filter window
@@ -821,17 +1224,17 @@
           let filteredPregnancies = allPregnancies;
           let filteredMidwives = allMidwives;
           let filteredChildren = allChildren;
-          let filteredImmunizations = allImmunizations;
 
           if (selectedBhcId !== "all") {
-            const bhcIdNum = parseInt(selectedBhcId, 10);
-            filteredMothers = allMothers.filter(m => m.assigned_bhc_id === bhcIdNum);
+            // Branch-aware, not an id match. Selecting a Rural Health Unit has
+            // to reach every health centre reporting to it — mothers are filed
+            // against the leaf, never against the RHU — or the municipal office
+            // reads zero for a branch with four staffed centres under it.
+            filteredMothers = allMothers.filter(m => inSelectedScope(m.assigned_bhc_id, selectedBhcId));
             const motherIds = new Set(filteredMothers.map(m => m.mother_id));
             filteredPregnancies = allPregnancies.filter(p => motherIds.has(p.mother_id));
-            filteredMidwives = allMidwives.filter(m => m.assigned_bhc_id === bhcIdNum);
+            filteredMidwives = allMidwives.filter(m => inSelectedScope(m.assigned_bhc_id, selectedBhcId));
             filteredChildren = allChildren.filter(c => motherIds.has(c.mother_id));
-            const childIds = new Set(filteredChildren.map(c => c.child_id));
-            filteredImmunizations = allImmunizations.filter(v => childIds.has(v.child_id));
           }
 
           // Filter Data by Date Range (if active)
@@ -840,18 +1243,41 @@
             filteredPregnancies = filteredPregnancies.filter(p =>
               isWithinReportDate(p.created_at || p.start_date || p.expected_due_date, startDate, endDate)
             );
-            filteredImmunizations = filteredImmunizations.filter(v =>
-              isWithinReportDate(v.date_administered || v.created_at, startDate, endDate)
-            );
           }
 
-          // Stock is filtered by which shelf to read
+          // Stock is filtered by which shelf to read. InventoryStock resolves a
+          // branch itself through PortalScope.coversFacility, so an RHU
+          // selection correctly totals its depot and every centre under it.
           const stockFacility = selectedBhcId === "all" ? "all" : selectedBhcId;
-          const stockFacilityCount = allBhcs.length + 1;
+
+          // How many shelves the "all" figure is the sum of, because the
+          // combined shortage threshold is the per-facility threshold times
+          // this. An RHU has its own depot plus its health centres; the
+          // municipal office also has four RHU depots and the warehouse, and
+          // counting only the health centres would set the bar four times too
+          // low and hide real municipal shortages.
+          const stockFacilityCount = isMho()
+            ? allBhcs.length + (PortalScope.childFacilities || []).length + 1
+            : allBhcs.length + 1;
 
           // KPI 1: Mothers
+          // What the reader is actually looking at. "Across all BHCs" is wrong
+          // for a municipal officer, and wrong again once they narrow to one
+          // Rural Health Unit — that is a branch, not a health centre.
+          const selectedLabel = (() => {
+            if (selectedBhcId === "all") {
+              return isMho() ? "Across the whole municipality" : "Across all BHCs";
+            }
+            const isBranch = (PortalScope.childFacilities || [])
+              .some(f => String(f.facility_id) === String(selectedBhcId));
+            const name = PortalScope.facilityLabel
+              ? PortalScope.facilityLabel(selectedBhcId, allBhcs.map(b => ({ facility_id: b.bhc_id, name: b.bhc_name })))
+              : "";
+            return isBranch ? `${name} and its health centres` : (name || "Selected health centre");
+          })();
+
           document.getElementById("kpi-mothers").textContent = filteredMothers.length.toLocaleString();
-          document.getElementById("kpi-mothers-sub").textContent = selectedBhcId === "all" ? "Across all BHCs" : "Target Health Center";
+          document.getElementById("kpi-mothers-sub").textContent = selectedLabel;
 
           // KPI 2: Pregnancies & High Risk
           const ongoingPregnancies = filteredPregnancies.filter(p => (p.status || "ongoing").toLowerCase() === "ongoing");
@@ -860,16 +1286,46 @@
           document.getElementById("kpi-pregnancies").textContent = ongoingPregnancies.length.toLocaleString();
           document.getElementById("kpi-high-risk-badge").textContent = `${highRiskCount} High Risk (${highRiskPct}%)`;
 
-          // KPI 3: Immunization Compliance
-          const completedVac = filteredImmunizations.filter(v => (v.status || "").toLowerCase() === "completed").length;
-          const totalVac = filteredImmunizations.length;
-          const vacRate = totalVac > 0 ? Math.round((completedVac / totalVac) * 100) : null;
-          document.getElementById("kpi-immunization-rate").textContent = vacRate === null ? "—" : `${vacRate}%`;
-          document.getElementById("kpi-child-count").textContent = `${filteredChildren.length} Infants / Children`;
+          // KPI 3: Immunization coverage.
+          //
+          // Fully immunized children over the children old enough to be asked,
+          // which is the DOH reading and the one the midwife app already uses.
+          // The old arithmetic here filtered immunization_records for
+          // status = 'completed', a value that column cannot hold, so it
+          // reported 0% on every database regardless of the data.
+          const coverageRows = coverageFor(selectedBhcId);
+          const fic = ficRate(coverageRows);
+          const rateEl = document.getElementById("kpi-immunization-rate");
+          const rateSubEl = document.getElementById("kpi-child-count");
+
+          if (coverageViewMissing) {
+            rateEl.textContent = "—";
+            rateEl.title = "Needs database/migrations/20260914_immunization_coverage_and_drive_demographics.sql";
+            rateSubEl.textContent = `${filteredChildren.length} children · rate unavailable`;
+          } else if (fic.rate === null) {
+            // Every child on the books is under a year old. Not 0% — there is
+            // simply nobody the question can be asked of yet.
+            rateEl.textContent = "—";
+            rateEl.title = "No child has reached 12 months yet, so there is no coverage rate to report.";
+            rateSubEl.textContent = `${coverageRows.length} children · none aged 12 months+`;
+          } else {
+            rateEl.textContent = `${fic.rate}%`;
+            rateEl.title = "Children who have had every dose scheduled in their first year, out of those aged 12 months or more.";
+            rateSubEl.textContent = `${fic.fic} of ${fic.eligible} aged 12 months+ fully immunized`;
+          }
 
           // KPI 4: Midwives
           document.getElementById("kpi-midwives").textContent = filteredMidwives.length.toLocaleString();
-          document.getElementById("kpi-bhc-count").textContent = selectedBhcId === "all" ? `${allBhcs.length} Active BHCs` : "1 Selected BHC";
+          document.getElementById("kpi-bhc-count").textContent = (() => {
+            const centres = selectedBhcId === "all"
+              ? allBhcs.length
+              : allBhcs.filter(b => inSelectedScope(b.bhc_id, selectedBhcId)).length;
+            const centreLabel = `${centres} health cent${centres === 1 ? "re" : "res"}`;
+            if (selectedBhcId !== "all") return centreLabel;
+            return isMho()
+              ? `${(PortalScope.childFacilities || []).length} RHUs · ${centreLabel}`
+              : `${centres} Active BHCs`;
+          })();
 
           // KPI 5: Stock Alerts
           const shortageItems = InventoryStock.shortages(stockFacility, stockFacilityCount);
@@ -879,7 +1335,7 @@
           renderRiskChart(ongoingPregnancies);
           renderBhcWorkloadChart();
           renderMonthlyTrendsChart(filteredPregnancies);
-          renderImmunizationChart(completedVac, totalVac);
+          renderImmunizationChart(coverageRows);
           renderTrimesterChart(ongoingPregnancies);
           renderAgeGroupsChart(filteredMothers);
 
@@ -890,6 +1346,10 @@
           renderHighRiskTable(ongoingPregnancies);
           renderStockAlertsTable(shortageItems);
           renderBhcComparativeTable();
+
+          // Drives read the same facility and date-range choices, against the
+          // drive's own date.
+          renderDriveAnalytics();
         }
 
         // --- CHART RENDERING ---
@@ -931,19 +1391,25 @@
         }
 
         function renderBhcWorkloadChart() {
-          const labels = allBhcs.map(b => {
-            const n = b.bhc_name || "Unnamed BHC";
+          // Rows are RHUs for the municipal office and health centres for an
+          // RHU, so each tier compares the things it actually runs.
+          const units = groupingRows();
+          const labels = units.map(u => {
+            const n = u.name || "Unnamed";
             return n.length > 14 ? n.slice(0, 14) + "…" : n;
           });
-          const motherCounts = allBhcs.map(b => allMothers.filter(m => m.assigned_bhc_id === b.bhc_id).length);
-          const midwifeCounts = allBhcs.map(b => allMidwives.filter(m => m.assigned_bhc_id === b.bhc_id).length);
+          const motherCounts = units.map(u => allMothers.filter(m => inSelectedScope(m.assigned_bhc_id, u.id)).length);
+          const midwifeCounts = units.map(u => allMidwives.filter(m => inSelectedScope(m.assigned_bhc_id, u.id)).length);
 
           const ctx = document.getElementById("chart-bhc-workload");
           if (!ctx) return;
           if (chartBhcInstance) chartBhcInstance.destroy();
           resetChartCanvas(ctx);
 
-          if (!labels.length) { showEmptyChart(ctx, "No health centers registered"); return; }
+          if (!labels.length) {
+            showEmptyChart(ctx, isMho() ? "No Rural Health Units registered" : "No health centers registered");
+            return;
+          }
 
           chartBhcInstance = new Chart(ctx, {
             type: "bar",
@@ -1018,25 +1484,50 @@
           });
         }
 
-        function renderImmunizationChart(completed, total) {
-          const completedCount = completed || 0;
-          const totalCount = total || 0;
-          const pendingCount = Math.max(0, totalCount - completedCount);
-
+        // Four populations, not two. An infant who has not finished the series
+        // is not a failure and must not sit in the same slice as a two-year-old
+        // who never came back — they call for completely different work.
+        function renderImmunizationChart(coverageRows) {
           const ctx = document.getElementById("chart-immunization-status");
           if (!ctx) return;
           if (chartVacInstance) chartVacInstance.destroy();
           resetChartCanvas(ctx);
 
-          if (totalCount === 0) { showEmptyChart(ctx, "No immunization records yet"); return; }
+          if (coverageViewMissing) {
+            showEmptyChart(ctx, "Run migration 20260914 to enable coverage reporting");
+            return;
+          }
+
+          const rows = coverageRows || [];
+          const counts = {
+            fully_immunized: 0, incomplete: 0, on_schedule: 0, behind: 0, unknown: 0,
+          };
+          rows.forEach(c => {
+            const k = c.coverage_status || "unknown";
+            if (counts[k] === undefined) counts.unknown++; else counts[k]++;
+          });
+
+          const total = rows.length;
+          document.getElementById("chart-vac-total").textContent =
+            total ? `${total} Children` : "WHO / DOH Standards";
+
+          if (!total) { showEmptyChart(ctx, "No children with a recorded birthdate"); return; }
+
+          const slices = [
+            ["Fully immunized (12 mo+)", counts.fully_immunized, "#68CBB8"],
+            ["Incomplete (12 mo+)",      counts.incomplete,      "#E57373"],
+            ["On schedule (under 12 mo)", counts.on_schedule,    "#3B82F6"],
+            ["Behind for their age",     counts.behind,          "#FFB562"],
+            ["No birthdate recorded",    counts.unknown,         "#CBD5E1"],
+          ].filter(s => s[1] > 0);
 
           chartVacInstance = new Chart(ctx, {
             type: "doughnut",
             data: {
-              labels: ["Completed Immunizations", "Scheduled / Pending"],
+              labels: slices.map(s => s[0]),
               datasets: [{
-                data: [completedCount, pendingCount],
-                backgroundColor: ["#68CBB8", "#FFB562"],
+                data: slices.map(s => s[1]),
+                backgroundColor: slices.map(s => s[2]),
                 borderWidth: 2,
                 borderColor: "#ffffff"
               }]
@@ -1044,8 +1535,18 @@
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              plugins: { legend: { position: "bottom", labels: { font: { size: 12, family: "DM Sans" }, padding: 14 } } },
-              cutout: "68%"
+              plugins: {
+                legend: { position: "bottom", labels: { font: { size: 11, family: "DM Sans" }, padding: 10, boxWidth: 12 } },
+                tooltip: {
+                  callbacks: {
+                    label: (item) => {
+                      const pct = total ? Math.round((item.parsed / total) * 100) : 0;
+                      return ` ${item.label}: ${item.parsed} (${pct}% of children)`;
+                    }
+                  }
+                }
+              },
+              cutout: "62%"
             }
           });
         }
@@ -1178,7 +1679,10 @@
             const mother = allMothers.find(m => m.mother_id === p.mother_id) || {};
             const account = mother.accounts || {};
             const mName = [account.first_name, account.last_name].filter(Boolean).join(" ") || `Mother #${p.mother_id}`;
-            const bhc = allBhcs.find(b => b.bhc_id === mother.assigned_bhc_id);
+            // Always the health centre she is actually enrolled at, at either
+            // tier — a municipal officer chasing a high-risk mother needs the
+            // centre that holds her chart, not the RHU above it.
+            const bhc = allBhcs.find(b => String(b.bhc_id) === String(mother.assigned_bhc_id));
             const bhcName = bhc ? bhc.bhc_name : "Unassigned";
             const edd = p.expected_date_of_delivery ? new Date(p.expected_date_of_delivery).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "TBD";
 
@@ -1261,8 +1765,11 @@
           const tbody = document.getElementById("tbody-bhc-analytics");
           if (!tbody) return;
 
-          if (!allBhcs.length) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-secondary);">No Health Facilities registered in database.</td></tr>`;
+          updateGroupingWording();
+          const units = groupingRows();
+
+          if (!units.length) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-secondary);">No ${esc(isMho() ? "Rural Health Units" : "Health Facilities")} registered in database.</td></tr>`;
             return;
           }
 
@@ -1270,13 +1777,14 @@
           const startDate = document.getElementById("filter-start-date")?.value || "";
           const endDate = document.getElementById("filter-end-date")?.value || "";
 
-          let filteredBhcs = allBhcs.filter(b =>
-            (b.bhc_name || "").toLowerCase().includes(searchTerm) ||
-            (b.barangay || "").toLowerCase().includes(searchTerm));
+          const filteredUnits = units.filter(u =>
+            (u.name || "").toLowerCase().includes(searchTerm) ||
+            (u.sub || "").toLowerCase().includes(searchTerm));
 
-          // Calculate aggregated metrics per BHC
-          const rows = filteredBhcs.map(b => {
-            let bMothers = allMothers.filter(m => m.assigned_bhc_id === b.bhc_id);
+          // One row per unit — an RHU row totals every health centre beneath it,
+          // which is why membership is inSelectedScope rather than an id match.
+          const rows = filteredUnits.map(b => {
+            let bMothers = allMothers.filter(m => inSelectedScope(m.assigned_bhc_id, b.id));
             if (startDate || endDate) {
               bMothers = bMothers.filter(m => isWithinReportDate(m.created_at, startDate, endDate));
             }
@@ -1287,28 +1795,34 @@
               bPregnancies = bPregnancies.filter(p => isWithinReportDate(p.created_at || p.start_date, startDate, endDate));
             }
             const bHighRisk = bPregnancies.filter(p => (p.pregnancy_risk_level || "").toLowerCase() === "high").length;
-            const bMidwives = allMidwives.filter(m => m.assigned_bhc_id === b.bhc_id);
-            const bStockShortages = InventoryStock.shortages(String(b.bhc_id), 1).length;
+            const bMidwives = allMidwives.filter(m => inSelectedScope(m.assigned_bhc_id, b.id));
+            // InventoryStock already resolves a branch through coversFacility,
+            // so an RHU id correctly totals its depot and its centres.
+            const bStockShortages = InventoryStock.shortages(String(b.id), 1).length;
 
-            const bChildIds = new Set(allChildren.filter(c => motherIds.has(c.mother_id)).map(c => c.child_id));
-            let bImmun = allImmunizations.filter(v => bChildIds.has(v.child_id));
-            if (startDate || endDate) {
-              bImmun = bImmun.filter(v => isWithinReportDate(v.date_administered || v.created_at, startDate, endDate));
-            }
-            const bImmunDone = bImmun.filter(v => (v.status || "").toLowerCase() === "completed").length;
-            const immunPct = bImmun.length > 0 ? Math.round((bImmunDone / bImmun.length) * 100) : -1;
+            // Coverage, not a share of dose records. Same definition as the
+            // scorecard: fully immunized children over those aged 12 months or
+            // more, from child_immunization_coverage.
+            //
+            // Deliberately NOT narrowed by the date range. A child either is or
+            // is not protected today; asking "what was coverage between March
+            // and April" of a cumulative measure gives a number that means
+            // nothing. The date range still applies to every other column.
+            const bCoverage = ficRate(coverageFor(String(b.id)));
+            const immunPct = bCoverage.rate === null ? -1 : bCoverage.rate;
 
             return {
               bhc: b,
-              name: b.bhc_name || "",
-              barangay: b.barangay || "",
+              name: b.name || "",
+              barangay: b.sub || "",
               midwivesCount: bMidwives.length,
               mothersCount: bMothers.length,
               pregnanciesCount: bPregnancies.length,
               highRiskCount: bHighRisk,
               stockShortages: bStockShortages,
               immunPct: immunPct,
-              immunCount: bImmun.length
+              immunFic: bCoverage.fic,
+              immunEligible: bCoverage.eligible
             };
           });
 
@@ -1329,9 +1843,11 @@
           updateBhcSortHeaderUI();
 
           tbody.innerHTML = rows.map(r => {
-            const immunBadge = r.immunCount > 0
-              ? `<span class="badge badge-admin">${r.immunPct}%</span>`
-              : `<span class="badge badge-inactive" title="No immunization records for this health center">—</span>`;
+            const immunBadge = r.immunEligible > 0
+              ? `<span class="badge ${r.immunPct >= 80 ? "badge-low-risk" : r.immunPct >= 50 ? "badge-medium" : "badge-high-risk"}" title="${r.immunFic} of ${r.immunEligible} children aged 12 months or more have had every dose scheduled in their first year">${r.immunPct}%</span>`
+              : `<span class="badge badge-inactive" title="${coverageViewMissing
+                    ? "Run migration 20260914 to enable coverage reporting"
+                    : "No child at this health center has reached 12 months yet, so there is no coverage rate to report"}">—</span>`;
 
             const stockBadge = r.stockShortages > 0
               ? `<span class="badge badge-high"><i class="fa-solid fa-triangle-exclamation"></i> ${r.stockShortages} Alerts</span>`
@@ -1356,6 +1872,784 @@
           }).join("");
         }
 
+        /* ══════════════════════════════════════════════════════════════════
+           VACCINATION DRIVE ANALYTICS
+
+           Reads public.vaccination_drive_analytics, which resolves each drive's
+           invitation list and attendance server-side. The facility filter and
+           the date range at the top of this page apply here too — the date
+           range against the drive's own date, which is the only reading of
+           "reports between these dates" that means anything for a drive.
+
+           The view arrives with 20260912_vaccination_drive_analytics.sql. Until
+           that has been run this section says so and hides itself; every other
+           section on the page is unaffected.
+           ══════════════════════════════════════════════════════════════════ */
+
+        let allDrives = [];
+        let driveViewMissing = false;
+        let selectedDriveId = null;
+        let driveSortCol = "date";
+        let driveSortDir = "desc";
+        let chartDriveTurnout = null;
+        let chartDriveTrend = null;
+        let chartDriveVaccine = null;
+        let chartDriveDemographics = null;
+
+        async function loadDriveAnalytics() {
+          driveViewMissing = false;
+          try {
+            const { data, error } = await db
+              .from("vaccination_drive_analytics")
+              .select("*")
+              .order("schedule_date", { ascending: false });
+            if (error) throw error;
+            // Same scope rule the rest of the page uses: an RHU sees its own
+            // health centres, the municipal office sees every one of them.
+            allDrives = (data || []).filter(d => PortalScope.inScope(d.facility_id));
+          } catch (e) {
+            allDrives = [];
+            driveViewMissing = true;
+            console.warn("vaccination_drive_analytics unavailable:", e.message || e);
+            return;
+          }
+
+          // Stock and demographics live in their own view so that neither is
+          // defined in two migrations — see the note in 20260914. Merged on
+          // drive_id here rather than joined server-side.
+          //
+          // Absent on a database that has not run 20260914: the drive table
+          // simply shows a dash in those columns rather than the section
+          // refusing to render.
+          try {
+            const { data, error } = await db
+              .from("vaccination_drive_breakdown")
+              .select("*");
+            if (error) throw error;
+            const byId = new Map((data || []).map(b => [String(b.drive_id), b]));
+            allDrives.forEach(d => {
+              const b = byId.get(String(d.drive_id));
+              if (b) Object.assign(d, b);
+            });
+          } catch (e) {
+            console.warn("vaccination_drive_breakdown unavailable:", e.message || e);
+          }
+        }
+
+        // Child immunization coverage, one row per child. Replaces the old
+        // "status = 'completed'" filter, which could never match anything: that
+        // column's CHECK constraint admits only administered / missed /
+        // scheduled, so the rate was structurally 0% on every database.
+        let allCoverage = [];
+        let coverageViewMissing = false;
+
+        async function loadImmunizationCoverage() {
+          coverageViewMissing = false;
+          try {
+            const { data, error } = await db
+              .from("child_immunization_coverage")
+              .select("*");
+            if (error) throw error;
+            allCoverage = (data || []).filter(
+              c => !c.assigned_bhc_id || PortalScope.coversBhc(c.assigned_bhc_id)
+            );
+          } catch (e) {
+            allCoverage = [];
+            coverageViewMissing = true;
+            console.warn("child_immunization_coverage unavailable:", e.message || e);
+          }
+        }
+
+        // The coverage rows for one facility choice, or all of them.
+        function coverageFor(selectedBhcId) {
+          if (selectedBhcId === "all") return allCoverage;
+          return allCoverage.filter(c => inSelectedScope(c.assigned_bhc_id, selectedBhcId));
+        }
+
+        // Fully immunized over the children old enough to be asked. Returns
+        // null — not 0 — when nobody has reached twelve months, because there
+        // is then no rate to report.
+        function ficRate(rows) {
+          const eligible = rows.filter(c => c.is_fully_immunized !== null && c.is_fully_immunized !== undefined);
+          if (!eligible.length) return { rate: null, fic: 0, eligible: 0 };
+          const fic = eligible.filter(c => c.is_fully_immunized === true).length;
+          return { rate: Math.round((fic / eligible.length) * 1000) / 10, fic, eligible: eligible.length };
+        }
+
+        function renderDriveMissingNotice() {
+          const notice = document.getElementById("drive-missing-notice");
+          const body = document.getElementById("drive-analytics-body");
+          if (!notice || !body) return false;
+
+          if (!driveViewMissing) {
+            notice.style.display = "none";
+            body.style.display = "";
+            return false;
+          }
+
+          body.style.display = "none";
+          notice.style.display = "";
+          notice.innerHTML =
+            "<strong>Drive analytics is not available on this database yet.</strong> " +
+            "Run <code>database/migrations/20260912_vaccination_drive_analytics.sql</code> " +
+            "in the Supabase SQL editor, then refresh. Nothing else on this page is affected.";
+          document.getElementById("drive-count-badge").textContent = "Unavailable";
+          return true;
+        }
+
+        // Drive dates are plain YYYY-MM-DD, and so are the filter inputs, so
+        // they compare as strings. Parsing them into Date objects would push
+        // every drive an hour either way whenever the browser is not on UTC.
+        function driveDateInRange(drive, startStr, endStr) {
+          const v = drive.schedule_date;
+          if (!startStr && !endStr) return true;
+          if (!v) return false;
+          if (startStr && v < startStr) return false;
+          if (endStr && v > endStr) return false;
+          return true;
+        }
+
+        function getFilteredDrives(opts) {
+          const ignoreSpecific = !!(opts && opts.ignoreSpecific);
+          const selectedBhcId = document.getElementById("filter-bhc-select")?.value || "all";
+          const startDate = document.getElementById("filter-start-date")?.value || "";
+          const endDate = document.getElementById("filter-end-date")?.value || "";
+          const vaccine = document.getElementById("drive-filter-vaccine")?.value || "all";
+          const audience = document.getElementById("drive-filter-audience")?.value || "all";
+          const status = document.getElementById("drive-filter-status")?.value || "held";
+          const specific = document.getElementById("drive-filter-specific")?.value || "all";
+          const term = (document.getElementById("drive-search")?.value || "").trim().toLowerCase();
+
+          return allDrives.filter(d => {
+            // Selecting a Rural Health Unit has to match the whole branch
+            // beneath it, not only drives filed against the RHU itself.
+            if (!inSelectedScope(d.facility_id, selectedBhcId)) return false;
+            if (!driveDateInRange(d, startDate, endDate)) return false;
+            if (vaccine !== "all" && d.vaccine_name !== vaccine) return false;
+            if (audience !== "all" && d.target_recipients !== audience) return false;
+            if (status === "held" && d.drive_status === "upcoming") return false;
+            if (status === "completed" && d.drive_status !== "completed") return false;
+            if (status === "upcoming" && d.drive_status !== "upcoming") return false;
+            if (!ignoreSpecific && specific !== "all" && String(d.drive_id) !== String(specific)) return false;
+            if (term) {
+              const hay = [d.barangay, d.facility_name, d.vaccine_name, d.audience]
+                .filter(Boolean).join(" ").toLowerCase();
+              if (!hay.includes(term)) return false;
+            }
+            return true;
+          });
+        }
+
+        function formatDriveDate(iso) {
+          if (!iso) return "—";
+          const [y, m, d] = iso.split("-").map(Number);
+          if (!y || !m || !d) return iso;
+          return new Date(y, m - 1, d).toLocaleDateString("en-PH",
+            { month: "short", day: "numeric", year: "numeric" });
+        }
+
+        function driveLabel(d) {
+          return `${formatDriveDate(d.schedule_date)} · ${d.barangay || d.facility_name || "Unknown centre"} · ${d.vaccine_name}`;
+        }
+
+        // Rebuilt on every render, keeping the current choice when it is still
+        // reachable. A drive filtered out of range must not stay selected, or
+        // the table shows nothing and the reason is invisible.
+        function syncSelect(id, options, placeholder) {
+          const sel = document.getElementById(id);
+          if (!sel) return;
+          const previous = sel.value;
+          const stillThere = options.some(o => o.value === previous);
+          sel.innerHTML = `<option value="all">${esc(placeholder)}</option>` +
+            options.map(o => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("");
+          sel.value = stillThere ? previous : "all";
+        }
+
+        function populateDriveFilters() {
+          const vaccines = Array.from(new Set(allDrives.map(d => d.vaccine_name).filter(Boolean))).sort();
+          syncSelect("drive-filter-vaccine", vaccines.map(v => ({ value: v, label: v })), "All vaccines");
+
+          // The drive picker offers what the other filters leave standing,
+          // itself excluded — otherwise choosing one drive would empty its own
+          // list on the next render.
+          const reachable = getFilteredDrives({ ignoreSpecific: true })
+            .slice()
+            .sort((a, b) => (b.schedule_date || "").localeCompare(a.schedule_date || ""));
+          syncSelect("drive-filter-specific",
+            reachable.map(d => ({ value: String(d.drive_id), label: driveLabel(d) })),
+            "All drives in range");
+        }
+
+        function renderDriveAnalytics() {
+          if (renderDriveMissingNotice()) return;
+
+          populateDriveFilters();
+          const rows = getFilteredDrives();
+
+          document.getElementById("drive-count-badge").textContent =
+            `${rows.length} ${rows.length === 1 ? "Drive" : "Drives"}`;
+
+          // Attendance is only meaningful for drives that have actually
+          // happened. An upcoming drive has an invitation list and, correctly,
+          // nobody through the door yet; folding it into turnout would report a
+          // collapse caused entirely by scheduling something.
+          //
+          // Invitations are different. Ten people HAVE been invited to next
+          // week's drive — that is a fact today, and the table says so, so the
+          // scorecard must not quietly report zero beside it.
+          const held = rows.filter(d => d.drive_status !== "upcoming");
+          const upcoming = rows.filter(d => d.drive_status === "upcoming");
+          const sum = (list, key) => list.reduce((t, d) => t + (Number(d[key]) || 0), 0);
+
+          const invitedAll = sum(rows, "invited_count");
+          const invitedHeld = sum(held, "invited_count");
+          const invitedAttended = sum(held, "invited_attended");
+          const attended = sum(held, "attended_count");
+          const noShows = sum(held, "no_show_count");
+          const walkIns = sum(held, "walk_in_count");
+          const doses = sum(held, "doses_administered");
+          const turnout = invitedHeld > 0 ? Math.round((invitedAttended / invitedHeld) * 1000) / 10 : null;
+
+          // A dash, not a zero, when nothing in view has happened yet.
+          const attendance = (n) => held.length ? n.toLocaleString() : "—";
+
+          document.getElementById("drive-kpi-count").textContent = rows.length.toLocaleString();
+          document.getElementById("drive-kpi-invited").textContent = invitedAll.toLocaleString();
+          document.getElementById("drive-kpi-attended").textContent = attendance(attended);
+          document.getElementById("drive-kpi-noshow").textContent = attendance(noShows);
+          document.getElementById("drive-kpi-walkins").textContent = attendance(walkIns);
+          document.getElementById("drive-kpi-turnout").textContent = turnout === null ? "—" : `${turnout}%`;
+          document.getElementById("drive-kpi-doses").textContent = attendance(doses);
+
+          renderDriveKpiNote(held, upcoming, invitedAll, invitedHeld);
+          renderDriveTurnoutChart(held, upcoming);
+          renderDriveTrendChart(held, upcoming);
+          renderDriveVaccineChart(held, upcoming);
+          renderDriveDemographicsChart(held, upcoming);
+          renderDriveTable(rows);
+        }
+
+        // Why "Invited" can exceed what the attendance figures are measured
+        // against. Without this the scorecard looks self-contradictory.
+        function renderDriveKpiNote(held, upcoming, invitedAll, invitedHeld) {
+          const el = document.getElementById("drive-kpi-note");
+          if (!el) return;
+
+          if (!upcoming.length) { el.style.display = "none"; return; }
+
+          const n = upcoming.length;
+          const pending = invitedAll - invitedHeld;
+          el.style.display = "flex";
+          el.innerHTML =
+            '<i class="fa-solid fa-circle-info" style="color:var(--info);"></i>' +
+            `<span>${n} upcoming drive${n === 1 ? "" : "s"} in view. ` +
+            `${pending.toLocaleString()} ${pending === 1 ? "person is" : "people are"} invited to ${n === 1 ? "it" : "them"}, ` +
+            (held.length
+              ? "counted above; attendance and turnout cover only the drives already held."
+              : "counted above; nothing has happened yet, so there is no attendance to report.") +
+            "</span>";
+        }
+
+        // Three empty panels reading "no data" is misleading when the reason is
+        // simply that the drive has not been held yet.
+        function onlyUpcoming(upcoming) {
+          return Array.isArray(upcoming) && upcoming.length > 0;
+        }
+
+        function renderDriveTurnoutChart(held, upcoming) {
+          const ctx = document.getElementById("chart-drive-turnout");
+          if (!ctx) return;
+          if (chartDriveTurnout) { chartDriveTurnout.destroy(); chartDriveTurnout = null; }
+          resetChartCanvas(ctx);
+
+          // Oldest to newest, capped at the twelve most recent: past that the
+          // bars are too narrow to read and the axis labels overlap.
+          const recent = held.slice()
+            .sort((a, b) => (a.schedule_date || "").localeCompare(b.schedule_date || ""))
+            .slice(-12);
+
+          if (!recent.length) { showEmptyChart(ctx, onlyUpcoming(upcoming) ? "Only upcoming drives in view — nothing has happened yet" : "No drives held in this range"); return; }
+
+          chartDriveTurnout = new Chart(ctx, {
+            type: "bar",
+            data: {
+              // An array per tick is how Chart.js draws a two-line label; a
+              // "\n" inside a string is rendered literally.
+              labels: recent.map(d => [formatDriveDate(d.schedule_date), d.barangay || d.facility_name || ""]),
+              datasets: [
+                { label: "Invited", data: recent.map(d => d.invited_count || 0), backgroundColor: "#C7D2FE", borderRadius: 5 },
+                { label: "Came", data: recent.map(d => d.attended_count || 0), backgroundColor: "#FF68A5", borderRadius: 5 }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: "bottom", labels: { font: { size: 11, family: "DM Sans" }, boxWidth: 12 } },
+                tooltip: {
+                  callbacks: {
+                    title: (items) => {
+                      const d = recent[items[0].dataIndex];
+                      return `${formatDriveDate(d.schedule_date)} — ${d.vaccine_name}`;
+                    },
+                    afterBody: (items) => {
+                      const d = recent[items[0].dataIndex];
+                      const lines = [`${d.barangay || d.facility_name || ""} · ${d.audience}`];
+                      if (d.walk_in_count) lines.push(`${d.walk_in_count} came without an invitation`);
+                      if (d.turnout_rate !== null && d.turnout_rate !== undefined) lines.push(`Turnout ${d.turnout_rate}%`);
+                      return lines;
+                    }
+                  }
+                }
+              },
+              scales: {
+                y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11 } }, grid: { color: "#F0F0F0" } },
+                x: { ticks: { font: { size: 9 }, maxRotation: 0, autoSkip: false }, grid: { display: false } }
+              }
+            }
+          });
+        }
+
+        function renderDriveTrendChart(held, upcoming) {
+          const ctx = document.getElementById("chart-drive-trend");
+          if (!ctx) return;
+          if (chartDriveTrend) { chartDriveTrend.destroy(); chartDriveTrend = null; }
+          resetChartCanvas(ctx);
+
+          // Only drives with an invitation list can carry a turnout figure. One
+          // held before invitations were recorded has no denominator, and a
+          // point at 0% would read as a drive nobody attended.
+          const points = held.slice()
+            .filter(d => d.turnout_rate !== null && d.turnout_rate !== undefined)
+            .sort((a, b) => (a.schedule_date || "").localeCompare(b.schedule_date || ""));
+
+          if (!points.length) { showEmptyChart(ctx, onlyUpcoming(upcoming) ? "Only upcoming drives in view — nothing has happened yet" : "No drive held here has a recorded invitation list"); return; }
+
+          chartDriveTrend = new Chart(ctx, {
+            type: "line",
+            data: {
+              labels: points.map(d => formatDriveDate(d.schedule_date)),
+              datasets: [{
+                label: "Turnout %",
+                data: points.map(d => Number(d.turnout_rate)),
+                borderColor: "#3B82F6",
+                backgroundColor: "rgba(59,130,246,0.12)",
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointBackgroundColor: "#3B82F6"
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    afterBody: (items) => {
+                      const d = points[items[0].dataIndex];
+                      return [`${d.barangay || d.facility_name || ""} · ${d.vaccine_name}`,
+                              `${d.invited_attended} of ${d.invited_count} invited`];
+                    }
+                  }
+                }
+              },
+              scales: {
+                y: { beginAtZero: true, max: 100, ticks: { callback: (v) => `${v}%`, font: { size: 11 } }, grid: { color: "#F0F0F0" } },
+                x: { ticks: { font: { size: 9 }, maxRotation: 45 }, grid: { display: false } }
+              }
+            }
+          });
+        }
+
+        function renderDriveVaccineChart(held, upcoming) {
+          const ctx = document.getElementById("chart-drive-vaccine");
+          if (!ctx) return;
+          if (chartDriveVaccine) { chartDriveVaccine.destroy(); chartDriveVaccine = null; }
+          resetChartCanvas(ctx);
+
+          const byVaccine = {};
+          held.forEach(d => {
+            const key = d.vaccine_name || "Unnamed vaccine";
+            byVaccine[key] = (byVaccine[key] || 0) + (Number(d.doses_administered) || 0);
+          });
+          const entries = Object.entries(byVaccine).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+
+          if (!entries.length) { showEmptyChart(ctx, onlyUpcoming(upcoming) ? "Only upcoming drives in view — nothing has happened yet" : "No doses recorded against a drive"); return; }
+
+          const palette = ["#FF68A5", "#68CBB8", "#3B82F6", "#FFB562", "#8b5cf6", "#E57373", "#0f766e", "#d97706"];
+          chartDriveVaccine = new Chart(ctx, {
+            type: "doughnut",
+            data: {
+              labels: entries.map(([k]) => k.length > 22 ? k.slice(0, 22) + "…" : k),
+              datasets: [{
+                data: entries.map(([, v]) => v),
+                backgroundColor: entries.map((_, i) => palette[i % palette.length]),
+                borderWidth: 2,
+                borderColor: "#ffffff"
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: "62%",
+              plugins: { legend: { position: "bottom", labels: { font: { size: 10, family: "DM Sans" }, boxWidth: 11, padding: 10 } } }
+            }
+          });
+        }
+
+        // Who the drives actually reached. Children are split by sex; mothers
+        // are their own bar rather than being folded into "girls", because a Td
+        // drive reaching 7 women and a measles drive reaching 7 girls are not
+        // the same fact and adding them together would say they were.
+        function renderDriveDemographicsChart(held, upcoming) {
+          const ctx = document.getElementById("chart-drive-demographics");
+          if (!ctx) return;
+          if (chartDriveDemographics) { chartDriveDemographics.destroy(); chartDriveDemographics = null; }
+          resetChartCanvas(ctx);
+
+          let boys = 0, girls = 0, mothers = 0, unrecorded = 0, haveBreakdown = false;
+          held.forEach(d => {
+            if (d.male_count === undefined && d.female_count === undefined) return;
+            haveBreakdown = true;
+            if (d.target_recipients === "mother") {
+              mothers += Number(d.female_count) || 0;
+            } else {
+              boys  += Number(d.male_count) || 0;
+              girls += Number(d.female_count) || 0;
+            }
+            unrecorded += Number(d.sex_not_recorded) || 0;
+          });
+
+          if (!haveBreakdown) {
+            showEmptyChart(ctx, onlyUpcoming(upcoming)
+              ? "Only upcoming drives in view — nothing has happened yet"
+              : "Run migration 20260914 to enable the attendance breakdown");
+            return;
+          }
+
+          const slices = [
+            ["Boys", boys, "#3B82F6"],
+            ["Girls", girls, "#FF68A5"],
+            ["Mothers", mothers, "#8b5cf6"],
+            ["Sex not recorded", unrecorded, "#CBD5E1"],
+          ].filter(s => s[1] > 0);
+
+          if (!slices.length) { showEmptyChart(ctx, "Nobody attended these drives"); return; }
+
+          const total = slices.reduce((t, s) => t + s[1], 0);
+          chartDriveDemographics = new Chart(ctx, {
+            type: "doughnut",
+            data: {
+              labels: slices.map(s => s[0]),
+              datasets: [{
+                data: slices.map(s => s[1]),
+                backgroundColor: slices.map(s => s[2]),
+                borderWidth: 2,
+                borderColor: "#ffffff"
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: "62%",
+              plugins: {
+                legend: { position: "bottom", labels: { font: { size: 10, family: "DM Sans" }, boxWidth: 11, padding: 10 } },
+                tooltip: {
+                  callbacks: {
+                    label: (item) => ` ${item.label}: ${item.parsed} of ${total}`
+                  }
+                }
+              }
+            }
+          });
+        }
+
+        window.toggleDriveSort = function(col) {
+          if (driveSortCol === col) {
+            driveSortDir = driveSortDir === "asc" ? "desc" : "asc";
+          } else {
+            driveSortCol = col;
+            // Names read best A–Z; every count reads best largest-first.
+            driveSortDir = (col === "facility" || col === "vaccine" || col === "audience") ? "asc" : "desc";
+          }
+          renderDriveAnalytics();
+        };
+
+        function updateDriveSortHeaderUI() {
+          document.querySelectorAll("th[data-drive-sort]").forEach(th => {
+            const isCurrent = th.dataset.driveSort === driveSortCol;
+            th.classList.toggle("sort-active", isCurrent);
+            const ind = th.querySelector(".sort-indicator");
+            if (!ind) return;
+            ind.innerHTML = isCurrent
+              ? (driveSortDir === "asc"
+                  ? '<i class="fa-solid fa-arrow-up-long"></i>'
+                  : '<i class="fa-solid fa-arrow-down-long"></i>')
+              : '<i class="fa-solid fa-sort"></i>';
+          });
+        }
+
+        function sortDrives(rows) {
+          const mult = driveSortDir === "asc" ? 1 : -1;
+          const text = (v) => (v || "").toString();
+          // A drive with no invitation list has no turnout at all. Sorting it
+          // as if it were 0% would rank it below a drive nobody came to, which
+          // is a different and much worse thing.
+          const num = (v) => (v === null || v === undefined || v === "") ? -1 : Number(v);
+
+          return rows.slice().sort((a, b) => {
+            switch (driveSortCol) {
+              case "facility": return text(a.barangay || a.facility_name).localeCompare(text(b.barangay || b.facility_name)) * mult;
+              case "vaccine":  return text(a.vaccine_name).localeCompare(text(b.vaccine_name)) * mult;
+              case "audience": return text(a.audience).localeCompare(text(b.audience)) * mult;
+              case "invited":  return (num(a.invited_count) - num(b.invited_count)) * mult;
+              case "attended": return (num(a.attended_count) - num(b.attended_count)) * mult;
+              case "noshow":   return (num(a.no_show_count) - num(b.no_show_count)) * mult;
+              case "walkins":  return (num(a.walk_in_count) - num(b.walk_in_count)) * mult;
+              case "turnout":  return (num(a.turnout_rate) - num(b.turnout_rate)) * mult;
+              case "doses":    return (num(a.doses_administered) - num(b.doses_administered)) * mult;
+              case "units":    return (num(a.units_consumed) - num(b.units_consumed)) * mult;
+              // Boys first, then girls, so the column sorts by the figure a
+              // reader is looking at rather than by their sum.
+              case "sex":      return ((num(a.male_count) - num(b.male_count))
+                                    || (num(a.female_count) - num(b.female_count))) * mult;
+              case "status":   return text(a.drive_status).localeCompare(text(b.drive_status)) * mult;
+              default:         return text(a.schedule_date).localeCompare(text(b.schedule_date)) * mult;
+            }
+          });
+        }
+
+        function turnoutBadge(d) {
+          if (d.drive_status === "upcoming") return '<span class="badge badge-inactive">—</span>';
+          if (d.turnout_rate === null || d.turnout_rate === undefined) {
+            return '<span class="badge badge-inactive" title="No invitation list was recorded for this drive, so there is nothing to measure turnout against">No list</span>';
+          }
+          const rate = Number(d.turnout_rate);
+          const cls = rate >= 80 ? "badge-low-risk" : rate >= 50 ? "badge-medium" : "badge-high-risk";
+          return `<span class="badge ${cls}">${rate}%</span>`;
+        }
+
+        // Nobody has attended a drive that has not happened. A zero there reads
+        // as "we held it and none came", which is a different and much worse
+        // thing to report about next week's drive.
+        function notYet(d, value) {
+          if (d.drive_status === "upcoming") return '<span style="color:var(--text-secondary);">—</span>';
+          return String(Number(value) || 0);
+        }
+
+        // Whole units off the shelf, and how many of them were vials broken
+        // open. Fewer units than doses is CORRECT for a multi-dose vaccine —
+        // seven Td doses out of one 10-dose vial is one unit — so the figure is
+        // labelled rather than left to look like a discrepancy.
+        function stockCell(d) {
+          if (d.units_consumed === undefined || d.units_consumed === null) {
+            return '<span class="badge badge-inactive" title="Run migration 20260914 to report stock against a drive">—</span>';
+          }
+          const units = Number(d.units_consumed) || 0;
+          const vials = Number(d.vials_opened) || 0;
+          const fromOpen = Number(d.doses_from_open_vials) || 0;
+          if (!units && !fromOpen) return '<span style="color:var(--text-secondary);">—</span>';
+
+          const detail = vials
+            ? `${vials} vial${vials === 1 ? "" : "s"} opened, ${fromOpen} dose${fromOpen === 1 ? "" : "s"} drawn from ${vials === 1 ? "it" : "them"}`
+            : "single-dose presentation, one unit per dose";
+          return `<span style="font-weight:600;" title="${esc(detail)}">${units}</span>` +
+                 (vials ? `<div style="font-size:10.5px; color:var(--text-secondary);">${vials} vial${vials === 1 ? "" : "s"} opened</div>` : "");
+        }
+
+        function sexCell(d) {
+          if (d.male_count === undefined && d.female_count === undefined) {
+            return '<span class="badge badge-inactive" title="Run migration 20260914 to report who attended">—</span>';
+          }
+          const m = Number(d.male_count) || 0;
+          const f = Number(d.female_count) || 0;
+          const unknown = Number(d.sex_not_recorded) || 0;
+          if (!m && !f && !unknown) return '<span style="color:var(--text-secondary);">—</span>';
+
+          if (d.target_recipients === "mother") {
+            return `<span title="A maternal Td drive. Mothers are the patients, so everyone who attended is a woman.">${f} women</span>`;
+          }
+          const age = (d.avg_age_months === null || d.avg_age_months === undefined)
+            ? "" : `<div style="font-size:10.5px; color:var(--text-secondary);">avg ${d.avg_age_months} mo</div>`;
+          return `<span style="color:#3B82F6; font-weight:600;">${m}</span> / ` +
+                 `<span style="color:#FF68A5; font-weight:600;">${f}</span>` +
+                 (unknown ? `<span style="color:var(--text-secondary);"> (+${unknown}?)</span>` : "") +
+                 age;
+        }
+
+        function statusBadge(d) {
+          if (d.drive_status === "upcoming") return '<span class="badge badge-admin"><i class="fa-solid fa-clock"></i> Upcoming</span>';
+          if (d.drive_status === "today") return '<span class="badge badge-active"><i class="fa-solid fa-bolt"></i> Today</span>';
+          return '<span class="badge badge-teal"><i class="fa-solid fa-circle-check"></i> Completed</span>';
+        }
+
+        function renderDriveTable(rows) {
+          updateDriveSortHeaderUI();
+          const tbody = document.getElementById("tbody-drives");
+          if (!tbody) return;
+
+          if (!rows.length) {
+            tbody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:28px; color:var(--text-secondary);">No vaccination drive matches these filters.</td></tr>`;
+            return;
+          }
+
+          tbody.innerHTML = sortDrives(rows).map(d => {
+            // Two calendar entries for one real drive. Only the earlier one is
+            // credited with the attendance, so say so rather than showing the
+            // second as a drive nobody came to.
+            const dupWarning = (Number(d.colliding_rows) || 1) > 1
+              ? ` <i class="fa-solid fa-triangle-exclamation" style="color:var(--warning);" title="${d.is_canonical
+                    ? 'Another calendar entry duplicates this drive. Attendance is credited here.'
+                    : 'This duplicates an earlier entry for the same drive, which is credited with the attendance.'}"></i>`
+              : "";
+
+            return `
+              <tr class="drive-row${String(d.drive_id) === String(selectedDriveId) ? " is-selected" : ""}" data-drive-id="${esc(d.drive_id)}">
+                <td style="font-weight:700; color:var(--brand-text); white-space:nowrap;">${esc(formatDriveDate(d.schedule_date))}${dupWarning}</td>
+                <td>
+                  <div style="font-weight:600; color:var(--text-primary);"><i class="fa-solid fa-location-dot" style="color:var(--brand-primary); margin-right:4px;"></i>${esc(d.barangay || "—")}</div>
+                  <div style="font-size:11px; color:var(--text-secondary);">${esc(d.facility_name || "Unknown centre")}</div>
+                </td>
+                <td>${esc(d.vaccine_name || "—")}</td>
+                <td><span class="badge ${d.target_recipients === "mother" ? "badge-mother" : "badge-admin"}">${esc(d.audience || "—")}</span></td>
+                <td style="text-align:center; font-weight:600;">${Number(d.invited_count) || 0}</td>
+                <td style="text-align:center; font-weight:700; color:var(--success);">${notYet(d, d.attended_count)}</td>
+                <td style="text-align:center; font-weight:600; color:${(Number(d.no_show_count) || 0) > 0 ? "var(--error)" : "var(--text-secondary)"};">${
+                  (d.no_show_count === null || d.no_show_count === undefined) ? "—" : Number(d.no_show_count)
+                }</td>
+                <td style="text-align:center; color:var(--text-secondary);">${notYet(d, d.walk_in_count)}</td>
+                <td style="text-align:center;">${turnoutBadge(d)}</td>
+                <td style="text-align:center; font-weight:600;">${notYet(d, d.doses_administered)}</td>
+                <td style="text-align:center;">${stockCell(d)}</td>
+                <td style="text-align:center;">${sexCell(d)}</td>
+                <td style="text-align:center;">${statusBadge(d)}</td>
+              </tr>
+            `;
+          }).join("");
+
+          tbody.querySelectorAll("tr.drive-row").forEach(tr => {
+            tr.addEventListener("click", () => openDriveRoster(tr.dataset.driveId));
+          });
+        }
+
+        const ROSTER_OUTCOME = {
+          attended:    { label: "Came", cls: "badge-teal", icon: "fa-circle-check", rank: 1 },
+          walk_in:     { label: "Walk-in", cls: "badge-admin", icon: "fa-person-walking", rank: 2 },
+          expected:    { label: "Expected", cls: "badge-active", icon: "fa-clock", rank: 3 },
+          no_show:     { label: "Did not come", cls: "badge-high-risk", icon: "fa-circle-xmark", rank: 4 },
+          unreachable: { label: "No contact details", cls: "badge-medium", icon: "fa-phone-slash", rank: 5 },
+        };
+
+        async function openDriveRoster(driveId) {
+          selectedDriveId = driveId;
+          const panel = document.getElementById("drive-roster-panel");
+          const tbody = document.getElementById("tbody-drive-roster");
+          const title = document.getElementById("drive-roster-title");
+          if (!panel || !tbody) return;
+
+          const drive = allDrives.find(d => String(d.drive_id) === String(driveId));
+          if (title) {
+            title.textContent = drive
+              ? `${driveLabel(drive)} — ${drive.audience}`
+              : `Drive #${driveId}`;
+          }
+
+          panel.style.display = "";
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-secondary);">Loading roster…</td></tr>`;
+          document.querySelectorAll("#tbody-drives tr.drive-row").forEach(tr => {
+            tr.classList.toggle("is-selected", tr.dataset.driveId === String(driveId));
+          });
+
+          let rows = [];
+          try {
+            const { data, error } = await db
+              .from("vaccination_drive_participants")
+              .select("*")
+              .eq("drive_id", driveId);
+            if (error) throw error;
+            rows = data || [];
+          } catch (e) {
+            console.warn("drive roster read failed:", e.message || e);
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--error);">Could not load this drive's roster.</td></tr>`;
+            return;
+          }
+
+          if (!rows.length) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-secondary);">Nobody was invited to this drive and nobody was recorded as attending it.</td></tr>`;
+            return;
+          }
+
+          rows.sort((a, b) => {
+            const ra = (ROSTER_OUTCOME[a.outcome]?.rank ?? 9);
+            const rb = (ROSTER_OUTCOME[b.outcome]?.rank ?? 9);
+            if (ra !== rb) return ra - rb;
+            return (a.chart_number || "").localeCompare(b.chart_number || "");
+          });
+
+          panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+          tbody.innerHTML = rows.map(r => {
+            const o = ROSTER_OUTCOME[r.outcome] || { label: r.outcome || "—", cls: "badge-inactive", icon: "fa-circle" };
+            return `
+              <tr>
+                <td style="font-weight:700; color:var(--brand-text);">${esc(r.chart_number || "—")}</td>
+                <td>${r.subject_kind === "mother" ? "Mother" : "Child"}</td>
+                <td>${r.was_invited ? '<i class="fa-solid fa-check" style="color:var(--success);"></i>' : '<span style="color:var(--text-secondary);">Not on the list</span>'}</td>
+                <td>${r.reminded_at ? esc(new Date(r.reminded_at).toLocaleDateString("en-PH", { month: "short", day: "numeric" })) : "<span style='color:var(--text-secondary);'>—</span>"}</td>
+                <td><span class="badge ${o.cls}"><i class="fa-solid ${o.icon}"></i> ${esc(o.label)}</span></td>
+                <td style="text-align:center; font-weight:600;">${Number(r.doses_received) || 0}</td>
+                <td>${r.attended_on ? esc(formatDriveDate(r.attended_on)) : "<span style='color:var(--text-secondary);'>—</span>"}</td>
+              </tr>
+            `;
+          }).join("");
+        }
+
+        function closeDriveRoster() {
+          selectedDriveId = null;
+          const panel = document.getElementById("drive-roster-panel");
+          if (panel) panel.style.display = "none";
+          document.querySelectorAll("#tbody-drives tr.drive-row").forEach(tr => tr.classList.remove("is-selected"));
+        }
+
+        function exportDrivesCsv() {
+          const rows = sortDrives(getFilteredDrives());
+          if (!rows.length) { showToast("No drives to export with these filters.", "warning"); return; }
+
+          const header = ["Drive Date", "Barangay", "Health Center", "Vaccine", "Given To",
+                          "Invited", "Reached", "Reminded", "Came", "Invited & Came",
+                          "Walk-ins", "No-shows", "Turnout %", "Doses Given",
+                          "Units Off Shelf", "Vials Opened", "Doses From Open Vials",
+                          "Male", "Female", "Avg Age (months)", "Status"];
+          const cell = (v) => {
+            const s = (v === null || v === undefined) ? "" : String(v);
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          };
+          const csv = [header.join(",")].concat(rows.map(d => [
+            d.schedule_date, d.barangay, d.facility_name, d.vaccine_name, d.audience,
+            d.invited_count, d.invited_reachable, d.reminded_count, d.attended_count,
+            d.invited_attended, d.walk_in_count, d.no_show_count,
+            (d.turnout_rate === null || d.turnout_rate === undefined) ? "" : d.turnout_rate,
+            d.doses_administered,
+            d.units_consumed, d.vials_opened, d.doses_from_open_vials,
+            d.male_count, d.female_count, d.avg_age_months,
+            d.drive_status
+          ].map(cell).join(","))).join("\r\n");
+
+          // BOM so Excel reads the file as UTF-8 rather than the system codepage.
+          const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `vaccination-drives-${getReportsTodayStr()}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          showToast(`Exported ${rows.length} drive${rows.length === 1 ? "" : "s"}.`, "success");
+        }
+
         // Event Listeners
         document.getElementById("filter-bhc-select")?.addEventListener("change", renderReports);
         document.getElementById("refresh-reports-btn")?.addEventListener("click", () => {
@@ -1363,6 +2657,15 @@
           initReports();
         });
         document.getElementById("bhc-table-search")?.addEventListener("input", renderBhcComparativeTable);
+        document.querySelectorAll("#bhc-group-toggle button").forEach(btn => {
+          btn.addEventListener("click", () => {
+            bhcGroupBy = btn.dataset.group;
+            renderGroupingToggle();
+            // The workload chart compares the same unit, so it moves too.
+            renderBhcWorkloadChart();
+            renderBhcComparativeTable();
+          });
+        });
         document.getElementById("export-pdf-btn")?.addEventListener("click", () => {
           window.print();
         });
@@ -1379,6 +2682,29 @@
           th.addEventListener("click", () => {
             const col = th.dataset.bhcSort;
             if (col) window.toggleBhcSort(col);
+          });
+        });
+
+        // Vaccination Drive Analytics Wiring
+        ["drive-filter-vaccine", "drive-filter-audience", "drive-filter-status"].forEach(id => {
+          document.getElementById(id)?.addEventListener("change", () => {
+            // A drive outside the new filters can no longer be the one on show.
+            closeDriveRoster();
+            renderDriveAnalytics();
+          });
+        });
+        document.getElementById("drive-filter-specific")?.addEventListener("change", (e) => {
+          renderDriveAnalytics();
+          if (e.target.value !== "all") openDriveRoster(e.target.value);
+          else closeDriveRoster();
+        });
+        document.getElementById("drive-search")?.addEventListener("input", renderDriveAnalytics);
+        document.getElementById("drive-roster-close")?.addEventListener("click", closeDriveRoster);
+        document.getElementById("drive-export-btn")?.addEventListener("click", exportDrivesCsv);
+        document.querySelectorAll("th[data-drive-sort]").forEach(th => {
+          th.addEventListener("click", () => {
+            const col = th.dataset.driveSort;
+            if (col) window.toggleDriveSort(col);
           });
         });
 
