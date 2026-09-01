@@ -2831,6 +2831,7 @@
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
     <script src="live-refresh.js"></script>
+    <script src="notification-center.js"></script>
 
     <!-- Main Logic Script -->
     <script>
@@ -2838,6 +2839,7 @@
         const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
         const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        window.AdminNotifications?.attach(db);
         window.db = db;
 
         const SESSION_KEY = "inaagapay_admin_session";
@@ -10961,6 +10963,28 @@
           }
         }
 
+        /**
+         * Open the hub and pane a link asked for.
+         *
+         * The notification centre links here from every other page — a low-stock
+         * alert should land on the catalogue, an expiry alert on the batch
+         * register, an incoming request on the request queue. Without this they
+         * all land on whichever pane the officer happened to leave open, which
+         * makes the alert feel like it did nothing.
+         *
+         * Deliberately runs AFTER restoreSubview, so an explicit link wins over
+         * the remembered pane, and after the data has loaded, because the
+         * analytics hub builds charts the moment it opens.
+         */
+        function applyHubQueryParam() {
+          const params = new URLSearchParams(window.location.search);
+          const hub = params.get("tab");
+          if (!hub || !HUB_SUBVIEW_SWITCH[hub]) return;
+
+          const subview = params.get("subview");
+          window.switchTab(hub, subview || null);
+        }
+
         function openPendingIssueModal() {
           if (!pendingIssueTarget) return;
           const target = pendingIssueTarget;
@@ -11218,6 +11242,7 @@
           Object.keys(HUB_DEFAULT_SUBVIEW).forEach(restoreSubview);
           inventoryBooting = false;
           await loadInventoryData();
+          applyHubQueryParam();
         })();
 
         window.AdminLiveRefresh?.start({

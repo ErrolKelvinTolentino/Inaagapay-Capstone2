@@ -175,12 +175,14 @@
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
     <script src="live-refresh.js"></script>
+    <script src="notification-center.js"></script>
     <script>
       (function () {
         const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
         const SUPABASE_ANON =
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        window.AdminNotifications?.attach(db);
         window.db = db;
 
         const SESSION_KEY = "inaagapay_admin_session";

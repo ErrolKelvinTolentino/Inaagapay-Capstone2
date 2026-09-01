@@ -65,4 +65,26 @@
   document.querySelectorAll(`.profile-menu a[href="${currentPage}"]`).forEach((link) => {
     link.setAttribute("aria-current", "page");
   });
+
+  /* ── Notification bell ──────────────────────────────
+     help, profile and settings are the only pages that read nothing from the
+     database, so they were the only three with no Supabase client to hand the
+     notification centre. A bell that is present on eleven pages and absent on
+     three reads as a bug, so the client is built here — once, for all three —
+     rather than pasted into each of them.
+
+     These constants are the twelfth copy of the same pair in this folder. That
+     is worth fixing, but it is a refactor of every page and does not belong in
+     this change; keeping them identical to the other eleven is the safe move
+     today.
+     ─────────────────────────────────────────────────── */
+  const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
+  const SUPABASE_ANON =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
+
+  if (window.supabase?.createClient && window.AdminNotifications) {
+    window.AdminNotifications.attach(
+      window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON),
+    );
+  }
 })();

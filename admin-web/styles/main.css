@@ -5108,3 +5108,281 @@ table.data-table tbody tr:hover td {
     width: 100%;
   }
 }
+
+/* =====================================================
+   Notification Centre — header bell and panel
+   Paired with pages/notification-center.js.
+   ===================================================== */
+
+.notif-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.notif-bell {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-primary);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition),
+    color var(--transition), transform var(--transition-fast);
+}
+
+.notif-bell:hover {
+  border-color: var(--brand-primary-30);
+  background: var(--brand-secondary);
+  color: var(--brand-text);
+}
+
+.notif-bell:active {
+  transform: scale(0.96);
+}
+
+.notif-bell.has-unread {
+  color: var(--brand-primary);
+  border-color: var(--brand-primary-30);
+}
+
+/* The count is the only thing on this bar that is allowed to be loud. */
+.notif-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--brand-accent);
+  color: var(--text-on-color);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.notif-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 1200;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  background: #ffffff;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-card-sm);
+  box-shadow: 0 14px 30px rgba(45, 45, 45, 0.14);
+  overflow: hidden;
+}
+
+.notif-panel[hidden] {
+  display: none;
+}
+
+.notif-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--brand-secondary);
+}
+
+.notif-panel-head strong {
+  font-size: 13.5px;
+  color: var(--brand-text);
+}
+
+.notif-panel-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notif-filter,
+.notif-readall {
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  padding: 4px 9px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition),
+    border-color var(--transition);
+}
+
+.notif-filter:hover,
+.notif-readall:hover {
+  color: var(--brand-text);
+  background: var(--brand-primary-10);
+}
+
+.notif-filter.is-on {
+  color: var(--brand-text);
+  background: #fff;
+  border-color: var(--brand-primary-30);
+}
+
+.notif-list {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.notif-list:focus-visible {
+  outline: none;
+}
+
+.notif-item {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 14px;
+  border: none;
+  border-bottom: 1px solid var(--border-primary);
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.notif-item:last-child {
+  border-bottom: none;
+}
+
+.notif-item:hover {
+  background: var(--brand-secondary);
+}
+
+.notif-item.is-unread {
+  background: var(--brand-primary-10);
+}
+
+.notif-item.is-unread:hover {
+  background: var(--brand-secondary);
+}
+
+.notif-item-icon {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  margin-top: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-icon);
+  font-size: 12.5px;
+}
+
+/* Tones name the SUBJECT, not a severity. Severity lives in the wording the
+   database wrote; colouring an expiry watch the same red as an expired batch
+   here would contradict it. */
+.notif-item-icon.tone-stock    { background: var(--info-10);    color: #2563eb; }
+.notif-item-icon.tone-expiry   { background: var(--warning-10); color: #b45309; }
+.notif-item-icon.tone-request  { background: var(--brand-primary-10); color: var(--brand-text); }
+.notif-item-icon.tone-transfer { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
+.notif-item-icon.tone-care     { background: var(--success-10); color: #318f7d; }
+.notif-item-icon.tone-general  { background: var(--border-primary); color: var(--text-secondary); }
+
+.notif-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notif-item-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+/* Two lines, then an ellipsis. The full sentence is on the page the row opens;
+   a panel that lets one alert run to six lines hides the four beneath it. */
+.notif-item-msg {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notif-item-time {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  opacity: 0.85;
+}
+
+.notif-item-dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  margin-top: 11px;
+  border-radius: 50%;
+  background: var(--brand-primary);
+}
+
+.notif-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 34px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.notif-empty i {
+  font-size: 20px;
+  color: var(--brand-primary-40);
+  margin-bottom: 3px;
+}
+
+.notif-empty strong {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.notif-empty span {
+  font-size: 11.5px;
+  line-height: 1.45;
+  max-width: 260px;
+}
+
+@media (max-width: 992px) {
+  /* Anchored to the header rather than the bell: at this width the bell sits
+     close enough to the right edge that a right-aligned 380px panel would hang
+     off the screen. */
+  .notif-panel {
+    position: fixed;
+    top: 64px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: none;
+  }
+
+  .notif-list {
+    max-height: 60vh;
+  }
+}

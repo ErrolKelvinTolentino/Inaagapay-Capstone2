@@ -558,6 +558,55 @@
           </div>
         </div>
 
+        <!-- ── Child Growth & Nutritional Status ──────────────────────────
+             The z-scores are computed and stored by the mobile app when the
+             midwife records a measurement (child_growth_records). Nothing is
+             recalculated here: one formula, in one place, so a child cannot be
+             stunted on the phone and fine on the portal.
+
+             Counts, not rates. See renderChildNutrition for why.
+             ─────────────────────────────────────────────────────────────── -->
+        <div class="card" id="card-child-nutrition">
+          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+            <div>
+              <h3 class="card-title"><i class="fa-solid fa-child-reaching" style="color: var(--brand-primary); margin-right: 6px;"></i> Child Growth &amp; Nutritional Status</h3>
+              <p class="small-description">Latest measurement per child, classified against the WHO Child Growth Standards (&plusmn;2 SD)</p>
+            </div>
+            <span class="badge badge-teal" id="nutrition-coverage-badge">— measured</span>
+          </div>
+
+          <!-- Indicator tiles -->
+          <div id="nutrition-tiles" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:16px;"></div>
+
+          <!-- Shown below n=10, and whenever a denominator is too small to
+               carry a percentage. -->
+          <div id="nutrition-smalln-note" style="display:none; margin-bottom:16px;"></div>
+
+          <!-- Children currently below the WHO range -->
+          <div class="table-wrap" style="max-height:300px; overflow-y:auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Child</th>
+                  <th id="nutrition-col-facility">BHC</th>
+                  <th>Latest Measurement</th>
+                  <th style="text-align:center;">Weight-for-Age</th>
+                  <th style="text-align:center;">Height-for-Age</th>
+                  <th style="text-align:center;">BMI-for-Age</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-child-nutrition">
+                <tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-secondary);">Loading growth records...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Readings the WHO plausibility flags reject. Not a nutrition
+               finding — a data-quality one, which is why it is kept apart from
+               the counts above rather than folded into them. -->
+          <div id="nutrition-implausible" style="display:none; margin-top:16px;"></div>
+        </div>
+
         <!-- ── Detailed BHC Comparative Performance Analytics Table ── -->
         <div class="card">
           <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
@@ -783,11 +832,13 @@
     <script src="portal-scope.js"></script>
     <script src="inventory-stock.js"></script>
     <script src="live-refresh.js"></script>
+    <script src="notification-center.js"></script>
     <script>
       (function() {
         const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
         const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
         const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        window.AdminNotifications?.attach(db);
         const SESSION_KEY = "inaagapay_admin_session";
 
         const session = (() => {
@@ -859,6 +910,7 @@
         let allPregnancies = [];
         let allChildren = [];
         let allImmunizations = [];
+        let allGrowthRecords = [];
         // Stock is held by InventoryStock rather than a local array, because it
         // needs the batches alongside the catalogue to mean anything.
 
@@ -929,10 +981,33 @@
           } catch (e) { console.warn("Pregnancies fetch warning:", e); }
 
           // 5. Fetch Children & Immunization
+          //
+          // Children are filed against a health centre the same way mothers and
+          // midwives are, and were the only one of the three not being narrowed
+          // to this office — so an RHU's own reports counted every child in the
+          // municipality. Same rule, same helper.
           try {
             const { data: cData } = await db.from("children").select("*");
-            allChildren = cData || [];
+            allChildren = (cData || []).filter(inScope);
           } catch (e) {}
+
+          // 5b. Growth measurements, for the nutritional status card.
+          //
+          // Narrowed by child rather than re-filtered by facility: the record
+          // itself carries no assigned_bhc_id, and the child roster above is
+          // already scoped, so keying off it cannot leak a record from a centre
+          // this office does not cover.
+          try {
+            const childIds = new Set(allChildren.map(c => String(c.child_id)));
+            const { data: gData } = await db
+              .from("child_growth_records")
+              .select("child_details_id, child_id, measurement_date, child_weight, child_height, weight_for_age_zscore, height_for_age_zscore, bmi_for_age_zscore")
+              .order("measurement_date", { ascending: false });
+            allGrowthRecords = (gData || []).filter(r => childIds.has(String(r.child_id)));
+          } catch (e) {
+            console.warn("Growth records fetch warning:", e.message || e);
+            allGrowthRecords = [];
+          }
 
           try {
             const { data: vData } = await db.from("immunization_records").select("*");
@@ -1100,6 +1175,9 @@
           set("filter-bhc-label", mho ? "Facility:" : "Health Center:");
           set("chart-bhc-title", mho ? "Patient Distribution per Rural Health Unit" : "Patient Distribution per Health Center");
           set("high-risk-col-facility", "Health Center");
+          // Children are filed against a barangay health centre in both tiers,
+          // so this column names one whoever is reading it.
+          set("nutrition-col-facility", "Health Center");
 
           const badge = document.getElementById("chart-bhc-label");
           if (badge) badge.textContent = mho ? "RHU Comparison" : "BHC Comparison";
@@ -1234,7 +1312,17 @@
             const motherIds = new Set(filteredMothers.map(m => m.mother_id));
             filteredPregnancies = allPregnancies.filter(p => motherIds.has(p.mother_id));
             filteredMidwives = allMidwives.filter(m => inSelectedScope(m.assigned_bhc_id, selectedBhcId));
-            filteredChildren = allChildren.filter(c => motherIds.has(c.mother_id));
+            // A child carries its own assigned_bhc_id, and that is the centre
+            // the growth card names in its facility column. Selecting by the
+            // mother's centre instead put a child under a heading that
+            // contradicted the row next to it whenever the two differ — a
+            // child registered at the centre nearest the grandmother who
+            // brings him, for instance. The mother is still the fallback for
+            // records that never had a centre recorded.
+            filteredChildren = allChildren.filter(c =>
+              c.assigned_bhc_id
+                ? inSelectedScope(c.assigned_bhc_id, selectedBhcId)
+                : motherIds.has(c.mother_id));
           }
 
           // Filter Data by Date Range (if active)
@@ -1345,6 +1433,7 @@
           // Render Tables
           renderHighRiskTable(ongoingPregnancies);
           renderStockAlertsTable(shortageItems);
+          renderChildNutrition(filteredChildren);
           renderBhcComparativeTable();
 
           // Drives read the same facility and date-range choices, against the
@@ -1731,6 +1820,261 @@
 
         let bhcSortCol = "name";
         let bhcSortDir = "asc";
+
+        /* ── Child growth & nutritional status ─────────────────────────────
+
+           WHAT THIS READS, AND WHAT IT DELIBERATELY DOES NOT COMPUTE
+
+           The z-scores come from `child_growth_records`, where the mobile app
+           wrote them when the midwife saved the measurement. This screen does
+           not recalculate them and does not carry a copy of the WHO tables.
+           GrowthCalculator in the Flutter app is the one implementation; a
+           second one here would drift from it, and the first symptom would be
+           a child reading "stunted" on the portal and "within range" on the
+           phone the midwife is holding in front of the mother.
+
+           WHY COUNTS AND NOT RATES
+
+           A stunting *rate* over eleven children is not a statistic, it is one
+           child worth nine percentage points. Percentages appear only once at
+           least ten children have a measurement, and the card says so plainly
+           below that. This is the same rule the midwife analytics already
+           follow, applied to the same kind of small denominator.
+
+           WHY THE LATEST MEASUREMENT ONLY
+
+           A child weighed four times would otherwise be counted four times,
+           and the busiest-monitored children — usually the ones being watched
+           because something is wrong — would dominate the totals. One child,
+           one current status.
+           ───────────────────────────────────────────────────────────────── */
+
+        // Matches GrowthCalculator.whoStandardSd in the Flutter app. Both must
+        // move together if either moves.
+        const WHO_SD_CUTOFF = 2.0;
+        const WHO_SEVERE_CUTOFF = 3.0;
+
+        /* Biologically implausible value flags, WHO Child Growth Standards.
+           A length of 50 cm typed for a one-year-old yields a height-for-age
+           around -8 SD; that is a keyboard slip, not a child, and averaging it
+           into a nutrition figure turns one typo into a district finding. WHO
+           excludes these from analysis and so does this card — but it lists
+           them underneath, because somebody at that health centre needs to fix
+           the record. */
+        const GROWTH_INDICATORS = [
+          { key: "weight_for_age_zscore", label: "Underweight",   severeLabel: "Severely underweight", short: "Weight-for-age", biv: [-6, 5] },
+          { key: "height_for_age_zscore", label: "Stunted",       severeLabel: "Severely stunted",     short: "Height-for-age", biv: [-6, 6] },
+          { key: "bmi_for_age_zscore",    label: "Thin (wasted)", severeLabel: "Severely thin",        short: "BMI-for-age",    biv: [-5, 5] },
+        ];
+
+        function growthBand(z, indicator) {
+          if (z === null || z === undefined || !Number.isFinite(Number(z))) return "nodata";
+          const value = Number(z);
+          if (value < indicator.biv[0] || value > indicator.biv[1]) return "implausible";
+          if (value < -WHO_SEVERE_CUTOFF) return "severe";
+          if (value < -WHO_SD_CUTOFF) return "below";
+          if (value > WHO_SD_CUTOFF) return "above";
+          return "within";
+        }
+
+        /** The most recent measurement for each child, one row per child. */
+        function latestGrowthPerChild(children) {
+          const allowed = new Set(children.map(c => String(c.child_id)));
+          const latest = new Map();
+
+          allGrowthRecords
+            .filter(r => allowed.has(String(r.child_id)))
+            .forEach(r => {
+              const key = String(r.child_id);
+              const held = latest.get(key);
+              if (!held) { latest.set(key, r); return; }
+              // Same-day repeats happen — three were recorded for one child in
+              // a single afternoon. The higher id is the later entry, which is
+              // the correction, so it wins rather than whichever row the
+              // database happened to return first.
+              const newer =
+                r.measurement_date > held.measurement_date ||
+                (r.measurement_date === held.measurement_date &&
+                 Number(r.child_details_id) > Number(held.child_details_id));
+              if (newer) latest.set(key, r);
+            });
+
+          return latest;
+        }
+
+        function zChip(z, indicator) {
+          const band = growthBand(z, indicator);
+          if (band === "nodata") return `<span style="color:var(--text-secondary);">—</span>`;
+
+          const value = Number(z).toFixed(1);
+          const styles = {
+            severe:      "background:var(--error-10); color:#b91c1c;",
+            below:       "background:var(--warning-10); color:#b45309;",
+            within:      "background:var(--success-10); color:#318f7d;",
+            above:       "background:var(--info-10); color:#1d4ed8;",
+            implausible: "background:var(--border-primary); color:var(--text-secondary);",
+          };
+          const text = band === "implausible" ? `${value} ?` : value;
+          const title = {
+            severe: "Below -3 SD", below: "Below -2 SD", within: "Within ±2 SD",
+            above: "Above +2 SD", implausible: "Outside the WHO plausible range — check the record",
+          }[band];
+
+          return `<span title="${esc(title)}" style="display:inline-block; padding:2px 9px; border-radius:var(--radius-pill); font-size:11.5px; font-weight:700; ${styles[band]}">${esc(text)}</span>`;
+        }
+
+        function renderChildNutrition(children) {
+          const tilesEl       = document.getElementById("nutrition-tiles");
+          const tbody         = document.getElementById("tbody-child-nutrition");
+          const badge         = document.getElementById("nutrition-coverage-badge");
+          const smallNoteEl   = document.getElementById("nutrition-smalln-note");
+          const implausibleEl = document.getElementById("nutrition-implausible");
+          if (!tilesEl || !tbody) return;
+
+          const latest      = latestGrowthPerChild(children);
+          const measured    = latest.size;
+          const totalKids   = children.length;
+          const childById   = new Map(children.map(c => [String(c.child_id), c]));
+          const bhcName = (id) => {
+            const hit = allBhcs.find(b => String(b.bhc_id) === String(id));
+            return hit ? (hit.bhc_name || hit.name) : "—";
+          };
+
+          if (badge) {
+            badge.textContent = totalKids === 0
+              ? "No children registered"
+              : `${measured} of ${totalKids} measured`;
+          }
+
+          /* ── Tiles ─────────────────────────────────────────────────────── */
+          // Percentages need a denominator that can carry one. Below ten
+          // children a single record moves the figure by ten points, so the
+          // tile shows the count alone and the note below says why.
+          const showRates = measured >= 10;
+
+          tilesEl.innerHTML = GROWTH_INDICATORS.map(ind => {
+            let below = 0, severe = 0, assessed = 0;
+            latest.forEach(rec => {
+              const band = growthBand(rec[ind.key], ind);
+              if (band === "nodata" || band === "implausible") return;
+              assessed += 1;
+              if (band === "severe") { severe += 1; below += 1; }
+              else if (band === "below") below += 1;
+            });
+
+            const rate = showRates && assessed > 0
+              ? ` <span style="font-size:12px; font-weight:600; color:var(--text-secondary);">(${Math.round((below / assessed) * 100)}%)</span>`
+              : "";
+            const tone = below === 0 ? "var(--success)" : (severe > 0 ? "var(--error)" : "var(--warning)");
+
+            return `
+              <div style="border:1px solid var(--border-primary); border-left:4px solid ${tone}; border-radius:var(--radius-card-sm); padding:14px 16px;">
+                <div style="font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--text-secondary);">${esc(ind.label)}</div>
+                <div style="font-size:26px; font-weight:800; color:var(--text-primary); margin-top:2px;">${below}${rate}</div>
+                <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">
+                  ${severe > 0 ? `<strong style="color:#b91c1c;">${severe} severe</strong> · ` : ""}${assessed} assessed · ${esc(ind.short)}
+                </div>
+              </div>`;
+          }).join("");
+
+          if (smallNoteEl) {
+            if (measured === 0) {
+              smallNoteEl.style.display = "none";
+            } else if (!showRates) {
+              smallNoteEl.style.display = "block";
+              smallNoteEl.innerHTML = `
+                <div style="display:flex; gap:9px; align-items:flex-start; padding:11px 14px; background:var(--info-10); border:1px solid rgba(59,130,246,0.25); border-radius:var(--radius-card-sm); font-size:12px; color:#1e40af; line-height:1.5;">
+                  <i class="fa-solid fa-circle-info" style="margin-top:2px;"></i>
+                  <span><strong>Counts only — ${measured} child${measured === 1 ? "" : "ren"} measured.</strong>
+                  Percentages are withheld below ten children because one child would move the figure by more than ten points. They appear automatically once the tenth measurement is recorded.</span>
+                </div>`;
+            } else {
+              smallNoteEl.style.display = "none";
+            }
+          }
+
+          /* ── Children below the WHO range ──────────────────────────────── */
+          const flagged = [];
+          const implausible = [];
+
+          latest.forEach((rec, childId) => {
+            const child = childById.get(childId);
+            if (!child) return;
+
+            const bands = GROWTH_INDICATORS.map(ind => growthBand(rec[ind.key], ind));
+            if (bands.some(b => b === "implausible")) implausible.push({ child, rec });
+            if (bands.some(b => b === "below" || b === "severe")) flagged.push({ child, rec, bands });
+          });
+
+          // Severe cases first, then by how many indicators are below.
+          flagged.sort((a, b) => {
+            const sev = x => x.bands.filter(v => v === "severe").length;
+            const low = x => x.bands.filter(v => v === "severe" || v === "below").length;
+            return (sev(b) - sev(a)) || (low(b) - low(a));
+          });
+
+          if (measured === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:28px; color:var(--text-secondary);">
+              ${totalKids === 0
+                ? "No children are registered under this office yet."
+                : "No growth measurements have been recorded for these children yet."}
+            </td></tr>`;
+          } else if (flagged.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:28px; color:var(--text-secondary);">
+              <i class="fa-solid fa-check" style="color:var(--success); margin-right:6px;"></i>
+              Every measured child sits within the WHO standard range.
+            </td></tr>`;
+          } else {
+            tbody.innerHTML = flagged.map(({ child, rec }) => {
+              const name = [child.first_name, child.middle_name, child.last_name].filter(Boolean).join(" ") || "Unnamed child";
+              return `
+                <tr>
+                  <td>
+                    <div style="font-weight:600;">${esc(name)}</div>
+                    ${child.child_number ? `<div style="font-size:11px; color:var(--text-secondary);">${esc(child.child_number)}</div>` : ""}
+                  </td>
+                  <td>${esc(bhcName(child.assigned_bhc_id))}</td>
+                  <td>${esc(rec.measurement_date || "—")}</td>
+                  <td style="text-align:center;">${zChip(rec.weight_for_age_zscore, GROWTH_INDICATORS[0])}</td>
+                  <td style="text-align:center;">${zChip(rec.height_for_age_zscore, GROWTH_INDICATORS[1])}</td>
+                  <td style="text-align:center;">${zChip(rec.bmi_for_age_zscore, GROWTH_INDICATORS[2])}</td>
+                </tr>`;
+            }).join("");
+          }
+
+          /* ── Readings the plausibility flags reject ────────────────────── */
+          if (implausibleEl) {
+            if (implausible.length === 0) {
+              implausibleEl.style.display = "none";
+              implausibleEl.innerHTML = "";
+            } else {
+              implausibleEl.style.display = "block";
+              implausibleEl.innerHTML = `
+                <div style="padding:13px 15px; background:var(--warning-10); border:1px solid rgba(255,181,98,0.4); border-radius:var(--radius-card-sm);">
+                  <div style="font-size:12.5px; font-weight:700; color:#b45309; margin-bottom:5px;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    ${implausible.length} measurement${implausible.length === 1 ? "" : "s"} outside the WHO plausible range
+                  </div>
+                  <div style="font-size:11.5px; color:#78350f; line-height:1.5; margin-bottom:8px;">
+                    These are excluded from the counts above. A z-score this far out is almost always a typed height or weight rather than a child's real measurement — ask the health centre to check the record.
+                  </div>
+                  <ul style="margin:0; padding-left:18px; font-size:11.5px; color:#78350f; line-height:1.7;">
+                    ${implausible.map(({ child, rec }) => {
+                      const name = [child.first_name, child.last_name].filter(Boolean).join(" ") || "Unnamed child";
+                      const parts = GROWTH_INDICATORS
+                        .filter(ind => growthBand(rec[ind.key], ind) === "implausible")
+                        .map(ind => `${ind.short} ${Number(rec[ind.key]).toFixed(1)} SD`);
+                      const recorded = [
+                        rec.child_weight != null ? `${rec.child_weight} kg` : null,
+                        rec.child_height != null ? `${rec.child_height} cm` : null,
+                      ].filter(Boolean).join(", ");
+                      return `<li><strong>${esc(name)}</strong> — ${esc(parts.join("; "))}${recorded ? ` (recorded ${esc(recorded)} on ${esc(rec.measurement_date || "an unknown date")})` : ""}</li>`;
+                    }).join("")}
+                  </ul>
+                </div>`;
+            }
+          }
+        }
 
         window.toggleBhcSort = function(col) {
           if (bhcSortCol === col) {
