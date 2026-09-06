@@ -6,6 +6,7 @@ import '../../services/midwife_alert_badge.dart';
 import '../../services/notification_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/secondary_header.dart';
+import '../midwife_inventory/inventory_models.dart';
 import '../midwife_inventory/inventory_repository.dart';
 
 enum MidwifeAlertCategory {
@@ -440,16 +441,40 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
                 .where((i) => i.catalog.itemId == trf.itemId)
                 .firstOrNull;
             final itemName = item?.catalog.name ?? 'Item #${trf.itemId}';
+            final isLateral = trf.direction == TransferDirection.lateral;
             alerts.add(MidwifeAlertItem(
               id: 'trf_transit_${trf.transferId}',
-              title: 'Incoming Stock Shipment In-Transit',
+              title: isLateral
+                  ? 'Incoming Peer Transfer from BHC'
+                  : 'Incoming Stock Shipment In-Transit',
               message: '${trf.quantityIssued} ${item?.catalog.unit ?? "units"} '
-                  'of $itemName from ${trf.sourceFacilityName ?? "the RHU"} are '
+                  'of $itemName from ${trf.sourceFacilityName ?? (isLateral ? "neighbouring BHC" : "the RHU")} are '
                   'waiting for your receipt confirmation.',
               category: MidwifeAlertCategory.transfers,
               severity: MidwifeAlertSeverity.info,
               timestamp: trf.issuedAt,
               actionLabel: 'Confirm Receipt',
+              onAction: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/midwife-inventory');
+              },
+              notificationReferenceType: 'inventory_transfers',
+              notificationReferenceId: trf.transferId,
+            ));
+          } else if (trf.isOutboundFor(bhcId) && trf.status == 'pending_receipt') {
+            final item = snapshot.inventory
+                .where((i) => i.catalog.itemId == trf.itemId)
+                .firstOrNull;
+            final itemName = item?.catalog.name ?? 'Item #${trf.itemId}';
+            alerts.add(MidwifeAlertItem(
+              id: 'trf_outbound_${trf.transferId}',
+              title: 'Stock In-Transit to Peer BHC',
+              message: '${trf.quantityIssued} ${item?.catalog.unit ?? "units"} '
+                  'of $itemName sent to ${trf.targetFacilityName ?? "destination BHC"} (transfer #${trf.transferId}) — awaiting confirmation.',
+              category: MidwifeAlertCategory.transfers,
+              severity: MidwifeAlertSeverity.info,
+              timestamp: trf.issuedAt,
+              actionLabel: 'Track Shipment',
               onAction: () {
                 Navigator.pop(context);
                 Navigator.pushNamed(context, '/midwife-inventory');
@@ -561,7 +586,12 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
                 candidateDerivedId = 'req_rej_$referenceId';
               }
             } else if (referenceType == 'inventory_transfers') {
-              candidateDerivedId = 'trf_transit_$referenceId';
+              if (derivedIds.contains('trf_transit_$referenceId')) {
+                continue;
+              }
+              if (derivedIds.contains('trf_outbound_$referenceId')) {
+                continue;
+              }
             }
             if (candidateDerivedId != null &&
                 derivedIds.contains(candidateDerivedId)) {
@@ -571,17 +601,16 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
 
           if (type == 'inventory' ||
               type.contains('stock') ||
+              type.contains('transfer') ||
               normalizedTitle.contains('stock') ||
-              normalizedTitle.contains('incoming')) {
-            cat = MidwifeAlertCategory.inventory;
+              normalizedTitle.contains('transfer') ||
+              normalizedTitle.contains('incoming') ||
+              normalizedTitle.contains('dispatched')) {
+            cat = (referenceType == 'inventory_transfers' ||
+                    normalizedTitle.contains('transfer'))
+                ? MidwifeAlertCategory.transfers
+                : MidwifeAlertCategory.inventory;
 
-            // Read the same way InventoryNotificationRecord.tryFromJson reads
-            // this table for the bell badge, so a raw row and the richer alert
-            // this screen derives from live stock agree on how urgent an event
-            // looks. Substring matching survives a reworded title; the exact
-            // four-phrase match this replaced did not, and dropped every row
-            // that missed it out of the classification -- silently, since
-            // there was no onAction either way to notice was missing.
             if (normalizedTitle.contains('approved') ||
                 normalizedMsg.contains('was approved')) {
               sev = MidwifeAlertSeverity.success;
@@ -590,12 +619,21 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
                 normalizedTitle.contains('rejected')) {
               sev = MidwifeAlertSeverity.warning;
               actionLabel = 'Review Request';
+            } else if (normalizedTitle.contains('confirmed') ||
+                normalizedTitle.contains('received') ||
+                normalizedTitle.contains('completed')) {
+              sev = MidwifeAlertSeverity.success;
+              actionLabel = 'View Inventory';
             } else if (normalizedTitle.contains('incoming')) {
               sev = MidwifeAlertSeverity.info;
               actionLabel = 'Confirm Receipt';
+            } else if (normalizedTitle.contains('dispatched') ||
+                normalizedTitle.contains('transit')) {
+              sev = MidwifeAlertSeverity.info;
+              actionLabel = 'Track Shipment';
             } else {
               sev = MidwifeAlertSeverity.info;
-              actionLabel = 'View Requests';
+              actionLabel = 'View Inventory';
             }
 
             // Same destination the derived stock-request and shipment alerts

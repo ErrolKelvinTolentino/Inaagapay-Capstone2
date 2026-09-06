@@ -63,6 +63,7 @@ class MidwifeInventoryContext {
     required this.displayName,
     required this.isDemo,
     this.supplierName,
+    this.parentFacilityId,
   });
 
   final int accountId;
@@ -80,9 +81,188 @@ class MidwifeInventoryContext {
   /// predates the MHO hierarchy, where the generic wording is the best
   /// available.
   final String? supplierName;
+  final int? parentFacilityId;
 
   /// Who a stock request is addressed to, for use in copy.
   String get supplierLabel => supplierName ?? 'your RHU';
+}
+
+class PeerFacility {
+  const PeerFacility({
+    required this.facilityId,
+    required this.name,
+    this.facilityCode,
+    this.facilityType = 'bhc',
+    this.parentFacilityId,
+  });
+
+  final int facilityId;
+  final String name;
+  final String? facilityCode;
+  final String facilityType;
+  final int? parentFacilityId;
+
+  factory PeerFacility.fromJson(Map<String, dynamic> json) {
+    return PeerFacility(
+      facilityId: _asInt(json['facility_id']),
+      name: _asString(json['name'], fallback: 'Barangay Health Center'),
+      facilityCode: _asString(json['facility_code']),
+      facilityType: _asString(json['facility_type'], fallback: 'bhc'),
+      parentFacilityId: json['parent_facility_id'] == null
+          ? null
+          : _asInt(json['parent_facility_id']),
+    );
+  }
+}
+
+enum TransferSafetyLevel { safe, warning, critical }
+
+class TransferSafetyAssessment {
+  const TransferSafetyAssessment({
+    required this.level,
+    required this.title,
+    required this.message,
+    required this.transitDays,
+    required this.shelfLifeAtArrival,
+    required this.sourceRemainingAfter,
+    this.warnings = const [],
+    this.isBlocked = false,
+  });
+
+  final TransferSafetyLevel level;
+  final String title;
+  final String message;
+  final int? transitDays;
+  final int? shelfLifeAtArrival;
+  final int? sourceRemainingAfter;
+  final List<String> warnings;
+  final bool isBlocked;
+
+  /// Evaluates safety for transferring [quantity] of a batch expiring on [expirationDate] on [expectedArrivalDate].
+  static TransferSafetyAssessment evaluate({
+    required DateTime? expectedArrivalDate,
+    required DateTime expirationDate,
+    required int batchQuantityRemaining,
+    required int totalSourceItemAvailable,
+    required int quantity,
+    required int minimumStockThreshold,
+    required String itemName,
+    required String unit,
+    required String destinationName,
+    DateTime? now,
+  }) {
+    final today = now ?? DateTime.now();
+    final arrival = expectedArrivalDate;
+
+    if (arrival == null) {
+      return const TransferSafetyAssessment(
+        level: TransferSafetyLevel.warning,
+        title: 'Choose expected arrival date',
+        message:
+            'Select an expected delivery date to calculate transit safety and shelf life.',
+        transitDays: null,
+        shelfLifeAtArrival: null,
+        sourceRemainingAfter: null,
+        isBlocked: false,
+      );
+    }
+
+    final arrivalClean = DateTime(arrival.year, arrival.month, arrival.day);
+    final todayClean = DateTime(today.year, today.month, today.day);
+    final expClean =
+        DateTime(expirationDate.year, expirationDate.month, expirationDate.day);
+
+    final transitDays = arrivalClean.difference(todayClean).inDays;
+    final shelfLifeAtArrival = expClean.difference(arrivalClean).inDays;
+    final sourceAfter = (totalSourceItemAvailable - quantity).clamp(0, 9999999);
+
+    if (transitDays < 0) {
+      return TransferSafetyAssessment(
+        level: TransferSafetyLevel.critical,
+        title: 'Invalid arrival date',
+        message: 'Expected arrival date cannot be in the past.',
+        transitDays: transitDays,
+        shelfLifeAtArrival: shelfLifeAtArrival,
+        sourceRemainingAfter: sourceAfter,
+        isBlocked: true,
+      );
+    }
+
+    if (quantity <= 0) {
+      return TransferSafetyAssessment(
+        level: TransferSafetyLevel.critical,
+        title: 'Enter valid quantity',
+        message: 'Quantity must be at least 1 unit.',
+        transitDays: transitDays,
+        shelfLifeAtArrival: shelfLifeAtArrival,
+        sourceRemainingAfter: sourceAfter,
+        isBlocked: true,
+      );
+    }
+
+    if (quantity > batchQuantityRemaining) {
+      return TransferSafetyAssessment(
+        level: TransferSafetyLevel.critical,
+        title: 'Quantity exceeds available batch stock',
+        message:
+            'This batch only has $batchQuantityRemaining $unit available.',
+        transitDays: transitDays,
+        shelfLifeAtArrival: shelfLifeAtArrival,
+        sourceRemainingAfter: sourceAfter,
+        isBlocked: true,
+      );
+    }
+
+    if (shelfLifeAtArrival <= 0) {
+      return TransferSafetyAssessment(
+        level: TransferSafetyLevel.critical,
+        title: 'Batch will expire before or on arrival',
+        message:
+            'Transfer batch expires on or before the arrival date. It cannot be transferred for clinical use.',
+        transitDays: transitDays,
+        shelfLifeAtArrival: shelfLifeAtArrival,
+        sourceRemainingAfter: sourceAfter,
+        isBlocked: true,
+      );
+    }
+
+    final warnings = <String>[];
+    if (shelfLifeAtArrival <= 30) {
+      warnings.add(
+          'Batch will have only $shelfLifeAtArrival days of shelf life remaining upon arrival.');
+    }
+    if (sourceAfter == 0) {
+      warnings.add(
+          'Your health centre will be left with 0 $unit of $itemName after this transfer.');
+    } else if (sourceAfter <= minimumStockThreshold) {
+      warnings.add(
+          'Your health centre will drop to $sourceAfter $unit, at or below minimum reorder level ($minimumStockThreshold).');
+    }
+
+    if (warnings.isNotEmpty) {
+      return TransferSafetyAssessment(
+        level: TransferSafetyLevel.warning,
+        title: 'Review before transferring',
+        message: warnings.join(' '),
+        transitDays: transitDays,
+        shelfLifeAtArrival: shelfLifeAtArrival,
+        sourceRemainingAfter: sourceAfter,
+        warnings: warnings,
+        isBlocked: false,
+      );
+    }
+
+    return TransferSafetyAssessment(
+      level: TransferSafetyLevel.safe,
+      title: 'Safe to transfer',
+      message:
+          'Batch will arrive at $destinationName with $shelfLifeAtArrival days of shelf life. Your facility will retain $sourceAfter $unit.',
+      transitDays: transitDays,
+      shelfLifeAtArrival: shelfLifeAtArrival,
+      sourceRemainingAfter: sourceAfter,
+      isBlocked: false,
+    );
+  }
 }
 
 class InventoryCatalogRecord {

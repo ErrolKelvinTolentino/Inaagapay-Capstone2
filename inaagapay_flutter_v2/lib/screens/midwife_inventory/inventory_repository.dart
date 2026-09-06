@@ -137,25 +137,29 @@ class InventoryRepository {
 
     String facilityName = 'Barangay Health Center #$facilityId';
     String? supplierName;
+    int? parentFacilityId;
     try {
       // parent_facility_id arrived with the MHO hierarchy; selecting it inside
       // the same round trip keeps the older fallback below intact for a
       // database that has not run that migration.
       final facility = await _client
           .from('health_facilities')
-          .select('name, parent:parent_facility_id (name, facility_type)')
+          .select('name, parent_facility_id, parent:parent_facility_id (name, facility_type)')
           .eq('facility_id', facilityId)
           .maybeSingle();
       final name = facility?['name']?.toString().trim();
       if (name != null && name.isNotEmpty) facilityName = name;
+
+      parentFacilityId = _nullableInt(facility?['parent_facility_id']);
 
       final parent = facility?['parent'];
       final parentMap = parent is List
           ? (parent.isEmpty ? null : parent.first as Map?)
           : parent as Map?;
       final parentName = parentMap?['name']?.toString().trim();
-      if (parentName != null && parentName.isNotEmpty)
+      if (parentName != null && parentName.isNotEmpty) {
         supplierName = parentName;
+      }
     } catch (_) {
       try {
         final bhc = await _client
@@ -180,6 +184,7 @@ class InventoryRepository {
       displayName: fullName.isEmpty ? 'Midwife' : fullName,
       isDemo: false,
       supplierName: supplierName,
+      parentFacilityId: parentFacilityId,
     );
   }
 
@@ -462,6 +467,126 @@ class InventoryRepository {
         _workflowRpcUnavailable = true;
         throw InventoryWorkflowUnavailableException(
           'The stock receipt RPC is not installed in Supabase yet.',
+          cause: error,
+        );
+      }
+      if (error is InventoryRepositoryException) rethrow;
+      throw InventoryRepositoryException(
+        _friendlyError(error),
+        cause: error,
+      );
+    }
+  }
+
+  /// Loads neighbouring BHC facilities under the same RHU for lateral transfers.
+  Future<List<PeerFacility>> loadPeerFacilities({
+    required int currentFacilityId,
+    int? parentFacilityId,
+  }) async {
+    try {
+      dynamic query = _client
+          .from('health_facilities')
+          .select('facility_id, name, facility_code, facility_type, parent_facility_id')
+          .eq('is_active', true);
+
+      if (parentFacilityId != null) {
+        query = query.eq('parent_facility_id', parentFacilityId);
+      } else {
+        query = query.eq('facility_type', 'bhc');
+      }
+
+      final rows = await query.order('name', ascending: true);
+      final list = (rows as List)
+          .map((row) => PeerFacility.fromJson(row as Map<String, dynamic>))
+          .where((f) => f.facilityId != currentFacilityId)
+          .toList();
+
+      if (list.isEmpty && parentFacilityId != null) {
+        // Fallback: if no siblings found under parentFacilityId, query other BHCs
+        final allBhcs = await _client
+            .from('health_facilities')
+            .select('facility_id, name, facility_code, facility_type, parent_facility_id')
+            .eq('facility_type', 'bhc')
+            .eq('is_active', true)
+            .order('name', ascending: true);
+        return (allBhcs as List)
+            .map((row) => PeerFacility.fromJson(row as Map<String, dynamic>))
+            .where((f) => f.facilityId != currentFacilityId)
+            .toList();
+      }
+
+      return list;
+    } catch (_) {
+      try {
+        final bhcRows = await _client
+            .from('bhc')
+            .select('bhc_id, bhc_name')
+            .order('bhc_name', ascending: true);
+        return (bhcRows as List)
+            .map((row) {
+              final id = _nullableInt(row['bhc_id']) ?? 0;
+              final nameStr = row['bhc_name']?.toString().trim();
+              return PeerFacility(
+                facilityId: id,
+                name: (nameStr != null && nameStr.isNotEmpty)
+                    ? nameStr
+                    : 'Barangay Health Center',
+                facilityType: 'bhc',
+              );
+            })
+            .where((f) => f.facilityId != currentFacilityId)
+            .toList();
+      } catch (_) {
+        return const [];
+      }
+    }
+  }
+
+  /// Dispatches stock from the midwife's BHC to a peer BHC under the same RHU.
+  Future<InventoryTransferRecord> issueTransfer({
+    required MidwifeInventoryContext context,
+    required int sourceBatchId,
+    required int destinationFacilityId,
+    required int quantity,
+    required DateTime expectedArrivalDate,
+    required String reason,
+    String? notes,
+  }) async {
+    final dateStr =
+        '${expectedArrivalDate.year.toString().padLeft(4, '0')}-${expectedArrivalDate.month.toString().padLeft(2, '0')}-${expectedArrivalDate.day.toString().padLeft(2, '0')}';
+    final remarkParts = <String>[
+      'Expected delivery: $dateStr.',
+      'Reason for move: ${reason.trim()}.',
+    ];
+    if (notes != null && notes.trim().isNotEmpty) {
+      remarkParts.add(notes.trim());
+    }
+    final combinedRemarks = remarkParts.join(' ').trim();
+
+    try {
+      final response = await _client.rpc(
+        'issue_inventory_transfer',
+        params: {
+          'p_source_batch_id': sourceBatchId,
+          'p_destination_facility_id': destinationFacilityId,
+          'p_quantity': quantity,
+          'p_issued_by': context.accountId,
+          'p_request_id': null,
+          'p_remarks': combinedRemarks,
+        },
+      );
+
+      final row = _singleRow(response);
+      if (row == null) {
+        throw const InventoryRepositoryException(
+          'Supabase did not return the issued transfer.',
+        );
+      }
+      return InventoryTransferRecord.fromJson(row);
+    } catch (error) {
+      if (_isMissingWorkflow(error)) {
+        throw InventoryWorkflowUnavailableException(
+          'The stock issue RPC is not installed in Supabase yet.',
           cause: error,
         );
       }

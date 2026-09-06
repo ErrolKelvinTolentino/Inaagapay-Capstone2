@@ -1502,6 +1502,10 @@ class MidwifeAnalyticsService {
         kind: AnalyticsChartKind.rankedBars,
         icon: AnalyticsIcon.stock,
         message: 'No inventory recorded for this health centre yet.',
+        prescription: AnalyticsPrescription(
+          label: 'Open inventory',
+          action: AnalyticsAction.viewInventory,
+        ),
       );
     }
 
@@ -1569,6 +1573,10 @@ class MidwifeAnalyticsService {
         kind: AnalyticsChartKind.rankedBars,
         icon: AnalyticsIcon.expiry,
         message: 'Nothing on the shelf expires within the next three months.',
+        prescription: AnalyticsPrescription(
+          label: 'Open inventory',
+          action: AnalyticsAction.viewInventory,
+        ),
       );
     }
 
@@ -1643,6 +1651,10 @@ class MidwifeAnalyticsService {
         icon: AnalyticsIcon.demand,
         message:
             'No doses fall due in the next 30 days for the children on file.',
+        prescription: AnalyticsPrescription(
+          label: 'Open inventory',
+          action: AnalyticsAction.viewInventory,
+        ),
       );
     }
 

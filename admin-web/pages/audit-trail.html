@@ -72,6 +72,7 @@
           <div class="page-actions" style="display: flex; gap: 8px; flex-wrap: wrap; align-items:center;">
             <button class="btn btn-primary btn-sm" id="export-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow: 0 2px 8px rgba(255,104,165,0.25);"><i class="fa-solid fa-table-list"></i> Summary PDF</button>
             <button class="btn btn-primary btn-sm" id="export-detail-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow: 0 2px 8px rgba(255,104,165,0.25);"><i class="fa-solid fa-file-lines"></i> Detailed PDF</button>
+            <button class="btn btn-secondary btn-sm" id="export-csv-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px;"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
             <button class="btn btn-secondary btn-sm" id="print-list-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px;"><i class="fa-solid fa-print"></i> Print Log</button>
             <button class="btn btn-secondary btn-sm" id="refresh-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px;"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
           </div>
@@ -163,25 +164,25 @@
               <caption class="sr-only">Filtered audit trail activity records</caption>
               <thead>
                 <tr>
-                   <th scope="col" class="th-sortable sort-active" data-sort="timestamp" aria-sort="descending" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                   <th scope="col" class="th-sortable sort-active" data-sort="timestamp" aria-sort="descending" style="padding:8px 10px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
                     Date &amp; Time <span class="sort-indicator"><i class="fa-solid fa-arrow-down-long"></i></span>
                   </th>
-                   <th scope="col" class="th-sortable" data-sort="actor" aria-sort="none" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                   <th scope="col" class="th-sortable" data-sort="actor" aria-sort="none" style="padding:8px 10px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
                     Who Performed <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span>
                   </th>
-                   <th scope="col" class="th-sortable" data-sort="action" aria-sort="none" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                   <th scope="col" class="th-sortable" data-sort="action" aria-sort="none" style="padding:8px 10px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
                     Activity Event <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span>
                   </th>
-                   <th scope="col" class="th-sortable" data-sort="module" aria-sort="none" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                   <th scope="col" class="th-sortable" data-sort="module" aria-sort="none" style="padding:8px 10px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
                     Module Area <span class="sort-indicator"><i class="fa-solid fa-sort"></i></span>
                   </th>
-                  <th scope="col" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                  <th scope="col" style="padding:8px 10px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
                     Target Record
                   </th>
-                  <th scope="col" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
+                  <th scope="col" style="padding:8px 10px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary);">
                     Summary / Narrative
                   </th>
-                  <th scope="col" style="padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary); text-align: center;">
+                  <th scope="col" style="padding:8px 10px; font-size:11px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700; color:var(--brand-text); background:#fcfdfe; border-bottom:1.5px solid var(--border-primary); text-align: center;">
                     Full Note
                   </th>
                 </tr>
@@ -371,15 +372,16 @@
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="../js/supabase-client.js"></script>
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
     <script src="live-refresh.js"></script>
     <script src="notification-center.js"></script>
     <script>
       (function(){
-        const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
-        const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
-        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        const SUPABASE_URL = window.SUPABASE_URL || "https://krooorixhjwygcsdoomg.supabase.co";
+        const SUPABASE_ANON = window.SUPABASE_ANON || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
+        const db = window.db || supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
         window.AdminNotifications?.attach(db);
         const SESSION_KEY = "inaagapay_admin_session";
         const session = (()=>{ try{ return JSON.parse(localStorage.getItem(SESSION_KEY)); }catch{ return null; }})();
@@ -405,13 +407,21 @@
         // audit_trail.action_timestamp is a naive timestamp holding UTC. Without
         // the Z the browser would read it as local and shift every entry.
         function toUTC(ts){ if(!ts) return null; return new Date(/Z|[+-]\d{2}:?\d{2}$/.test(ts) ? ts : ts+'Z'); }
+        function fmtDate(ts){
+          if(!ts) return '—';
+          return toUTC(ts).toLocaleDateString('en-US',{timeZone:'Asia/Manila', month:'short', day:'2-digit', year:'numeric'});
+        }
+        function fmtTime(ts){
+          if(!ts) return '';
+          return toUTC(ts).toLocaleTimeString('en-US',{timeZone:'Asia/Manila', hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        }
         function fmtDT(ts){
           if(!ts) return '—';
-          return toUTC(ts).toLocaleString('en-PH',{timeZone:'Asia/Manila', year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'});
+          return `${fmtDate(ts)}, ${fmtTime(ts)}`;
         }
         function fmtDTLong(ts){
           if(!ts) return '—';
-          return toUTC(ts).toLocaleString('en-PH',{timeZone:'Asia/Manila', dateStyle:'full', timeStyle:'medium'});
+          return `${fmtDate(ts)}, ${fmtTime(ts)}`;
         }
         function titleCase(s){
           return String(s ?? '').replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -435,6 +445,10 @@
           delete_account:'Account Removed', change_password:'Password Changed',
           change_account_status:'Account Status Changed', suspend_account:'Account Suspended',
           change_account_role:'Account Role Changed',
+          inventory_count_opened:'Stock Count Opened',
+          inventory_count_submitted:'Stock Count Submitted',
+          inventory_count_posted:'Stock Count Posted',
+          inventory_count_cancelled:'Stock Count Cancelled',
           assign_midwife:'Midwife Reassigned', assign_facility:'Posted to Facility',
           reassign_facility:'Facility Reassigned', end_facility_assignment:'Posting Ended',
           remove_facility_assignment:'Posting Removed',
@@ -1030,40 +1044,43 @@
             const roleLabel = actorRoleLabel(l);
             const mod = moduleOf(l);
             return `<tr style="transition:background 0.12s ease;">
-              <td style="padding:10px 14px; white-space:nowrap; vertical-align:middle;">
-                <div style="display:flex; align-items:center; gap:6px;">
+              <td style="padding:8px 10px; white-space:nowrap; vertical-align:middle;">
+                <div style="display:flex; align-items:center; gap:8px;">
                   <span class="sev-dot sev-${sev}" title="Severity: ${esc(SEVERITY_LABEL[sev])}"></span>
-                  <span style="font-weight:600; font-size:12px; color:var(--text-primary);">${fmtDT(l.action_timestamp)}</span>
+                  <div class="row-stacked">
+                    <span class="row-stacked-title" style="font-size:12px;">${fmtDate(l.action_timestamp)}</span>
+                    <span class="row-stacked-sub" style="font-size:11px;">${fmtTime(l.action_timestamp)}</span>
+                  </div>
                 </div>
               </td>
-              <td style="padding:10px 14px; vertical-align:middle;">
+              <td style="padding:8px 10px; vertical-align:middle; max-width:180px;">
                 <div style="display:flex; align-items:center; gap:8px;">
                   <div class="actor-avatar-circle" title="${esc(actorName)}">${esc(initials)}</div>
-                  <div>
-                    <div style="font-weight:700; font-size:12.5px; color:var(--text-primary); line-height:1.2;">${esc(actorName)}</div>
-                    <div style="font-size:10.5px; color:var(--text-secondary); margin-top:2px;">
+                  <div style="min-width:0; overflow:hidden;">
+                    <div style="font-weight:700; font-size:12px; color:var(--text-primary); line-height:1.2; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${esc(actorName)}</div>
+                    <div style="font-size:10.5px; color:var(--text-secondary); margin-top:2px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">
                       <span style="font-weight:600; color:var(--brand-text);">${esc(roleLabel)}</span>${l.actor_facility_name ? ' &middot; ' + esc(l.actor_facility_name) : ''}
                     </div>
                   </div>
                 </div>
               </td>
-              <td style="padding:10px 14px; vertical-align:middle;">
+              <td style="padding:8px 10px; vertical-align:middle; white-space:nowrap;">
                 <span class="badge ${actionBadgeClass(l)}">${esc(actionLabel(l.action))}</span>
               </td>
-              <td style="padding:10px 14px; vertical-align:middle;">
+              <td style="padding:8px 10px; vertical-align:middle; white-space:nowrap;">
                 <span class="module-chip" data-mod="${esc(mod)}">
                   <i class="fa-solid ${moduleIcon(mod)}" style="font-size:10px;"></i> ${esc(mod)}
                 </span>
               </td>
-              <td style="padding:10px 14px; vertical-align:middle; font-size:12px; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              <td style="padding:8px 10px; vertical-align:middle; font-size:12px; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                 ${l.entity_label ? `<span class="target-record-tag" title="${esc(l.entity_label)}">${esc(l.entity_label)}</span>` : '<span style="color:var(--text-secondary);">—</span>'}
               </td>
-              <td style="padding:10px 14px; vertical-align:middle; font-size:12.5px; color:var(--text-primary); max-width:280px;">
-                <div style="overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.4;">
+              <td style="padding:8px 10px; vertical-align:middle; font-size:12px; color:var(--text-primary); max-width:240px;">
+                <div style="overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.35;">
                   ${esc(summaryOf(l))}
                 </div>
               </td>
-              <td style="padding:10px 14px; text-align:center; vertical-align:middle;">
+              <td style="padding:8px 10px; text-align:center; vertical-align:middle; white-space:nowrap;">
                 <button class="btn btn-sm btn-secondary" onclick="showDetail(${start+idx})" aria-label="View full note for ${esc(actionLabel(l.action))}" title="Read full event note" style="height:28px; padding:0 10px; border-radius:6px; font-size:11px; font-weight:600; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; border:1px solid #dcdfe4; background:#ffffff;">
                   <i class="fa-solid fa-file-lines" style="color:var(--brand-primary);" aria-hidden="true"></i> View Note
                 </button>
@@ -1400,7 +1417,7 @@
 
         function printFoot(extra){
           const by = [session.first_name, session.last_name].filter(Boolean).join(' ') || 'Administrator';
-          return `<div class="print-foot">Printed by ${esc(by)} on ${esc(new Date().toLocaleString('en-PH'))}.${extra ? ' ' + esc(extra) : ''}</div>`;
+          return `<div class="print-foot">Printed by ${esc(by)} on ${esc(fmtDT(new Date().toISOString()))}.${extra ? ' ' + esc(extra) : ''}</div>`;
         }
 
         function doPrint(html){
@@ -1478,7 +1495,7 @@
           doc.text(title, w - 14, 12, { align:'right' });
           doc.setFontSize(8); doc.setTextColor(128,128,128);
           const by = [session.first_name, session.last_name].filter(Boolean).join(' ') || 'Administrator';
-          doc.text(`Generated by ${by} | ${new Date().toLocaleString('en-PH')}`, 14, h - 8);
+          doc.text(`Generated by ${by} | ${fmtDT(new Date().toISOString())}`, 14, h - 8);
           doc.text(`Page ${pageNo} of ${totalPages}`, w - 14, h - 8, { align:'right' });
           doc.setTextColor(0,0,0);
         }
@@ -1624,6 +1641,64 @@
         document.getElementById('detail-pdf-btn')?.addEventListener('click', () => {
           if(!currentLog) return;
           buildDetailPdf([currentLog], `audit_record_${currentLog.audit_id}.pdf`, 'AUDIT RECORD EXTRACT');
+        });
+
+        /* ── CSV export ───────────────────────────────────────────────────
+           The two PDFs are documents: paginated, chromed, meant to be filed or
+           handed over. Neither is any use to somebody who wants to sort by
+           actor in a spreadsheet or count actions per module, which is what an
+           adviser asks for. This is the same filtered set as the table, in the
+           same order, with no page limit — the PDF caps at DETAIL_PDF_LIMIT
+           because a document has to end somewhere; a CSV does not.
+
+           One row per entry. Deliberately NOT the before/after snapshots: those
+           are what the detailed PDF is for, they carry patient data under a
+           redaction policy, and flattening redacted JSON into a spreadsheet
+           cell is how that policy gets lost.
+           ─────────────────────────────────────────────────────────────────── */
+
+        const AUDIT_CSV_COLUMNS = [
+          ['Audit ID',        l => l.audit_id],
+          ['Timestamp',       l => fmtDT(l.action_timestamp)],
+          ['Severity',        l => SEVERITY_LABEL[severityOf(l)] || severityOf(l)],
+          ['Module',          l => moduleOf(l)],
+          ['Action',          l => actionLabel(l.action)],
+          ['Actor',           l => actorOf(l)],
+          ['Actor role',      l => actorRoleLabel(l)],
+          ['Actor facility',  l => l.actor_facility_name || ''],
+          ['Target record',   l => l.entity_label || ''],
+          ['Summary',         l => l.description || ''],
+          ['Narrative',       l => l.narrative || ''],
+          ['Table',           l => l.table_name || ''],
+          ['Row ID',          l => l.row_id || ''],
+        ];
+
+        document.getElementById('export-csv-btn')?.addEventListener('click', () => {
+          if(!filtered.length){
+            showToast('There is nothing to export with the current filters.', 'warning');
+            return;
+          }
+
+          // Sorted the way the table is sorted, so the file matches the screen
+          // it was exported from rather than arriving in a different order.
+          const rows = sortLogs(filtered, currentSortCol, currentSortDir);
+          const lines = [AUDIT_CSV_COLUMNS.map(c => window.csvCell(c[0])).join(',')];
+          rows.forEach(l => {
+            lines.push(AUDIT_CSV_COLUMNS.map(c => window.csvCell(c[1](l))).join(','));
+          });
+
+          // BOM so Excel opens UTF-8 names correctly instead of mangling them.
+          const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `audit_trail_${new Date().toISOString().slice(0,10)}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          showToast(`Exported ${rows.length} audit ${rows.length === 1 ? 'entry' : 'entries'} to CSV.`, 'success');
         });
 
         /* ── Wiring ─────────────────────────────────────────────────────── */

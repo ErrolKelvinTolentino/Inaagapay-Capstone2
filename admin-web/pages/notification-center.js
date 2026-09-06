@@ -46,9 +46,13 @@
   let db = null;
   let session = null;
   let rows = [];
+  let live = [];
   let unreadOnly = false;
   let loading = false;
   let loadFailed = false;
+  // Switched off for good the first time the RPC answers "no such function",
+  // so a portal deployed ahead of its migration stops asking every 90 seconds.
+  let livePreviewAvailable = true;
   let pollId = null;
   let bell = null;
   let panel = null;
@@ -86,20 +90,25 @@
     if (hours < 24) return `${hours}h ago`;
     const days = Math.round(hours / 24);
     if (days < 7) return `${days}d ago`;
-    return then.toLocaleDateString("en-PH", {
+    return then.toLocaleDateString("en-US", {
       timeZone: "Asia/Manila",
       month: "short",
-      day: "numeric",
+      day: "2-digit",
     });
   }
 
   function absoluteTime(ts) {
     const then = toUTC(ts);
     if (!then || !Number.isFinite(then.getTime())) return "";
-    return then.toLocaleString("en-PH", {
+    return then.toLocaleDateString("en-US", {
       timeZone: "Asia/Manila",
-      dateStyle: "medium",
-      timeStyle: "short",
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    }) + ", " + then.toLocaleTimeString("en-US", {
+      timeZone: "Asia/Manila",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   }
 
@@ -115,37 +124,184 @@
       icon: "fa-boxes-stacked",
       tone: "stock",
       href: "inventory.html?tab=catalog&subview=summary",
+      actionHint: "View item",
     },
     inventory_batches: {
       icon: "fa-hourglass-half",
       tone: "expiry",
       href: "inventory.html?tab=catalog&subview=batches",
+      actionHint: "View batch",
     },
     inventory_stock_requests: {
       icon: "fa-clipboard-list",
       tone: "request",
       href: "inventory.html?tab=requests&subview=requests",
+      actionHint: "Review request",
     },
     inventory_transfers: {
       icon: "fa-truck-ramp-box",
       tone: "transfer",
       href: "inventory.html?tab=requests&subview=transfers",
+      actionHint: "Open transfer",
     },
   };
 
   const TYPE_FALLBACK = {
-    inventory: { icon: "fa-boxes-stacked", tone: "stock", href: "inventory.html" },
-    checkup_reminder: { icon: "fa-calendar-check", tone: "care", href: null },
-    vaccine_reminder: { icon: "fa-syringe", tone: "care", href: null },
-    general: { icon: "fa-circle-info", tone: "general", href: null },
+    inventory: { icon: "fa-boxes-stacked", tone: "stock", href: "inventory.html", actionHint: "Open inventory" },
+    checkup_reminder: { icon: "fa-calendar-check", tone: "care", href: "reports.html", actionHint: "View schedule" },
+    vaccine_reminder: { icon: "fa-syringe", tone: "care", href: "reports.html", actionHint: "View schedule" },
+    general: { icon: "fa-circle-info", tone: "general", href: null, actionHint: null },
   };
 
   function routeFor(row) {
-    return (
-      REFERENCE_ROUTES[row.reference_type] ||
-      TYPE_FALLBACK[row.type] ||
-      TYPE_FALLBACK.general
-    );
+    let refType = row.reference_type;
+    let refId = row.reference_id;
+
+    // Fallback parsing for legacy rows where reference_type/reference_id was not populated
+    if (!refType) {
+      const text = `${row.title || ""} ${row.message || ""}`;
+      const transferMatch = text.match(/transfer\s*#?(\d+)/i);
+      const requestMatch = text.match(/(?:stock\s*request|requisition|request)\s*#?(\d+)/i);
+      const batchMatch = text.match(/batch\s*(?:#|no\.?|number|id|:)\s*([A-Za-z0-9-_]+)/i) ||
+                         text.match(/\bbatch\s+(?!expired\b|expiring\b|excursion\b)([A-Za-z0-9-_]+)/i);
+
+      if (transferMatch) {
+        refType = "inventory_transfers";
+        refId = transferMatch[1];
+      } else if (requestMatch) {
+        refType = "inventory_stock_requests";
+        refId = requestMatch[1];
+      } else if (batchMatch) {
+        refType = "inventory_batches";
+        refId = batchMatch[1];
+      } else if (row.type === "inventory") {
+        refType = "inventory_items";
+      }
+    }
+
+    if (refType && REFERENCE_ROUTES[refType]) {
+      const base = REFERENCE_ROUTES[refType];
+      let href = base.href;
+      if (refId !== null && refId !== undefined && refId !== "") {
+        if (refType === "inventory_transfers") {
+          href += `&transfer_id=${encodeURIComponent(refId)}`;
+        } else if (refType === "inventory_stock_requests") {
+          href += `&request_id=${encodeURIComponent(refId)}`;
+        } else if (refType === "inventory_batches") {
+          href += `&batch_id=${encodeURIComponent(refId)}`;
+        } else if (refType === "inventory_items") {
+          href += `&item_id=${encodeURIComponent(refId)}`;
+        }
+      }
+      return {
+        ...base,
+        href,
+      };
+    }
+
+    return TYPE_FALLBACK[row.type] || TYPE_FALLBACK.general;
+  }
+
+  /* ── Conditions, as opposed to messages ────────────────
+     `notifications` holds events: something happened, and it has a read state.
+     preview_inventory_alerts() holds conditions: nothing happened, something
+     IS — a shelf is short right now. A condition has no read state because
+     there is nothing to acknowledge; it ends when the stock arrives, not when
+     somebody clicks it.
+
+     Both belong in this panel. Between two runs of the nightly job a shortage
+     that appeared this morning has no notification row yet, and the officer
+     who needs to know is the one who has not opened inventory.html today.
+     ──────────────────────────────────────────────────── */
+
+  // The same ladder as public.inventory_alert_rank(). Kept in step by hand:
+  // the browser cannot read a SQL CASE, so if that function's rungs change,
+  // this changes with it.
+  const SEVERITY_RANK = { watch: 1, low: 2, urgent: 3, critical: 4, expired: 5 };
+
+  // critical and expired — nothing left to give, or nothing left that may be
+  // given. The rung where somebody is turned away today.
+  const TOP_RUNG = 4;
+
+  function rankOf(severity) {
+    return SEVERITY_RANK[severity] || 0;
+  }
+
+  // Which row a live alert is about, derived exactly as scan_inventory_alerts()
+  // derives it when the job writes the notification: rule 1 names a shelf, so
+  // it points at the item; rules 2 and 3 name one box, so they point at the
+  // batch. This is what lets a condition and the message about it be
+  // recognised as one thing.
+  function liveKey(alert) {
+    return alert.batch_id === null || alert.batch_id === undefined
+      ? `inventory_items:${alert.item_id}`
+      : `inventory_batches:${alert.batch_id}`;
+  }
+
+  function liveRoute(alert) {
+    if (alert.batch_id !== null && alert.batch_id !== undefined) {
+      const isOpenVial = alert.alert_kind === "open_vial" ||
+        (alert.title && alert.title.toLowerCase().includes("open vial"));
+      let href = `inventory.html?tab=catalog&subview=batches&batch_id=${encodeURIComponent(alert.batch_id)}`;
+      if (isOpenVial) href += "&open_vial=1";
+      if (alert.facility_id !== null && alert.facility_id !== undefined) {
+        href += `&facility_id=${encodeURIComponent(alert.facility_id)}`;
+      }
+      return {
+        icon: isOpenVial ? "fa-syringe" : "fa-hourglass-half",
+        tone: "expiry",
+        href,
+        actionHint: isOpenVial ? "Discard vial" : "View batch",
+      };
+    }
+
+    if (alert.item_id !== null && alert.item_id !== undefined) {
+      let href = `inventory.html?tab=catalog&subview=summary&item_id=${encodeURIComponent(alert.item_id)}`;
+      if (alert.facility_id !== null && alert.facility_id !== undefined) {
+        href += `&facility_id=${encodeURIComponent(alert.facility_id)}`;
+      }
+      return {
+        icon: "fa-boxes-stacked",
+        tone: "stock",
+        href,
+        actionHint: "View item",
+      };
+    }
+
+    return TYPE_FALLBACK.inventory;
+  }
+
+  function executeNavigation(targetHref) {
+    if (!targetHref) return;
+    togglePanel(false);
+
+    try {
+      const currentUrl = new URL(window.location.href);
+      const targetUrl = new URL(targetHref, window.location.href);
+
+      const isCurrentInventory = currentUrl.pathname.endsWith("inventory.html");
+      const isTargetInventory = targetUrl.pathname.endsWith("inventory.html");
+
+      if (isCurrentInventory && isTargetInventory) {
+        // Fast path: in-page switch without full page reload
+        const newRelative = targetUrl.pathname.split("/").pop() + targetUrl.search + targetUrl.hash;
+        if (window.history && window.history.pushState) {
+          window.history.pushState(null, "", newRelative);
+        }
+        if (typeof window.applyHubQueryParam === "function") {
+          window.applyHubQueryParam();
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not parse navigation URL:", e);
+    }
+
+    if (window.navigateTo) {
+      window.navigateTo(targetHref);
+    } else {
+      window.location.href = targetHref;
+    }
   }
 
   /* ── Chrome ────────────────────────────────────────── */
@@ -186,7 +342,18 @@
     // Before the profile button, which is always last in the header. Inserting
     // before .header-badge instead would race live-refresh.js, which puts its
     // own control there — the two would swap places depending on script order.
-    const profile = headerRight.querySelector(".header-user");
+    //
+    // Anchored on the direct CHILD holding the profile button rather than on
+    // .header-user itself. common-security.js wraps that element in a
+    // .header-user-menu, so .header-user is only a direct child of
+    // .header-right for as long as this file runs first — which today it does,
+    // because attach() is called during script parse and the wrapping happens
+    // on DOMContentLoaded. insertBefore throws NotFoundError on a node that is
+    // not a child, and it would take the whole bell down with it, so this does
+    // not rely on that ordering holding.
+    const profile = Array.from(headerRight.children).find(
+      (el) => el.classList.contains("header-user") || el.querySelector(".header-user"),
+    );
     headerRight.insertBefore(wrap, profile || null);
 
     bell = wrap.querySelector("#admin-notif-bell");
@@ -209,8 +376,16 @@
     // One delegated listener rather than one per row, because the list is
     // rebuilt on every refresh.
     wrap.querySelector("#admin-notif-list").addEventListener("click", (event) => {
-      const item = event.target.closest("[data-notif-id]");
+      const item = event.target.closest("[data-notif-id], [data-live-href]");
       if (!item) return;
+
+      // A condition has nothing to mark read — it stops being true when the
+      // stock does, not when somebody clicks it. So this only navigates.
+      if (item.dataset.liveHref) {
+        executeNavigation(item.dataset.liveHref);
+        return;
+      }
+
       openNotification(Number(item.dataset.notifId));
     });
 
@@ -245,19 +420,56 @@
 
   /* ── Reading ───────────────────────────────────────── */
 
+  /**
+   * The conditions the nightly job would report if it ran now.
+   *
+   * Scoped in the browser, because preview_inventory_alerts() answers for the
+   * whole municipality — the database has no way to know who is asking. Same
+   * client-side narrowing every other page in this portal applies, and the
+   * same limitation.
+   */
+  async function loadLive() {
+    if (!livePreviewAvailable) return [];
+    try {
+      const { data, error } = await db.rpc("preview_inventory_alerts");
+      if (error) throw error;
+      return (data || []).filter(
+        (a) => !window.PortalScope || window.PortalScope.inScope(a.facility_id),
+      );
+    } catch (e) {
+      const code = e?.code || e?.status;
+      // "No such function" is a deployment-order fact, not a fault worth
+      // repeating on every poll.
+      if (code === "PGRST202" || code === "42883" || code === 404) {
+        livePreviewAvailable = false;
+        return [];
+      }
+      console.warn("Live inventory alerts unavailable:", e.message || e);
+      return [];
+    }
+  }
+
   async function refresh() {
     if (!db || !session?.account_id || loading) return;
     loading = true;
     try {
-      const { data, error } = await db
-        .from("notifications")
-        .select("notification_id, title, message, type, is_read, created_at, reference_type, reference_id")
-        .eq("account_id", session.account_id)
-        .order("created_at", { ascending: false })
-        .limit(PAGE_SIZE);
+      // Live alerts never fail the panel: loadLive() swallows its own errors
+      // and returns an empty list, so a missing RPC costs the extra section
+      // rather than the notifications an officer came here to read.
+      const [stored, liveRows] = await Promise.all([
+        db
+          .from("notifications")
+          .select("notification_id, title, message, type, is_read, created_at, reference_type, reference_id")
+          .eq("account_id", session.account_id)
+          .order("created_at", { ascending: false })
+          .limit(PAGE_SIZE),
+        loadLive(),
+      ]);
 
+      const { data, error } = stored;
       if (error) throw error;
       rows = data || [];
+      live = liveRows;
       loadFailed = false;
     } catch (e) {
       // A missing table or column means this database predates the notification
@@ -272,8 +484,73 @@
     }
   }
 
+  /**
+   * The newest stored row about each referenced thing, so a condition on screen
+   * can be matched to the message the job already sent about it.
+   *
+   * Matched on reference_type / reference_id and never on the wording —
+   * 20260909 added those columns precisely so this code would not have to
+   * recognise events by reading English sentences.
+   */
+  function twinIndex() {
+    const map = new Map();
+    rows.forEach((row) => {
+      if (!row.reference_type || row.reference_id === null || row.reference_id === undefined) return;
+      const key = `${row.reference_type}:${row.reference_id}`;
+      if (!map.has(key)) map.set(key, row); // query is newest-first
+    });
+    return map;
+  }
+
+  /**
+   * Stored rows that are not already on screen as a live condition.
+   *
+   * The job writes "Batch expired: BCG" about the same batch the scan is still
+   * reporting as expired. Showing both is one event as two cards, which is the
+   * duplicate 20260909 was written to end. The live one wins: it is current,
+   * and it carries the facility name the message only mentions in prose.
+   */
+  function storedRows() {
+    if (live.length === 0) return rows;
+    const onScreen = new Set(live.map(liveKey));
+    return rows.filter(
+      (row) => !onScreen.has(`${row.reference_type}:${row.reference_id}`),
+    );
+  }
+
+  /**
+   * Live conditions the officer has not been shown yet.
+   *
+   * A condition whose message is sitting UNREAD counts at any rung. Hiding the
+   * duplicate card must not also hide the fact that it is unread — otherwise
+   * the nightly job sends 31 notifications and the bell still reads zero,
+   * because storedRows() suppressed every one of them and none was severe
+   * enough to count on its own. That is not hypothetical: it is what the first
+   * real sweep produced.
+   *
+   * A condition with NO message behind it counts only on the top rung. Those
+   * are the ones the job has not reported yet, and a batch thirty days out is
+   * not worth a red dot every morning until it expires.
+   */
+  function untoldLive() {
+    const twins = twinIndex();
+    return live.filter((alert) => {
+      const twin = twins.get(liveKey(alert));
+      if (twin) return !twin.is_read;
+      return rankOf(alert.severity) >= TOP_RUNG;
+    });
+  }
+
+  /**
+   * What the badge means: things not yet seen.
+   *
+   * Unread messages, plus top-rung conditions whose message is unread or has
+   * never been written. Deliberately NOT every live alert — a batch thirty days
+   * out is worth listing and is not worth a red dot every morning for a month,
+   * and a badge that is never zero is a badge nobody reads.
+   */
   function unreadCount() {
-    return rows.filter((r) => !r.is_read).length;
+    return storedRows().filter((r) => !r.is_read).length + untoldLive().length;
   }
 
   function renderCount() {
@@ -310,9 +587,16 @@
       return;
     }
 
-    const visible = unreadOnly ? rows.filter((r) => !r.is_read) : rows;
+    // "Unread only" is a property of messages, so under it the conditions
+    // shown are the ones the badge is counting — the filter and the number on
+    // the bell then agree, instead of the panel emptying while the bell still
+    // reads 3.
+    const visibleLive = unreadOnly ? untoldLive() : live;
+    const visible = unreadOnly
+      ? storedRows().filter((r) => !r.is_read)
+      : storedRows();
 
-    if (visible.length === 0) {
+    if (visible.length === 0 && visibleLive.length === 0) {
       list.innerHTML = `
         <div class="notif-empty">
           <i class="fa-solid fa-check" aria-hidden="true"></i>
@@ -326,7 +610,57 @@
       return;
     }
 
-    list.innerHTML = visible
+    const sections = [];
+
+    if (visibleLive.length > 0) {
+      // Capped like the stored list is by PAGE_SIZE. A municipality with high
+      // thresholds can be short of a lot of things at once, and a dropdown is
+      // not the place to read two hundred of them — the count in the heading
+      // still tells the truth, and inventory.html is where the full list lives.
+      const shownLive = visibleLive.slice(0, PAGE_SIZE);
+
+      sections.push(
+        `<div class="notif-section">Happening now<span>${visibleLive.length}</span></div>`,
+        shownLive
+          .map((alert) => {
+            const route = liveRoute(alert);
+            const top = rankOf(alert.severity) >= TOP_RUNG;
+            return `
+              <button type="button" class="notif-item is-live${top ? " is-top" : ""}"
+                      data-live-href="${esc(route.href)}">
+                <span class="notif-item-icon tone-${route.tone}" aria-hidden="true">
+                  <i class="fa-solid ${route.icon}"></i>
+                </span>
+                <span class="notif-item-body">
+                  <span class="notif-item-title">${esc(alert.title)}</span>
+                  <span class="notif-item-msg">${esc(alert.message)}</span>
+                  <span class="notif-item-time">
+                    ${esc(alert.facility_name || "")} &middot; ${esc(alert.severity)}
+                    ${route.actionHint ? `<span class="notif-item-action-hint">${esc(route.actionHint)} &rarr;</span>` : ""}
+                  </span>
+                </span>
+              </button>`;
+          })
+          .join(""),
+        visibleLive.length > shownLive.length
+          ? `<button type="button" class="notif-item is-live" data-live-href="inventory.html?tab=catalog&amp;subview=summary">
+               <span class="notif-item-body">
+                 <span class="notif-item-msg">and ${visibleLive.length - shownLive.length} more &mdash; open Inventory to see all of them.</span>
+               </span>
+             </button>`
+          : "",
+      );
+    }
+
+    if (visible.length > 0) {
+      sections.push(
+        `<div class="notif-section">${
+          visibleLive.length > 0 ? "Earlier" : "Recent"
+        }<span>${visible.length}</span></div>`,
+      );
+    }
+
+    list.innerHTML = sections.join("") + visible
       .map((row) => {
         const route = routeFor(row);
         return `
@@ -340,6 +674,7 @@
               <span class="notif-item-msg">${esc(row.message)}</span>
               <span class="notif-item-time" title="${esc(absoluteTime(row.created_at))}">
                 ${esc(relativeTime(row.created_at))}
+                ${route.actionHint ? `<span class="notif-item-action-hint">${esc(route.actionHint)} &rarr;</span>` : ""}
               </span>
             </span>
             ${row.is_read ? "" : '<span class="notif-item-dot" aria-label="Unread"></span>'}
@@ -401,12 +736,7 @@
       return;
     }
 
-    togglePanel(false);
-    if (window.navigateTo) {
-      window.navigateTo(route.href);
-    } else {
-      window.location.href = route.href;
-    }
+    executeNavigation(route.href);
   }
 
   /* ── Wiring ────────────────────────────────────────── */

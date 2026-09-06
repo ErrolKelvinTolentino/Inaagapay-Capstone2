@@ -48,7 +48,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ sent: false, error: "Invalid JSON body" }, 400);
   }
 
-  const number = String(payload.number ?? "").trim();
+  let number = String(payload.number ?? "").trim();
+  const digits = number.replace(/\D/g, "");
+  if (digits.startsWith("09") && digits.length === 11) {
+    number = "+63" + digits.slice(1);
+  } else if (digits.startsWith("639") && digits.length === 12) {
+    number = "+" + digits;
+  } else if (digits.startsWith("9") && digits.length === 10) {
+    number = "+63" + digits;
+  }
+
   const message = String(payload.message ?? "").trim();
 
   if (!PH_MOBILE.test(number)) {

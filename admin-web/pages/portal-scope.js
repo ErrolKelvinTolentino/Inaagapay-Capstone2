@@ -93,6 +93,7 @@
       child_facility_type: isMho ? "RHU" : "BHC",
       child_facilities: [],
       bhc_facilities: [],
+      peer_facilities: [],
       scope_facility_ids: [],
       parent_facility_id: null,
       parent_facility_name: null,
@@ -211,6 +212,9 @@
      * the tree rather than this office's immediate children.
      */
     get bhcFacilities() { return scope.bhc_facilities || []; },
+
+    /** Other Rural Health Units at the same tier under the Municipal Health Office. */
+    get peerFacilities() { return scope.peer_facilities || []; },
 
     /** True when a BHC-level record belongs to this office. */
     coversBhc(bhcId) {
@@ -332,7 +336,7 @@
       // The municipal office holds stock two levels down, so a batch can be
       // filed against a BHC that is not one of its own children. Searching the
       // leaves as well is what stops those rows reading "Facility #3".
-      const pools = [facilities, scope.child_facilities, scope.bhc_facilities];
+      const pools = [facilities, scope.child_facilities, scope.bhc_facilities, scope.peer_facilities];
       for (const list of pools) {
         if (!Array.isArray(list)) continue;
         const hit = list.find(
@@ -407,6 +411,7 @@
         subtreeCache = null;
 
         await loadParentFacility(dbInstance);
+        await loadPeerFacilities(dbInstance);
 
         localStorage.setItem(SCOPE_KEY, JSON.stringify(scope));
       } catch (e) {
@@ -523,6 +528,31 @@
       scope.parent_facility_type = (parent && parent.facility_type) || null;
     } catch (e) {
       console.warn("Parent facility lookup failed:", e.message || e);
+    }
+  }
+
+  /**
+   * For an RHU account, find the other Rural Health Units in the municipality.
+   * Enables lateral (RHU-to-RHU) stock transfers and resolves peer facility names.
+   */
+  async function loadPeerFacilities(dbInstance) {
+    scope.peer_facilities = [];
+    if (!scope.facility_id || scope.role !== "rhu") return;
+
+    try {
+      const { data, error } = await dbInstance
+        .from("health_facilities")
+        .select("facility_id, name, facility_code, facility_type, parent_facility_id, is_active")
+        .eq("facility_type", "RHU")
+        .order("name");
+      if (error) throw error;
+      if (data) {
+        scope.peer_facilities = data.filter(
+          (f) => String(f.facility_id) !== String(scope.facility_id) && f.is_active !== false
+        );
+      }
+    } catch (e) {
+      console.warn("Peer facilities lookup failed:", e.message || e);
     }
   }
 

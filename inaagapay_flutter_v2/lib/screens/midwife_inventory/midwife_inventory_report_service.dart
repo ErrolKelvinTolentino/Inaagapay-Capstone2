@@ -99,6 +99,9 @@ class MidwifeInventoryReportService {
     int dispensedDoses = 0;
     int replenishedUnits = 0;
     int unusableLossDoses = 0;
+    int totalTransfers = 0;
+    int inboundTransfers = 0;
+    int outboundTransfers = 0;
 
     for (final t in transactions) {
       final type = t.transactionType.toLowerCase();
@@ -108,6 +111,14 @@ class MidwifeInventoryReportService {
         replenishedUnits += t.quantity.abs();
       } else if (type == 'expiry_disposal' || type == 'discard') {
         unusableLossDoses += t.dosesMoved;
+      }
+      if (type == 'transfer') {
+        totalTransfers++;
+        if ((t.doseQuantity ?? t.quantity) > 0) {
+          inboundTransfers++;
+        } else {
+          outboundTransfers++;
+        }
       }
     }
 
@@ -240,15 +251,25 @@ class MidwifeInventoryReportService {
                 pw.Expanded(
                   flex: 6,
                   child: pw.Row(
-                    children: [
-                      _buildKpiCard('TOTAL MOVEMENTS', '$totalMovements', PdfColors.blueGrey800, PdfColors.grey100),
-                      pw.SizedBox(width: 6),
-                      _buildKpiCard('DISPENSED DOSES', '$dispensedDoses', PdfColors.pink800, PdfColors.pink50),
-                      pw.SizedBox(width: 6),
-                      _buildKpiCard('REPLENISHED UNITS', '+$replenishedUnits', PdfColors.green800, PdfColors.green50),
-                      pw.SizedBox(width: 6),
-                      _buildKpiCard('LOSS / EXPIRED', '-$unusableLossDoses', PdfColors.red800, PdfColors.red50),
-                    ],
+                    children: categoryFilter == 'transfer'
+                        ? [
+                            _buildKpiCard('TOTAL TRANSFERS', '$totalTransfers', PdfColors.blueGrey800, PdfColors.grey100),
+                            pw.SizedBox(width: 6),
+                            _buildKpiCard('INBOUND TRANSFERS', '$inboundTransfers', PdfColors.teal800, PdfColors.teal50),
+                            pw.SizedBox(width: 6),
+                            _buildKpiCard('OUTBOUND DISPATCH', '$outboundTransfers', PdfColors.pink800, PdfColors.pink50),
+                            pw.SizedBox(width: 6),
+                            _buildKpiCard('RECEIVED UNITS', '+$replenishedUnits', PdfColors.green800, PdfColors.green50),
+                          ]
+                        : [
+                            _buildKpiCard('TOTAL MOVEMENTS', '$totalMovements', PdfColors.blueGrey800, PdfColors.grey100),
+                            pw.SizedBox(width: 6),
+                            _buildKpiCard('DISPENSED DOSES', '$dispensedDoses', PdfColors.pink800, PdfColors.pink50),
+                            pw.SizedBox(width: 6),
+                            _buildKpiCard('REPLENISHED UNITS', '+$replenishedUnits', PdfColors.green800, PdfColors.green50),
+                            pw.SizedBox(width: 6),
+                            _buildKpiCard('LOSS / EXPIRED', '-$unusableLossDoses', PdfColors.red800, PdfColors.red50),
+                          ],
                   ),
                 ),
               ],
@@ -540,6 +561,14 @@ class MidwifeInventoryReportService {
       case 'discard':
         return 'Open Vial Discard';
       case 'transfer':
+        final isLateral = t.referenceType.toLowerCase().contains('lateral') ||
+            t.notes.toLowerCase().contains('reason for move:') ||
+            t.notes.toLowerCase().contains('peer transfer');
+        if (isLateral) {
+          return (t.doseQuantity ?? t.quantity) > 0
+              ? 'Peer Transfer Inward'
+              : 'Peer Transfer Outward';
+        }
         return (t.doseQuantity ?? t.quantity) > 0 ? 'Inbound Transfer' : 'Outbound Transfer';
       case 'adjustment':
         return 'Stock Adjustment';
@@ -555,6 +584,56 @@ class MidwifeInventoryReportService {
   }
 
   static String _formatNotes(InventoryTransactionRecord t) {
+    final type = t.transactionType.toLowerCase();
+    if (type == 'transfer') {
+      final isLateral = t.referenceType.toLowerCase().contains('lateral') ||
+          t.notes.toLowerCase().contains('reason for move:') ||
+          t.notes.toLowerCase().contains('expected delivery:');
+
+      String? moveReason;
+      String? expectedDelivery;
+      String cleanNotes = t.notes;
+
+      if (isLateral) {
+        final deliveryMatch = RegExp(
+          r'Expected delivery:\s*([^.]+)\.?',
+          caseSensitive: false,
+        ).firstMatch(t.notes);
+        if (deliveryMatch != null) {
+          expectedDelivery = deliveryMatch.group(1)?.trim();
+        }
+
+        final reasonMatch = RegExp(
+          r'Reason for move:\s*([^.]+)\.?',
+          caseSensitive: false,
+        ).firstMatch(t.notes);
+        if (reasonMatch != null) {
+          moveReason = reasonMatch.group(1)?.trim();
+        }
+
+        cleanNotes = cleanNotes
+            .replaceAll(RegExp(r'Expected delivery:[^.]*\.?', caseSensitive: false), '')
+            .replaceAll(RegExp(r'Reason for move:[^.]*\.?', caseSensitive: false), '')
+            .trim();
+      }
+
+      final parts = <String>[];
+      if (t.referenceType.isNotEmpty && t.referenceType != '-' && t.referenceType != '—') {
+        parts.add(t.referenceType);
+      }
+      if (moveReason != null && moveReason.isNotEmpty) {
+        parts.add('Reason: $moveReason');
+      }
+      if (expectedDelivery != null && expectedDelivery.isNotEmpty) {
+        parts.add('Exp. Delivery: $expectedDelivery');
+      }
+      if (cleanNotes.isNotEmpty && cleanNotes != '-' && cleanNotes != '—') {
+        parts.add(cleanNotes);
+      }
+      if (parts.isNotEmpty) return parts.join(' | ');
+      return '-';
+    }
+
     final parts = <String>[];
     if (t.referenceType.isNotEmpty && t.referenceType != '-' && t.referenceType != '—') parts.add(t.referenceType);
     if (t.notes.isNotEmpty) parts.add(t.notes);

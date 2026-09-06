@@ -39,6 +39,11 @@ class AnalyticsCard extends StatelessWidget {
           if (!metric.hasData) ...[
             const SizedBox(height: 16),
             _emptyState(context),
+            if (metric.prescription != null &&
+                metric.prescription!.action != AnalyticsAction.none) ...[
+              const SizedBox(height: 14),
+              _actionButton(metric.prescription!),
+            ],
           ] else ...[
             if (metric.headline != null) ...[
               const SizedBox(height: 12),
@@ -220,27 +225,51 @@ class AnalyticsCard extends StatelessWidget {
     );
   }
 
+  IconData _actionIcon(AnalyticsAction action) {
+    switch (action) {
+      case AnalyticsAction.viewInventory:
+        return Icons.inventory_2_outlined;
+      case AnalyticsAction.viewMothers:
+        return Icons.pregnant_woman_rounded;
+      case AnalyticsAction.viewChildren:
+        return Icons.child_care_rounded;
+      case AnalyticsAction.viewSchedules:
+        return Icons.calendar_month_outlined;
+      case AnalyticsAction.none:
+        return Icons.arrow_forward_rounded;
+    }
+  }
+
   Widget _actionButton(AnalyticsPrescription prescription) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: onAction == null ? null : () => onAction!(prescription.action),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(prescription.label, style: AnalyticsTheme.actionStyle),
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.arrow_forward_rounded,
-                  size: 16,
-                  color: AppColors.brandPrimary,
-                ),
-              ],
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ElevatedButton.icon(
+          onPressed:
+              onAction == null ? null : () => onAction!(prescription.action),
+          icon: Icon(
+            _actionIcon(prescription.action),
+            size: 18,
+            color: Colors.white,
+          ),
+          label: Text(
+            prescription.label,
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              letterSpacing: 0.2,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.brandPrimary,
+            foregroundColor: Colors.white,
+            elevation: 1.0,
+            shadowColor: AppColors.brandPrimary.withValues(alpha: 0.35),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
         ),

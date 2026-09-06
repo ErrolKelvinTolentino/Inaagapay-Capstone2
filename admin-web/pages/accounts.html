@@ -306,6 +306,7 @@
     <div id="toast-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="../js/supabase-client.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bcryptjs/2.4.3/bcrypt.min.js"></script>
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
@@ -313,9 +314,9 @@
     <script src="notification-center.js"></script>
     <script>
         (function() {
-            const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
-            const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
-            const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+            const SUPABASE_URL = window.SUPABASE_URL || "https://krooorixhjwygcsdoomg.supabase.co";
+            const SUPABASE_ANON = window.SUPABASE_ANON || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
+            const db = window.db || supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
             window.AdminNotifications?.attach(db);
             const SESSION_KEY = "inaagapay_admin_session";
             const session = (() => { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } })();
@@ -330,7 +331,7 @@
 
             function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
             function toUTC(ts) { if (!ts) return null; return new Date(/Z|[+-]\d{2}:?\d{2}$/.test(ts) ? ts : ts + "Z"); }
-            function fmtDate(ts) { if (!ts) return "—"; return toUTC(ts).toLocaleDateString("en-PH", { timeZone: "Asia/Manila", year: "numeric", month: "short", day: "numeric" }); }
+            function fmtDate(ts) { if (!ts) return "—"; return toUTC(ts).toLocaleDateString("en-US", { timeZone: "Asia/Manila", year: "numeric", month: "short", day: "2-digit" }); }
             
             function showToast(msg, type) {
                 const icons = { success: "fa-circle-check", error: "fa-circle-xmark", warning: "fa-triangle-exclamation", info: "fa-circle-info" };

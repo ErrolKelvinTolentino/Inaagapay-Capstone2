@@ -1674,9 +1674,29 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         AnalyticsCard(
           metric: AnalyticsMetric.empty(
             title: sections[tabIndex].title,
+            icon: sections[tabIndex].title.toLowerCase().contains('suppl')
+                ? AnalyticsIcon.stock
+                : (sections[tabIndex].title.toLowerCase().contains('child')
+                    ? AnalyticsIcon.children
+                    : AnalyticsIcon.mothers),
             message: 'Nothing to analyse here yet. Cards appear as records '
                 'are added at this health centre.',
+            prescription: sections[tabIndex].title.toLowerCase().contains('suppl')
+                ? const AnalyticsPrescription(
+                    label: 'Open Inventory',
+                    action: AnalyticsAction.viewInventory,
+                  )
+                : (sections[tabIndex].title.toLowerCase().contains('child')
+                    ? const AnalyticsPrescription(
+                        label: 'View Children',
+                        action: AnalyticsAction.viewChildren,
+                      )
+                    : const AnalyticsPrescription(
+                        label: 'View Mothers',
+                        action: AnalyticsAction.viewMothers,
+                      )),
           ),
+          onAction: _onAnalyticsAction,
         )
       else
         for (int i = 0; i < metrics.length; i++) ...[

@@ -202,6 +202,7 @@ class AnalyticsMetric {
     this.kind = AnalyticsChartKind.bars,
     this.icon = AnalyticsIcon.mothers,
     this.periodLabel,
+    this.prescription,
   })  : headline = null,
         headlineCaption = null,
         bands = const [],
@@ -209,7 +210,6 @@ class AnalyticsMetric {
         eligible = null,
         comparison = null,
         insight = null,
-        prescription = null,
         footnote = null,
         emptyMessage = message;
 

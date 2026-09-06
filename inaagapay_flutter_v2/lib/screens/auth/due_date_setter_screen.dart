@@ -90,7 +90,7 @@ class _DueDateSetterScreenState extends State<DueDateSetterScreen> {
     if (pickedDate != null && mounted) {
       setState(() {
         _selectedDate = pickedDate;
-        _dateController.text = DateFormat('MM/dd/yyyy').format(pickedDate);
+        _dateController.text = DateFormat('MMM dd, yyyy').format(pickedDate);
       });
     }
   }

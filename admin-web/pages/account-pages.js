@@ -35,7 +35,7 @@
 
   const loginDate = session.logged_in_at ? new Date(session.logged_in_at) : null;
   const loginText = loginDate && Number.isFinite(loginDate.getTime())
-    ? loginDate.toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" })
+    ? loginDate.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) + ", " + loginDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
     : "—";
   document.querySelectorAll("[data-account-login]").forEach((element) => {
     element.textContent = loginText;

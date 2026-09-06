@@ -182,7 +182,7 @@
           <li><a href="dashboard.html" class="active"><i class="fa-solid fa-gauge-high"></i> Dashboard</a></li>
           <li><a href="accounts.html"><i class="fa-solid fa-users"></i> Account Management</a></li>
           <li><a href="midwife-assignment.html"><i class="fa-solid fa-user-nurse"></i> Midwife Assignment</a></li>
-          <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management</a></li>
+          <li><a href="inventory.html"><i class="fa-solid fa-boxes-stacked"></i> Inventory Management <span class="nav-counter-badge" id="nav-pending-requests-badge" style="display:none;">0</span></a></li>
           <li><a href="reports.html"><i class="fa-solid fa-chart-pie"></i> Reports &amp; Analytics</a></li>
         </ul>
         <div class="sidebar-divider"></div>
@@ -217,6 +217,9 @@
             </button>
           </div>
         </div>
+
+        <!-- Dynamic Clinical Urgent Actions Strip -->
+        <div id="dashboard-urgent-strip" style="display:none; margin-bottom: 24px;"></div>
 
         <!-- KPI Scorecards Grid (5 Cards) -->
         <div class="stats-grid" style="margin-bottom: 24px;">
@@ -356,6 +359,7 @@
             <div class="chart-container-wrap">
               <canvas id="inventory-chart"></canvas>
             </div>
+            <div id="inventory-stockout-banner" style="display:none; margin-top:10px; padding:8px 12px; background:#fff1f2; border:1px solid #fecdd3; border-radius:6px; font-size:11.5px; color:#be123c; text-align:center;"></div>
           </div>
         </div>
 
@@ -421,6 +425,7 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="../js/supabase-client.js"></script>
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
     <script src="inventory-stock.js"></script>
@@ -428,9 +433,9 @@
     <script src="notification-center.js"></script>
     <script>
       (function () {
-        const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
-        const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
-        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        const SUPABASE_URL = window.SUPABASE_URL || "https://krooorixhjwygcsdoomg.supabase.co";
+        const SUPABASE_ANON = window.SUPABASE_ANON || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
+        const db = window.db || supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
         window.AdminNotifications?.attach(db);
         const SESSION_KEY = "inaagapay_admin_session";
         const session = (() => { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; } })();
@@ -486,6 +491,26 @@
         }
         renderBannerDate();
 
+        // Cache for scoped mother IDs within a single dashboard refresh cycle
+        let cachedMotherIds = undefined;
+        async function getScopedMotherIds(force = false) {
+          if (!force && cachedMotherIds !== undefined) return cachedMotherIds;
+          const scopedBhcIds = (PortalScope.bhcFacilities || []).map(f => f.facility_id);
+          if (scopedBhcIds.length === 0) {
+            cachedMotherIds = null; // Unscoped: covers all (MHO or unmigrated)
+            return null;
+          }
+          try {
+            const { data, error } = await db.from("mothers").select("mother_id").in("assigned_bhc_id", scopedBhcIds);
+            if (error) throw error;
+            cachedMotherIds = (data || []).map(m => m.mother_id);
+          } catch (err) {
+            console.warn("getScopedMotherIds error:", err);
+            cachedMotherIds = null;
+          }
+          return cachedMotherIds;
+        }
+
         // Load Statistics KPI Cards
         async function loadStats() {
           try {
@@ -534,20 +559,13 @@
             // 4. Pregnancies. These hang off a mother rather than a facility, so
             //    they are scoped through the mothers this office covers.
             try {
-              let motherIds = null;
-              if (scopedBhcIds.length > 0) {
-                const { data: scopedMothers } = await db
-                  .from("mothers")
-                  .select("mother_id")
-                  .in("assigned_bhc_id", scopedBhcIds);
-                motherIds = (scopedMothers || []).map(m => m.mother_id);
-              }
+              const motherIds = await getScopedMotherIds();
 
-              if (motherIds && motherIds.length === 0) {
+              if (motherIds !== null && motherIds.length === 0) {
                 pregnanciesCount = 0;
               } else {
                 let q = db.from("pregnancies").select("pregnancy_id", { count: "exact", head: true }).eq("status", "ongoing");
-                if (motherIds) q = q.in("mother_id", motherIds);
+                if (motherIds && motherIds.length > 0) q = q.in("mother_id", motherIds);
                 const { count, error } = await q;
                 if (!error && count !== null) pregnanciesCount = count;
               }
@@ -595,7 +613,22 @@
 
         async function loadRiskChart() {
           try {
-            const { data } = await db.from("pregnancies").select("pregnancy_risk_level, status");
+            const canvas = document.getElementById("risk-chart");
+            const motherIds = await getScopedMotherIds();
+            if (motherIds !== null && motherIds.length === 0) {
+              document.getElementById("badge-risk-total").textContent = "0 Cases";
+              if (canvas) {
+                if (chartRiskInstance) chartRiskInstance.destroy();
+                resetChartCanvas(canvas);
+                showEmptyChart(canvas, "No pregnancy records in this scope");
+              }
+              return;
+            }
+
+            let q = db.from("pregnancies").select("pregnancy_risk_level, status");
+            if (motherIds && motherIds.length > 0) q = q.in("mother_id", motherIds);
+
+            const { data } = await q;
             const counts = { low: 0, medium: 0, high: 0 };
             (data || []).forEach(r => {
               const lvl = (r.pregnancy_risk_level || "low").toLowerCase();
@@ -607,7 +640,6 @@
             const total = counts.low + counts.medium + counts.high;
             document.getElementById("badge-risk-total").textContent = `${total} Cases`;
 
-            const canvas = document.getElementById("risk-chart");
             if (!canvas) return;
             if (chartRiskInstance) chartRiskInstance.destroy();
             resetChartCanvas(canvas);
@@ -678,8 +710,22 @@
 
         async function loadMonthlyChart() {
           try {
+            const canvas = document.getElementById("monthly-chart");
+            const motherIds = await getScopedMotherIds();
+            if (motherIds !== null && motherIds.length === 0) {
+              if (canvas) {
+                if (chartMonthlyInstance) chartMonthlyInstance.destroy();
+                resetChartCanvas(canvas);
+                showEmptyChart(canvas, "No registrations in this scope");
+              }
+              return;
+            }
+
             const sixMonths = new Date(); sixMonths.setMonth(sixMonths.getMonth() - 5); sixMonths.setDate(1);
-            const { data } = await db.from("pregnancies").select("created_at").gte("created_at", sixMonths.toISOString());
+            let q = db.from("pregnancies").select("created_at").gte("created_at", sixMonths.toISOString());
+            if (motherIds && motherIds.length > 0) q = q.in("mother_id", motherIds);
+
+            const { data } = await q;
             const map = {};
             (data || []).forEach(r => {
               if (r.created_at) {
@@ -695,7 +741,6 @@
               labels.push(d.toLocaleString("en-PH", { month: "short", year: "2-digit" }));
               values.push(map[key] || 0);
             }
-            const canvas = document.getElementById("monthly-chart");
             if (!canvas) return;
             if (chartMonthlyInstance) chartMonthlyInstance.destroy();
             resetChartCanvas(canvas);
@@ -736,7 +781,7 @@
             // is the quantity left in batches that are still active and not past
             // their expiration date, plus any doses left in an already-open vial.
             // InventoryStock applies those rules once for every page.
-            let stockHealthy = 0, stockLow = 0, stockOut = 0;
+            let stockHealthy = 0, stockLow = 0, stockOut = 0, localOutCount = 0;
             try {
               await InventoryStock.load(db);
               const facilityCount = PortalScope.bhcFacilities.length + 1; // shelves + this portal's depot
@@ -744,8 +789,93 @@
               stockHealthy = tally.ok;
               stockLow = tally.low;
               stockOut = tally.out;
+              localOutCount = tally.localOut || 0;
             } catch (e) {
               console.warn("Inventory stock read failed:", e.message || e);
+            }
+
+            let pendingReqCount = 0;
+            try {
+              const { count, error } = await db
+                .from("inventory_requests")
+                .select("request_id", { count: "exact", head: true })
+                .eq("status", "pending")
+                .eq("is_archived", false);
+              if (!error && count !== null) {
+                pendingReqCount = count;
+              }
+            } catch (err) {
+              console.warn("Pending requests count query failed:", err);
+            }
+
+            // Update sidebar navigation counter badge
+            const navBadge = document.getElementById("nav-pending-requests-badge");
+            if (navBadge) {
+              navBadge.textContent = pendingReqCount > 0 ? String(pendingReqCount) : "";
+              navBadge.style.display = pendingReqCount > 0 ? "inline-flex" : "none";
+              navBadge.title = `${pendingReqCount} pending stock request(s)`;
+            }
+
+            // Render Clinical Urgent Strip
+            const urgentStrip = document.getElementById("dashboard-urgent-strip");
+            if (urgentStrip) {
+              const urgentBadges = [];
+              if (pendingReqCount > 0) {
+                urgentBadges.push(`
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="badge-rop-warning" style="font-size:11.5px; padding:4px 10px;">
+                      <i class="fa-solid fa-clipboard-list"></i> <strong>${pendingReqCount}</strong> Requisition${pendingReqCount > 1 ? 's' : ''} Awaiting Review
+                    </span>
+                    <a href="inventory.html?tab=requests&subview=requests" class="btn btn-sm btn-primary" style="padding:4px 10px; font-size:11.5px; text-decoration:none;">
+                      Review Requisitions <i class="fa-solid fa-arrow-right" style="font-size:9px; margin-left:4px;"></i>
+                    </a>
+                  </div>
+                `);
+              }
+              if (localOutCount > 0) {
+                urgentBadges.push(`
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="badge-leadtime-alert" style="font-size:11.5px; padding:4px 10px;">
+                      <i class="fa-solid fa-triangle-exclamation"></i> <strong>${localOutCount}</strong> BHC Local Stockout${localOutCount > 1 ? 's' : ''}
+                    </span>
+                    <a href="reports.html" class="btn btn-sm btn-secondary" style="padding:4px 10px; font-size:11.5px; text-decoration:none;">
+                      Investigate in Reports <i class="fa-solid fa-arrow-right" style="font-size:9px; margin-left:4px;"></i>
+                    </a>
+                  </div>
+                `);
+              }
+
+              if (urgentBadges.length > 0) {
+                urgentStrip.style.display = "block";
+                urgentStrip.innerHTML = `
+                  <div style="background: #fff5f8; border: 1.5px solid rgba(255, 104, 165, 0.4); border-radius: var(--radius-md); padding: 12px 18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; box-shadow: 0 2px 8px rgba(255, 104, 165, 0.08);">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                      <div style="width:36px; height:36px; border-radius:8px; background:rgba(255,104,165,0.15); display:flex; align-items:center; justify-content:center; color:var(--brand-primary); font-size:16px;">
+                        <i class="fa-solid fa-bell"></i>
+                      </div>
+                      <div>
+                        <div style="font-size:13px; font-weight:700; color:var(--text-primary);">Inventory Attention Required</div>
+                        <div style="font-size:11.5px; color:var(--text-secondary);">Stock requisitions or health center stockouts need administrative action</div>
+                      </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                      ${urgentBadges.join("")}
+                    </div>
+                  </div>
+                `;
+              } else {
+                urgentStrip.style.display = "none";
+              }
+            }
+
+            const bannerEl = document.getElementById("inventory-stockout-banner");
+            if (bannerEl) {
+              if (localOutCount > 0) {
+                bannerEl.style.display = "block";
+                bannerEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="margin-right:4px;"></i><strong>${localOutCount} item${localOutCount > 1 ? "s have" : " has"} local stockouts</strong> at Barangay Health Centers. <a href="reports.html" style="color:#9f1239; font-weight:700; text-decoration:underline; margin-left:4px;">Review in Reports →</a>`;
+              } else {
+                bannerEl.style.display = "none";
+              }
             }
 
             const canvas = document.getElementById("inventory-chart");
@@ -758,13 +888,23 @@
               return;
             }
 
+            const chartLabels = localOutCount > 0
+              ? ["Adequate", "Low Stock", "Local BHC Empty", "Completely Out"]
+              : ["Available", "Low Stock", "Out of Stock"];
+            const chartData = localOutCount > 0
+              ? [stockHealthy, Math.max(0, stockLow - localOutCount), localOutCount, stockOut]
+              : [stockHealthy, stockLow, stockOut];
+            const chartColors = localOutCount > 0
+              ? ["#10B981", "#F59E0B", "#F43F5E", "#EF4444"]
+              : ["#10B981", "#F59E0B", "#EF4444"];
+
             chartInventoryInstance = new Chart(canvas, {
               type: "doughnut",
               data: {
-                labels: ["Available", "Low Stock", "Out of Stock"],
+                labels: chartLabels,
                 datasets: [{
-                  data: [stockHealthy, stockLow, stockOut],
-                  backgroundColor: ["#10B981", "#F59E0B", "#EF4444"],
+                  data: chartData,
+                  backgroundColor: chartColors,
                   borderWidth: 2,
                   borderColor: "#ffffff"
                 }]
@@ -802,7 +942,9 @@
         function formatTimestamp(ts) {
           if (!ts) return '—';
           const d = new Date(/Z|[+-]\d{2}:?\d{2}$/.test(ts) ? ts : ts + 'Z');
-          return d.toLocaleString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          const dateStr = d.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: '2-digit' });
+          const timeStr = d.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' });
+          return `${dateStr}, ${timeStr}`;
         }
 
         const accountNameCache = new Map();
@@ -1039,7 +1181,7 @@
               
               doc.setFontSize(8);
               doc.setTextColor(128, 128, 128);
-              doc.text(`Report Generated by Admin: ${session.first_name || "Admin"} ${session.last_name || ""} | Date: ${new Date().toLocaleString('en-PH')}`, 14, doc.internal.pageSize.height - 8);
+              doc.text(`Report Generated by Admin: ${session.first_name || "Admin"} ${session.last_name || ""} | Date: ${new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}, ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`, 14, doc.internal.pageSize.height - 8);
               doc.text(`Page ${i} of ${totalPages}`, doc.internal.pageSize.width - 14, doc.internal.pageSize.height - 8, { align: 'right' });
             }
             
@@ -1081,14 +1223,17 @@
             "bhc", "health_facilities", "inventory_items", "inventory_batches",
             "inventory_transactions", "audit_trail"
           ],
-          refresh: () => Promise.all([
-            loadStats(),
-            loadRiskChart(),
-            loadBhcChart(),
-            loadMonthlyChart(),
-            loadInventoryChart(),
-            loadAuditTrail(),
-          ]),
+          refresh: () => {
+            cachedMotherIds = undefined;
+            return Promise.all([
+              loadStats(),
+              loadRiskChart(),
+              loadBhcChart(),
+              loadMonthlyChart(),
+              loadInventoryChart(),
+              loadAuditTrail(),
+            ]);
+          },
         });
       })();
     </script>

@@ -158,5 +158,64 @@ void main() {
       expect(pdfBytes, isNotNull);
       expect(pdfBytes.isNotEmpty, isTrue);
     });
+
+    test('generates PDF correctly for peer transfer movements with parsed reason & expected delivery', () async {
+      final transferLedger = [
+        InventoryTransactionRecord.fromJson({
+          'transaction_id': 301,
+          'batch_id': 20,
+          'facility_id': 2,
+          'transaction_type': 'transfer',
+          'quantity': -15,
+          'dose_quantity': -15,
+          'doses_per_unit': 1,
+          'resulting_quantity_remaining': 35,
+          'reference_type': 'Lateral transfer: Sto. Nino BHC to San Isidro BHC - pending receipt',
+          'notes': 'Expected delivery: 2026-09-06. Reason for move: Emergency shortage at recipient BHC. Urgent resupply.',
+          'item_id': 5,
+          'item_name': 'Oxytocin 10 IU/mL Ampoule',
+          'unit_of_measure': 'ampoule',
+          'batch_number': 'OXY-2026B',
+          'logged_at': '2026-09-05T09:00:00Z',
+          'performed_by_name': 'Maria Santos',
+          'performed_by_role': 'midwife',
+        }),
+        InventoryTransactionRecord.fromJson({
+          'transaction_id': 302,
+          'batch_id': 25,
+          'facility_id': 2,
+          'transaction_type': 'transfer',
+          'quantity': 10,
+          'dose_quantity': 10,
+          'doses_per_unit': 1,
+          'resulting_quantity_remaining': 20,
+          'reference_type': 'Received laterally from Tibag BHC',
+          'notes': 'Expected delivery: 2026-09-05. Reason for move: Routine redistribution.',
+          'item_id': 6,
+          'item_name': 'Ferrous Sulfate + Folic Acid',
+          'unit_of_measure': 'tablet',
+          'batch_number': 'FE-2026A',
+          'logged_at': '2026-09-05T14:00:00Z',
+          'performed_by_name': 'Ana Reyes',
+          'performed_by_role': 'midwife',
+        }),
+      ];
+
+      final pdfBytes = await MidwifeInventoryReportService.generateReportPdf(
+        facilityName: 'Sto. Nino Barangay Health Center',
+        midwifeName: 'Maria Santos',
+        periodLabel: 'September 05, 2026 (Today)',
+        transactions: transferLedger,
+        categoryFilter: 'transfer',
+      );
+
+      expect(pdfBytes, isNotNull);
+      expect(pdfBytes.isNotEmpty, isTrue);
+      expect(pdfBytes[0], 0x25); // %
+      expect(pdfBytes[1], 0x50); // P
+      expect(pdfBytes[2], 0x44); // D
+      expect(pdfBytes[3], 0x46); // F
+    });
   });
 }
+

@@ -199,8 +199,6 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
             final pad = numStr.padLeft(3, '0');
             _patientNames['INA-$pad'] = name;
             _patientNames['INA-$numStr'] = name;
-            _patientNames['PATIENT #$numStr'] = name;
-            _patientNames['PATIENT #$pad'] = name;
           }
         }
       } catch (e) {
@@ -226,8 +224,6 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               final pad = cNum.padLeft(3, '0');
               _patientNames['NAK-$pad'] = name;
               _patientNames['NAK-$cNum'] = name;
-              _patientNames['CHILD #$cNum'] = name;
-              _patientNames['CHILD #$pad'] = name;
             }
           }
         }
@@ -453,7 +449,11 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
       measure,
       transaction.itemName,
       'Batch ${transaction.batchNumber}',
-      if (transaction.patientLabel != null) transaction.patientLabel!,
+      // A midwife may see her own patients by name; the admin portal never can.
+      // The pseudonym is what the database returns, so it is resolved here at the
+      // point of display rather than being carried around as a name.
+      if (transaction.patientLabel != null)
+        _resolvePatientName(transaction.patientLabel),
       if (transaction.performedByName != null)
         'by ${transaction.performedByName}',
       if (transaction.resultingOpenVialDoses != null &&
@@ -589,6 +589,11 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
 
   List<InventoryItem> get _reportableItems =>
       _inventory.where((item) => item.reportableBatches.isNotEmpty).toList();
+
+  List<InventoryItem> get _transferableItems => _inventory
+      .where((item) =>
+          item.batches.any((b) => b.isUsableOn() && b.quantityRemaining > 0))
+      .toList();
 
   bool _handleInventoryScroll(ScrollNotification notification) {
     if (notification.depth != 0) return false;
@@ -1605,6 +1610,18 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                 '${_expiryAttentionItems.length} expiry alert${_expiryAttentionItems.length == 1 ? '' : 's'}',
             onTap: _stockActivityAvailable && _reportableItems.isNotEmpty
                 ? _showUnusableSheet
+                : null,
+          ),
+          const SizedBox(height: 10),
+          _buildStockActionButton(
+            icon: Icons.swap_horiz_rounded,
+            color: const Color(0xFF0E7490),
+            title: 'Transfer stock to BHC',
+            subtitle:
+                'Send stock to a neighbouring health centre under your RHU.',
+            badge: 'BHC-to-BHC peer transfer',
+            onTap: _workflowAvailable && _transferableItems.isNotEmpty
+                ? _showTransferStockSheet
                 : null,
           ),
         ],
@@ -2894,6 +2911,23 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                 ),
               ),
               const Spacer(),
+              if (item.batches.any((b) => b.isUsableOn() && b.quantityRemaining > 0)) ...[
+                TextButton.icon(
+                  onPressed: _workflowAvailable
+                      ? () => _showTransferStockSheet(item)
+                      : null,
+                  icon: const Icon(Icons.swap_horiz_rounded, size: 17),
+                  label: const Text('Transfer'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF0E7490),
+                    textStyle: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
               if (item.isLowStock)
                 TextButton.icon(
                   onPressed:
@@ -4392,6 +4426,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
       return t.itemName.toLowerCase().contains(query) ||
           t.batchNumber.toLowerCase().contains(query) ||
           (t.patientNumber ?? '').toLowerCase().contains(query) ||
+          // Also match the resolved name, or the list shows a name the search
+          // cannot find.
+          _resolvePatientName(t.patientNumber).toLowerCase().contains(query) ||
           (t.performedByName ?? '').toLowerCase().contains(query) ||
           t.referenceType.toLowerCase().contains(query) ||
           t.notes.toLowerCase().contains(query) ||
@@ -4424,8 +4461,12 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
           (t) =>
               t.transactionType.toLowerCase() == 'receipt' ||
               (t.transactionType.toLowerCase() == 'transfer' &&
-                  (t.doseQuantity ?? t.quantity) > 0),
+                  (t.doseQuantity ?? t.quantity) > 0 &&
+                  !t.referenceType.toLowerCase().contains('lateral')),
         )
+        .length;
+    final transferCount = _transactions
+        .where((t) => t.transactionType.toLowerCase() == 'transfer')
         .length;
     final unusableCount = _transactions
         .where(
@@ -4498,12 +4539,13 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
           total: totalMovements,
           dispensed: dispensedCount,
           replenished: replenishedCount,
+          transfers: transferCount,
           unusable: unusableCount,
         ),
         const SizedBox(height: 18),
         AppInputField(
           controller: _historySearchController,
-          hintText: 'Search item, batch, patient ID, performer, or reason',
+          hintText: 'Search item, batch, patient, performer, or reason',
           leadingIcon: Icons.search_rounded,
           trailingIcon: _historySearchController.text.isEmpty
               ? null
@@ -4664,9 +4706,9 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               const SizedBox(width: 8),
               _buildHistoryFilterChip(
                 value: 'transfer',
-                label: 'Transfers',
-                icon: Icons.local_shipping_outlined,
-                color: AppColors.warning,
+                label: 'Peer Transfers',
+                icon: Icons.swap_horiz_rounded,
+                color: const Color(0xFF0E7490),
               ),
               const SizedBox(width: 8),
               _buildHistoryFilterChip(
@@ -4803,11 +4845,12 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     required int total,
     required int dispensed,
     required int replenished,
+    required int transfers,
     required int unusable,
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -4820,52 +4863,59 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _HistoryMetricItem(
-              label: 'Total Logs',
-              value: '$total',
-              icon: Icons.receipt_long_rounded,
-              color: AppColors.brandPrimary,
-              isActive: _historyFilter == 'all',
-              onTap: () => setState(() => _historyFilter = 'all'),
-            ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              _HistoryMetricItem(
+                label: 'Total Logs',
+                value: '$total',
+                icon: Icons.receipt_long_rounded,
+                color: AppColors.brandPrimary,
+                isActive: _historyFilter == 'all',
+                onTap: () => setState(() => _historyFilter = 'all'),
+              ),
+              Container(width: 1, height: 36, color: AppColors.borderPrimary),
+              _HistoryMetricItem(
+                label: 'Dispensed',
+                value: '$dispensed',
+                icon: Icons.vaccines_rounded,
+                color: AppColors.info,
+                isActive: _historyFilter == 'dispense',
+                onTap: () => setState(() => _historyFilter = 'dispense'),
+              ),
+              Container(width: 1, height: 36, color: AppColors.borderPrimary),
+              _HistoryMetricItem(
+                label: 'Replenished',
+                value: '$replenished',
+                icon: Icons.inventory_2_outlined,
+                color: AppColors.success,
+                isActive: _historyFilter == 'replenishment',
+                onTap: () => setState(() => _historyFilter = 'replenishment'),
+              ),
+              Container(width: 1, height: 36, color: AppColors.borderPrimary),
+              _HistoryMetricItem(
+                label: 'Transfers',
+                value: '$transfers',
+                icon: Icons.swap_horiz_rounded,
+                color: const Color(0xFF0E7490),
+                isActive: _historyFilter == 'transfer',
+                onTap: () => setState(() => _historyFilter = 'transfer'),
+              ),
+              Container(width: 1, height: 36, color: AppColors.borderPrimary),
+              _HistoryMetricItem(
+                label: 'Expired/Loss',
+                value: '$unusable',
+                icon: Icons.event_busy_outlined,
+                color: AppColors.error,
+                isActive: _historyFilter == 'unusable',
+                onTap: () => setState(() => _historyFilter = 'unusable'),
+              ),
+            ],
           ),
-          Container(width: 1, height: 36, color: AppColors.borderPrimary),
-          Expanded(
-            child: _HistoryMetricItem(
-              label: 'Dispensed',
-              value: '$dispensed',
-              icon: Icons.vaccines_rounded,
-              color: AppColors.info,
-              isActive: _historyFilter == 'dispense',
-              onTap: () => setState(() => _historyFilter = 'dispense'),
-            ),
-          ),
-          Container(width: 1, height: 36, color: AppColors.borderPrimary),
-          Expanded(
-            child: _HistoryMetricItem(
-              label: 'Replenished',
-              value: '$replenished',
-              icon: Icons.inventory_2_outlined,
-              color: AppColors.success,
-              isActive: _historyFilter == 'replenishment',
-              onTap: () => setState(() => _historyFilter = 'replenishment'),
-            ),
-          ),
-          Container(width: 1, height: 36, color: AppColors.borderPrimary),
-          Expanded(
-            child: _HistoryMetricItem(
-              label: 'Expired/Loss',
-              value: '$unusable',
-              icon: Icons.event_busy_outlined,
-              color: AppColors.error,
-              isActive: _historyFilter == 'unusable',
-              onTap: () => setState(() => _historyFilter = 'unusable'),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -4908,48 +4958,97 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     final type = row.transactionType.toLowerCase();
     final isWaste = type == 'expiry_disposal' || type == 'discard';
     final isReplenishment = type == 'receipt' ||
-        (type == 'transfer' && (row.doseQuantity ?? row.quantity) > 0);
+        (type == 'transfer' &&
+            (row.doseQuantity ?? row.quantity) > 0 &&
+            !row.referenceType.toLowerCase().contains('lateral'));
     final isDispense = type == 'dispense' || row.isAdministration;
     final isOutbound =
         type == 'transfer' && (row.doseQuantity ?? row.quantity) < 0;
     final isIn = (row.doseQuantity ?? row.quantity) > 0;
+    final isLateral = type == 'transfer' &&
+        (row.referenceType.toLowerCase().contains('lateral') ||
+            row.notes.toLowerCase().contains('reason for move:') ||
+            row.notes.toLowerCase().contains('expected delivery:'));
 
-    final Color accentColor = isWaste
-        ? AppColors.error
-        : isReplenishment
-            ? AppColors.success
-            : isOutbound
-                ? AppColors.warning
-                : isDispense
-                    ? AppColors.brandPrimary
-                    : type == 'adjustment'
-                        ? const Color(0xFF8B5CF6)
-                        : (isIn ? AppColors.success : AppColors.brandPrimary);
+    String? expectedDelivery;
+    String? moveReason;
+    String cleanNotes = row.notes;
 
-    final IconData categoryIcon = switch (type) {
-      'receipt' => Icons.add_circle_outline_rounded,
-      'expiry_disposal' => Icons.event_busy_outlined,
-      'discard' => Icons.delete_outline_rounded,
-      'adjustment' => Icons.tune_rounded,
-      'transfer' =>
-        isOutbound ? Icons.outbound_rounded : Icons.south_west_rounded,
-      _ when row.isAdministration => Icons.vaccines_rounded,
-      _ when isDispense => Icons.medication_rounded,
-      _ => isIn
-          ? Icons.add_circle_outline_rounded
-          : Icons.remove_circle_outline_rounded,
-    };
+    if (isLateral) {
+      final deliveryMatch = RegExp(
+        r'Expected delivery:\s*([^.]+)\.?',
+        caseSensitive: false,
+      ).firstMatch(row.notes);
+      if (deliveryMatch != null) {
+        expectedDelivery = deliveryMatch.group(1)?.trim();
+      }
 
-    final String headline = switch (type) {
-      'receipt' => 'Stock Replenishment Received',
-      'discard' => 'Open Vial Discarded',
-      'expiry_disposal' => 'Unusable / Expired Stock Written Off',
-      'adjustment' => 'Stock Ledger Adjusted',
-      'transfer' =>
-        isOutbound ? 'Stock Transferred Outward' : 'Stock Transferred Inward',
-      _ when row.isAdministration => 'Dose Administered to Patient',
-      _ => isIn ? 'Stock Added' : 'Stock Dispensed',
-    };
+      final reasonMatch = RegExp(
+        r'Reason for move:\s*([^.]+)\.?',
+        caseSensitive: false,
+      ).firstMatch(row.notes);
+      if (reasonMatch != null) {
+        moveReason = reasonMatch.group(1)?.trim();
+      }
+
+      cleanNotes = cleanNotes
+          .replaceAll(
+            RegExp(r'Expected delivery:[^.]*\.?', caseSensitive: false),
+            '',
+          )
+          .replaceAll(
+            RegExp(r'Reason for move:[^.]*\.?', caseSensitive: false),
+            '',
+          )
+          .trim();
+    }
+
+    final Color accentColor = isLateral
+        ? const Color(0xFF0E7490)
+        : (isWaste
+            ? AppColors.error
+            : isReplenishment
+                ? AppColors.success
+                : isOutbound
+                    ? AppColors.warning
+                    : isDispense
+                        ? AppColors.brandPrimary
+                        : type == 'adjustment'
+                            ? const Color(0xFF8B5CF6)
+                            : (isIn
+                                ? AppColors.success
+                                : AppColors.brandPrimary));
+
+    final IconData categoryIcon = isLateral
+        ? Icons.swap_horiz_rounded
+        : switch (type) {
+            'receipt' => Icons.add_circle_outline_rounded,
+            'expiry_disposal' => Icons.event_busy_outlined,
+            'discard' => Icons.delete_outline_rounded,
+            'adjustment' => Icons.tune_rounded,
+            'transfer' =>
+              isOutbound ? Icons.outbound_rounded : Icons.south_west_rounded,
+            _ when row.isAdministration => Icons.vaccines_rounded,
+            _ when isDispense => Icons.medication_rounded,
+            _ => isIn
+                ? Icons.add_circle_outline_rounded
+                : Icons.remove_circle_outline_rounded,
+          };
+
+    final String headline = isLateral
+        ? (isOutbound
+            ? 'Peer Transfer Sent to BHC'
+            : 'Peer Transfer Received from BHC')
+        : switch (type) {
+            'receipt' => 'Stock Replenishment Received',
+            'discard' => 'Open Vial Discarded',
+            'expiry_disposal' => 'Unusable / Expired Stock Written Off',
+            'adjustment' => 'Stock Ledger Adjusted',
+            'transfer' =>
+              isOutbound ? 'Stock Transferred Outward' : 'Stock Transferred Inward',
+            _ when row.isAdministration => 'Dose Administered to Patient',
+            _ => isIn ? 'Stock Added' : 'Stock Dispensed',
+          };
 
     final doses = row.dosesMoved;
     final sign = isIn ? '+' : '−';
@@ -5091,13 +5190,33 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                 value:
                     '${row.performedByName}${row.performedByRole != null ? ' • ${_displayRole(row.performedByRole!)}' : ''}',
               ),
+            if (isLateral) ...[
+              if (moveReason != null && moveReason.isNotEmpty)
+                _historyDetailRow(
+                  icon: Icons.alt_route_rounded,
+                  label: 'Reason for move',
+                  value: moveReason,
+                  emphasise: true,
+                  badgeColor: const Color(0xFF0E7490),
+                ),
+              if (expectedDelivery != null && expectedDelivery.isNotEmpty)
+                _historyDetailRow(
+                  icon: Icons.calendar_today_rounded,
+                  label: 'Expected delivery',
+                  value: expectedDelivery,
+                ),
+            ],
             if (row.referenceType.isNotEmpty)
               _historyDetailRow(
-                icon: Icons.receipt_outlined,
-                label: 'Reference / Reason',
+                icon: isLateral
+                    ? Icons.swap_horiz_rounded
+                    : Icons.receipt_outlined,
+                label: isLateral ? 'Transfer route' : 'Reference / Reason',
                 value: row.referenceType,
+                emphasise: isLateral,
+                badgeColor: isLateral ? const Color(0xFF0E7490) : null,
               ),
-            if (row.notes.isNotEmpty) ...[
+            if (cleanNotes.isNotEmpty) ...[
               const SizedBox(height: 6),
               Container(
                 width: double.infinity,
@@ -5111,7 +5230,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
                   ),
                 ),
                 child: Text(
-                  'Note: "${row.notes}"',
+                  'Note: "$cleanNotes"',
                   style: const TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 11,
@@ -5570,16 +5689,17 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         RegExp(r'(?:PATIENT|MOTHER|CHILD)\s*#?(\d+)', caseSensitive: false)
             .firstMatch(trimmed);
     if (patientNumMatch != null) {
+      // "Patient #12" / "Child #12" carry the internal id, never a chart
+      // number - see the fallback branches of the patient_number expression in
+      // 20260830_dose_traceability.sql. Resolving these against INA-/NAK- would
+      // answer with whoever holds chart number 12 at some facility, which is a
+      // real name on the wrong record.
       final num = patientNumMatch.group(1)!;
-      final pad = num.padLeft(3, '0');
-      if (_patientNames.containsKey('INA-$pad')) {
-        return _patientNames['INA-$pad']!;
-      }
-      if (_patientNames.containsKey('NAK-$pad')) {
-        return _patientNames['NAK-$pad']!;
-      }
       if (_patientNames.containsKey('PATIENT #$num')) {
         return _patientNames['PATIENT #$num']!;
+      }
+      if (_patientNames.containsKey('MOTHER #$num')) {
+        return _patientNames['MOTHER #$num']!;
       }
       if (_patientNames.containsKey('CHILD #$num')) {
         return _patientNames['CHILD #$num']!;
@@ -8011,6 +8131,1186 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
     );
   }
 
+  Future<void> _showTransferStockSheet([
+    InventoryItem? suggestedItem,
+    live.InventoryBatchRecord? suggestedBatch,
+  ]) async {
+    if (_transferableItems.isEmpty) {
+      AppSnackbar.warning(
+        context,
+        'No usable stock is available to transfer.',
+      );
+      return;
+    }
+
+    final contextRecord = _liveContext;
+    if (contextRecord == null) return;
+
+    List<live.PeerFacility> peerFacilities = [];
+    try {
+      peerFacilities = await _repository.loadPeerFacilities(
+        currentFacilityId: contextRecord.facilityId,
+        parentFacilityId: contextRecord.parentFacilityId,
+      );
+    } catch (_) {
+      peerFacilities = [];
+    }
+
+    if (!mounted) return;
+    if (peerFacilities.isEmpty) {
+      AppSnackbar.warning(
+        context,
+        'No neighbouring Barangay Health Centers found under ${contextRecord.supplierLabel} to transfer stock to.',
+      );
+      return;
+    }
+
+    InventoryItem? selectedItem = suggestedItem != null &&
+            _transferableItems.any((i) => i.itemId == suggestedItem.itemId)
+        ? suggestedItem
+        : _transferableItems.first;
+
+    live.PeerFacility? selectedPeer =
+        peerFacilities.length == 1 ? peerFacilities.first : null;
+
+    List<live.InventoryBatchRecord> transferableBatches(InventoryItem? item) {
+      if (item == null) return const [];
+      return item.usableBatches
+          .where((b) => b.quantityRemaining > 0)
+          .toList();
+    }
+
+    live.InventoryBatchRecord? selectedBatch = suggestedBatch ??
+        (transferableBatches(selectedItem).isNotEmpty
+            ? transferableBatches(selectedItem).first
+            : null);
+
+    DateTime? expectedArrivalDate =
+        DateTime.now().add(const Duration(days: 1));
+    String selectedReason = 'Stock balancing / Peer support';
+    bool isSubmitting = false;
+
+    String? peerError;
+    String? itemError;
+    String? batchError;
+    String? quantityError;
+    String? reasonError;
+    String? notesError;
+
+    final peerFieldKey = GlobalKey();
+    final itemFieldKey = GlobalKey();
+    final batchFieldKey = GlobalKey();
+    final quantityFieldKey = GlobalKey();
+    final dateFieldKey = GlobalKey();
+    final reasonFieldKey = GlobalKey();
+    final notesFieldKey = GlobalKey();
+
+    const moveReasons = <String>[
+      'Stock balancing / Peer support',
+      'Emergency shortage at recipient BHC',
+      'Routine redistribution',
+      'Near-expiry redistribution',
+      'Other',
+    ];
+
+    final submitted = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return _InventoryFormControllerHost(
+          initialValues: const ['', ''],
+          builder: (sheetContext, controllers) {
+            final quantityController = controllers[0];
+            final notesController = controllers[1];
+
+            return StatefulBuilder(
+              builder: (sheetContext, setModalState) {
+                final bottomInset =
+                    MediaQuery.viewInsetsOf(sheetContext).bottom;
+                final batchOptions = transferableBatches(selectedItem);
+                final batch = selectedBatch;
+                final parsedQuantity =
+                    int.tryParse(quantityController.text.trim()) ?? 0;
+
+                live.TransferSafetyAssessment? safety;
+                if (batch != null && selectedItem != null) {
+                  safety = live.TransferSafetyAssessment.evaluate(
+                    expectedArrivalDate: expectedArrivalDate,
+                    expirationDate: batch.expirationDay ?? DateTime.now(),
+                    batchQuantityRemaining: batch.quantityRemaining,
+                    totalSourceItemAvailable: selectedItem!.quantity,
+                    quantity: parsedQuantity,
+                    minimumStockThreshold: selectedItem!.minimumStock,
+                    itemName: selectedItem!.name,
+                    unit: selectedItem!.unit,
+                    destinationName: selectedPeer?.name ?? 'recipient BHC',
+                  );
+                }
+
+                Future<void> submitTransfer() async {
+                  if (isSubmitting || !_workflowAvailable) return;
+
+                  final quantity =
+                      int.tryParse(quantityController.text.trim());
+                  final peerValid = selectedPeer != null;
+                  final itemValid = selectedItem != null;
+                  final batchValid = batch != null;
+                  final quantityValid = quantity != null &&
+                      quantity > 0 &&
+                      batch != null &&
+                      quantity <= batch.quantityRemaining;
+                  final dateValid = expectedArrivalDate != null &&
+                      !expectedArrivalDate!.isBefore(
+                        DateTime(
+                          DateTime.now().year,
+                          DateTime.now().month,
+                          DateTime.now().day,
+                        ),
+                      );
+                  final reasonValid = selectedReason.trim().isNotEmpty;
+                  final notesValid = selectedReason != 'Other' ||
+                      notesController.text.trim().isNotEmpty;
+
+                  final isBlockedBySafety = safety?.isBlocked ?? false;
+
+                  setModalState(() {
+                    peerError = peerValid
+                        ? null
+                        : 'Choose the receiving health center.';
+                    itemError =
+                        itemValid ? null : 'Choose an item to transfer.';
+                    batchError = batchValid ? null : 'Choose a stock batch.';
+                    quantityError = !quantityValid
+                        ? batch == null
+                            ? 'Choose a batch first.'
+                            : 'Enter 1–${batch.quantityRemaining} ${selectedItem?.unit ?? "units"}.'
+                        : null;
+                    reasonError =
+                        reasonValid ? null : 'Choose a reason for this move.';
+                    notesError = notesValid
+                        ? null
+                        : 'Please explain the reason for this move.';
+                  });
+
+                  if (!peerValid ||
+                      !itemValid ||
+                      !batchValid ||
+                      !quantityValid ||
+                      !dateValid ||
+                      !reasonValid ||
+                      !notesValid) {
+                    _revealFirstError([
+                      (peerError, peerFieldKey),
+                      (itemError, itemFieldKey),
+                      (batchError, batchFieldKey),
+                      (quantityError, quantityFieldKey),
+                      (reasonError, reasonFieldKey),
+                      (notesError, notesFieldKey),
+                    ]);
+                    return;
+                  }
+
+                  if (isBlockedBySafety) {
+                    AppSnackbar.warning(
+                      sheetContext,
+                      safety?.message ??
+                          'Transfer cannot proceed due to safety restrictions.',
+                    );
+                    return;
+                  }
+
+                  final confirmed = await showDialog<bool>(
+                    context: sheetContext,
+                    builder: (dialogContext) => ConfirmationDialogBox(
+                      title: 'Issue stock transfer?',
+                      subtitle:
+                          'Transfer $quantity ${selectedItem!.unit} of ${selectedItem!.name} (Batch ${batch.batchNumber}) from ${contextRecord.facilityName} to ${selectedPeer!.name}?\n\n'
+                          'Expected delivery: ${_shortDate(expectedArrivalDate!)} (${expectedArrivalDate!.year}).\n'
+                          'Reason: $selectedReason.${notesController.text.trim().isNotEmpty ? "\nNote: ${notesController.text.trim()}" : ""}',
+                      confirmText: 'Issue transfer',
+                      cancelText: 'Review again',
+                      onCancel: () => Navigator.of(dialogContext).pop(false),
+                      onConfirm: () => Navigator.of(dialogContext).pop(true),
+                    ),
+                  );
+
+                  if (confirmed != true || !sheetContext.mounted) return;
+
+                  setModalState(() => isSubmitting = true);
+                  try {
+                    await _repository.issueTransfer(
+                      context: contextRecord,
+                      sourceBatchId: batch.batchId,
+                      destinationFacilityId: selectedPeer!.facilityId,
+                      quantity: quantity,
+                      expectedArrivalDate: expectedArrivalDate!,
+                      reason: selectedReason,
+                      notes: notesController.text.trim().isEmpty
+                          ? null
+                          : notesController.text.trim(),
+                    );
+                    if (!sheetContext.mounted) return;
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    Navigator.of(sheetContext).pop(true);
+                  } catch (error) {
+                    if (!sheetContext.mounted) return;
+                    setModalState(() => isSubmitting = false);
+                    if (error is live.InventoryWorkflowUnavailableException &&
+                        mounted) {
+                      setState(() {
+                        _workflowAvailable = false;
+                        _workflowMessage = error.message;
+                      });
+                    }
+                    AppSnackbar.error(sheetContext, error.toString());
+                  }
+                }
+
+                return SafeArea(
+                  top: false,
+                  child: AnimatedPadding(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    padding: EdgeInsets.only(bottom: bottomInset),
+                    child: Container(
+                      constraints: BoxConstraints(
+                        maxHeight:
+                            MediaQuery.sizeOf(sheetContext).height * 0.9,
+                      ),
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                      decoration: const BoxDecoration(
+                        color: AppColors.bgPrimary,
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(28)),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: AppColors.borderPrimary,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0E7490)
+                                      .withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(13),
+                                ),
+                                child: const Icon(
+                                  Icons.swap_horiz_rounded,
+                                  color: Color(0xFF0E7490),
+                                ),
+                              ),
+                              const SizedBox(width: 11),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Wrap(
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
+                                      spacing: 6,
+                                      runSpacing: 2,
+                                      children: [
+                                        const Text(
+                                          'TRANSFER STOCK TO BHC',
+                                          style: TextStyle(
+                                            color: AppColors.brandText,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 0.3,
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF0E7490)
+                                                .withValues(alpha: 0.12),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                          child: const Text(
+                                            'BHC PEER TRANSFER',
+                                            style: TextStyle(
+                                              color: Color(0xFF0E7490),
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w800,
+                                              letterSpacing: 0.4,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      'Dispatch stock directly to a neighbouring BHC under ${contextRecord.supplierLabel}.',
+                                      style: const TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 11,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () =>
+                                        Navigator.of(sheetContext).pop(false),
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTransferFlowSteps(),
+                          const SizedBox(height: 14),
+                          Expanded(
+                            child: ListView(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              children: [
+                                _FormLabel('1. DESTINATION BHC',
+                                    key: peerFieldKey),
+                                const SizedBox(height: 7),
+                                AppDropdownField<live.PeerFacility>(
+                                  value: selectedPeer,
+                                  hintText: 'Choose receiving health center',
+                                  leadingIcon: Icons.domain_rounded,
+                                  options: peerFacilities,
+                                  displayStringForOption: (f) =>
+                                      '${f.name}${f.facilityCode != null && f.facilityCode!.isNotEmpty ? " (${f.facilityCode})" : ""}',
+                                  errorText: peerError,
+                                  onSelected: (facility) {
+                                    setModalState(() {
+                                      selectedPeer = facility;
+                                      peerError = null;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _FormLabel('2. INVENTORY ITEM',
+                                    key: itemFieldKey),
+                                const SizedBox(height: 7),
+                                AppDropdownField<InventoryItem>(
+                                  value: selectedItem,
+                                  hintText: 'Choose an item',
+                                  leadingIcon:
+                                      Icons.medical_information_outlined,
+                                  options: _transferableItems,
+                                  displayStringForOption: (item) =>
+                                      '${item.name} • ${item.quantity} ${item.unit} available',
+                                  errorText: itemError,
+                                  onSelected: (item) {
+                                    setModalState(() {
+                                      selectedItem = item;
+                                      itemError = null;
+                                      batchError = null;
+                                      quantityError = null;
+                                      quantityController.clear();
+                                      final batches =
+                                          transferableBatches(item);
+                                      selectedBatch = batches.isNotEmpty
+                                          ? batches.first
+                                          : null;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _FormLabel('3. STOCK BATCH',
+                                    key: batchFieldKey),
+                                const SizedBox(height: 7),
+                                _buildBatchPickerField(
+                                  item: selectedItem,
+                                  selected: batch,
+                                  options: batchOptions,
+                                  hintText: selectedItem == null
+                                      ? 'Choose an item first'
+                                      : batchOptions.isEmpty
+                                          ? 'No usable batch available'
+                                          : 'Choose a batch to transfer',
+                                  errorText: batchError,
+                                  onSelected: (pickedBatch) {
+                                    setModalState(() {
+                                      selectedBatch = pickedBatch;
+                                      batchError = null;
+                                      quantityError = null;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _FormLabel('4. TRANSFER QUANTITY',
+                                    key: quantityFieldKey),
+                                const SizedBox(height: 7),
+                                AppInputField(
+                                  controller: quantityController,
+                                  hintText: batch != null
+                                      ? 'Available in batch: ${batch.quantityRemaining} ${selectedItem?.unit ?? "units"}'
+                                      : 'Enter transfer quantity',
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly
+                                  ],
+                                  leadingIcon:
+                                      Icons.format_list_numbered_rounded,
+                                  errorText: quantityError,
+                                  onChanged: (_) {
+                                    setModalState(() {
+                                      quantityError = null;
+                                    });
+                                  },
+                                ),
+                                if (batch != null &&
+                                    batch.quantityRemaining > 1) ...[
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 6,
+                                    children: [
+                                      _buildDatePresetChip(
+                                        label:
+                                            'All (${batch.quantityRemaining})',
+                                        isSelected: quantityController.text
+                                                .trim() ==
+                                            '${batch.quantityRemaining}',
+                                        onTap: () {
+                                          setModalState(() {
+                                            quantityController.text =
+                                                '${batch.quantityRemaining}';
+                                            quantityError = null;
+                                          });
+                                        },
+                                      ),
+                                      _buildDatePresetChip(
+                                        label:
+                                            'Half (${(batch.quantityRemaining / 2).floor()})',
+                                        isSelected: quantityController.text
+                                                .trim() ==
+                                            '${(batch.quantityRemaining / 2).floor()}',
+                                        onTap: () {
+                                          setModalState(() {
+                                            quantityController.text =
+                                                '${(batch.quantityRemaining / 2).floor()}';
+                                            quantityError = null;
+                                          });
+                                        },
+                                      ),
+                                      if (batch.quantityRemaining >= 4)
+                                        _buildDatePresetChip(
+                                          label:
+                                              '1/4 (${(batch.quantityRemaining / 4).floor()})',
+                                          isSelected: quantityController.text
+                                                  .trim() ==
+                                              '${(batch.quantityRemaining / 4).floor()}',
+                                          onTap: () {
+                                            setModalState(() {
+                                              quantityController.text =
+                                                  '${(batch.quantityRemaining / 4).floor()}';
+                                              quantityError = null;
+                                            });
+                                          },
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                                const SizedBox(height: 16),
+                                _FormLabel(
+                                    '5. EXPECTED ARRIVAL DATE & TRANSIT',
+                                    key: dateFieldKey),
+                                const SizedBox(height: 7),
+                                _buildExpectedDateSelector(
+                                  context: sheetContext,
+                                  selectedDate: expectedArrivalDate,
+                                  onDateChanged: (newDate) {
+                                    setModalState(() {
+                                      expectedArrivalDate = newDate;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _FormLabel('6. REASON FOR MOVE',
+                                    key: reasonFieldKey),
+                                const SizedBox(height: 7),
+                                AppDropdownField<String>(
+                                  value: selectedReason,
+                                  hintText:
+                                      'Select reason for lateral transfer',
+                                  leadingIcon: Icons.alt_route_rounded,
+                                  options: moveReasons,
+                                  displayStringForOption: (r) => r,
+                                  errorText: reasonError,
+                                  onSelected: (reason) {
+                                    setModalState(() {
+                                      selectedReason = reason;
+                                      reasonError = null;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _FormLabel(
+                                  selectedReason == 'Other'
+                                      ? '7. NOTES (REQUIRED FOR "OTHER")'
+                                      : '7. REFERENCE / NOTES (OPTIONAL)',
+                                  key: notesFieldKey,
+                                ),
+                                const SizedBox(height: 7),
+                                AppInputField(
+                                  controller: notesController,
+                                  hintText: selectedReason == 'Other'
+                                      ? 'Explain the clinical or operational reason'
+                                      : 'e.g. Dispensed via vehicle #2, urgent request',
+                                  leadingIcon: Icons.notes_rounded,
+                                  errorText: notesError,
+                                  onChanged: (_) {
+                                    if (notesError != null) {
+                                      setModalState(() => notesError = null);
+                                    }
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                const _FormLabel(
+                                    '8. SAFETY & EXPIRY ASSESSMENT'),
+                                const SizedBox(height: 7),
+                                _buildTransferSafetyCard(
+                                  safety: safety,
+                                  batch: batch,
+                                  item: selectedItem,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          MainButton(
+                            label: isSubmitting
+                                ? 'Issuing transfer...'
+                                : (safety?.isBlocked == true)
+                                    ? 'Transfer blocked by safety check'
+                                    : 'Review & issue transfer',
+                            leftIcon: isSubmitting
+                                ? Icons.sync_rounded
+                                : (safety?.isBlocked == true)
+                                    ? Icons.block_rounded
+                                    : Icons.swap_horiz_rounded,
+                            onPressed:
+                                (isSubmitting || (safety?.isBlocked == true))
+                                    ? null
+                                    : submitTransfer,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+
+    if (submitted != true || !mounted) return;
+    await _loadLiveInventory(refresh: true);
+    if (!mounted) return;
+    AppSnackbar.success(
+      context,
+      'Stock transfer issued; awaiting receipt confirmation.',
+    );
+  }
+
+  Widget _buildTransferFlowSteps() {
+    const color = Color(0xFF0E7490);
+    const steps = [
+      (num: '1', label: 'Destination'),
+      (num: '2', label: 'Stock & Qty'),
+      (num: '3', label: 'Safety Check'),
+    ];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          for (int index = 0; index < steps.length; index++) ...[
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 19,
+                    height: 19,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      steps[index].num,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      steps[index].label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (index < steps.length - 1)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 2),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFF94A3B8),
+                  size: 15,
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpectedDateSelector({
+    required BuildContext context,
+    required DateTime? selectedDate,
+    required ValueChanged<DateTime> onDateChanged,
+  }) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final in3Days = today.add(const Duration(days: 3));
+    final in1Week = today.add(const Duration(days: 7));
+
+    final selectedClean = selectedDate == null
+        ? null
+        : DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+
+    final transitDays = selectedClean?.difference(today).inDays;
+
+    String dateSubtitle;
+    String? transitBadge;
+    Color transitBadgeColor = const Color(0xFF0E7490);
+
+    if (transitDays == null) {
+      dateSubtitle = 'Choose an arrival date';
+    } else if (transitDays < 0) {
+      dateSubtitle = 'Date is in the past';
+      transitBadge = 'Past Date';
+      transitBadgeColor = AppColors.error;
+    } else if (transitDays == 0) {
+      dateSubtitle = 'Same day delivery (0 days transit)';
+      transitBadge = 'Same Day';
+      transitBadgeColor = const Color(0xFF059669);
+    } else if (transitDays == 1) {
+      dateSubtitle = 'Tomorrow (1 day transit)';
+      transitBadge = 'Tomorrow';
+      transitBadgeColor = const Color(0xFF0E7490);
+    } else {
+      dateSubtitle = '$transitDays days transit from today';
+      transitBadge = '+$transitDays Days';
+      transitBadgeColor = const Color(0xFF0E7490);
+    }
+
+    final isTodaySelected = selectedClean == today;
+    final isTomorrowSelected = selectedClean == tomorrow;
+    final isIn3DaysSelected = selectedClean == in3Days;
+    final isIn1WeekSelected = selectedClean == in1Week;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () async {
+            final picked = await showBrandedDatePicker(
+              context: context,
+              initialDate: selectedDate ?? tomorrow,
+              firstDate: today,
+              lastDate: today.add(const Duration(days: 365 * 2)),
+              helpText: 'Select Expected Delivery Date',
+            );
+            if (picked != null) {
+              onDateChanged(picked);
+            }
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppColors.borderPrimary,
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(15),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.calendar_today_rounded,
+                  color: AppColors.brandAccent,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              selectedDate == null
+                                  ? 'Select delivery date'
+                                  : '${_shortDate(selectedDate)}, ${selectedDate.year}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.brandText,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          if (transitBadge != null) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: transitBadgeColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                transitBadge,
+                                style: TextStyle(
+                                  color: transitBadgeColor,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        dateSubtitle,
+                        style: TextStyle(
+                          color: transitDays != null && transitDays < 0
+                              ? AppColors.error
+                              : AppColors.textSecondary,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_drop_down_rounded,
+                  color: AppColors.textSecondary,
+                  size: 24,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            _buildDatePresetChip(
+              label: 'Today',
+              isSelected: isTodaySelected,
+              onTap: () => onDateChanged(today),
+            ),
+            _buildDatePresetChip(
+              label: 'Tomorrow',
+              isSelected: isTomorrowSelected,
+              onTap: () => onDateChanged(tomorrow),
+            ),
+            _buildDatePresetChip(
+              label: '+3 Days',
+              isSelected: isIn3DaysSelected,
+              onTap: () => onDateChanged(in3Days),
+            ),
+            _buildDatePresetChip(
+              label: '+1 Week',
+              isSelected: isIn1WeekSelected,
+              onTap: () => onDateChanged(in1Week),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDatePresetChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.brandPrimary.withValues(alpha: 0.12)
+              : AppColors.bgSecondary,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color:
+                isSelected ? AppColors.brandPrimary : AppColors.borderPrimary,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? AppColors.brandPrimary : AppColors.brandText,
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTransferSafetyCard({
+    required live.TransferSafetyAssessment? safety,
+    required live.InventoryBatchRecord? batch,
+    required InventoryItem? item,
+  }) {
+    if (safety == null || batch == null || item == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.bgSecondary,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderPrimary),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.info_outline_rounded,
+                size: 18, color: AppColors.textSecondary),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Select an item, batch, and delivery date to verify transfer safety.',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final Color bgColor;
+    final Color borderColor;
+    final Color textColor;
+    final IconData icon;
+    final String statusTag;
+
+    switch (safety.level) {
+      case live.TransferSafetyLevel.safe:
+        bgColor = const Color(0xFFECFDF5);
+        borderColor = const Color(0xFFA7F3D0);
+        textColor = const Color(0xFF047857);
+        icon = Icons.check_circle_outline_rounded;
+        statusTag = 'SAFE TO PROCEED';
+        break;
+      case live.TransferSafetyLevel.warning:
+        bgColor = const Color(0xFFFFFBEB);
+        borderColor = const Color(0xFFFDE68A);
+        textColor = const Color(0xFFB45309);
+        icon = Icons.warning_amber_rounded;
+        statusTag = 'REVIEW WARNINGS';
+        break;
+      case live.TransferSafetyLevel.critical:
+        bgColor = const Color(0xFFFEF2F2);
+        borderColor = const Color(0xFFFECACA);
+        textColor = const Color(0xFFB91C1C);
+        icon = Icons.block_rounded;
+        statusTag = 'TRANSFER BLOCKED';
+        break;
+    }
+
+    final transitLabel = safety.transitDays == null
+        ? '—'
+        : safety.transitDays == 0
+            ? '0 days (Same day)'
+            : '${safety.transitDays} day${safety.transitDays == 1 ? '' : 's'}';
+
+    final shelfLifeColor = safety.shelfLifeAtArrival == null
+        ? AppColors.textSecondary
+        : safety.shelfLifeAtArrival! <= 0
+            ? AppColors.error
+            : safety.shelfLifeAtArrival! <= 30
+                ? const Color(0xFFD97706)
+                : const Color(0xFF059669);
+
+    final shelfLifeLabel = safety.shelfLifeAtArrival == null
+        ? '—'
+        : safety.shelfLifeAtArrival! <= 0
+            ? 'Expired by arrival'
+            : '${safety.shelfLifeAtArrival} days left';
+
+    final retainColor = safety.sourceRemainingAfter == null
+        ? AppColors.textSecondary
+        : safety.sourceRemainingAfter == 0
+            ? AppColors.error
+            : safety.sourceRemainingAfter! <= item.minimumStock
+                ? const Color(0xFFD97706)
+                : const Color(0xFF059669);
+
+    final retainLabel = safety.sourceRemainingAfter == null
+        ? '—'
+        : '${safety.sourceRemainingAfter} ${item.unit}';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: textColor, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      runSpacing: 2,
+                      children: [
+                        Text(
+                          safety.title.toUpperCase(),
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: textColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            statusTag,
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      safety.message,
+                      style: TextStyle(
+                        color: textColor.withValues(alpha: 0.9),
+                        fontSize: 11.5,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: borderColor.withValues(alpha: 0.6),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'TRANSIT TIME',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        transitLabel,
+                        style: const TextStyle(
+                          color: AppColors.brandText,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                    width: 1, height: 26, color: AppColors.borderPrimary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'SHELF-LIFE @ ARRIVAL',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        shelfLifeLabel,
+                        style: TextStyle(
+                          color: shelfLifeColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                    width: 1, height: 26, color: AppColors.borderPrimary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'YOUR BHC RETAINS',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        retainLabel,
+                        style: TextStyle(
+                          color: retainColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (safety.level == live.TransferSafetyLevel.warning) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline_rounded,
+                      size: 14, color: Color(0xFFB45309)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      safety.shelfLifeAtArrival != null &&
+                              safety.shelfLifeAtArrival! <= 30
+                          ? 'Item will expire in ${safety.shelfLifeAtArrival} days after delivery. Confirm the receiving BHC can dispense it promptly.'
+                          : 'Your BHC remaining stock will drop below the minimum threshold (${item.minimumStock} ${item.unit}).',
+                      style: const TextStyle(
+                        color: Color(0xFF92400E),
+                        fontSize: 10.5,
+                        height: 1.3,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   void _confirmReceive(IncomingShipment shipment) {
     // canConfirmReceipt, not isPending: an outbound shipment is pending on the
     // facility at the other end, and receiving it here would credit the stock
@@ -8027,7 +9327,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         return ConfirmationDialogBox(
           title: 'Receive stocks?',
           subtitle:
-              'Confirm that ${shipment.issuedQuantity} ${shipment.unit} of ${shipment.itemName} from ${_liveContext?.supplierLabel ?? 'your RHU'} were received.',
+              'Confirm that ${shipment.issuedQuantity} ${shipment.unit} of ${shipment.itemName} from ${shipment.counterpartName ?? _liveContext?.supplierLabel ?? 'your RHU'} were received.',
           confirmText: 'Receive',
           cancelText: 'Not yet',
           onCancel: () => Navigator.of(dialogContext).pop(),
@@ -8666,7 +9966,8 @@ class _HistoryMetricItem extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        constraints: const BoxConstraints(minWidth: 68),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
         decoration: BoxDecoration(
           color: isActive ? color.withValues(alpha: 0.08) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),

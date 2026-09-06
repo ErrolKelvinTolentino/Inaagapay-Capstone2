@@ -565,16 +565,17 @@
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="../js/supabase-client.js"></script>
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
     <script src="live-refresh.js"></script>
     <script src="notification-center.js"></script>
     <script>
       (function () {
-        const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co";
-        const SUPABASE_ANON =
+        const SUPABASE_URL = window.SUPABASE_URL || "https://krooorixhjwygcsdoomg.supabase.co";
+        const SUPABASE_ANON = window.SUPABASE_ANON ||
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
-        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        const db = window.db || supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
         window.AdminNotifications?.attach(db);
         const SESSION_KEY = "inaagapay_admin_session";
         const session = (() => {
@@ -637,11 +638,14 @@
         }
         function fmtDT(ts) {
           if (!ts) return "—";
-          return toUTC(ts).toLocaleString("en-PH", {
+          const d = toUTC(ts);
+          return d.toLocaleDateString("en-US", {
             timeZone: "Asia/Manila",
             year: "numeric",
             month: "short",
-            day: "numeric",
+            day: "2-digit",
+          }) + ", " + d.toLocaleTimeString("en-US", {
+            timeZone: "Asia/Manila",
             hour: "2-digit",
             minute: "2-digit",
           });
