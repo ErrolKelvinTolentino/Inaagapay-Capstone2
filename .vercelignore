@@ -1,14 +1,30 @@
-# Guard, not the real configuration.
+# What Vercel uploads when it deploys from the repository root.
 #
-# The portal is deployed with the Vercel project's Root Directory set to
-# `admin-web`, and in that setup Vercel reads admin-web/.vercelignore and never
-# looks at this file. This one only takes effect if somebody deploys from the
-# repository root by mistake -- `vercel` run from here, or the Root Directory
-# left unset -- which would otherwise publish the SQL migrations, the Flutter
-# source and the planning documents as static files on a public URL.
+# This file is load-bearing, not a safety net. The Vercel project's Root
+# Directory is unset, so the deployment source is this directory -- and without
+# the rules below that publishes every SQL migration, the whole Flutter source
+# tree and the planning documents on a public URL.
 #
-# Ignore everything, then allow back only the directory that is meant to ship.
+# The companion piece is the root vercel.json, which rewrites incoming paths
+# down into admin-web/ so the site answers on "/" rather than "/admin-web/".
+#
+# If the Root Directory is ever set to `admin-web` in the project settings,
+# Vercel reads admin-web/.vercelignore and admin-web/vercel.json instead and
+# ignores both files at this level. Everything keeps working either way.
+
+# Ignore everything, then allow back only what is meant to ship.
 *
 !admin-web
 !admin-web/**
+
+# The deployment configuration itself. Re-included explicitly rather than
+# relying on Vercel to special-case it against the `*` above.
+!vercel.json
+
+# Node test files, run with `node admin-web/tests/<file>.test.js` during
+# development. No business being served to a browser.
 admin-web/tests
+
+# Redundant while the Root Directory is unset: at this level it is an ordinary
+# file that would be served over HTTP rather than read as configuration.
+admin-web/vercel.json
