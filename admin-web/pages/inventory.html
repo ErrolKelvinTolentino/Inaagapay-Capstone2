@@ -11507,9 +11507,21 @@
         // still stops at the right day; saveBatch is what actually enforces it.
         window.openReceiveStockModal = function(itemId) {
           const recEl = document.getElementById("batch-received-date");
+          const expEl = document.getElementById("batch-expiration-date");
           // en-CA formats as YYYY-MM-DD in local time. toISOString() would shift
           // to UTC and offer tomorrow to anyone in Manila after 4pm.
           if (recEl) recEl.max = new Date().toLocaleDateString("en-CA");
+
+          // The expiry can only be in the future — receiving already-expired
+          // stock is what saveBatch rejects, so the picker should not offer it
+          // in the first place. min is tomorrow: an item that lapses today is
+          // expired for dispensing purposes. Set each open so a portal left up
+          // overnight advances with the date.
+          if (expEl) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            expEl.min = tomorrow.toLocaleDateString("en-CA");
+          }
 
           if (itemId != null && itemId !== "") {
             const el = document.getElementById("batch-item-id");
