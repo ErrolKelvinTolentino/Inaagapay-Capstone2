@@ -5169,9 +5169,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
               _historyDetailRow(
                 icon: Icons.warehouse_outlined,
                 label: 'Resulting balance',
-                value:
-                    '${row.resultingQuantityRemaining ?? 0} ${row.unit.toLowerCase()}'
-                    '${row.isMultiDose && row.resultingOpenVialDoses != null ? ' (${row.resultingOpenVialDoses} open doses left)' : ''}',
+                value: _resultingBalanceLabel(row),
                 emphasise: true,
               ),
             if (row.hasPatient)
@@ -5263,6 +5261,31 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
         ),
       ),
     );
+  }
+
+  /// The shelf after a movement, written so an opened vial does not read as a
+  /// loss.
+  ///
+  /// quantity_remaining counts sealed units only. Opening the last vial of a
+  /// 20-dose presentation takes it to 0 while 19 doses are still on the shelf
+  /// inside the vial just opened, and this line rendered that as
+  /// "0 vials (19 open doses left)" — reported, reasonably, as one vial opened
+  /// turning into no vials. Sealed stock and the open vial are named
+  /// separately now, so the two numbers add up to what is actually there.
+  String _resultingBalanceLabel(live.InventoryTransactionRecord row) {
+    final sealed = row.resultingQuantityRemaining ?? 0;
+    final unit = row.unit.toLowerCase();
+
+    if (!row.isMultiDose || row.resultingOpenVialDoses == null) {
+      return '$sealed $unit';
+    }
+
+    final openDoses = row.resultingOpenVialDoses ?? 0;
+    if (openDoses <= 0) {
+      return '$sealed sealed $unit, no vial open';
+    }
+    return '$sealed sealed $unit + $openDoses '
+        '${openDoses == 1 ? 'dose' : 'doses'} left in the open vial';
   }
 
   Widget _historyDetailRow({

@@ -10,6 +10,7 @@ import '../../services/auth_storage.dart';
 import '../../services/language_service.dart';
 import '../../widgets/secondary_header.dart';
 import '../../services/immunization_reminder_service.dart';
+import '../../widgets/branded_date_picker.dart';
 
 class ImmunizationPosterScreen extends StatefulWidget {
   const ImmunizationPosterScreen({super.key});
@@ -856,23 +857,11 @@ class _ImmunizationPosterScreenState extends State<ImmunizationPosterScreen> {
                             final lastDay = DateTime(_selectedYear, monthNumber + 1, 0).day;
                             final lastDate = DateTime(_selectedYear, monthNumber, lastDay);
 
-                            final picked = await showDatePicker(
+                            final picked = await showBrandedDatePicker(
                               context: context,
                               initialDate: initial,
                               firstDate: firstDate,
                               lastDate: lastDate,
-                              builder: (context, child) {
-                                return Theme(
-                                  data: Theme.of(context).copyWith(
-                                    colorScheme: const ColorScheme.light(
-                                      primary: AppColors.brandPrimary,
-                                      onPrimary: Colors.white,
-                                      onSurface: AppColors.textPrimary,
-                                    ),
-                                  ),
-                                  child: child!,
-                                );
-                              },
                             );
 
                             if (picked != null) {

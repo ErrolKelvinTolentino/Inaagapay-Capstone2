@@ -8,6 +8,7 @@ import '../../widgets/page_title.dart';
 import '../../services/language_service.dart';
 import '../../widgets/app_input_field.dart';
 import '../../models/due_date_mode.dart';
+import '../../widgets/branded_date_picker.dart';
 
 class DueDateSetter extends StatefulWidget {
   final DueDateMode mode;
@@ -34,28 +35,11 @@ class _DueDateSetterState extends State<DueDateSetter> {
     final DateTime minDate = now;
     final DateTime maxDate = now.add(const Duration(days: 365));
     
-    final DateTime? picked = await showDatePicker(
+    final DateTime? picked = await showBrandedDatePicker(
       context: context,
       initialDate: _selectedDate ?? minDate.add(const Duration(days: 280)),
       firstDate: minDate,
       lastDate: maxDate,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.brandPrimary,
-              onPrimary: Colors.white,
-              onSurface: AppColors.textPrimary,
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.brandPrimary,
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     
     if (picked != null && mounted) {

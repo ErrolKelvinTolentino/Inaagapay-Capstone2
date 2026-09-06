@@ -1,0 +1,3 @@
+# Node test files. They are run with `node admin-web/tests/<file>.test.js`
+# during development and have no business being served to a browser.
+tests/

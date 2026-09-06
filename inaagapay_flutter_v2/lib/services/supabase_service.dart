@@ -724,6 +724,32 @@ class SupabaseService {
     return createdBy != 'self' && createdBy != accountId?.toString();
   }
 
+  /// Records an authentication event in the audit trail.
+  ///
+  /// Signing in is picked up by the account trigger when last_login_at moves,
+  /// but signing out and a rejected sign-in touch no table at all, so nothing
+  /// server-side can see them. record_auth_event is the one call that writes
+  /// them down.
+  ///
+  /// Failure is swallowed on purpose, and the database may not have the RPC yet
+  /// (20260923_auth_session_audit.sql): an audit write must never be the reason
+  /// a midwife cannot sign out or be told her password was wrong.
+  static Future<void> recordAuthEvent(
+    int accountId,
+    String event, {
+    String? detail,
+  }) async {
+    try {
+      await client.rpc('record_auth_event', params: {
+        'p_account_id': accountId,
+        'p_event': event,
+        'p_detail': detail,
+      });
+    } catch (e) {
+      if (kDebugMode) debugPrint('record_auth_event($event) failed: $e');
+    }
+  }
+
   // LOGIN (supports email or phone)
   static Future<Map<String, dynamic>> login(
       String identifier, String password) async {
@@ -793,15 +819,35 @@ class SupabaseService {
         };
       }
 
+      // A rejected attempt against a known account is the half of the login
+      // story worth keeping: it is how a reviewer sees an account being probed.
+      // An identifier matching no account is not recorded, because there is no
+      // account to attribute it to.
+      final int? attemptedAccountId =
+          (accountResponse['account_id'] as num?)?.toInt();
+
       if (!_verifyPassword(password, accountResponse['password_hash'] ?? '')) {
+        if (attemptedAccountId != null) {
+          await recordAuthEvent(attemptedAccountId, 'login_failed',
+              detail: 'The password did not match.');
+        }
         return {'success': false, 'message': 'Invalid credentials'};
       }
 
       if (!accountResponse['is_verified']) {
+        if (attemptedAccountId != null) {
+          await recordAuthEvent(attemptedAccountId, 'login_failed',
+              detail: 'The account has not been verified.');
+        }
         return {'success': false, 'message': 'Account not verified'};
       }
 
       if (accountResponse['status'] != 'active') {
+        if (attemptedAccountId != null) {
+          await recordAuthEvent(attemptedAccountId, 'login_failed',
+              detail: 'The account status is '
+                  '"${accountResponse['status']}", so sign-in was refused.');
+        }
         return {'success': false, 'message': 'Account inactive'};
       }
 

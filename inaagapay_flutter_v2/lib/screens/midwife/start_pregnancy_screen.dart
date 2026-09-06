@@ -7,6 +7,7 @@ import '../../models/due_date_basis.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_input_field.dart';
+import '../../widgets/branded_date_picker.dart';
 
 class StartPregnancyScreen extends StatefulWidget {
   const StartPregnancyScreen({
@@ -265,7 +266,7 @@ class _StartPregnancyScreenState extends State<StartPregnancyScreen> {
 
   Future<void> _pickDate() async {
     final now = _today;
-    final picked = await showDatePicker(
+    final picked = await showBrandedDatePicker(
       context: context,
       initialDate: _basis == DueDateBasis.edd
           ? (_edd ?? now.add(const Duration(days: 1)))
@@ -273,8 +274,7 @@ class _StartPregnancyScreenState extends State<StartPregnancyScreen> {
       firstDate: _basis == DueDateBasis.edd
           ? now.subtract(const Duration(days: 14))
           : now.subtract(const Duration(days: _maxGestationDays)),
-      lastDate:
-          _basis == DueDateBasis.edd ? now.add(const Duration(days: 280)) : now,
+      lastDate: _basis == DueDateBasis.edd ? now.add(const Duration(days: 280)) : now,
     );
 
     if (picked != null) {

@@ -1246,7 +1246,7 @@
                alert count still surfaces on the trigger, so nothing urgent is
                hidden behind a click. -->
           <div class="page-actions" style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-            <button class="btn btn-primary btn-sm" id="open-batch-modal-btn" onclick="openModal('modal-batch')"><i class="fa-solid fa-box-archive"></i> Receive Stock</button>
+            <button class="btn btn-primary btn-sm" id="open-batch-modal-btn" onclick="openReceiveStockModal()"><i class="fa-solid fa-box-archive"></i> Receive Stock</button>
             <button class="btn btn-primary btn-sm" id="open-issue-modal-btn" onclick="openGeneralIssueModal()" style="background:#8b5cf6; border-color:#8b5cf6;"><i class="fa-solid fa-truck-ramp-box"></i> Issue Stock Transfer</button>
             <!-- Asking the office above is a top-level action, not something to
                  go hunting for inside the requests table. Hidden for the
@@ -2633,9 +2633,8 @@
                 </select>
               </div>
               <div class="form-group">
-                <div style="display:flex; justify-content:space-between; align-items:center; min-height:22px; margin-bottom:4px;">
+                <div style="display:flex; align-items:center; min-height:22px; margin-bottom:4px;">
                   <label class="form-label" for="issue-target-bhc" style="font-weight: 600; font-size: 12.5px; margin:0;">Deliver it to <span class="req" style="color:#dc2626;">*</span></label>
-                  <button type="button" class="action-pill-btn pill-purple" id="btn-autofill-forecast" onclick="autoFillForecastForDestination()" title="Auto-calculate quota from due patients"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Forecast</button>
                 </div>
                 <select class="form-select" id="issue-target-bhc" required style="width:100%; border-radius: 8px;" onchange="onTransferEndpointChanged('destination');">
                   <option value="">— Select destination —</option>
@@ -10709,148 +10708,6 @@
         }
         window.populateIssueBatchDropdown = populateIssueBatchDropdown;
 
-        // 🧠 Feature 4: Predictive Quota & Stock Demand Auto-Fill
-        async function autoFillForecastForDestination() {
-          const targetBhcVal = document.getElementById("issue-target-bhc")?.value;
-          if (!targetBhcVal) {
-            showToast("Choose the destination facility first — the forecast is calculated from its own patient load.", "warning");
-            return;
-          }
-
-          const btn = document.getElementById("btn-autofill-forecast");
-          if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Calculating...';
-          }
-
-          try {
-            let forecastData = null;
-            try {
-              const { data, error } = await db.rpc("get_bhc_monthly_demand_forecast", {
-                p_facility_id: resolveEndpointFacilityId(targetBhcVal)
-              });
-              if (!error && Array.isArray(data) && data.length > 0) {
-                forecastData = data;
-              }
-            } catch (rpcErr) {
-              console.warn("Demand RPC warning, using intelligent local demand fallback:", rpcErr);
-            }
-
-            // If RPC is available, use database-calculated forecast
-            if (forecastData && forecastData.length > 0) {
-              const itemsWithDeficit = forecastData.filter(d => (d.recommended_transfer_units || 0) > 0);
-              const topItem = itemsWithDeficit.length > 0 ? itemsWithDeficit[0] : forecastData[0];
-
-              if (topItem) {
-                const sourceFacilityVal = document.getElementById("issue-source-facility")?.value || "central";
-                const sourceShelf = placeKey(resolveEndpointFacilityId(sourceFacilityVal));
-                const matchingBatches = batches.filter(b => {
-                  if (b.status !== 'active' || isBatchExpired(b) || b.quantity_remaining <= 0) return false;
-                  if (placeKey(b.facility_id) !== sourceShelf) return false;
-                  return String(b.item_id) === String(topItem.item_id);
-                });
-
-                if (matchingBatches.length > 0) {
-                  matchingBatches.sort((a, b) => new Date(a.expiration_date) - new Date(b.expiration_date));
-                  const chosenBatch = matchingBatches[0];
-                  const issueBatchSel = document.getElementById("issue-source-batch");
-                  const sourceLocName = transferEndpointName(resolveEndpointFacilityId(sourceFacilityVal));
-
-                  if (issueBatchSel) {
-                    issueBatchSel.value = chosenBatch.batch_id;
-                    const wrap = issueBatchSel.nextElementSibling?.classList?.contains("searchable-select-wrap") 
-                      ? issueBatchSel.nextElementSibling 
-                      : issueBatchSel.parentElement?.querySelector(".searchable-select-wrap");
-                    if (wrap) {
-                      const searchInput = wrap.querySelector(".searchable-main-input");
-                      if (searchInput) searchInput.value = `${topItem.item_name} — Batch ${chosenBatch.batch_number}`;
-                      const chipPreview = wrap.querySelector(".selected-chip-preview");
-                      if (chipPreview) {
-                        chipPreview.innerHTML = `<span class="select-chip chip-batch"><i class="fa-solid fa-barcode"></i> Batch ${esc(chosenBatch.batch_number)}</span> <span class="select-chip chip-qty"><i class="fa-solid fa-boxes-stacked"></i> ${chosenBatch.quantity_remaining} avail</span> <span class="select-chip chip-location"><i class="fa-solid fa-location-dot"></i> ${esc(sourceLocName)}</span>`;
-                      }
-                    }
-                  }
-
-                  const qtyToTransfer = Math.min(
-                    topItem.recommended_transfer_units > 0 ? topItem.recommended_transfer_units : 15,
-                    chosenBatch.quantity_remaining
-                  );
-                  const qtyInput = document.getElementById("issue-qty");
-                  if (qtyInput) qtyInput.value = qtyToTransfer;
-
-                  const refInput = document.getElementById("issue-reference");
-                  if (refInput) {
-                    refInput.value = `Monthly forecast quota (${topItem.target_patients_count || 15} target patients, req: ${topItem.recommended_transfer_units || 15} units)`;
-                  }
-
-                  applySuggestedDeliveryEstimate(false);
-                  showToast(`Auto-filled: ${topItem.item_name} (${qtyToTransfer} units for ${topItem.target_patients_count || 15} due patients)`, "success");
-                  updateIssueSafetyCheck();
-                  return;
-                }
-              }
-            }
-
-            // Intelligent Client-Side Fallback: evaluate available source batches vs destination stock
-            const sourceFacilityVal = document.getElementById("issue-source-facility")?.value || "central";
-            const fallbackShelf = placeKey(resolveEndpointFacilityId(sourceFacilityVal));
-            const availableSourceBatches = batches.filter(b => {
-              if (b.status !== 'active' || isBatchExpired(b) || b.quantity_remaining <= 0) return false;
-              return placeKey(b.facility_id) === fallbackShelf;
-            });
-
-            if (availableSourceBatches.length === 0) {
-              showToast("No usable batches found at selected transfer source.", "warning");
-              return;
-            }
-
-            // Find batch with earliest expiry (FEFO)
-            availableSourceBatches.sort((a, b) => new Date(a.expiration_date) - new Date(b.expiration_date));
-            const topBatch = availableSourceBatches[0];
-            const topItem = items.find(i => String(i.item_id) === String(topBatch.item_id));
-            const sourceLocName = transferEndpointName(resolveEndpointFacilityId(sourceFacilityVal));
-
-            const issueBatchSel = document.getElementById("issue-source-batch");
-            if (issueBatchSel) {
-              issueBatchSel.value = topBatch.batch_id;
-              const wrap = issueBatchSel.nextElementSibling?.classList?.contains("searchable-select-wrap") 
-                ? issueBatchSel.nextElementSibling 
-                : issueBatchSel.parentElement?.querySelector(".searchable-select-wrap");
-              if (wrap) {
-                const searchInput = wrap.querySelector(".searchable-main-input");
-                if (searchInput) searchInput.value = `${topItem?.name || 'Item'} — Batch ${topBatch.batch_number}`;
-                const chipPreview = wrap.querySelector(".selected-chip-preview");
-                if (chipPreview) {
-                  chipPreview.innerHTML = `<span class="select-chip chip-batch"><i class="fa-solid fa-barcode"></i> Batch ${esc(topBatch.batch_number)}</span> <span class="select-chip chip-qty"><i class="fa-solid fa-boxes-stacked"></i> ${topBatch.quantity_remaining} avail</span> <span class="select-chip chip-location"><i class="fa-solid fa-location-dot"></i> ${esc(sourceLocName)}</span>`;
-                }
-              }
-            }
-
-            const standardDemandQuota = Math.min(20, topBatch.quantity_remaining);
-            const qtyInput = document.getElementById("issue-qty");
-            if (qtyInput) qtyInput.value = standardDemandQuota;
-
-            const refInput = document.getElementById("issue-reference");
-            if (refInput) {
-              refInput.value = `Estimated monthly clinic demand quota (Standard allotment: ${standardDemandQuota} units)`;
-            }
-
-            applySuggestedDeliveryEstimate(false);
-            showToast(`Auto-filled demand quota: ${topItem?.name || 'Item'} (${standardDemandQuota} units)`, "success");
-            updateIssueSafetyCheck();
-
-          } catch (err) {
-            console.error("Demand forecast failed:", err);
-            showToast("Could not calculate demand forecast: " + (err.message || err), "error");
-          } finally {
-            if (btn) {
-              btn.disabled = false;
-              btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Forecast';
-            }
-          }
-        }
-        window.autoFillForecastForDestination = autoFillForecastForDestination;
-
         /**
          * Printable dispatch slip that travels with the delivery.
          *
@@ -11645,13 +11502,27 @@
           }
         };
 
-        window.quickReceive = function(itemId) {
-          const el = document.getElementById("batch-item-id");
-          if (el) {
-            el.value = itemId;
-            el.dispatchEvent(new Event('change', { bubbles: true }));
+        // Stock cannot arrive tomorrow. The picker is clamped every time the
+        // modal opens rather than once at load, so a portal left open overnight
+        // still stops at the right day; saveBatch is what actually enforces it.
+        window.openReceiveStockModal = function(itemId) {
+          const recEl = document.getElementById("batch-received-date");
+          // en-CA formats as YYYY-MM-DD in local time. toISOString() would shift
+          // to UTC and offer tomorrow to anyone in Manila after 4pm.
+          if (recEl) recEl.max = new Date().toLocaleDateString("en-CA");
+
+          if (itemId != null && itemId !== "") {
+            const el = document.getElementById("batch-item-id");
+            if (el) {
+              el.value = itemId;
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
           }
           openModal("modal-batch");
+        };
+
+        window.quickReceive = function(itemId) {
+          window.openReceiveStockModal(itemId);
         };
 
         // Ask the office above for stock. Called bare from the action bar and
@@ -12068,6 +11939,22 @@
           }
 
           const today = new Date(); today.setHours(0, 0, 0, 0);
+
+          // A consignment dated ahead of today books stock onto the shelf before
+          // it physically arrives, and every FEFO calculation, ageing report and
+          // stock count downstream then reads a batch that is not there. The max
+          // attribute on the picker only guides the calendar; a typed date and a
+          // browser that ignores it both land here.
+          //
+          // Parsed as a local date on purpose: new Date("2026-09-06") is UTC
+          // midnight, which is 8am the same day in Manila and would read as
+          // "in the future" for a batch received today.
+          const [ry, rm, rd] = recDate.split("-").map(Number);
+          const receivedOn = new Date(ry, (rm || 1) - 1, rd || 1);
+          if (receivedOn > today) {
+            return fieldError("batch-received-date",
+              "A delivery cannot be received on a future date. Enter the day the stock actually arrived.");
+          }
           if (new Date(expDate) <= today) {
             return fieldError("batch-expiration-date", "This batch has already expired, so it cannot be received into stock.");
           }

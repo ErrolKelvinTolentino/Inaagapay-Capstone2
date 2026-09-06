@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
+import '../../services/supabase_service.dart';
 import '../../services/midwife_alert_badge.dart';
 import '../../services/push_notification_service.dart';
 import 'midwife_dashboard.dart';
@@ -89,6 +90,15 @@ class _MidwifeShellState extends State<MidwifeShell> {
   }
 
   Future<void> _logout() async {
+    // Signing out writes to nothing, so no trigger can see it. Recorded before
+    // the stored account id is cleared, because after clearAll() there is
+    // nothing left to attribute the event to.
+    final accountId = await AuthStorage.getUserId();
+    if (accountId != null) {
+      await SupabaseService.recordAuthEvent(accountId, 'logout',
+          detail: 'Signed out of the midwife app.');
+    }
+
     await PushNotificationService.removeToken();
     await AuthStorage.clearAll();
     if (!mounted) return;

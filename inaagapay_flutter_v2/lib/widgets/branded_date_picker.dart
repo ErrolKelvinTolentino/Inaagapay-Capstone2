@@ -10,12 +10,18 @@ import '../theme/app_colors.dart';
 ///
 /// [initialDate] is clamped into the [firstDate]-[lastDate] range, because
 /// showDatePicker asserts rather than degrades when it falls outside.
+///
+/// [selectableDayPredicate] greys out individual days the caller will not
+/// accept — the prenatal scheduler uses it for weekends and Philippine
+/// holidays. It is passed straight through; this wrapper only supplies the
+/// theme.
 Future<DateTime?> showBrandedDatePicker({
   required BuildContext context,
   required DateTime initialDate,
   required DateTime firstDate,
   required DateTime lastDate,
   String? helpText,
+  bool Function(DateTime)? selectableDayPredicate,
 }) {
   DateTime clampedInitial = initialDate;
   if (clampedInitial.isBefore(firstDate)) {
@@ -30,6 +36,7 @@ Future<DateTime?> showBrandedDatePicker({
     firstDate: firstDate,
     lastDate: lastDate,
     helpText: helpText,
+    selectableDayPredicate: selectableDayPredicate,
     builder: (context, child) {
       return Theme(
         data: Theme.of(context).copyWith(

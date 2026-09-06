@@ -10,6 +10,7 @@ import '../../../widgets/aog_input.dart';
 import '../../../models/due_date_basis.dart';
 import '../../../services/supabase_service.dart';
 import '../../../services/auth_storage.dart';
+import '../../widgets/branded_date_picker.dart';
 
 enum DueDateMode { pregnant, supporting }
 
@@ -77,7 +78,7 @@ class _DueDateSetterScreenState extends State<DueDateSetterScreen> {
       lastDate = now;
     }
 
-    final pickedDate = await showDatePicker(
+    final pickedDate = await showBrandedDatePicker(
       context: context,
       initialDate: initialDate,
       firstDate: firstDate,

@@ -13,6 +13,7 @@ import '../../widgets/app_input_field.dart';
 import '../../widgets/confirmation_dialog_box.dart';
 import '../../widgets/dialog_box.dart';
 import '../../widgets/secondary_header.dart';
+import '../../widgets/branded_date_picker.dart';
 
 /// Dedicated maternal Td (tetanus-diphtheria) immunization module.
 ///
@@ -283,24 +284,12 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     var first = _status.nextEligibleDate ?? DateTime(2000);
     if (first.isAfter(today)) first = today;
 
-    final picked = await showDatePicker(
+    final picked = await showBrandedDatePicker(
       context: context,
       initialDate: _administrationDate.isBefore(first) ? first : _administrationDate,
       firstDate: first,
       lastDate: today,
       helpText: 'Date ${_status.nextDoseKey ?? 'dose'} was given',
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.brandPrimary,
-              onPrimary: Colors.white,
-              onSurface: AppColors.textPrimary,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked != null) {
@@ -618,23 +607,11 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                                           if (initDate.isBefore(minDate)) initDate = minDate;
                                           if (initDate.isAfter(DateTime.now())) initDate = DateTime.now();
 
-                                          final picked = await showDatePicker(
+                                          final picked = await showBrandedDatePicker(
                                             context: modalCtx,
                                             initialDate: initDate,
                                             firstDate: minDate.isBefore(DateTime.now()) ? minDate : DateTime(1990),
                                             lastDate: DateTime.now(),
-                                            builder: (context, child) {
-                                              return Theme(
-                                                data: Theme.of(context).copyWith(
-                                                  colorScheme: const ColorScheme.light(
-                                                    primary: AppColors.brandPrimary,
-                                                    onPrimary: Colors.white,
-                                                    onSurface: AppColors.textPrimary,
-                                                  ),
-                                                ),
-                                                child: child!,
-                                              );
-                                            },
                                           );
                                           if (picked != null) {
                                             setModalState(() => backfillDates[dKey] = picked);

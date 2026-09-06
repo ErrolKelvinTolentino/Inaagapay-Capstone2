@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../theme/app_colors.dart';
 import '../../widgets/growth_record_card.dart';
+import '../../widgets/branded_date_picker.dart';
 
 class GrowthHistoryScreen extends StatefulWidget {
   final List<Map<String, dynamic>> records;
@@ -136,7 +137,7 @@ class _GrowthHistoryScreenState extends State<GrowthHistoryScreen> {
   }
 
   Future<void> _pickFromDate() async {
-    final picked = await showDatePicker(
+    final picked = await showBrandedDatePicker(
       context: context,
       initialDate: _fromDate ?? DateTime.now(),
       firstDate: DateTime(2000),
@@ -151,7 +152,7 @@ class _GrowthHistoryScreenState extends State<GrowthHistoryScreen> {
   }
 
   Future<void> _pickToDate() async {
-    final picked = await showDatePicker(
+    final picked = await showBrandedDatePicker(
       context: context,
       initialDate: _toDate ?? DateTime.now(),
       firstDate: DateTime(2000),

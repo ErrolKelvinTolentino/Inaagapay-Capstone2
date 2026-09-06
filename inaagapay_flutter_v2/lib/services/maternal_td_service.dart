@@ -95,6 +95,7 @@ class MaternalTdService {
   }) async {
     final client = Supabase.instance.client;
     final doses = <String, MaternalTdRecord>{};
+    var readFailed = false;
 
     // 1. Authoritative dedicated records.
     try {
@@ -126,6 +127,12 @@ class MaternalTdService {
         );
       }
     } catch (e) {
+      // An empty list and a failed read are not the same answer, and until now
+      // they produced the same one: a mother with a full Td history read as
+      // having none, and the prenatal card called her UNPROTECTED. The flag
+      // lets a caller say "not known" instead of asserting something clinical
+      // that it cannot back up.
+      readFailed = true;
       debugPrint('MaternalTdService: maternal_td_records read failed: $e');
     }
 
@@ -187,7 +194,7 @@ class MaternalTdService {
       );
     }
 
-    return MaternalTdStatus(doses: doses);
+    return MaternalTdStatus(doses: doses, readFailed: readFailed);
   }
 }
 
@@ -279,9 +286,14 @@ enum TdNextAction {
 /// Merged, canonical maternal Td state.
 @immutable
 class MaternalTdStatus {
-  const MaternalTdStatus({required this.doses});
+  const MaternalTdStatus({required this.doses, this.readFailed = false});
 
   final Map<String, MaternalTdRecord> doses;
+
+  /// True when maternal_td_records could not be read at all, so [doses] is
+  /// silence rather than an answer. Anything that would tell a midwife a mother
+  /// is unprotected must check this first.
+  final bool readFailed;
 
   static const MaternalTdStatus empty = MaternalTdStatus(doses: {});
 

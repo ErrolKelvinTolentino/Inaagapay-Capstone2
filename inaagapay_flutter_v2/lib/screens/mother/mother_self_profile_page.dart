@@ -14,6 +14,7 @@ import '../../widgets/password_constraints.dart';
 import '../../models/password_strength.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/main_button.dart';
+import '../../widgets/branded_date_picker.dart';
 
 const List<String> _commonConditions = [
   'Anemia',
@@ -2231,37 +2232,11 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
       clampedInitial = lastDate;
     }
 
-    return showDatePicker(
+    return showBrandedDatePicker(
       context: context,
       initialDate: clampedInitial,
       firstDate: firstDate,
       lastDate: lastDate,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.brandPrimary,
-              onPrimary: Colors.white,
-              onSurface: AppColors.brandText,
-              secondary: AppColors.brandPrimary,
-              surface: Colors.white,
-            ),
-            dialogTheme: DialogThemeData(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-              backgroundColor: Colors.white,
-              elevation: 4,
-              surfaceTintColor: Colors.transparent,
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.brandPrimary,
-                textStyle: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
   }
 }

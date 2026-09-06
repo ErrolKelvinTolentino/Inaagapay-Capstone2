@@ -20,6 +20,7 @@ import '../../services/supabase_service.dart';
 import '../../services/weight_gain_engine.dart';
 import 'mother_chatbot_page.dart';
 import 'mother_vitals_page.dart';
+import '../../widgets/branded_date_picker.dart';
 
 class MotherDashboard extends StatefulWidget {
   const MotherDashboard({super.key});
@@ -957,7 +958,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
                               onTap: isSubmitting
                                   ? null
                                   : () async {
-                                      final picked = await showDatePicker(
+                                      final picked = await showBrandedDatePicker(
                                         context: ctx,
                                         initialDate: outcomeDates[i],
                                         firstDate: DateUtils.dateOnly(lmpDate),

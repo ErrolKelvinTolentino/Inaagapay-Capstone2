@@ -21,6 +21,7 @@ import '../../widgets/secondary_header.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/confirmation_dialog_box.dart';
+import '../../widgets/branded_date_picker.dart';
 
 class UltrasoundAnalyzerScreen extends StatefulWidget {
   final int motherId;
@@ -1552,59 +1553,11 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
   }
 
   Future<void> _selectDate() async {
-    final DateTime? picked = await showDatePicker(
+    final DateTime? picked = await showBrandedDatePicker(
       context: context,
       initialDate: _ultrasoundDate ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.brandPrimary,
-              onPrimary: Colors.white,
-              onSurface: AppColors.brandText,
-              secondary: AppColors.brandPrimary,
-              surface: Colors.white,
-            ),
-            dialogTheme: DialogThemeData(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
-              backgroundColor: Colors.white,
-              elevation: 4,
-              surfaceTintColor: Colors.transparent,
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.brandPrimary,
-                textStyle: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            datePickerTheme: DatePickerThemeData(
-              backgroundColor: Colors.white,
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
-              headerBackgroundColor: Colors.white,
-              headerForegroundColor: AppColors.brandText,
-              headerHeadlineStyle: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppColors.brandText,
-              ),
-              headerHelpStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: AppColors.brandPrimary,
-              ),
-              surfaceTintColor: Colors.transparent,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked != null) {

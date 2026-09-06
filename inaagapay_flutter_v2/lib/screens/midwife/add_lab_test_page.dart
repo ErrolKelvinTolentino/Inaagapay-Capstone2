@@ -21,6 +21,7 @@ import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/headline.dart';
 import '../../widgets/secondary_header.dart';
 import '../../widgets/confirmation_dialog_box.dart';
+import '../../widgets/branded_date_picker.dart';
 
 class LabTestAttachment {
   final String name;
@@ -699,32 +700,11 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final picked = await showBrandedDatePicker(
       context: context,
       initialDate: _date ?? now,
       firstDate: DateTime(2000),
       lastDate: now,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.brandPrimary,
-              onPrimary: Colors.white,
-              onSurface: AppColors.brandText,
-              secondary: AppColors.brandPrimary,
-              surface: Colors.white,
-            ),
-            dialogTheme: DialogThemeData(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
-              backgroundColor: Colors.white,
-              elevation: 4,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked == null) return;

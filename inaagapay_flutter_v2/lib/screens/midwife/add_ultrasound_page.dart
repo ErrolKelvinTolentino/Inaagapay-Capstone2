@@ -18,6 +18,7 @@ import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/headline.dart';
 import '../../widgets/secondary_header.dart';
 import '../../widgets/confirmation_dialog_box.dart';
+import '../../widgets/branded_date_picker.dart';
 
 class UltrasoundAttachment {
   final String name;
@@ -620,7 +621,7 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
         ? DateTime(_pregnancyLmp!.year, _pregnancyLmp!.month, _pregnancyLmp!.day)
         : DateTime(2000);
 
-    final picked = await showDatePicker(
+    final picked = await showBrandedDatePicker(
       context: context,
       initialDate: _date ?? now,
       firstDate: first,
@@ -628,62 +629,6 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
       helpText: _pregnancyLmp == null
           ? 'Select Ultrasound Date'
           : 'Select date after LMP (${DateFormat('MMM d, yyyy').format(_pregnancyLmp!)})',
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.brandPrimary,
-              onPrimary: Colors.white,
-              onSurface: AppColors.brandText,
-              secondary: AppColors.brandPrimary,
-              surface: Colors.white,
-            ),
-            dialogTheme: DialogThemeData(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
-              backgroundColor: Colors.white,
-              elevation: 4,
-              surfaceTintColor: Colors.transparent,
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.brandPrimary,
-                textStyle: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            datePickerTheme: DatePickerThemeData(
-              backgroundColor: Colors.white,
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
-              headerBackgroundColor: Colors.white,
-              headerForegroundColor: AppColors.brandText,
-              headerHeadlineStyle: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppColors.brandText,
-              ),
-              weekdayStyle: const TextStyle(
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
-              ),
-              dayStyle: const TextStyle(fontWeight: FontWeight.w500),
-              todayBorder: const BorderSide(color: AppColors.brandPrimary, width: 1.5),
-              dayForegroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) return Colors.white;
-                return AppColors.brandText;
-              }),
-              dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) return AppColors.brandPrimary;
-                return Colors.transparent;
-              }),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked == null) return;

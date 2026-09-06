@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/pregnancy_health_record.dart';
 import '../../theme/app_colors.dart';
 import 'baby_book_section_components.dart';
+import '../../widgets/branded_date_picker.dart';
 
 class PregnancyHealthRecordsSection extends StatefulWidget {
   final List<PregnancyHealthRecord> initialRecords;
@@ -754,7 +755,7 @@ class _PregnancyHealthRecordFormState
   }
 
   Future<DateTime?> _pickDate(DateTime initial) {
-    return showDatePicker(
+    return showBrandedDatePicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime(2020),

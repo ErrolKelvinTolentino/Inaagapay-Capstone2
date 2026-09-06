@@ -26,6 +26,7 @@ import '../../services/maternal_td_service.dart';
 import '../../services/stock_deduction_outcome.dart';
 import '../../widgets/stock_indicators.dart';
 import 'maternal_td_screen.dart';
+import '../../widgets/branded_date_picker.dart';
 
 class AddPrenatalCheckupScreen extends StatefulWidget {
   const AddPrenatalCheckupScreen({
@@ -2116,7 +2117,7 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
       initialDate = initialDate.add(const Duration(days: 1));
     }
 
-    final picked = await showDatePicker(
+    final picked = await showBrandedDatePicker(
       context: context,
       initialDate: initialDate,
       firstDate: baseDate,
@@ -2132,54 +2133,6 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
         if (isHoliday(date)) return false;
 
         return true;
-      },
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.brandPrimary,
-              onPrimary: Colors.white,
-              onSurface: AppColors.brandText,
-              secondary: AppColors.brandPrimary,
-              surface: Colors.white,
-            ),
-            dialogTheme: DialogThemeData(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
-              backgroundColor: Colors.white,
-              elevation: 4,
-              surfaceTintColor: Colors.transparent,
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.brandPrimary,
-                textStyle: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            datePickerTheme: DatePickerThemeData(
-              backgroundColor: Colors.white,
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
-              headerBackgroundColor: Colors.white,
-              headerForegroundColor: AppColors.brandText,
-              headerHeadlineStyle: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppColors.brandText,
-              ),
-              headerHelpStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: AppColors.brandPrimary,
-              ),
-              surfaceTintColor: Colors.transparent,
-            ),
-          ),
-          child: child!,
-        );
       },
     );
     if (picked == null) return;
@@ -4074,9 +4027,13 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        isFim
-                            ? 'Fully Immunized Mother (FIM ⭐)'
-                            : (highestTd > 0 ? 'Td$highestTd Recorded' : 'No Td Recorded'),
+                        _tdStatus.readFailed
+                            ? 'Td history unavailable'
+                            : (isFim
+                                ? 'Fully Immunized Mother (FIM ⭐)'
+                                : (highestTd > 0
+                                    ? 'Td$highestTd Recorded'
+                                    : 'No Td Recorded')),
                         style: const TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.bold,
@@ -4099,7 +4056,13 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                         ),
                       ),
                       child: Text(
-                        isFim ? 'LIFETIME' : (isProtectedAtBirth ? 'PAB PROTECTED' : 'UNPROTECTED'),
+                        _tdStatus.readFailed
+                            ? 'NOT KNOWN'
+                            : (isFim
+                                ? 'LIFETIME'
+                                : (isProtectedAtBirth
+                                    ? 'PAB PROTECTED'
+                                    : 'UNPROTECTED')),
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
@@ -4113,11 +4076,16 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  isFim
-                      ? 'Lifetime maternal and neonatal tetanus protection achieved.'
-                      : (isProtectedAtBirth
-                          ? 'Baby is Protected at Birth (PAB). Manage or backfill remaining doses in the dedicated Td module.'
-                          : 'DOH recommends starting or updating Td doses as early as possible in pregnancy.'),
+                  _tdStatus.readFailed
+                      ? 'Her Td records could not be read just now, so this card '
+                          'cannot say whether she is protected. Reopen this '
+                          'screen before deciding on a dose — an empty history '
+                          'here does not mean she has had none.'
+                      : (isFim
+                          ? 'Lifetime maternal and neonatal tetanus protection achieved.'
+                          : (isProtectedAtBirth
+                              ? 'Baby is Protected at Birth (PAB). Manage or backfill remaining doses in the dedicated Td module.'
+                              : 'DOH recommends starting or updating Td doses as early as possible in pregnancy.')),
                   style: const TextStyle(
                     fontSize: 12.5,
                     color: AppColors.textSecondary,

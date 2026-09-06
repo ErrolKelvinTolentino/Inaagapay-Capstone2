@@ -1,0 +1,14 @@
+# Guard, not the real configuration.
+#
+# The portal is deployed with the Vercel project's Root Directory set to
+# `admin-web`, and in that setup Vercel reads admin-web/.vercelignore and never
+# looks at this file. This one only takes effect if somebody deploys from the
+# repository root by mistake -- `vercel` run from here, or the Root Directory
+# left unset -- which would otherwise publish the SQL migrations, the Flutter
+# source and the planning documents as static files on a public URL.
+#
+# Ignore everything, then allow back only the directory that is meant to ship.
+*
+!admin-web
+!admin-web/**
+admin-web/tests
