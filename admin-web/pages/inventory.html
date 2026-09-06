@@ -7013,10 +7013,6 @@
           let totalDispensed = 0;
           let totalReplenished = 0;
           let totalLoss = 0;
-
-          let totalDispensed = 0;
-          let totalReplenished = 0;
-          let totalLoss = 0;
           let totalTransfers = 0;
           let totalOutboundTransfers = 0;
           let totalInboundTransfers = 0;
@@ -12264,7 +12260,7 @@
             // to a refresh cycle old, and a blind absolute write would silently
             // discard a concurrent admin's deduction.
             const { data: freshBatch, error: readErr } = await db.from("inventory_batches")
-              .select("quantity_remaining, status")
+              .select("quantity_received, quantity_remaining, status")
               .eq("batch_id", batchId)
               .single();
             if (readErr) throw new Error(`Could not read current batch stock: ${readErr.message}`);
@@ -12278,12 +12274,19 @@
             }
 
             const newRemaining = current + deduction;
+            // chk_batch_quantities forbids quantity_remaining > quantity_received, and
+            // an upward audit adjustment can legitimately land above the quantity the
+            // batch was booked in with. Raise the received figure to the new
+            // high-water mark so the correction saves instead of coming back as a raw
+            // constraint error. A reversal that stays under the booked quantity leaves
+            // quantity_received alone, so it keeps meaning "how much ever arrived".
+            const newReceived = Math.max(Number(freshBatch.quantity_received || 0), newRemaining);
             const newStatus = (newRemaining === 0 && type === 'expiry_disposal') ? 'discarded' : freshBatch.status;
 
             // Conditioning the update on the value just read makes the write fail
             // rather than overwrite if another admin changed it in the meantime.
             const { data: updated, error: updateErr } = await db.from("inventory_batches")
-              .update({ quantity_remaining: newRemaining, status: newStatus })
+              .update({ quantity_remaining: newRemaining, quantity_received: newReceived, status: newStatus })
               .eq("batch_id", batchId)
               .eq("quantity_remaining", current)
               .select();

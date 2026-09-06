@@ -493,8 +493,6 @@ CREATE TABLE public.inventory_items (
     unit_of_measure character varying NOT NULL,
     minimum_stock_threshold integer DEFAULT 50,
     is_archived boolean DEFAULT false,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
-);
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT inventory_items_item_code_format_check CHECK (
         item_code IS NULL OR (
