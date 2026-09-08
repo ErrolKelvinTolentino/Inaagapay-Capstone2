@@ -18,6 +18,7 @@ import '../services/language_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/profile_section.dart';
 import '../widgets/secondary_header.dart';
+import '../widgets/terms_and_conditions_dialog.dart';
 
 /// The version shown on this page.
 ///
@@ -314,12 +315,120 @@ class _SettingsScreenState extends State<SettingsScreen> {
             color: AppColors.textSecondary,
           ),
         ),
+
+        // Where Facebook and Instagram keep theirs: the last group on the
+        // settings page, beside the version number, reachable when someone
+        // goes looking and silent when they don't. Deliberately not a banner,
+        // a badge or a first-launch prompt — consent was already given at
+        // registration, and re-presenting it would read as a second demand
+        // rather than a reference.
+        const SizedBox(height: 14),
+        const _AboutDivider(),
+        const SizedBox(height: 6),
+        _LegalRow(
+          icon: Icons.description_outlined,
+          label: LanguageService.translate(
+            'Terms and Conditions of Use',
+            'Mga Tuntunin at Kondisyon ng Paggamit',
+          ),
+          description: LanguageService.translate(
+            'The terms accepted when this account was created.',
+            'Ang mga tuntuning tinanggap noong ginawa ang account na ito.',
+          ),
+          // Read-only here: this is a look-up, not a second consent.
+          onTap: () =>
+              showTermsAndConditionsDialog(context, askForAgreement: false),
+        ),
       ],
     );
   }
 }
 
 // ── Pieces ──────────────────────────────────────────────────────────────────
+
+/// Separates the plain facts in About from the document it links to.
+class _AboutDivider extends StatelessWidget {
+  const _AboutDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(height: 1, color: AppColors.borderPrimary);
+  }
+}
+
+/// A document the user can open and read. Same icon chip and type sizes as
+/// [_AlertToggle], with a chevron instead of a switch — nothing here changes
+/// a setting, so nothing here should look like it might.
+class _LegalRow extends StatelessWidget {
+  const _LegalRow({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String description;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppColors.brandPrimary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 16, color: AppColors.brandPrimary),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        height: 1.35,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: AppColors.textSecondary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _ChoicePill extends StatelessWidget {
   final String label;

@@ -9,6 +9,7 @@ import '../../widgets/headline.dart';
 import '../../widgets/password_constraints.dart';
 import '../../widgets/password_strength_indicator.dart';
 import '../../widgets/dialog_box.dart';
+import '../../widgets/terms_and_conditions_dialog.dart';
 import '../../services/supabase_service.dart';
 import '../../models/password_strength.dart';
 
@@ -31,6 +32,12 @@ class _MotherRegistrationScreenState extends State<MotherRegistrationScreen>
   bool _isLoading = false;
   bool _contactExists = false;
   bool _checkingContact = false;
+
+  /// Starts false and is only ever set by the mother — either by ticking the
+  /// box or by pressing "I Agree" at the end of the terms. Nothing pre-checks
+  /// it, and dismissing the terms dialog leaves it alone.
+  bool _acceptedTerms = false;
+
   Timer? _contactTimer;
   String? _contactError;
 
@@ -151,12 +158,19 @@ class _MotherRegistrationScreenState extends State<MotherRegistrationScreen>
   bool get _passwordsDoNotMatch =>
       _confirmPasswordController.text.isNotEmpty && !_passwordsMatch;
 
-  bool get _canSubmit =>
+  /// Everything the account needs *except* consent.
+  ///
+  /// Kept separate from [_canSubmit] so the screen can explain why the button
+  /// is still grey once the form itself is complete. A disabled button with no
+  /// stated reason is the most common way a registration flow loses someone.
+  bool get _restOfFormReady =>
       _isContactAvailable &&
       _calculateStrength(_passwordController.text) == PasswordStrength.strong &&
       _passwordsMatch &&
       !_isLoading &&
       !_checkingContact;
+
+  bool get _canSubmit => _restOfFormReady && _acceptedTerms;
 
   Future<void> _handleSubmit() async {
     if (!_canSubmit) {
@@ -233,6 +247,120 @@ class _MotherRegistrationScreenState extends State<MotherRegistrationScreen>
         ),
       );
     }
+  }
+
+  Future<void> _openTerms() async {
+    final agreed = await showTermsAndConditionsDialog(context);
+    if (!mounted) return;
+
+    // Reading to the end and pressing "I Agree" is consent, so it ticks the
+    // box. Closing or dismissing the dialog is not, so it changes nothing —
+    // including for someone who had already ticked it and reopened it to read.
+    if (agreed) setState(() => _acceptedTerms = true);
+  }
+
+  /// The consent gate for registration.
+  ///
+  /// The hint below the box only appears once everything else is filled in
+  /// correctly. Flagging the terms while a password is still half-typed is
+  /// noise; staying silent when the box is the only thing left is worse.
+  Widget _buildTermsAcceptance() {
+    final showHint = _restOfFormReady && !_acceptedTerms;
+
+    final Color borderColor = _acceptedTerms
+        ? AppColors.brandPrimary.withValues(alpha: 0.45)
+        : showHint
+            ? AppColors.error.withValues(alpha: 0.55)
+            : AppColors.borderPrimary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => setState(() => _acceptedTerms = !_acceptedTerms),
+            borderRadius: BorderRadius.circular(16),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding: const EdgeInsets.fromLTRB(10, 12, 16, 12),
+              decoration: BoxDecoration(
+                color: _acceptedTerms
+                    ? AppColors.brandPrimary.withValues(alpha: 0.06)
+                    : AppColors.brandSecondary,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderColor),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Checkbox(
+                      value: _acceptedTerms,
+                      onChanged: (value) =>
+                          setState(() => _acceptedTerms = value ?? false),
+                      activeColor: AppColors.brandPrimary,
+                      side: BorderSide(
+                        color: showHint
+                            ? AppColors.error
+                            : AppColors.textSecondary,
+                        width: 1.6,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        const Text(
+                          'I have read and agree to the ',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        ClickableText(
+                          text: 'Terms and Conditions of Use',
+                          fontSize: 13,
+                          underline: true,
+                          color: AppColors.brandPrimary,
+                          onTap: _openTerms,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (showHint) ...[
+          const SizedBox(height: 8),
+          const Padding(
+            padding: EdgeInsets.only(left: 6),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, size: 15, color: AppColors.error),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Please accept the Terms and Conditions of Use to continue.',
+                    style: TextStyle(fontSize: 12, color: AppColors.error),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   @override
@@ -451,7 +579,13 @@ class _MotherRegistrationScreenState extends State<MotherRegistrationScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   children: [
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
+
+                    // Consent sits directly above the button it gates, where
+                    // it is read as part of creating the account rather than
+                    // as fine print under it.
+                    _buildTermsAcceptance(),
+                    const SizedBox(height: 20),
 
                     MainButton(
                       label: _isLoading ? 'Creating Account...' : 'Create Account',
@@ -480,39 +614,11 @@ class _MotherRegistrationScreenState extends State<MotherRegistrationScreen>
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'By proceeding, you are acknowledging the',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ClickableText(
-                          text: 'Terms of Use',
-                          fontSize: 11,
-                          color: AppColors.brandPrimary,
-                          onTap: () {},
-                        ),
-                        const Text(
-                          ' and ',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        ClickableText(
-                          text: 'Privacy Policy',
-                          fontSize: 11,
-                          color: AppColors.brandPrimary,
-                          onTap: () {},
-                        ),
-                      ],
-                    ),
+                    // The "By proceeding, you are acknowledging the Terms of
+                    // Use and Privacy Policy" footer used to sit here. Both of
+                    // its links opened nothing, and it claimed agreement the
+                    // mother had never given. The checkbox above the button is
+                    // now the single place consent is asked for and recorded.
                     const SizedBox(height: 24),
                   ],
                 ),
