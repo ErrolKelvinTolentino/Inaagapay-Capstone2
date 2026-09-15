@@ -136,7 +136,6 @@ class _RiskSnapshot {
   }
 }
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
@@ -187,7 +186,7 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
   String? _tdNextBatch;
   int _ferrousStockAvailable = 0;
   int _calciumStockAvailable = 0;
-  bool _tdGivenOnSite = true;
+  final bool _tdGivenOnSite = true;
   _RiskSnapshot? _riskSnapshot;
   String? _lastRiskSignature;
   String? _lastRiskAiPrompt;
@@ -198,14 +197,16 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
 
   // ── AI Remarks (Option C) ─────────────────────────────────────────────────
   bool _generatingAiRemarks = false;
-  String _remarksSource = 'midwife_authored'; // midwife_authored | ai_generated_approved | ai_generated_edited
+  String _remarksSource =
+      'midwife_authored'; // midwife_authored | ai_generated_approved | ai_generated_edited
   // Remarks are written once, in Tagalog. Mothers read this text in the record
   // view, so there is one version of it to write, edit and store — no second
   // language to keep in sync and no toggle to get wrong.
-  String? _aiOriginalRemarks;      // original AI Tagalog text (for audit)
-  String _aiRemarks = '';          // stored AI Tagalog text
-  String? _aiRemarksModel;         // AI model used
-  double? _initialSessionWeight;   // Locked baseline weight for session calculation
+  String? _aiOriginalRemarks; // original AI Tagalog text (for audit)
+  String _aiRemarks = ''; // stored AI Tagalog text
+  String? _aiRemarksModel; // AI model used
+  double?
+      _initialSessionWeight; // Locked baseline weight for session calculation
 
   static const List<String> _fetalTones = [
     'Regular',
@@ -213,7 +214,6 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     'Faint',
     'Absent',
   ];
-
 
   @override
   void initState() {
@@ -355,7 +355,8 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
       DateTime? checkupDate;
 
       if (checkupRes != null) {
-        checkupDate = DateTime.tryParse(checkupRes['encounter_datetime']?.toString() ?? '');
+        checkupDate = DateTime.tryParse(
+            checkupRes['encounter_datetime']?.toString() ?? '');
         dynamic checkupData = checkupRes['checkup'];
         Map<String, dynamic>? innerCheckup;
         if (checkupData is List && checkupData.isNotEmpty) {
@@ -364,7 +365,8 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           innerCheckup = Map<String, dynamic>.from(checkupData);
         }
         if (innerCheckup != null && innerCheckup['checkup_weight'] != null) {
-          checkupWeight = double.tryParse(innerCheckup['checkup_weight'].toString());
+          checkupWeight =
+              double.tryParse(innerCheckup['checkup_weight'].toString());
         }
       }
 
@@ -381,13 +383,17 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
       DateTime? vitalDate;
 
       if (vitalRes != null && vitalRes['weight_kg'] != null) {
-        vitalDate = DateTime.tryParse(vitalRes['recorded_at']?.toString() ?? '');
+        vitalDate =
+            DateTime.tryParse(vitalRes['recorded_at']?.toString() ?? '');
         vitalWeight = double.tryParse(vitalRes['weight_kg'].toString());
       }
 
       // 3. Determine the absolute latest weight
       double? latestWeight;
-      if (checkupWeight != null && vitalWeight != null && checkupDate != null && vitalDate != null) {
+      if (checkupWeight != null &&
+          vitalWeight != null &&
+          checkupDate != null &&
+          vitalDate != null) {
         if (checkupDate.isAfter(vitalDate)) {
           latestWeight = checkupWeight;
         } else {
@@ -414,7 +420,8 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     try {
       final result = await Supabase.instance.client
           .from('midwives')
-          .select('midwife_id, assigned_bhc_id, account:accounts(first_name, last_name)')
+          .select(
+              'midwife_id, assigned_bhc_id, account:accounts(first_name, last_name)')
           .eq('account_id', accountId)
           .maybeSingle();
 
@@ -424,7 +431,8 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
         String? mwName;
         final acc = result['account'] as Map<String, dynamic>?;
         if (acc != null) {
-          mwName = '${acc['first_name'] ?? ''} ${acc['last_name'] ?? ''}'.trim();
+          mwName =
+              '${acc['first_name'] ?? ''} ${acc['last_name'] ?? ''}'.trim();
         }
         setState(() {
           _midwifeId = mwId;
@@ -443,7 +451,8 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     try {
       final batches = await Supabase.instance.client
           .from('inventory_batches')
-          .select('batch_number, quantity_remaining, expiration_date, status, doses_remaining_in_open_vial, vial_opened_at, item:inventory_items(name, generic_name, item_type, doses_per_unit)')
+          .select(
+              'batch_number, quantity_remaining, expiration_date, status, doses_remaining_in_open_vial, vial_opened_at, item:inventory_items(name, generic_name, item_type, doses_per_unit)')
           .eq('facility_id', facilityId)
           .eq('status', 'active')
           .order('expiration_date', ascending: true);
@@ -471,12 +480,17 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
         final type = (item['item_type']?.toString() ?? '').toLowerCase();
         final qty = (b['quantity_remaining'] as num?)?.toInt() ?? 0;
         final dosesPerUnit = (item['doses_per_unit'] as num?)?.toInt() ?? 1;
-        final openDoses = (b['doses_remaining_in_open_vial'] as num?)?.toInt() ?? 0;
+        final openDoses =
+            (b['doses_remaining_in_open_vial'] as num?)?.toInt() ?? 0;
         final batchNum = b['batch_number']?.toString();
         final openedAtStr = b['vial_opened_at']?.toString();
-        final openedAt = openedAtStr != null ? DateTime.tryParse(openedAtStr) : null;
+        final openedAt =
+            openedAtStr != null ? DateTime.tryParse(openedAtStr) : null;
 
-        if (name.contains('td') || name.contains('tetanus') || generic.contains('tetanus') || (type == 'vaccine' && name.contains('td'))) {
+        if (name.contains('td') ||
+            name.contains('tetanus') ||
+            generic.contains('tetanus') ||
+            (type == 'vaccine' && name.contains('td'))) {
           // Check if open vial is past 28-day DOH shelf limit (672 hours)
           bool isOpenVialValid = true;
           if (openDoses > 0 && openedAt != null) {
@@ -499,7 +513,9 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           if (tdNextBatch == null && qty > 0) {
             tdNextBatch = batchNum;
           }
-        } else if (name.contains('ferrous') || generic.contains('ferrous') || name.contains('iron')) {
+        } else if (name.contains('ferrous') ||
+            generic.contains('ferrous') ||
+            name.contains('iron')) {
           ferrousTabs += qty;
         } else if (name.contains('calcium') || generic.contains('calcium')) {
           calciumTabs += qty;
@@ -553,7 +569,10 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
         {'symptom_name': 'No Fetal Movement', 'risk_category': 'danger'},
         {'symptom_name': 'Difficulty Breathing', 'risk_category': 'danger'},
         {'symptom_name': 'High Fever', 'risk_category': 'danger'},
-        {'symptom_name': 'Severe Swelling of Face or Hands', 'risk_category': 'danger'},
+        {
+          'symptom_name': 'Severe Swelling of Face or Hands',
+          'risk_category': 'danger'
+        },
         {'symptom_name': 'Reduced Fetal Movement', 'risk_category': 'danger'},
         {'symptom_name': 'Persistent Vomiting', 'risk_category': 'warning'},
         {'symptom_name': 'Painful Urination', 'risk_category': 'warning'},
@@ -573,7 +592,8 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
         {'symptom_name': 'Other', 'risk_category': 'normal'},
       ];
 
-      final existingNames = parsed.map((st) => st.name.trim().toLowerCase()).toSet();
+      final existingNames =
+          parsed.map((st) => st.name.trim().toLowerCase()).toSet();
       final toInsert = defaultSymptoms.where((ds) {
         final name = ds['symptom_name']!.trim().toLowerCase();
         return !existingNames.contains(name);
@@ -584,7 +604,8 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
           await Supabase.instance.client.from('symptom_types').insert(toInsert);
           final retryRows = await Supabase.instance.client
               .from('symptom_types')
-              .select('symptom_type_id, symptom_name, risk_category, description')
+              .select(
+                  'symptom_type_id, symptom_name, risk_category, description')
               .order('risk_category')
               .order('symptom_name');
           final retryParsed = (retryRows as List)
@@ -738,7 +759,9 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
         }
 
         final motherHeight = mother?['height']?.toString();
-        if (motherHeight != null && motherHeight.isNotEmpty && motherHeight != 'null') {
+        if (motherHeight != null &&
+            motherHeight.isNotEmpty &&
+            motherHeight != 'null') {
           _heightCtrl.text = '$motherHeight cm';
         } else {
           _heightCtrl.text = 'Not recorded in profile';
@@ -869,8 +892,12 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     final weekStr = _aogWeeks != null ? '${_aogWeeks!.toInt()}' : '7';
     final sysText = _sysCtrl.text.trim();
     final diaText = _diaCtrl.text.trim();
-    final bpText = (sysText.isNotEmpty && diaText.isNotEmpty) ? '$sysText/$diaText mmHg' : null;
-    final fhrText = _fetalBeatCtrl.text.trim().isNotEmpty ? '${_fetalBeatCtrl.text.trim()} bpm' : null;
+    final bpText = (sysText.isNotEmpty && diaText.isNotEmpty)
+        ? '$sysText/$diaText mmHg'
+        : null;
+    final fhrText = _fetalBeatCtrl.text.trim().isNotEmpty
+        ? '${_fetalBeatCtrl.text.trim()} bpm'
+        : null;
 
     final reasPoints = <String>[];
     if (bpText != null && _bpCategory == BpCategory.normal) {
@@ -886,9 +913,11 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
 
     if (reasPoints.isNotEmpty) {
       final joined = reasPoints.join(' and ');
-      buf.write('$joined ${reasPoints.length > 1 ? "are both" : "is"} within expected range this visit. ');
+      buf.write(
+          '$joined ${reasPoints.length > 1 ? "are both" : "is"} within expected range this visit. ');
     } else {
-      buf.write('Vitals recorded during this prenatal checkup are documented. ');
+      buf.write(
+          'Vitals recorded during this prenatal checkup are documented. ');
     }
 
     final highFactors = snapshot.factors
@@ -896,10 +925,12 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
         .map((f) => f.factor)
         .toList();
     if (highFactors.isEmpty) {
-      buf.write('All recorded vitals and findings are progressing smoothly for this stage of pregnancy.');
+      buf.write(
+          'All recorded vitals and findings are progressing smoothly for this stage of pregnancy.');
     } else {
       final itemsText = highFactors.join(', ');
-      buf.write('Note that $itemsText — these are worth tracking closely at your next checkup.');
+      buf.write(
+          'Note that $itemsText — these are worth tracking closely at your next checkup.');
     }
 
     return buf.toString();
@@ -909,8 +940,12 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
     final weekStr = _aogWeeks != null ? '${_aogWeeks!.toInt()}' : '7';
     final sysText = _sysCtrl.text.trim();
     final diaText = _diaCtrl.text.trim();
-    final bpText = (sysText.isNotEmpty && diaText.isNotEmpty) ? '$sysText/$diaText mmHg' : null;
-    final fhrText = _fetalBeatCtrl.text.trim().isNotEmpty ? '${_fetalBeatCtrl.text.trim()} bpm' : null;
+    final bpText = (sysText.isNotEmpty && diaText.isNotEmpty)
+        ? '$sysText/$diaText mmHg'
+        : null;
+    final fhrText = _fetalBeatCtrl.text.trim().isNotEmpty
+        ? '${_fetalBeatCtrl.text.trim()} bpm'
+        : null;
 
     final reasPoints = <String>[];
     if (bpText != null && _bpCategory == BpCategory.normal) {
@@ -926,9 +961,11 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
 
     if (reasPoints.isNotEmpty) {
       final joined = reasPoints.join(' at ');
-      buf.write('$joined ay parehong nasa karaniwang inaasahang antas sa bisitang ito. ');
+      buf.write(
+          '$joined ay parehong nasa karaniwang inaasahang antas sa bisitang ito. ');
     } else {
-      buf.write('Naitala nang maayos ang mga resulta para sa prenatal checkup na ito. ');
+      buf.write(
+          'Naitala nang maayos ang mga resulta para sa prenatal checkup na ito. ');
     }
 
     final highFactors = snapshot.factors
@@ -936,10 +973,12 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
         .map((f) => f.factor)
         .toList();
     if (highFactors.isEmpty) {
-      buf.write('Maayos ang lagay ng lahat ng naitalang resulta para sa yugtong ito ng pagbubuntis.');
+      buf.write(
+          'Maayos ang lagay ng lahat ng naitalang resulta para sa yugtong ito ng pagbubuntis.');
     } else {
       final itemsText = highFactors.join(', ');
-      buf.write('Napansin ang $itemsText — karaniwan itong nababantayan at magandang masubaybayan sa susunod na checkup.');
+      buf.write(
+          'Napansin ang $itemsText — karaniwan itong nababantayan at magandang masubaybayan sa susunod na checkup.');
     }
 
     return buf.toString();
@@ -1175,7 +1214,8 @@ class _AddPrenatalCheckupScreenState extends State<AddPrenatalCheckupScreen> {
       switch (bpCat) {
         case BpCategory.severe:
         case BpCategory.raised:
-          bpAssessmentStr = 'RAISED / HIGH ($sysVal/$diaVal mmHg. DO NOT SAY THIS IS WITHIN EXPECTED RANGE! PUT THIS IN FLAGGED ITEMS SENTENCE 2!)';
+          bpAssessmentStr =
+              'RAISED / HIGH ($sysVal/$diaVal mmHg. DO NOT SAY THIS IS WITHIN EXPECTED RANGE! PUT THIS IN FLAGGED ITEMS SENTENCE 2!)';
           break;
         case BpCategory.low:
           bpAssessmentStr = 'LOW / BELOW STANDARD RANGE ($sysVal/$diaVal mmHg)';
@@ -1663,10 +1703,13 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: isLow ? const Color(0xFFEFF6FF) : pillColor.withValues(alpha: 0.1),
+        color:
+            isLow ? const Color(0xFFEFF6FF) : pillColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isLow ? const Color(0xFFBFDBFE) : pillColor.withValues(alpha: 0.3),
+          color: isLow
+              ? const Color(0xFFBFDBFE)
+              : pillColor.withValues(alpha: 0.3),
         ),
       ),
       child: Text(
@@ -1685,14 +1728,14 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
   // widgets/pregnancy_risk_override.dart, shared with the ultrasound and lab
   // screens so the three cannot drift apart.
 
-
   /// Centralized baseline weight resolution for weight gain analysis.
   /// All weight gain evaluate() calls in this screen MUST use this method
   /// to ensure consistent baseline across status pill, insight card,
   /// AI prompt, risk factors, and persist.
   double? _resolveBaselineWeight() {
     final motherMap = _motherRiskContext?['mother'] as Map<String, dynamic>?;
-    final pregnancyMap = _motherRiskContext?['pregnancy'] as Map<String, dynamic>?;
+    final pregnancyMap =
+        _motherRiskContext?['pregnancy'] as Map<String, dynamic>?;
     final previousCheckups =
         (_motherRiskContext?['previous_checkups'] as List? ?? const [])
             .cast<dynamic>();
@@ -1725,7 +1768,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
         earliestCheckupWeight = double.tryParse(
             sortedPrev.first['checkup_weight']?.toString() ?? '');
       }
-      final referenceWeight = motherWeight ?? widget.motherWeight ?? earliestCheckupWeight;
+      final referenceWeight =
+          motherWeight ?? widget.motherWeight ?? earliestCheckupWeight;
       if (referenceWeight != null) {
         final est = WeightGainEngine.estimatePrePregnancyBMI(
           currentWeightKg: referenceWeight,
@@ -1754,8 +1798,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
         if (da == null || db == null) return 0;
         return da.compareTo(db);
       });
-      final earliest = double.tryParse(
-          sortedPrev.first['checkup_weight']?.toString() ?? '');
+      final earliest =
+          double.tryParse(sortedPrev.first['checkup_weight']?.toString() ?? '');
       if (earliest != null) return earliest;
     }
 
@@ -1877,12 +1921,14 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
 
     switch (category) {
       case BpCategory.severe:
-        statusText = 'Severely elevated (≥160/110 mmHg) — Immediate Referral Required';
+        statusText =
+            'Severely elevated (≥160/110 mmHg) — Immediate Referral Required';
         statusColor = const Color(0xFFB71C1C);
         statusIcon = Icons.error_rounded;
         break;
       case BpCategory.raised:
-        statusText = 'Raised blood pressure (≥140/90 mmHg) — Repeat and monitor';
+        statusText =
+            'Raised blood pressure (≥140/90 mmHg) — Repeat and monitor';
         statusColor = AppColors.error;
         statusIcon = Icons.warning_rounded;
         break;
@@ -2004,7 +2050,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
           return false;
         }
         if (_fetalTone == null || _fetalTone!.isEmpty) {
-          _showMessage('Fetal Heart Tone is required when Fetal Heart Rate is entered.');
+          _showMessage(
+              'Fetal Heart Tone is required when Fetal Heart Rate is entered.');
           return false;
         }
       }
@@ -2217,9 +2264,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
     for (final entry in _symptoms) {
       final typeId = _resolveSymptomTypeId(entry);
       if (typeId != null && typeId > 0) {
-        final noteText = entry.notes != null
-            ? '${entry.name}: ${entry.notes}'
-            : entry.name;
+        final noteText =
+            entry.notes != null ? '${entry.name}: ${entry.notes}' : entry.name;
         payload.add({
           'pregnancy_id': widget.pregnancyId,
           'encounter_id': encounterId,
@@ -2553,7 +2599,9 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
       int? aogWeeks;
       int? aogDays;
       if (lmp != null) {
-        final totalDays = _normalizedDate(_checkupDateTime).difference(_normalizedDate(lmp)).inDays;
+        final totalDays = _normalizedDate(_checkupDateTime)
+            .difference(_normalizedDate(lmp))
+            .inDays;
         if (totalDays >= 0) {
           aogWeeks = totalDays ~/ 7;
           aogDays = totalDays % 7;
@@ -2570,13 +2618,16 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
             'encounter_datetime': _checkupDateTime.toIso8601String(),
             'age_of_gestation_weeks': aogWeeks,
             'age_of_gestation_days': aogDays,
-            'midwife_notes': _remarksCtrl.text.trim().isEmpty ? null : _remarksCtrl.text.trim(),
+            'midwife_notes': _remarksCtrl.text.trim().isEmpty
+                ? null
+                : _remarksCtrl.text.trim(),
             // Recorded beside the text it describes, so a record can say
             // whether the midwife wrote these words, approved an AI draft of
             // them, or corrected one. It was previously kept only inside an
             // audit_trail JSON blob, where nothing could read it back and the
             // record view had to label every summary identically.
-            'remarks_source': _remarksCtrl.text.trim().isEmpty ? null : _remarksSource,
+            'remarks_source':
+                _remarksCtrl.text.trim().isEmpty ? null : _remarksSource,
           })
           .select('encounter_id')
           .maybeSingle();
@@ -2587,20 +2638,18 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
 
       final encounterId = encounter['encounter_id'] as int;
 
-      await Supabase.instance.client
-          .from('prenatal_checkups')
-          .insert({
-            'encounter_id': encounterId,
-            'pregnancy_id': widget.pregnancyId,
-            'checkup_weight': weight,
-            'blood_pressure_systolic': systolic,
-            'blood_pressure_diastolic': diastolic,
-            'fetal_heart_beat': fetalBeat,
-            'fetal_heart_tone': _normalizeFetalTone(_fetalTone),
-            'td_vaccine_dose': _tdDose,
-            'edema': _edema == 'none' ? null : _edema,
-            'next_schedule': _nextSchedule?.toIso8601String().split('T')[0],
-          });
+      await Supabase.instance.client.from('prenatal_checkups').insert({
+        'encounter_id': encounterId,
+        'pregnancy_id': widget.pregnancyId,
+        'checkup_weight': weight,
+        'blood_pressure_systolic': systolic,
+        'blood_pressure_diastolic': diastolic,
+        'fetal_heart_beat': fetalBeat,
+        'fetal_heart_tone': _normalizeFetalTone(_fetalTone),
+        'td_vaccine_dose': _tdDose,
+        'edema': _edema == 'none' ? null : _edema,
+        'next_schedule': _nextSchedule?.toIso8601String().split('T')[0],
+      });
 
       await _insertSymptomRecords(encounterId);
 
@@ -2616,7 +2665,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
       StockDeductionOutcome? stockOutcome;
 
       if (!dispensedSomething) {
-        stockOutcome = null; // Nothing was handed over; there is nothing to say.
+        stockOutcome =
+            null; // Nothing was handed over; there is nothing to say.
       } else if (_midwifeBhcId == null) {
         stockOutcome = StockDeductionOutcome.fromPrenatalEncounter(
           null,
@@ -2861,7 +2911,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                 offset: const Offset(0, 2),
               ),
             ],
-            border: Border.all(color: AppColors.borderPrimary.withValues(alpha: 0.6)),
+            border: Border.all(
+                color: AppColors.borderPrimary.withValues(alpha: 0.6)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2925,7 +2976,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                   const SizedBox(width: 8),
                   if (_aogWeeks != null)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
@@ -3076,14 +3128,16 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
               if (_sysError != null || _diaError != null)
                 Container(
                   margin: const EdgeInsets.only(top: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: AppColors.error.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.error_outline, size: 14, color: AppColors.error),
+                      const Icon(Icons.error_outline,
+                          size: 14, color: AppColors.error),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -3102,7 +3156,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
               const SizedBox(height: 8),
               const Row(
                 children: [
-                  Icon(Icons.info_outline, size: 13, color: AppColors.textSecondary),
+                  Icon(Icons.info_outline,
+                      size: 13, color: AppColors.textSecondary),
                   SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -3186,7 +3241,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
       final expectedGainMin = gainRange['min']!;
       final expectedGainMax = gainRange['max']!;
 
-      final baselineW = result.baselineWeight ?? effectivePrePreg ?? currentWeight;
+      final baselineW =
+          result.baselineWeight ?? effectivePrePreg ?? currentWeight;
       final expectedWeightMin = baselineW + expectedGainMin;
       final expectedWeightMax = baselineW + expectedGainMax;
 
@@ -3198,8 +3254,7 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
       final weightRangeStr =
           "${expectedWeightMin.toStringAsFixed(1)} – ${expectedWeightMax.toStringAsFixed(1)} kg";
 
-      final detailsText =
-          "Based on pre-pregnancy BMI (${result.bmiCategory}): "
+      final detailsText = "Based on pre-pregnancy BMI (${result.bmiCategory}): "
           "recommended target weight for Week ${_aogWeeks!.toInt()} is $weightRangeStr "
           "(ideal gain: $gainRangeStr; current gain: $actualStr).";
 
@@ -3295,7 +3350,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                         final v = int.tryParse(_fetalBeatCtrl.text.trim());
                         if (v == null) return AppColors.textSecondary;
                         final assessment = FetalHeartRateReference.assess(v);
-                        if (!assessment.isOutsideBaseline) return AppColors.success;
+                        if (!assessment.isOutsideBaseline)
+                          return AppColors.success;
                         return AppColors.error;
                       }(),
                     ),
@@ -3508,12 +3564,16 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
   }
 
   Future<void> _showAddSymptomDialog({int? editIndex}) async {
-    _SymptomEntry? existing = editIndex != null && editIndex < _symptoms.length ? _symptoms[editIndex] : null;
+    _SymptomEntry? existing = editIndex != null && editIndex < _symptoms.length
+        ? _symptoms[editIndex]
+        : null;
 
     SymptomType? selectedType;
     if (existing != null) {
       final matchIndex = _symptomTypes.indexWhere(
-        (st) => st.id == existing.symptomTypeId || st.name.toLowerCase() == existing.name.toLowerCase(),
+        (st) =>
+            st.id == existing.symptomTypeId ||
+            st.name.toLowerCase() == existing.name.toLowerCase(),
       );
       if (matchIndex != -1) {
         selectedType = _symptomTypes[matchIndex];
@@ -3530,7 +3590,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
 
     final customNameCtrl = TextEditingController(text: existing?.name ?? '');
     final notesCtrl = TextEditingController(text: existing?.notes ?? '');
-    String selectedRisk = selectedType?.riskCategory ?? existing?.riskCategory ?? 'normal';
+    String selectedRisk =
+        selectedType?.riskCategory ?? existing?.riskCategory ?? 'normal';
 
     // The pills are the catalogue, not a second list of their own.
     //
@@ -3566,15 +3627,20 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
       builder: (ctx) {
         return Dialog(
           backgroundColor: Colors.white,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
           child: Container(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+            constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(ctx).size.height * 0.85),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             child: StatefulBuilder(
               builder: (dialogCtx, setDialogState) {
                 final isCustom = _symptomTypes.isEmpty;
-                final symptomName = isCustom ? customNameCtrl.text.trim() : (selectedType?.name ?? customNameCtrl.text.trim());
+                final symptomName = isCustom
+                    ? customNameCtrl.text.trim()
+                    : (selectedType?.name ?? customNameCtrl.text.trim());
                 final isValid = symptomName.isNotEmpty;
 
                 return Column(
@@ -3583,7 +3649,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                     Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.close, color: AppColors.brandText),
+                          icon: const Icon(Icons.close,
+                              color: AppColors.brandText),
                           onPressed: () => Navigator.pop(dialogCtx, false),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
@@ -3594,7 +3661,9 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                             fit: BoxFit.scaleDown,
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              editIndex != null ? 'Edit Symptom' : 'Add Symptom',
+                              editIndex != null
+                                  ? 'Edit Symptom'
+                                  : 'Add Symptom',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 18,
@@ -3627,7 +3696,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                               children: commonSymptoms.map((sym) {
                                 final name = sym.name;
                                 final risk = sym.riskCategory;
-                                final isSelected = symptomName.toLowerCase() == name.toLowerCase();
+                                final isSelected = symptomName.toLowerCase() ==
+                                    name.toLowerCase();
 
                                 Color chipColor;
                                 if (risk == 'danger') {
@@ -3642,12 +3712,16 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                                   label: Text(
                                     name,
                                     style: TextStyle(
-                                      color: isSelected ? Colors.white : chipColor,
+                                      color:
+                                          isSelected ? Colors.white : chipColor,
                                       fontSize: 12,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
                                     ),
                                   ),
-                                  backgroundColor: isSelected ? chipColor : Colors.white,
+                                  backgroundColor:
+                                      isSelected ? chipColor : Colors.white,
                                   side: BorderSide(color: chipColor),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(20),
@@ -3742,7 +3816,9 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                       height: 48,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isValid ? AppColors.brandPrimary : Colors.grey.shade300,
+                          backgroundColor: isValid
+                              ? AppColors.brandPrimary
+                              : Colors.grey.shade300,
                           foregroundColor: Colors.white,
                           disabledBackgroundColor: Colors.grey.shade300,
                           shape: RoundedRectangleBorder(
@@ -3753,15 +3829,20 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                         onPressed: isValid
                             ? () {
                                 final typeId = selectedType?.id ??
-                                    (_symptomTypes.isNotEmpty ? _symptomTypes.first.id : 1);
+                                    (_symptomTypes.isNotEmpty
+                                        ? _symptomTypes.first.id
+                                        : 1);
                                 final entry = _SymptomEntry(
                                   symptomTypeId: typeId,
                                   name: symptomName,
                                   riskCategory: selectedRisk,
-                                  notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
+                                  notes: notesCtrl.text.trim().isNotEmpty
+                                      ? notesCtrl.text.trim()
+                                      : null,
                                 );
                                 setState(() {
-                                  if (editIndex != null && editIndex < _symptoms.length) {
+                                  if (editIndex != null &&
+                                      editIndex < _symptoms.length) {
                                     _symptoms[editIndex] = entry;
                                   } else {
                                     _symptoms.add(entry);
@@ -3792,8 +3873,12 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
   Widget _buildStep3() {
     final ferrousEntered = int.tryParse(_ferrousQtyCtrl.text.trim()) ?? 0;
     final calciumEntered = int.tryParse(_calciumQtyCtrl.text.trim()) ?? 0;
-    final ferrousExceeds = _midwifeBhcId != null && _ferrousStockAvailable > 0 && ferrousEntered > _ferrousStockAvailable;
-    final calciumExceeds = _midwifeBhcId != null && _calciumStockAvailable > 0 && calciumEntered > _calciumStockAvailable;
+    final ferrousExceeds = _midwifeBhcId != null &&
+        _ferrousStockAvailable > 0 &&
+        ferrousEntered > _ferrousStockAvailable;
+    final calciumExceeds = _midwifeBhcId != null &&
+        _calciumStockAvailable > 0 &&
+        calciumEntered > _calciumStockAvailable;
 
     final highestTd = _tdStatus.highestCompletedDose;
     final isProtectedAtBirth = _tdStatus.isProtectedAtBirth;
@@ -3815,7 +3900,9 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: ferrousExceeds ? AppColors.error : AppColors.borderPrimary.withValues(alpha: 0.6),
+                    color: ferrousExceeds
+                        ? AppColors.error
+                        : AppColors.borderPrimary.withValues(alpha: 0.6),
                   ),
                 ),
                 child: Column(
@@ -3829,7 +3916,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                             color: const Color(0xFFFEF2F2),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.medication_rounded, size: 16, color: Color(0xFFDC2626)),
+                          child: const Icon(Icons.medication_rounded,
+                              size: 16, color: Color(0xFFDC2626)),
                         ),
                         const SizedBox(width: 8),
                         const Expanded(
@@ -3879,10 +3967,14 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                         const Spacer(),
                         if (_ferrousQtyCtrl.text.isNotEmpty)
                           GestureDetector(
-                            onTap: () => setState(() => _ferrousQtyCtrl.clear()),
+                            onTap: () =>
+                                setState(() => _ferrousQtyCtrl.clear()),
                             child: Text(
                               'Clear',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade600),
                             ),
                           ),
                       ],
@@ -3891,7 +3983,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                       StockStatusCard(
                         margin: const EdgeInsets.only(top: 8),
                         tone: StockTone.caution,
-                        message: 'Only $_ferrousStockAvailable tablet(s) are in stock here. '
+                        message:
+                            'Only $_ferrousStockAvailable tablet(s) are in stock here. '
                             'The record will show what you hand over; the shortfall '
                             'needs reconciling with your RHU.',
                       ),
@@ -3907,7 +4000,9 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: calciumExceeds ? AppColors.error : AppColors.borderPrimary.withValues(alpha: 0.6),
+                    color: calciumExceeds
+                        ? AppColors.error
+                        : AppColors.borderPrimary.withValues(alpha: 0.6),
                   ),
                 ),
                 child: Column(
@@ -3921,7 +4016,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                             color: const Color(0xFFEFF6FF),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.healing_rounded, size: 16, color: Color(0xFF2563EB)),
+                          child: const Icon(Icons.healing_rounded,
+                              size: 16, color: Color(0xFF2563EB)),
                         ),
                         const SizedBox(width: 8),
                         const Expanded(
@@ -3971,10 +4067,14 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                         const Spacer(),
                         if (_calciumQtyCtrl.text.isNotEmpty)
                           GestureDetector(
-                            onTap: () => setState(() => _calciumQtyCtrl.clear()),
+                            onTap: () =>
+                                setState(() => _calciumQtyCtrl.clear()),
                             child: Text(
                               'Clear',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade600),
                             ),
                           ),
                       ],
@@ -3983,7 +4083,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                       StockStatusCard(
                         margin: const EdgeInsets.only(top: 8),
                         tone: StockTone.caution,
-                        message: 'Only $_calciumStockAvailable tablet(s) are in stock here. '
+                        message:
+                            'Only $_calciumStockAvailable tablet(s) are in stock here. '
                             'The record will show what you hand over; the shortfall '
                             'needs reconciling with your RHU.',
                       ),
@@ -4043,7 +4144,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                     ),
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: isFim || isProtectedAtBirth
                             ? const Color(0xFFDCFCE7)
@@ -4098,7 +4200,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                 if (!isFim) ...[
                   const SizedBox(height: 10),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
                       color: AppColors.bgSecondary,
                       borderRadius: BorderRadius.circular(10),
@@ -4152,7 +4255,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                     icon: const Icon(Icons.vaccines_rounded, size: 16),
                     label: const Text(
                       'Manage Td Vaccine Records & Doses',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          fontSize: 12.5, fontWeight: FontWeight.bold),
                     ),
                     onPressed: () async {
                       await Navigator.push(
@@ -4185,9 +4289,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
   /// saving. It stays hidden when no dose is due and none is selected, so the
   /// card does not add a line to every routine visit.
   Widget _buildTdStockCard() {
-    final doseSelected = _tdDose != null &&
-        _tdDose!.trim().isNotEmpty &&
-        _tdDose!.trim() != '-';
+    final doseSelected =
+        _tdDose != null && _tdDose!.trim().isNotEmpty && _tdDose!.trim() != '-';
     if (!doseSelected && !_tdStatus.canAdministerToday) {
       return const SizedBox.shrink();
     }
@@ -4198,7 +4301,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
       return const StockStatusCard(
         margin: margin,
         tone: StockTone.blocked,
-        message: 'Your account is not assigned to a health center, so a Td dose '
+        message:
+            'Your account is not assigned to a health center, so a Td dose '
             'given here cannot be deducted from stock.',
       );
     }
@@ -4216,9 +4320,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
     // An open vial is drawn from first, so it is the fact that matters.
     if (_tdOpenVialDoses > 0) {
       final opened = _tdOpenVialOpenedAt;
-      final hoursOpen = opened == null
-          ? null
-          : DateTime.now().difference(opened).inHours;
+      final hoursOpen =
+          opened == null ? null : DateTime.now().difference(opened).inHours;
       final nearingLimit = hoursOpen != null && hoursOpen >= 600; // of 672h
 
       return StockStatusCard(
@@ -4255,7 +4358,10 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
         ),
         child: Text(
           label,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+          style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF334155)),
         ),
       ),
     );
@@ -4356,7 +4462,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                 borderRadius: BorderRadius.circular(28),
                 onTap: _pickNextSchedule,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(28),
@@ -4374,7 +4481,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.calendar_month_rounded, color: AppColors.brandAccent),
+                      const Icon(Icons.calendar_month_rounded,
+                          color: AppColors.brandAccent),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _nextSchedule == null
@@ -4399,7 +4507,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    DateFormat('MMMM d, yyyy (EEEE)').format(_nextSchedule!),
+                                    DateFormat('MMMM d, yyyy (EEEE)')
+                                        .format(_nextSchedule!),
                                     style: const TextStyle(
                                       color: AppColors.inputText,
                                       fontSize: 14,
@@ -4416,7 +4525,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                           onTap: () => setState(() => _nextSchedule = null),
                           child: const Padding(
                             padding: EdgeInsets.all(4),
-                            child: Icon(Icons.close_rounded, size: 20, color: AppColors.brandAccent),
+                            child: Icon(Icons.close_rounded,
+                                size: 20, color: AppColors.brandAccent),
                           ),
                         ),
                     ],
@@ -4426,7 +4536,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.auto_awesome, size: 13, color: AppColors.brandPrimary),
+                  const Icon(Icons.auto_awesome,
+                      size: 13, color: AppColors.brandPrimary),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
@@ -4457,7 +4568,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                   children: [
                     // AI-Assisted badge
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: AppColors.brandPrimary.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
@@ -4468,7 +4580,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.smart_toy_outlined, size: 13, color: AppColors.brandPrimary),
+                          const Icon(Icons.smart_toy_outlined,
+                              size: 13, color: AppColors.brandPrimary),
                           const SizedBox(width: 4),
                           Text(
                             _remarksSource == 'ai_generated_edited'
@@ -4537,12 +4650,14 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                 const SizedBox(height: 4),
                 Row(
                   children: const [
-                    Icon(Icons.info_outline, size: 12, color: AppColors.textSecondary),
+                    Icon(Icons.info_outline,
+                        size: 12, color: AppColors.textSecondary),
                     SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         'You can edit freely. The original AI text is saved for audit.',
-                        style: TextStyle(fontSize: 10.5, color: AppColors.textSecondary),
+                        style: TextStyle(
+                            fontSize: 10.5, color: AppColors.textSecondary),
                       ),
                     ),
                   ],
@@ -4592,7 +4707,6 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
     );
   }
 
-
   List<String> _getDetectedRiskFactors() {
     final factors = <String>[];
 
@@ -4619,7 +4733,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
     final currentWeight = double.tryParse(_weightCtrl.text.trim());
     if (currentWeight != null && _aogWeeks != null) {
       try {
-        final motherData = _motherRiskContext?['mother'] as Map<String, dynamic>?;
+        final motherData =
+            _motherRiskContext?['mother'] as Map<String, dynamic>?;
         final heightCm = motherData?['height'] != null
             ? double.tryParse(motherData!['height'].toString())
             : null;
@@ -4654,7 +4769,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
       }
     }
 
-    final medicalConditions = _motherRiskContext?['medical_conditions'] as List<dynamic>?;
+    final medicalConditions =
+        _motherRiskContext?['medical_conditions'] as List<dynamic>?;
     if (medicalConditions != null) {
       for (final mc in medicalConditions) {
         final name = mc['condition_name'] ?? mc['name'];
@@ -4733,20 +4849,25 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                       final isHigh = factor.toLowerCase().contains('severe') ||
                           factor.toLowerCase().contains('hypertension') ||
                           factor.toLowerCase().contains('urgent');
-                      final chipColor = isHigh ? AppColors.error : AppColors.warning;
+                      final chipColor =
+                          isHigh ? AppColors.error : AppColors.warning;
 
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: chipColor.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: chipColor.withValues(alpha: 0.25)),
+                          border: Border.all(
+                              color: chipColor.withValues(alpha: 0.25)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              isHigh ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
+                              isHigh
+                                  ? Icons.error_outline_rounded
+                                  : Icons.warning_amber_rounded,
                               size: 13,
                               color: chipColor,
                             ),
@@ -4877,16 +4998,20 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: AppColors.brandPrimary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.25)),
+                      border: Border.all(
+                          color:
+                              AppColors.brandPrimary.withValues(alpha: 0.25)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.smart_toy_outlined, size: 11, color: AppColors.brandPrimary),
+                        const Icon(Icons.smart_toy_outlined,
+                            size: 11, color: AppColors.brandPrimary),
                         const SizedBox(width: 3),
                         Text(
                           _remarksSource == 'ai_generated_edited'
@@ -5036,8 +5161,10 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                         style: OutlinedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: AppColors.brandPrimary,
-                          side: const BorderSide(color: AppColors.brandPrimary, width: 1.2),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                          side: const BorderSide(
+                              color: AppColors.brandPrimary, width: 1.2),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(28)),
                           padding: EdgeInsets.zero,
                         ),
                         child: const Icon(

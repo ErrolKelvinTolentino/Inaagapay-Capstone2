@@ -65,7 +65,6 @@ class _Symptom {
   const _Symptom(this.name, this.tip, this.icon);
 }
 
-
 class _NutritionTip {
   final String food;
   final String benefit;
@@ -121,7 +120,6 @@ final _trimesterContent = [
       _Symptom('Bloating', 'Avoid gas-producing foods; eat slowly.',
           Icons.bubble_chart_outlined),
     ],
-
     nutritionTips: [
       _NutritionTip('Folic acid (leafy greens)', 'Prevents neural tube defects',
           Icons.emoji_food_beverage),
@@ -188,7 +186,6 @@ final _trimesterContent = [
       _Symptom('Stretch marks', 'Moisturize daily with oil or lotion.',
           Icons.spa_outlined),
     ],
-
     nutritionTips: [
       _NutritionTip('Omega-3 (fish, chia seeds)',
           'Supports baby\'s brain development', Icons.egg),
@@ -262,7 +259,6 @@ final _trimesterContent = [
       _Symptom('Shortness of breath',
           'Sleep slightly propped up; avoid overexertion.', Icons.air_outlined),
     ],
-
     nutritionTips: [
       _NutritionTip(
           'Iron (spinach, red meat)',
@@ -904,7 +900,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
             .toList();
 
         if (riskIds.isNotEmpty) {
-          final List<dynamic>? factorsData = await supabase
+          final List<dynamic> factorsData = await supabase
               .from('pregnancy_risk_factors')
               .select('factor, risk_influence')
               .inFilter('pregnancy_risk_id', riskIds);
@@ -939,7 +935,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
 
       // Medical conditions
       if (motherId != null) {
-        final List<dynamic>? conditions = await supabase
+        final List<dynamic> conditions = await supabase
             .from('medical_conditions')
             .select('condition_name, status')
             .eq('mother_id', motherId);
@@ -988,7 +984,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       // Record findings from Checkups / Encounters
       final List<Map<String, dynamic>> findings = [];
 
-      final List<dynamic>? encounters = await supabase
+      final List<dynamic> encounters = await supabase
           .from('clinical_encounters')
           .select(
               'checkup_datetime, created_at, bp_systolic, bp_diastolic, notes, diagnosis, risk_level')
@@ -997,16 +993,13 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
 
       if (encounters != null) {
         for (final enc in encounters) {
-          final dateStr =
-              enc['checkup_datetime'] ?? enc['created_at'] ?? '';
-          final date =
-              DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
+          final dateStr = enc['checkup_datetime'] ?? enc['created_at'] ?? '';
+          final date = DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
           final sys = enc['bp_systolic'] as int?;
           final dia = enc['bp_diastolic'] as int?;
           final notes = enc['notes']?.toString().trim() ?? '';
           final diag = enc['diagnosis']?.toString().trim() ?? '';
-          final risk =
-              enc['risk_level']?.toString().toLowerCase().trim() ?? '';
+          final risk = enc['risk_level']?.toString().toLowerCase().trim() ?? '';
 
           if (risk == 'high' ||
               (sys != null && sys >= 140) ||
@@ -1015,8 +1008,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
               diag.isNotEmpty) {
             String summary = '';
             if (sys != null && dia != null && (sys >= 140 || dia >= 90)) {
-              summary =
-                  'Blood Pressure: $sys/$dia mmHg (Elevated reading)';
+              summary = 'Blood Pressure: $sys/$dia mmHg (Elevated reading)';
             } else if (diag.isNotEmpty) {
               summary = diag;
             } else if (notes.isNotEmpty) {
@@ -1036,7 +1028,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       }
 
       // Ultrasounds
-      final List<dynamic>? ultrasounds = await supabase
+      final List<dynamic> ultrasounds = await supabase
           .from('ultrasound_records')
           .select(
               'ultrasound_date, created_at, monitoring_classification, remarks')
@@ -1069,7 +1061,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       }
 
       // Lab Tests
-      final List<dynamic>? labTests = await supabase
+      final List<dynamic> labTests = await supabase
           .from('lab_tests')
           .select(
               'lab_test_date, lab_test_type, created_at, result_summary, is_abnormal')
@@ -1081,12 +1073,10 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           final isAbnormal = lab['is_abnormal'] == true;
           final summary = lab['result_summary']?.toString().trim() ?? '';
           if (isAbnormal || summary.isNotEmpty) {
-            final dateStr =
-                lab['lab_test_date'] ?? lab['created_at'] ?? '';
+            final dateStr = lab['lab_test_date'] ?? lab['created_at'] ?? '';
             final date =
                 DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
-            final type =
-                lab['lab_test_type']?.toString().trim() ?? 'Lab Test';
+            final type = lab['lab_test_type']?.toString().trim() ?? 'Lab Test';
             findings.add({
               'type': type,
               'date': date,
@@ -1114,16 +1104,14 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
         final resp = aiData['response'] as String;
         careRecommendations = resp
             .split(RegExp(r'\n+'))
-            .map((s) =>
-                s.replaceAll(RegExp(r'^[-*•\d.]+\s*'), '').trim())
+            .map((s) => s.replaceAll(RegExp(r'^[-*•\d.]+\s*'), '').trim())
             .where((s) =>
-                s.isNotEmpty &&
-                !s.toLowerCase().startsWith('disclaimer'))
+                s.isNotEmpty && !s.toLowerCase().startsWith('disclaimer'))
             .toList();
       }
 
-      findings.sort((a, b) =>
-          (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+      findings.sort(
+          (a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
 
       _currentRiskFactors = allRiskFactors;
       _personalizedWarnings = allRiskFactors;
@@ -1160,7 +1148,6 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
   String _translate(String english, String filipino, AppLanguage language) {
     return language == AppLanguage.filipino ? filipino : english;
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -1347,8 +1334,6 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       ],
     );
   }
-
-
 
   Widget _buildRiskSummaryCard(AppLanguage language) {
     if (widget.riskLevel.isEmpty) return const SizedBox.shrink();
@@ -1561,8 +1546,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                     decoration: BoxDecoration(
                       color: badgeColor.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                          color: badgeColor.withValues(alpha: 0.2)),
+                      border:
+                          Border.all(color: badgeColor.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       children: [
@@ -1665,8 +1650,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                     ...recordFindings.map((finding) {
                       final type =
                           finding['type']?.toString() ?? 'Health Record';
-                      final date = finding['date'] as DateTime? ??
-                          DateTime.now();
+                      final date =
+                          finding['date'] as DateTime? ?? DateTime.now();
                       final summary = finding['summary']?.toString() ?? '';
                       final formattedDate =
                           DateFormat('MMMM d, yyyy').format(date);
@@ -1677,8 +1662,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(14),
-                          border:
-                              Border.all(color: AppColors.borderPrimary),
+                          border: Border.all(color: AppColors.borderPrimary),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1690,8 +1674,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                                       horizontal: 9, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFF1F5F9),
-                                    borderRadius:
-                                        BorderRadius.circular(999),
+                                    borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -1773,8 +1756,7 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                               const Padding(
                                 padding: EdgeInsets.only(top: 6),
                                 child: Icon(Icons.check_circle_outline_rounded,
-                                    size: 14,
-                                    color: AppColors.brandPrimary),
+                                    size: 14, color: AppColors.brandPrimary),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
@@ -1816,14 +1798,6 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
       },
     );
   }
-
-
-
-
-
-
-
-
 
   Widget _buildEmotionalNote(AppLanguage language, int trimesterIndex) {
     return Container(
@@ -1906,8 +1880,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
   /// ones she has passed. Null for an entry that names no week, which is
   /// treated as neither past nor current rather than guessed at.
   int? _milestoneWeek(String milestone) {
-    final match = RegExp(r'week\s*(\d+)', caseSensitive: false)
-        .firstMatch(milestone);
+    final match =
+        RegExp(r'week\s*(\d+)', caseSensitive: false).firstMatch(milestone);
     if (match == null) return null;
     return int.tryParse(match.group(1)!);
   }
@@ -1957,7 +1931,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                           height: 30,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: entries[index].colour.withValues(alpha: 0.12),
+                            color:
+                                entries[index].colour.withValues(alpha: 0.12),
                             shape: BoxShape.circle,
                             border: entries[index].highlighted
                                 ? Border.all(
@@ -2125,8 +2100,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                               boxShadow: isNow
                                   ? [
                                       BoxShadow(
-                                        color: markerColour.withValues(
-                                            alpha: 0.3),
+                                        color:
+                                            markerColour.withValues(alpha: 0.3),
                                         blurRadius: 0,
                                         spreadRadius: 3,
                                       ),
@@ -2182,9 +2157,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                                       : AppColors.inputText,
                                   fontSize: 13.5,
                                   height: 1.45,
-                                  fontWeight: isNow
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
+                                  fontWeight:
+                                      isNow ? FontWeight.w700 : FontWeight.w500,
                                 ),
                               ),
                               if (isNow) ...[
@@ -2261,7 +2235,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                 ),
               const SizedBox(height: 14),
               Text(
-                _translate('Your Baby this Week', 'Ang Iyong Sanggol Ngayong Linggo', language),
+                _translate('Your Baby this Week',
+                    'Ang Iyong Sanggol Ngayong Linggo', language),
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
@@ -2288,7 +2263,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                   children: [
                     Expanded(
                       child: _buildBabyMeasurementChip(
-                        label: _translate('Estimated Length', 'Tinatayang Haba', language),
+                        label: _translate(
+                            'Estimated Length', 'Tinatayang Haba', language),
                         value: widget.babySize,
                         icon: Icons.straighten_rounded,
                         color: const Color(0xFFF39C12),
@@ -2297,7 +2273,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildBabyMeasurementChip(
-                        label: _translate('Estimated Weight', 'Tinatayang Timbang', language),
+                        label: _translate(
+                            'Estimated Weight', 'Tinatayang Timbang', language),
                         value: widget.babyWeight,
                         icon: Icons.monitor_weight_outlined,
                         color: const Color(0xFF3498DB),
@@ -2311,7 +2288,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
         ),
         const SizedBox(height: 20),
         _SectionHeader(
-          title: _translate('Development Milestones', 'Mga Milestone ng Pag-unlad', language),
+          title: _translate(
+              'Development Milestones', 'Mga Milestone ng Pag-unlad', language),
           icon: Icons.auto_awesome,
         ),
         const SizedBox(height: 10),
@@ -2325,7 +2303,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
         _buildBabyDevelopmentRail(language),
         const SizedBox(height: 20),
         _SectionHeader(
-          title: _translate('Changes in Your Body', 'Mga Pagbabago sa Iyong Katawan', language),
+          title: _translate('Changes in Your Body',
+              'Mga Pagbabago sa Iyong Katawan', language),
           icon: Icons.person_outline,
         ),
         const SizedBox(height: 10),
@@ -2364,12 +2343,18 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
               children: [
                 Text(
                   label,
-                  style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary),
                 ),
               ],
             ),
@@ -2379,7 +2364,6 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     );
   }
 
-
   Widget _buildMotherChangesPanel(AppLanguage language) {
     return _Card(
       child: Column(
@@ -2387,19 +2371,41 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           String tip = '';
           final changeLower = change.toLowerCase();
           if (changeLower.contains('breast')) {
-            tip = _translate('Supportive maternity bras and cool compresses provide comfort.', 'Ang pagsuot ng malambot na maternity bra at malamig na compress ay makakatulong.', language);
+            tip = _translate(
+                'Supportive maternity bras and cool compresses provide comfort.',
+                'Ang pagsuot ng malambot na maternity bra at malamig na compress ay makakatulong.',
+                language);
           } else if (changeLower.contains('urination')) {
-            tip = _translate('Empty your bladder fully. Do not restrict water intake; stay hydrated.', 'Umihi nang buo. Huwag bawasan ang pag-inom ng tubig upang maiwasan ang dehydration at UTI.', language);
+            tip = _translate(
+                'Empty your bladder fully. Do not restrict water intake; stay hydrated.',
+                'Umihi nang buo. Huwag bawasan ang pag-inom ng tubig upang maiwasan ang dehydration at UTI.',
+                language);
           } else if (changeLower.contains('fatigue')) {
-            tip = _translate('Listen to your body. Take 20-minute power naps and prioritize sleep.', 'Makinig sa iyong katawan. Matulog nang maaga at magkaroon ng maikling naps sa maghapon.', language);
+            tip = _translate(
+                'Listen to your body. Take 20-minute power naps and prioritize sleep.',
+                'Makinig sa iyong katawan. Matulog nang maaga at magkaroon ng maikling naps sa maghapon.',
+                language);
           } else if (changeLower.contains('stretch')) {
-            tip = _translate('Apply safe moisturizers or natural oils to ease itching and dry skin.', 'Maglagay ng moisturizer o natural na langis upang maibsan ang pangangati at dry skin.', language);
-          } else if (changeLower.contains('back pain') || changeLower.contains('posture')) {
-            tip = _translate('Maintain good posture, wear low-heeled shoes, and use support pillows.', 'Panatilihin ang maayos na tindig, iwasan ang takong, at gumamit ng unan sa likod kapag natutulog.', language);
+            tip = _translate(
+                'Apply safe moisturizers or natural oils to ease itching and dry skin.',
+                'Maglagay ng moisturizer o natural na langis upang maibsan ang pangangati at dry skin.',
+                language);
+          } else if (changeLower.contains('back pain') ||
+              changeLower.contains('posture')) {
+            tip = _translate(
+                'Maintain good posture, wear low-heeled shoes, and use support pillows.',
+                'Panatilihin ang maayos na tindig, iwasan ang takong, at gumamit ng unan sa likod kapag natutulog.',
+                language);
           } else if (changeLower.contains('braxton')) {
-            tip = _translate('Change your position or walk around. Drink a large glass of warm water.', 'Magpalit ng posisyon o maglakad-lakad. Uminom din ng isang basong maligamgam na tubig.', language);
+            tip = _translate(
+                'Change your position or walk around. Drink a large glass of warm water.',
+                'Magpalit ng posisyon o maglakad-lakad. Uminom din ng isang basong maligamgam na tubig.',
+                language);
           } else {
-            tip = _translate('Talk to your midwife if this causes you significant discomfort.', 'Kausapin ang iyong midwife kung ito ay nagdudulot ng matinding abala sa iyo.', language);
+            tip = _translate(
+                'Talk to your midwife if this causes you significant discomfort.',
+                'Kausapin ang iyong midwife kung ito ay nagdudulot ng matinding abala sa iyo.',
+                language);
           }
 
           return Padding(
@@ -2458,15 +2464,20 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.shield_outlined, color: AppColors.brandPrimary, size: 22),
+              const Icon(Icons.shield_outlined,
+                  color: AppColors.brandPrimary, size: 22),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _translate('Midwife Symptom Guidance', 'Gabay sa Sintomas mula sa Midwife', language),
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      _translate('Midwife Symptom Guidance',
+                          'Gabay sa Sintomas mula sa Midwife', language),
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -2475,7 +2486,10 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                         'Maraming pagbabago sa katawan ang normal. Nasa ibaba ang mga sintomas na naitala sa iyong checkup at pangkalahatang payo para sa iyong trimester. Report anumang bagong malalang sintomas sa iyong midwife.',
                         language,
                       ),
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.45),
+                      style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          height: 1.45),
                     ),
                   ],
                 ),
@@ -2486,7 +2500,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
         const SizedBox(height: 16),
         if (_personalizedSymptoms.isNotEmpty) ...[
           _SectionHeader(
-            title: _translate('Active & Reported Symptoms', 'Iyong Mga Naiulat na Sintomas', language),
+            title: _translate('Active & Reported Symptoms',
+                'Iyong Mga Naiulat na Sintomas', language),
             icon: Icons.assignment_turned_in_outlined,
           ),
           const SizedBox(height: 10),
@@ -2566,7 +2581,6 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     return null;
   }
 
-
   Widget _buildNutritionTab(AppLanguage language) {
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -2641,7 +2655,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           const SizedBox(height: 16),
         ],
         _SectionHeader(
-          title: _translate('Key Nutrients This Trimester', 'Pangunahing Nutrisyon ngayong Trimester', language),
+          title: _translate('Key Nutrients This Trimester',
+              'Pangunahing Nutrisyon ngayong Trimester', language),
           icon: Icons.food_bank_outlined,
         ),
         const SizedBox(height: 10),
@@ -2669,7 +2684,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
         ]),
         const SizedBox(height: 20),
         _SectionHeader(
-          title: _translate('Foods to skip for now', 'Mga pagkaing iwasan muna', language),
+          title: _translate(
+              'Foods to skip for now', 'Mga pagkaing iwasan muna', language),
           icon: Icons.block_outlined,
         ),
         const SizedBox(height: 10),
@@ -2684,13 +2700,20 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     bool hasDairy = false;
     bool hasPeanut = false;
     bool hasSeafood = false;
-    
+
     for (final allergen in _activeAllergies) {
-      if (allergen.contains('dairy') || allergen.contains('gatas') || allergen.contains('milk')) {
+      if (allergen.contains('dairy') ||
+          allergen.contains('gatas') ||
+          allergen.contains('milk')) {
         hasDairy = true;
-      } else if (allergen.contains('peanut') || allergen.contains('mani') || allergen.contains('nut')) {
+      } else if (allergen.contains('peanut') ||
+          allergen.contains('mani') ||
+          allergen.contains('nut')) {
         hasPeanut = true;
-      } else if (allergen.contains('seafood') || allergen.contains('isda') || allergen.contains('fish') || allergen.contains('shrimp')) {
+      } else if (allergen.contains('seafood') ||
+          allergen.contains('isda') ||
+          allergen.contains('fish') ||
+          allergen.contains('shrimp')) {
         hasSeafood = true;
       }
     }
@@ -2780,8 +2803,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
             children: [
               for (final allergen in _activeAllergies)
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFF7FA),
                     borderRadius: BorderRadius.circular(999),
@@ -2877,28 +2900,50 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
   Widget _buildFoodsToAvoidCard(AppLanguage language) {
     final listToAvoid = [
       (
-        _translate('Raw or undercooked meat and eggs', 'Hilaw o hindi lutong lubos na karne at itlog', language),
-        _translate('These can carry germs that make you very sick and can reach your baby. Cook meat and eggs all the way through.', 'May mga mikrobyo ito na puwedeng magpasakit sa iyo at makaabot sa sanggol. Lutuin nang husto ang karne at itlog.', language)
+        _translate('Raw or undercooked meat and eggs',
+            'Hilaw o hindi lutong lubos na karne at itlog', language),
+        _translate(
+            'These can carry germs that make you very sick and can reach your baby. Cook meat and eggs all the way through.',
+            'May mga mikrobyo ito na puwedeng magpasakit sa iyo at makaabot sa sanggol. Lutuin nang husto ang karne at itlog.',
+            language)
       ),
       (
-        _translate('High-mercury fish (shark, swordfish, king mackerel)', 'Isdang mataas sa mercury tulad ng pating, swordfish', language),
-        _translate('These fish hold a lot of mercury, which can harm your baby\'s growing brain. Smaller fish like tilapia, bangus and galunggong are fine.', 'Marami itong mercury na puwedeng makasama sa utak ng sanggol. Ayos lang ang maliliit na isda tulad ng tilapia, bangus at galunggong.', language)
+        _translate('High-mercury fish (shark, swordfish, king mackerel)',
+            'Isdang mataas sa mercury tulad ng pating, swordfish', language),
+        _translate(
+            'These fish hold a lot of mercury, which can harm your baby\'s growing brain. Smaller fish like tilapia, bangus and galunggong are fine.',
+            'Marami itong mercury na puwedeng makasama sa utak ng sanggol. Ayos lang ang maliliit na isda tulad ng tilapia, bangus at galunggong.',
+            language)
       ),
       (
-        _translate('Unpasteurized dairy and soft cheeses', 'Gatas na hindi pasteurized at malambot na keso', language),
-        _translate('These can carry germs that are dangerous for your baby. Boiled or pasteurised milk is safe.', 'May mga mikrobyo ito na delikado sa sanggol. Ligtas ang pinakuluang o pasteurised na gatas.', language)
+        _translate('Unpasteurized dairy and soft cheeses',
+            'Gatas na hindi pasteurized at malambot na keso', language),
+        _translate(
+            'These can carry germs that are dangerous for your baby. Boiled or pasteurised milk is safe.',
+            'May mga mikrobyo ito na delikado sa sanggol. Ligtas ang pinakuluang o pasteurised na gatas.',
+            language)
       ),
       (
         _translate('Alcohol of any kind', 'Alak ng anumang uri', language),
-        _translate('There is no amount that is known to be safe in pregnancy, so it is best skipped altogether.', 'Walang dami ng alak na alam na ligtas sa pagbubuntis, kaya mas mabuting iwasan ito nang tuluyan.', language)
+        _translate(
+            'There is no amount that is known to be safe in pregnancy, so it is best skipped altogether.',
+            'Walang dami ng alak na alam na ligtas sa pagbubuntis, kaya mas mabuting iwasan ito nang tuluyan.',
+            language)
       ),
       (
         _translate('Too much coffee or tea', 'Sobrang kape o tsaa', language),
-        _translate('About two cups of coffee a day is the usual limit. More than that can slow your baby\'s growth.', 'Mga dalawang tasa ng kape sa isang araw ang karaniwang limitasyon. Ang sobra ay puwedeng makabagal sa paglaki ng sanggol.', language)
+        _translate(
+            'About two cups of coffee a day is the usual limit. More than that can slow your baby\'s growth.',
+            'Mga dalawang tasa ng kape sa isang araw ang karaniwang limitasyon. Ang sobra ay puwedeng makabagal sa paglaki ng sanggol.',
+            language)
       ),
       (
-        _translate('Processed junk food and excess sugar', 'Pinrosesong junk food at labis na asukal', language),
-        _translate('These fill you up without feeding your baby, and too much sugar makes diabetes in pregnancy more likely.', 'Nakakabusog ito pero walang sustansya para sa sanggol, at ang sobrang asukal ay nagpapataas ng tsansa ng diabetes sa pagbubuntis.', language)
+        _translate('Processed junk food and excess sugar',
+            'Pinrosesong junk food at labis na asukal', language),
+        _translate(
+            'These fill you up without feeding your baby, and too much sugar makes diabetes in pregnancy more likely.',
+            'Nakakabusog ito pero walang sustansya para sa sanggol, at ang sobrang asukal ay nagpapataas ng tsansa ng diabetes sa pagbubuntis.',
+            language)
       ),
     ];
 
@@ -2929,7 +2974,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.info_outline, color: AppColors.brandPrimary, size: 20),
+              const Icon(Icons.info_outline,
+                  color: AppColors.brandPrimary, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -2962,11 +3008,15 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.medical_services_outlined, color: AppColors.warning, size: 20),
+                    const Icon(Icons.medical_services_outlined,
+                        color: AppColors.warning, size: 20),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        _translate('Your Active Risk Concerns (From Consultations)', 'Salik ng Panganib na Naitala sa Checkup', language),
+                        _translate(
+                            'Your Active Risk Concerns (From Consultations)',
+                            'Salik ng Panganib na Naitala sa Checkup',
+                            language),
                         style: const TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 13.5,
@@ -2986,13 +3036,18 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
                             width: 6,
                             height: 6,
                             margin: const EdgeInsets.only(top: 6),
-                            decoration: const BoxDecoration(color: AppColors.warning, shape: BoxShape.circle),
+                            decoration: const BoxDecoration(
+                                color: AppColors.warning,
+                                shape: BoxShape.circle),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               w,
-                              style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary, height: 1.4),
+                              style: const TextStyle(
+                                  fontSize: 12.5,
+                                  color: AppColors.textSecondary,
+                                  height: 1.4),
                             ),
                           ),
                         ],
@@ -3022,11 +3077,15 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
             children: [
               Row(
                 children: [
-                  const Icon(Icons.gpp_maybe_rounded, color: AppColors.error, size: 24),
+                  const Icon(Icons.gpp_maybe_rounded,
+                      color: AppColors.error, size: 24),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      _translate('🚨 OBSTETRIC EMERGENCIES - GO TO HOSPITAL NOW', '🚨 AGAD PUMUNTA SA OSPITAL SA MGA PALATANDAANG ITO', language),
+                      _translate(
+                          '🚨 OBSTETRIC EMERGENCIES - GO TO HOSPITAL NOW',
+                          '🚨 AGAD PUMUNTA SA OSPITAL SA MGA PALATANDAANG ITO',
+                          language),
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
@@ -3060,11 +3119,15 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.visibility_outlined, color: AppColors.warning, size: 22),
+                    const Icon(Icons.visibility_outlined,
+                        color: AppColors.warning, size: 22),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        _translate('⚠️ Signs to Monitor & Inform Midwife', '⚠️ Mga Palatandaang Dapat Ipaalam sa Midwife', language),
+                        _translate(
+                            '⚠️ Signs to Monitor & Inform Midwife',
+                            '⚠️ Mga Palatandaang Dapat Ipaalam sa Midwife',
+                            language),
                         style: const TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 13,
@@ -3093,10 +3156,14 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.favorite_rounded, color: AppColors.brandPrimary, size: 18),
+                    const Icon(Icons.favorite_rounded,
+                        color: AppColors.brandPrimary, size: 18),
                     const SizedBox(width: 8),
                     Text(
-                      _translate('Fetal Kick Counts (From Week 20)', 'Bilang ng Sipa ng Sanggol (Mula Linggo 20)', language),
+                      _translate(
+                          'Fetal Kick Counts (From Week 20)',
+                          'Bilang ng Sipa ng Sanggol (Mula Linggo 20)',
+                          language),
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 14,
@@ -3140,7 +3207,9 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            isEmergency ? Icons.report_problem_rounded : Icons.info_outline_rounded,
+            isEmergency
+                ? Icons.report_problem_rounded
+                : Icons.info_outline_rounded,
             size: 16,
             color: isEmergency ? AppColors.error : AppColors.warning,
           ),
@@ -3150,7 +3219,9 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
               _translateContent(sign, language),
               style: TextStyle(
                 fontSize: 13,
-                color: isEmergency ? const Color(0xFF78281F) : const Color(0xFF7E5109),
+                color: isEmergency
+                    ? const Color(0xFF78281F)
+                    : const Color(0xFF7E5109),
                 fontWeight: FontWeight.w600,
                 height: 1.45,
               ),
@@ -3187,7 +3258,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
               color: Colors.white24,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.phone_in_talk, color: Colors.white, size: 24),
+            child:
+                const Icon(Icons.phone_in_talk, color: Colors.white, size: 24),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -3195,13 +3267,22 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _translate('EMERGENCY SPEED DIAL', 'BILIS-TAWAG SA EMERGENCY', language),
-                  style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                  _translate('EMERGENCY SPEED DIAL', 'BILIS-TAWAG SA EMERGENCY',
+                      language),
+                  style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _translate('Instantly call for immediate obstetric assistance.', 'Mabilis na tawag para sa agarang tulong sa panganganak.', language),
-                  style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.3),
+                  _translate(
+                      'Instantly call for immediate obstetric assistance.',
+                      'Mabilis na tawag para sa agarang tulong sa panganganak.',
+                      language),
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 12, height: 1.3),
                 ),
               ],
             ),
@@ -3230,22 +3311,26 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
   Widget _buildEmergencyContactsList(AppLanguage language) {
     final contacts = [
       (
-        _translate('Barangay Health Station (Midwife)', 'Barangay Health Station (Midwife)', language),
+        _translate('Barangay Health Station (Midwife)',
+            'Barangay Health Station (Midwife)', language),
         '09123456789',
         Icons.local_hospital
       ),
       (
-        _translate('Municipal Health Office', 'Municipal Health Office', language),
+        _translate(
+            'Municipal Health Office', 'Municipal Health Office', language),
         '09234567890',
         Icons.health_and_safety
       ),
       (
-        _translate('Local Disaster Risk Reduction Management Office (LDRRMO)', 'Lokal na Ambulansya o NDRRMO', language),
+        _translate('Local Disaster Risk Reduction Management Office (LDRRMO)',
+            'Lokal na Ambulansya o NDRRMO', language),
         '09345678901',
         Icons.airport_shuttle
       ),
       (
-        _translate('General Emergency Services', 'Pangkalahatang Emergency Services', language),
+        _translate('General Emergency Services',
+            'Pangkalahatang Emergency Services', language),
         '911',
         Icons.phone_in_talk
       ),
@@ -3258,8 +3343,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
     // removes the black rule: that was a bare `Divider()` taking the theme
     // default, and it drew the only hard line in the mother's app.
     return ProfileCardSection(
-      title: _translate('Emergency contacts', 'Mga matatawagan sa emergency',
-          language),
+      title: _translate(
+          'Emergency contacts', 'Mga matatawagan sa emergency', language),
       icon: Icons.contact_phone_outlined,
       children: [
         Text(
@@ -3277,8 +3362,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
         const SizedBox(height: 14),
         for (var index = 0; index < contacts.length; index++)
           Padding(
-            padding: EdgeInsets.only(
-                bottom: index == contacts.length - 1 ? 0 : 10),
+            padding:
+                EdgeInsets.only(bottom: index == contacts.length - 1 ? 0 : 10),
             child: Material(
               color: const Color(0xFFFFFAFC),
               borderRadius: BorderRadius.circular(16),
@@ -3286,8 +3371,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
               child: InkWell(
                 onTap: () => _launchPhoneDialer(contacts[index].$2),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 12, horizontal: 12),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                   child: Row(
                     children: [
                       Container(
