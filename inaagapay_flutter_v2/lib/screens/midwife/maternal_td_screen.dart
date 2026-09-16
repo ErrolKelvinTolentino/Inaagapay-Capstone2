@@ -27,11 +27,25 @@ class MaternalTdScreen extends StatefulWidget {
   final String? motherName;
   final int? assignedBhcId;
 
+  /// View-only mode, used by a mother looking at her own Td record.
+  ///
+  /// She sees what her midwife sees — the same protection hero and the same
+  /// DOH 5-dose timeline — with every route that writes a dose removed: no
+  /// Administer tab, no backfill editor, and no health-centre stock, which is
+  /// neither hers to see nor hers to act on.
+  ///
+  /// Recording a Td dose is a clinical act by the midwife who gave it. The
+  /// dose dates on this screen drive the DOH interval maths, the PAB/FIM
+  /// status and an inventory deduction; a mother ticking off her own doses
+  /// would put unverified entries into all three.
+  final bool readOnly;
+
   const MaternalTdScreen({
     super.key,
     required this.motherId,
     this.motherName,
     this.assignedBhcId,
+    this.readOnly = false,
   });
 
   @override
@@ -99,7 +113,11 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       final client = Supabase.instance.client;
 
       // 1. Resolve current midwife & BHC context
-      final accountId = await AuthStorage.getUserId();
+      //
+      // A mother has no midwife context to resolve. Asking for one anyway only
+      // fills her log with a failed lookup, and nothing on the read-only view
+      // uses the answer.
+      final accountId = widget.readOnly ? null : await AuthStorage.getUserId();
       if (accountId != null) {
         try {
           final ctx = await SupabaseService.getMidwifeContext(accountId);
@@ -149,8 +167,10 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       // 4. Default the administration date to the first legal day
       _resetAdministrationDate();
 
-      // 5. BHC Td inventory & vial tracking
-      await _loadBhcTdStock();
+      // 5. BHC Td inventory & vial tracking — only the administer form reads
+      //    it, and what is on the health centre's shelf is not a mother's
+      //    business to be shown.
+      if (!widget.readOnly) await _loadBhcTdStock();
     } catch (e) {
       debugPrint('Error loading maternal Td data: $e');
       _errorMessage = 'Unable to load maternal immunization data: $e';
@@ -815,7 +835,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(56),
         child: SecondaryHeader(
-          title: 'Maternal Td Immunization',
+          title: widget.readOnly ? 'My Td Vaccine' : 'Maternal Td Immunization',
           onBack: () => Navigator.pop(context, true),
         ),
       ),
@@ -826,11 +846,13 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                 children: [
                   if (_errorMessage != null) _buildErrorBanner(),
                   _buildHeroProtectionCard(),
-                  _buildTabSwitcher(),
+                  // Read-only has one tab's worth of content, so it gets no
+                  // switcher — a lone tab is a control that does nothing.
+                  if (!widget.readOnly) _buildTabSwitcher(),
                   Expanded(
-                    child: _activeTabIndex == 0
-                        ? _buildAdministerTab()
-                        : _buildLifetimeHistoryTab(),
+                    child: widget.readOnly || _activeTabIndex == 1
+                        ? _buildLifetimeHistoryTab()
+                        : _buildAdministerTab(),
                   ),
                 ],
               ),
@@ -1122,7 +1144,11 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
         break;
       case TdNextAction.missingPrevious:
         icon = Icons.report_problem_rounded;
-        label = '${_status.blockingDoseKey} record missing — see Lifetime History';
+        // "See Lifetime History" is a tab the mother's view does not have, and
+        // the fix is not hers to make in the app either way.
+        label = widget.readOnly
+            ? '${_status.blockingDoseKey} record missing — ask your midwife'
+            : '${_status.blockingDoseKey} record missing — see Lifetime History';
         break;
     }
 
@@ -1722,8 +1748,9 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
         ),
         const SizedBox(height: 12),
 
-        // Backfill Past Doses prompt card placed at the top of Lifetime History
-        _buildBackfillPrompt(),
+        // The midwife gets the backfill editor here. The mother gets the one
+        // thing she can actually do about a dose that is missing.
+        widget.readOnly ? _buildMotherRecordNote() : _buildBackfillPrompt(),
         const SizedBox(height: 16),
 
         ...MaternalTdService.doseDefs.map((def) {
@@ -1863,6 +1890,74 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
           );
         }),
       ],
+    );
+  }
+
+  /// Stands in for the backfill card on the mother's view.
+  ///
+  /// Without it the screen is simply silent about why there is no way to add a
+  /// dose, and a mother who was given Td at a private clinic has no idea the
+  /// gap is hers to report. It says who keeps the record and what to do about
+  /// a missing dose — which is the only action available to her, and it
+  /// happens at the health centre rather than in the app.
+  Widget _buildMotherRecordNote() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFBCFE8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: AppColors.brandPrimary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: const Icon(Icons.verified_user_outlined,
+                size: 18, color: AppColors.brandPrimary),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Recorded by your midwife',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                SizedBox(height: 5),
+                Text(
+                  'This is your official Td record, kept by your health center. '
+                  'If a dose you were given somewhere else is missing here, '
+                  'tell your midwife at your next visit and she will add it.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
