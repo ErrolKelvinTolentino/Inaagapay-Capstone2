@@ -3062,6 +3062,8 @@
         </div>
         <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-primary); background: #ffffff; display: flex; justify-content: flex-end; gap: 10px;">
           <button class="btn btn-secondary" onclick="closeModal('modal-inventory-report')" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600;">Cancel</button>
+          <button class="btn btn-secondary" onclick="downloadInventoryReportXlsx(this)" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600;"><i class="fa-solid fa-file-excel"></i> Excel</button>
+          <button class="btn btn-secondary" onclick="downloadInventoryReportPdf(this)" style="height: 36px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight:600;"><i class="fa-solid fa-file-pdf"></i> PDF</button>
           <button class="btn btn-primary" onclick="generateAndPrintInventoryReport()" style="height: 36px; padding: 0 20px; border-radius: 8px; font-size: 13px; font-weight:600; box-shadow:0 2px 8px rgba(255,104,165,0.3);"><i class="fa-solid fa-print"></i> Generate &amp; Print Report</button>
         </div>
       </div>
@@ -3108,6 +3110,7 @@
     <script src="sidebar.js"></script>
     <script src="live-refresh.js"></script>
     <script src="notification-center.js"></script>
+    <script src="export-kit.js"></script>
 
     <!-- Main Logic Script -->
     <script>
@@ -6906,6 +6909,105 @@
           }
         };
 
+        // One movement as plain cells, for the PDF and the workbook. Says the
+        // same as the print window's row, without the markup.
+        const INVENTORY_REPORT_COLUMNS = ["Date & Time", "Item", "Batch", "Batch Expiry", "Movement",
+          "Change", "Balance After", "Patient", "Performed By", "Reference / Notes"];
+
+        function inventoryReportCells(t) {
+          const batch = batches.find(b => b.batch_id === t.batch_id);
+          const item = batch ? items.find(i => i.item_id === batch.item_id) : null;
+          const loc = transferEndpointName(t.facility_id);
+          const notes = [t.reference_type, t.notes, t.activity_notes].filter(Boolean);
+          let movement = `${String(t.transaction_type || "").replace(/_/g, " ")}${loc ? " (" + loc + ")" : ""}`;
+
+          if (t.transaction_type === "transfer" || /transfer|lateral|return|issued/i.test(t.reference_type || "")) {
+            const trRefId = t.reference_id || (t.reference_type && (String(t.reference_type).match(/#(\d+)/) || [])[1]);
+            const tr = (inventoryTransfers || []).find(x => String(x.transfer_id) === String(t.reference_id || trRefId));
+            if (tr) {
+              const dirMeta = DIRECTION_META[transferDirectionOf(tr)] || { label: "Transfer" };
+              movement = `Transfer (${dirMeta.label}): ${transferEndpointName(transferSourceFacilityId(tr))} -> ${transferEndpointName(tr.destination_facility_id)}`;
+              const reason = (String(tr.remarks || "").match(/Reason for move:\s*([^.]+)\./i) || [])[1];
+              if (reason) notes.push(`Reason: ${reason.trim()}`);
+              const expected = transferExpectedDate(tr);
+              if (expected) notes.push(`Exp. arrival: ${formatShortDate(expected)}`);
+            }
+          }
+
+          const isPos = (t.dose_quantity || t.quantity) > 0;
+          const balance = t.resulting_quantity_remaining != null ? String(t.resulting_quantity_remaining) : "";
+          return [
+            t.logged_at ? formatDateTime(t.logged_at) : "",
+            item?.name || "Item",
+            batch?.batch_number || "",
+            batch?.expiration_date ? String(batch.expiration_date).split("T")[0] : "",
+            movement,
+            isPos ? `+${t.quantity || 0}` : `${t.quantity || 0}`,
+            balance + (t.resulting_open_vial_doses ? ` (+${t.resulting_open_vial_doses} open doses)` : ""),
+            t.patient_number || "",
+            t.performed_by_name || accountMap[t.performed_by] || "Staff",
+            notes.join(" · "),
+          ];
+        }
+
+        function inventoryReportFigures(r) {
+          return r.category === "transfer"
+            ? [["Transfers logged", r.reportRows.length], ["Inbound units", `+${r.totalReplenished}`],
+               ["Outbound dispatches", r.totalOutboundTransfers], ["Inbound deliveries", r.totalInboundTransfers]]
+            : [["Movements logged", r.reportRows.length], ["Doses dispensed", r.totalDispensed],
+               ["Units replenished", `+${r.totalReplenished}`], ["Doses lost / expired", `-${r.totalLoss}`]];
+        }
+
+        async function withBusyButton(button, work) {
+          const original = button ? button.innerHTML : "";
+          if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Preparing…'; }
+          try {
+            await work();
+          } catch (err) {
+            console.error("Inventory export failed:", err);
+            showToast(err?.message || "The file could not be created.", "error");
+          } finally {
+            if (button) { button.disabled = false; button.innerHTML = original; }
+          }
+        }
+
+        window.downloadInventoryReportPdf = (button) => withBusyButton(button, async () => {
+          const r = collectInventoryReport();
+          const report = await ExportKit.pdf({
+            title: "Inventory and Stock Movement Report",
+            scope: r.facilityLabel,
+            period: r.periodLabel,
+            preparedBy: r.officerName,
+            landscape: true,
+          });
+          report.heading("Summary");
+          report.figures(inventoryReportFigures(r));
+          if (r.category !== "all") report.note(`Showing ${String(r.category).replace(/_/g, " ")} movements only.`);
+          report.heading("Stock movements");
+          report.table({ columns: INVENTORY_REPORT_COLUMNS, rows: r.reportRows.map(inventoryReportCells) },
+            { fontSize: 7, emptyText: "No inventory movements recorded for the selected period and criteria." });
+          report.signatures(r.designation ? `${r.designation}` : undefined);
+          report.save(ExportKit.fileName(`inventory-report-${r.facilityLabel}`, "pdf"));
+          showToast("Inventory report PDF downloaded.", "success");
+        });
+
+        window.downloadInventoryReportXlsx = (button) => withBusyButton(button, async () => {
+          const r = collectInventoryReport();
+          await ExportKit.xlsx(ExportKit.fileName(`inventory-report-${r.facilityLabel}`, "xlsx"), [{
+            name: "Stock movements",
+            title: "Inventory and Stock Movement Report",
+            scope: r.facilityLabel,
+            period: r.periodLabel,
+            preparedBy: r.officerName,
+            blocks: [
+              { title: "Summary", columns: ["Measure", "Value"], rows: inventoryReportFigures(r) },
+              { title: "Stock movements", columns: INVENTORY_REPORT_COLUMNS, rows: r.reportRows.map(inventoryReportCells),
+                emptyText: "No inventory movements recorded for the selected period and criteria." },
+            ],
+          }]);
+          showToast("Inventory report workbook downloaded.", "success");
+        });
+
         window.openInventoryReportModal = function() {
           // Populate facility select
           const facSelect = document.getElementById("inv-report-facility");
@@ -6940,7 +7042,10 @@
           openModal("modal-inventory-report");
         };
 
-        window.generateAndPrintInventoryReport = function() {
+        // Everything the inventory report says, gathered once. The print
+        // window, the PDF and the workbook all read from this, so the three
+        // cannot disagree about which movements fall in the period.
+        function collectInventoryReport() {
           const period = document.getElementById("inv-report-period")?.value || "this_week";
           const facilityId = document.getElementById("inv-report-facility")?.value || "all";
           const category = document.getElementById("inv-report-category")?.value || "all";
@@ -7035,6 +7140,11 @@
             }
           });
 
+          return { period, facilityId, category, officerName, designation, startDate, endDate, periodLabel, facilityLabel, reportRows, totalDispensed, totalReplenished, totalLoss, totalTransfers, totalOutboundTransfers, totalInboundTransfers };
+        }
+
+        window.generateAndPrintInventoryReport = function() {
+          const { period, facilityId, category, officerName, designation, startDate, endDate, periodLabel, facilityLabel, reportRows, totalDispensed, totalReplenished, totalLoss, totalTransfers, totalOutboundTransfers, totalInboundTransfers } = collectInventoryReport();
           // Build printable HTML document
           const printWindow = window.open("", "_blank");
           if (!printWindow) {
@@ -10305,98 +10415,44 @@
           window.downloadCsvFile(`inventory_batches_${localDateKey()}.csv`, csvContent);
         };
 
-        window.exportBatchesExcel = function() {
+        // A real .xlsx. This used to write an HTML table with an .xls name,
+        // which Excel opens only after warning that the file's format and
+        // extension do not match.
+        window.exportBatchesExcel = async function() {
           const bhcFilter = document.getElementById("global-bhc-filter")?.value || "all";
+          const scopeName = bhcFilter === 'all'
+            ? 'All Facilities (RHU & BHCs)'
+            : (bhcFilter === 'central' ? (PortalScope?.depotName || 'Central Warehouse') : ((bhcs || []).find(f => String(f.bhc_id) === String(bhcFilter))?.bhc_name || bhcFilter));
           const rows = batches.map(b => {
             const item = items.find(i => i.item_id === b.item_id);
-            const locName = batchLocationName(b);
-            const recDate = b.received_date ? String(b.received_date).split('T')[0] : "—";
-            const expDate = b.expiration_date ? String(b.expiration_date).split('T')[0] : "—";
-            const isExp = isBatchExpired(b);
-            const statusText = isExp ? "Expired" : (b.status || "active");
-            const statusBg = isExp ? "#fee2e2" : (statusText === "active" ? "#ecfdf5" : "#fef3c7");
-            const statusColor = isExp ? "#991b1b" : (statusText === "active" ? "#065f46" : "#92400e");
-
-            return `
-              <tr>
-                <td style="mso-number-format:'\\@'; padding: 6px 10px; font-weight: 600; border: 1px solid #cbd5e1;">${esc(b.batch_number || '')}</td>
-                <td style="mso-number-format:'\\@'; padding: 6px 10px; border: 1px solid #cbd5e1;">${esc(item ? item.name : 'Unknown')}</td>
-                <td style="mso-number-format:'\\@'; padding: 6px 10px; color: #475569; border: 1px solid #cbd5e1;">${esc(item ? (item.generic_name || '') : '')}</td>
-                <td style="mso-number-format:'\\@'; padding: 6px 10px; border: 1px solid #cbd5e1;">${esc(locName)}</td>
-                <td style="mso-number-format:'yyyy-mm-dd'; text-align: center; padding: 6px 10px; border: 1px solid #cbd5e1;">${recDate}</td>
-                <td style="mso-number-format:'yyyy-mm-dd'; text-align: center; padding: 6px 10px; border: 1px solid #cbd5e1; ${isExp ? 'color:#b91c1c; font-weight:600;' : ''}">${expDate}</td>
-                <td style="mso-number-format:'#,##0'; text-align: right; padding: 6px 10px; border: 1px solid #cbd5e1;">${b.quantity_received ?? 0}</td>
-                <td style="mso-number-format:'#,##0'; text-align: right; padding: 6px 10px; font-weight: 700; border: 1px solid #cbd5e1;">${b.quantity_remaining ?? 0}</td>
-                <td style="mso-number-format:'\\@'; padding: 6px 10px; border: 1px solid #cbd5e1;">${esc(b.manufacturer || '')}</td>
-                <td style="mso-number-format:'\\@'; text-align: center; padding: 6px 10px; border: 1px solid #cbd5e1; background: ${statusBg}; color: ${statusColor}; font-weight: 600;">${esc(statusText)}</td>
-              </tr>
-            `;
-          }).join("");
-
-          const scopeName = bhcFilter === 'all' 
-            ? 'All Facilities (RHU & BHCs)' 
-            : (bhcFilter === 'central' ? (PortalScope?.depotName || 'Central Warehouse') : ((bhcs || []).find(f => String(f.bhc_id) === String(bhcFilter))?.bhc_name || bhcFilter));
-
-          const template = `
-            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-            <head>
-              <meta charset="utf-8">
-              <!--[if gte mso 9]>
-              <xml>
-                <x:ExcelWorkbook>
-                  <x:ExcelWorksheets>
-                    <x:ExcelWorksheet>
-                      <x:Name>Inventory Batches</x:Name>
-                      <x:WorksheetOptions>
-                        <x:DisplayGridlines/>
-                      </x:WorksheetOptions>
-                    </x:ExcelWorksheet>
-                  </x:ExcelWorksheets>
-                </x:ExcelWorkbook>
-              </xml>
-              <![endif]-->
-              <style>
-                body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #1e293b; }
-                th { background-color: #ff68a5; color: #ffffff; font-weight: bold; border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; }
-                td { border: 1px solid #cbd5e1; padding: 6px 10px; vertical-align: middle; }
-              </style>
-            </head>
-            <body>
-              <h2 style="color:#0f172a; margin-bottom: 2px;">Republic of the Philippines — Municipal Health Office</h2>
-              <h3 style="color:#ff68a5; margin-top: 0;">InaAgapay Medical Inventory Batches Report</h3>
-              <p style="font-size: 10pt; color: #64748b;">Generated on: ${formatDateTime(new Date())} | Scope: ${esc(scopeName)}</p>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Batch Number</th>
-                    <th>Item Trade Name</th>
-                    <th>Generic Name</th>
-                    <th>Location</th>
-                    <th style="text-align:center;">Received Date</th>
-                    <th style="text-align:center;">Expiration Date</th>
-                    <th style="text-align:right;">Quantity Received</th>
-                    <th style="text-align:right;">Quantity Remaining</th>
-                    <th>Manufacturer</th>
-                    <th style="text-align:center;">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rows}
-                </tbody>
-              </table>
-            </body>
-            </html>
-          `;
-
-          const blob = new Blob(["\uFEFF" + template], { type: "application/vnd.ms-excel;charset=utf-8" });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.setAttribute("href", url);
-          link.setAttribute("download", `inventory_batches_${localDateKey()}.xls`);
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
+            return [
+              b.batch_number || "",
+              item ? item.name : "Unknown",
+              item ? (item.generic_name || "") : "",
+              batchLocationName(b),
+              b.received_date ? String(b.received_date).split('T')[0] : "",
+              b.expiration_date ? String(b.expiration_date).split('T')[0] : "",
+              b.quantity_received ?? 0,
+              b.quantity_remaining ?? 0,
+              b.manufacturer || "",
+              isBatchExpired(b) ? "Expired" : (b.status || "active"),
+            ];
+          });
+          try {
+            await ExportKit.xlsx(`inventory_batches_${localDateKey()}.xlsx`, [{
+              name: "Inventory batches",
+              title: "Medical Inventory Batches",
+              scope: scopeName,
+              period: `As of ${formatDateTime(new Date())}`,
+              blocks: [{
+                columns: ["Batch Number", "Item Trade Name", "Generic Name", "Location", "Received Date",
+                          "Expiration Date", "Quantity Received", "Quantity Remaining", "Manufacturer", "Status"],
+                rows,
+              }],
+            }]);
+          } catch (err) {
+            showToast(err?.message || "The workbook could not be created.", "error");
+          }
         };
 
         // Helper for Formatting Compact Dropdown Options

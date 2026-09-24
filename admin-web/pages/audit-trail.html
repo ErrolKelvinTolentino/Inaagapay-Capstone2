@@ -72,6 +72,7 @@
           <div class="page-actions" style="display: flex; gap: 8px; flex-wrap: wrap; align-items:center;">
             <button class="btn btn-primary btn-sm" id="export-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow: 0 2px 8px rgba(255,104,165,0.25);"><i class="fa-solid fa-table-list"></i> Summary PDF</button>
             <button class="btn btn-primary btn-sm" id="export-detail-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow: 0 2px 8px rgba(255,104,165,0.25);"><i class="fa-solid fa-file-lines"></i> Detailed PDF</button>
+            <button class="btn btn-secondary btn-sm" id="export-xlsx-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px;"><i class="fa-solid fa-file-excel"></i> Excel</button>
             <button class="btn btn-secondary btn-sm" id="export-csv-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px;"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
             <button class="btn btn-secondary btn-sm" id="print-list-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px;"><i class="fa-solid fa-print"></i> Print Log</button>
             <button class="btn btn-secondary btn-sm" id="refresh-btn" style="border-radius:8px; font-weight:600; display:inline-flex; align-items:center; gap:6px;"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
@@ -379,6 +380,7 @@
     <script src="sidebar.js"></script>
     <script src="live-refresh.js"></script>
     <script src="notification-center.js"></script>
+    <script src="export-kit.js"></script>
     <script>
       (function(){
         const SUPABASE_URL = window.SUPABASE_URL || "https://krooorixhjwygcsdoomg.supabase.co";
@@ -1701,6 +1703,36 @@
           URL.revokeObjectURL(url);
 
           showToast(`Exported ${rows.length} audit ${rows.length === 1 ? 'entry' : 'entries'} to CSV.`, 'success');
+        });
+
+        // Same columns and order as the CSV, as a real workbook.
+        document.getElementById('export-xlsx-btn')?.addEventListener('click', async (e) => {
+          if(!filtered.length){
+            showToast('There is nothing to export with the current filters.', 'warning');
+            return;
+          }
+          const button = e.currentTarget;
+          const original = button.innerHTML;
+          button.disabled = true;
+          button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Preparing…';
+          try {
+            const rows = sortLogs(filtered, currentSortCol, currentSortDir);
+            await ExportKit.xlsx(`audit_trail_${new Date().toISOString().slice(0,10)}.xlsx`, [{
+              name: 'Audit trail',
+              title: 'Audit Trail',
+              period: 'Current filters',
+              blocks: [{
+                columns: AUDIT_CSV_COLUMNS.map(c => c[0]),
+                rows: rows.map(l => AUDIT_CSV_COLUMNS.map(c => c[1](l))),
+              }],
+            }]);
+            showToast(`Exported ${rows.length} audit ${rows.length === 1 ? 'entry' : 'entries'} to Excel.`, 'success');
+          } catch (err) {
+            showToast(err?.message || 'The workbook could not be created.', 'error');
+          } finally {
+            button.disabled = false;
+            button.innerHTML = original;
+          }
         });
 
         /* ── Wiring ─────────────────────────────────────────────────────── */

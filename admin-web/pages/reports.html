@@ -982,6 +982,7 @@
           <div class="page-actions">
             <a href="inventory.html?tab=transactions&subview=ledger" class="btn btn-outline-pink btn-sm"><i class="fa-solid fa-boxes-stacked"></i> Inventory Reports</a>
             <button class="btn btn-secondary btn-sm" onclick="window.print()"><i class="fa-solid fa-print"></i> Print Report</button>
+            <button class="btn btn-secondary btn-sm" id="export-xlsx-btn"><i class="fa-solid fa-file-excel"></i> Excel</button>
             <button class="btn btn-primary btn-sm" id="export-pdf-btn"><i class="fa-solid fa-file-pdf"></i> Download PDF Report</button>
           </div>
         </div>
@@ -1375,7 +1376,9 @@
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
               <span class="badge badge-teal" id="drive-count-badge">0 Drives</span>
-              <button class="btn btn-secondary btn-sm" id="drive-export-btn" title="Download the filtered drives as CSV"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+              <button class="btn btn-secondary btn-sm" id="drive-export-pdf-btn" title="Download the filtered drives as a PDF report"><i class="fa-solid fa-file-pdf"></i> PDF</button>
+              <button class="btn btn-secondary btn-sm" id="drive-export-xlsx-btn" title="Download the filtered drives as an Excel workbook"><i class="fa-solid fa-file-excel"></i> Excel</button>
+              <button class="btn btn-secondary btn-sm" id="drive-export-btn" title="Download the filtered drives as CSV"><i class="fa-solid fa-file-csv"></i> CSV</button>
             </div>
           </div>
 
@@ -1572,6 +1575,7 @@
     <script src="sidebar.js"></script>
     <script src="inventory-stock.js"></script>
     <script src="analytics-recommendations.js"></script>
+    <script src="export-kit.js"></script>
     <script src="live-refresh.js"></script>
     <script src="notification-center.js"></script>
     <script>
@@ -4218,20 +4222,16 @@
           document.querySelectorAll("#tbody-drives tr.drive-row").forEach(tr => tr.classList.remove("is-selected"));
         }
 
-        function exportDrivesCsv() {
-          const rows = sortDrives(getFilteredDrives());
-          if (!rows.length) { showToast("No drives to export with these filters.", "warning"); return; }
-
-          const header = ["Drive Date", "Barangay", "Health Center", "Vaccine", "Given To",
+        // One column list for every drive export, so the CSV, the workbook
+        // and the PDF cannot disagree about what a drive row holds.
+        const DRIVE_EXPORT_COLUMNS = ["Drive Date", "Barangay", "Health Center", "Vaccine", "Given To",
                           "Invited", "Reached", "Reminded", "Came", "Invited & Came",
                           "Walk-ins", "No-shows", "Turnout %", "Doses Given",
                           "Units Off Shelf", "Vials Opened", "Doses From Open Vials",
                           "Male", "Female", "Avg Age (months)", "Status"];
-          const cell = (v) => {
-            const s = (v === null || v === undefined) ? "" : String(v);
-            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-          };
-          const csv = [header.join(",")].concat(rows.map(d => [
+
+        function driveExportRow(d) {
+          return [
             d.schedule_date, d.barangay, d.facility_name, d.vaccine_name, d.audience,
             d.invited_count, d.invited_reachable, d.reminded_count, d.attended_count,
             d.invited_attended, d.walk_in_count, d.no_show_count,
@@ -4240,7 +4240,33 @@
             d.units_consumed, d.vials_opened, d.doses_from_open_vials,
             d.male_count, d.female_count, d.avg_age_months,
             d.drive_status
-          ].map(cell).join(","))).join("\r\n");
+          ];
+        }
+
+        // What the drive filters are set to, said in words for the file header.
+        function driveFilterLabel() {
+          const picked = (id) => {
+            const el = document.getElementById(id);
+            if (!el || el.value === "all" || el.value === "") return null;
+            return el.options[el.selectedIndex]?.text || el.value;
+          };
+          const parts = [picked("drive-filter-vaccine"), picked("drive-filter-audience"), picked("drive-filter-status")]
+            .filter(Boolean);
+          const search = document.getElementById("drive-search")?.value.trim();
+          if (search) parts.push(`matching "${search}"`);
+          return parts.length ? parts.join(", ") : "All drives";
+        }
+
+        function exportDrivesCsv() {
+          const rows = sortDrives(getFilteredDrives());
+          if (!rows.length) { showToast("No drives to export with these filters.", "warning"); return; }
+
+          const header = DRIVE_EXPORT_COLUMNS;
+          const cell = (v) => {
+            const s = (v === null || v === undefined) ? "" : String(v);
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          };
+          const csv = [header.join(",")].concat(rows.map(d => driveExportRow(d).map(cell).join(","))).join("\r\n");
 
           // BOM so Excel reads the file as UTF-8 rather than the system codepage.
           const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
@@ -4254,6 +4280,241 @@
           URL.revokeObjectURL(url);
           showToast(`Exported ${rows.length} drive${rows.length === 1 ? "" : "s"}.`, "success");
         }
+
+        // ── PDF and Excel export ────────────────────────────────────────────
+        // Built from what the page shows under the current filters, so the
+        // file says exactly what the screen says. The PDF button used to call
+        // window.print(), which printed whatever the browser's print styles
+        // produced — charts cut across pages, tables clipped at the margin.
+        const exportText = (el) => (el ? (el.innerText || el.textContent || "") : "").replace(/\s+/g, " ").trim();
+
+        async function runExport(button, work) {
+          if (!button || button.disabled) return;
+          const original = button.innerHTML;
+          button.disabled = true;
+          button.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;"></span> Preparing…';
+          try {
+            await work();
+          } catch (err) {
+            console.error("Export failed:", err);
+            showToast(err?.message || "The file could not be created.", "error");
+          } finally {
+            button.disabled = false;
+            button.innerHTML = original;
+          }
+        }
+
+        function reportsExportContext() {
+          updatePrintReportMeta();
+          return {
+            scope: exportText(document.getElementById("print-scope-label")) || ExportKit.scopeLabel(),
+            period: exportText(document.getElementById("print-period-label")) || "All time",
+          };
+        }
+
+        function reportsVerdicts() {
+          return Array.from(document.querySelectorAll("#verdict-strip .verdict")).map(v => {
+            const unit = exportText(v.querySelector(".verdict-unit"));
+            return {
+              label: exportText(v.querySelector(".verdict-label")),
+              value: exportText(v.querySelector(".verdict-value")) + (unit ? " " + unit : ""),
+              note: exportText(v.querySelector(".verdict-note")),
+            };
+          });
+        }
+
+        function reportsRecommendations() {
+          return Array.from(document.querySelectorAll("#recommendation-list .recommendation")).map(r => ({
+            severity: exportText(r.querySelector(".rec-sev")),
+            domain: exportText(r.querySelector(".rec-domain")),
+            place: exportText(r.querySelector(".rec-place")),
+            headline: exportText(r.querySelector(".rec-headline")),
+            finding: exportText(r.querySelector(".rec-finding")),
+            action: exportText(r.querySelector(".rec-action")),
+          }));
+        }
+
+        function reportsNarrative() {
+          const host = document.getElementById("executive-narrative-content");
+          if (!host) return [];
+          const paras = Array.from(host.querySelectorAll("p, li")).map(exportText).filter(Boolean);
+          return paras.length ? paras : [exportText(host)].filter(Boolean);
+        }
+
+        function reportsTables() {
+          const table = (sel) => ExportKit.tableData(document.querySelector(sel)?.closest("table"));
+          return [
+            { title: "High-risk mothers requiring care", name: "High-risk mothers", data: table("#tbody-high-risk") },
+            { title: "Critical stock shortage alerts", name: "Stock alerts", data: table("#tbody-stock-alerts") },
+            { title: "Child growth and nutritional status", name: "Child growth", data: table("#tbody-child-nutrition") },
+            { title: exportText(document.getElementById("bhc-table-title")) || "Health center comparison", name: "Health centers", data: table("#tbody-bhc-analytics") },
+          ];
+        }
+
+        function reportsCharts() {
+          const title = (id, fallback) => exportText(document.getElementById(id)) || fallback;
+          return [
+            { canvas: document.getElementById("chart-risk-breakdown"), title: "Maternal risk level breakdown" },
+            { canvas: document.getElementById("chart-bhc-workload"), title: title("chart-bhc-title", "Patient distribution per health center") },
+            { canvas: document.getElementById("chart-monthly-trends"), title: "6-month prenatal registration trend" },
+            { canvas: document.getElementById("chart-immunization-status"), title: "Infant immunization status" },
+            { canvas: document.getElementById("chart-trimester-breakdown"), title: "Pregnancy stage by trimester" },
+            { canvas: document.getElementById("chart-age-groups"), title: "Patient age groups" },
+          ];
+        }
+
+        function reportsCoverageFigures() {
+          const v = (id) => exportText(document.getElementById(id)) || "0";
+          return [
+            ["PhilHealth members", v("social-philhealth-members")],
+            ["PhilHealth dependents", v("social-philhealth-dependents")],
+            ["Non-members", v("social-philhealth-non")],
+            ["4Ps beneficiaries", v("social-4ps-count")],
+          ];
+        }
+
+        async function exportReportsPdf() {
+          const ctx = reportsExportContext();
+          const report = await ExportKit.pdf({
+            title: "Maternal and Child Health Analytics Report",
+            scope: ctx.scope,
+            period: ctx.period,
+            landscape: true,
+          });
+
+          const verdicts = reportsVerdicts();
+          report.heading("Situation report");
+          report.figures(verdicts.map(v => [v.label, v.value]));
+          verdicts.filter(v => v.note).forEach(v => report.paragraph(`${v.label}: ${v.note}`, { size: 8.5 }));
+
+          const recs = reportsRecommendations();
+          report.heading("Recommended actions");
+          if (!recs.length) report.note("Nothing needs action for the selected scope.");
+          recs.forEach((r, i) => {
+            report.paragraph(`${i + 1}. ${r.headline}`, { bold: true });
+            report.paragraph(`${[r.severity, r.domain, r.place].filter(Boolean).join("  |  ")}`, { size: 7.5, color: [107, 107, 107] });
+            report.paragraph(r.finding, { size: 8.5 });
+            if (r.action) report.paragraph(`Action: ${r.action}`, { size: 8.5, color: [199, 53, 120] });
+          });
+
+          const narrative = reportsNarrative();
+          if (narrative.length) {
+            report.heading("Written narrative");
+            narrative.forEach(p => report.paragraph(p, { size: 8.5 }));
+          }
+
+          report.heading("Indicators");
+          report.charts(reportsCharts(), 3);
+
+          report.heading("PhilHealth and 4Ps coverage");
+          report.figures(reportsCoverageFigures());
+
+          reportsTables().forEach(t => {
+            report.heading(t.title);
+            report.table(t.data);
+          });
+
+          const drives = sortDrives(getFilteredDrives());
+          report.heading("Vaccination drives");
+          report.table({
+            columns: ["Date", "Health center", "Vaccine", "Given to", "Invited", "Came", "No-shows", "Walk-ins", "Turnout %", "Doses", "Status"],
+            rows: drives.map(d => [d.schedule_date, d.facility_name, d.vaccine_name, d.audience, d.invited_count,
+              d.attended_count, d.no_show_count ?? "", d.walk_in_count, d.turnout_rate ?? "", d.doses_administered, d.drive_status]),
+          }, { emptyText: driveViewMissing ? "Drive analytics need the 20260912 database update." : "No drives match the current filters." });
+
+          report.signatures();
+          report.save(ExportKit.fileName("mch-analytics-report", "pdf"));
+          showToast("PDF report downloaded.", "success");
+        }
+
+        async function exportReportsXlsx() {
+          const ctx = reportsExportContext();
+          const base = { scope: ctx.scope, period: ctx.period };
+          const verdicts = reportsVerdicts();
+          const recs = reportsRecommendations();
+          const sheets = [{
+            ...base,
+            name: "Situation report",
+            title: "Maternal and Child Health Analytics Report",
+            blocks: [
+              { title: "Situation report", columns: ["Indicator", "Value", "Reading"], rows: verdicts.map(v => [v.label, v.value, v.note]) },
+              { title: "Recommended actions", columns: ["#", "Severity", "Area", "Where", "Finding", "Action"],
+                rows: recs.map((r, i) => [i + 1, r.severity, r.domain, r.place, `${r.headline}. ${r.finding}`, r.action]),
+                emptyText: "Nothing needs action for the selected scope." },
+              { title: "PhilHealth and 4Ps coverage", columns: ["Group", "Count"], rows: reportsCoverageFigures() },
+            ],
+          }];
+          reportsTables().forEach(t => sheets.push({
+            ...base, name: t.name, title: t.title,
+            blocks: [{ columns: t.data.columns, rows: t.data.rows }],
+          }));
+          sheets.push({
+            ...base, name: "Vaccination drives", title: "Vaccination drives",
+            blocks: [{ columns: DRIVE_EXPORT_COLUMNS, rows: sortDrives(getFilteredDrives()).map(driveExportRow) }],
+          });
+          await ExportKit.xlsx(ExportKit.fileName("mch-analytics-report", "xlsx"), sheets);
+          showToast("Excel workbook downloaded.", "success");
+        }
+
+        async function exportDrivesPdf() {
+          const rows = sortDrives(getFilteredDrives());
+          if (!rows.length) { showToast("No drives to export with these filters.", "warning"); return; }
+          const ctx = reportsExportContext();
+          const report = await ExportKit.pdf({
+            title: "Vaccination Drive Report",
+            scope: ctx.scope,
+            period: `${ctx.period}  |  ${driveFilterLabel()}`,
+            landscape: true,
+          });
+          const kpi = (id) => exportText(document.getElementById(id)) || "0";
+          report.heading("Summary");
+          report.figures([
+            ["Drives", kpi("drive-kpi-count")],
+            ["Invited", kpi("drive-kpi-invited")],
+            ["Came", kpi("drive-kpi-attended")],
+            ["No-shows", kpi("drive-kpi-noshow")],
+            ["Walk-ins", kpi("drive-kpi-walkins")],
+            ["Turnout", kpi("drive-kpi-turnout")],
+            ["Doses given", kpi("drive-kpi-doses")],
+          ]);
+          const note = exportText(document.getElementById("drive-kpi-note"));
+          if (note) report.note(note);
+
+          report.heading("Charts");
+          report.charts([
+            { canvas: document.getElementById("chart-drive-turnout"), title: "Turnout by drive" },
+            { canvas: document.getElementById("chart-drive-trend"), title: "Drives over time" },
+            { canvas: document.getElementById("chart-drive-vaccine"), title: "Doses by vaccine" },
+            { canvas: document.getElementById("chart-drive-demographics"), title: "Who attended" },
+          ], 2);
+
+          report.heading("Drives");
+          report.table({
+            columns: ["Date", "Barangay", "Health center", "Vaccine", "Given to", "Invited", "Came", "No-shows",
+              "Walk-ins", "Turnout %", "Doses", "Units used", "Male", "Female", "Status"],
+            rows: rows.map(d => [d.schedule_date, d.barangay, d.facility_name, d.vaccine_name, d.audience,
+              d.invited_count, d.attended_count, d.no_show_count ?? "", d.walk_in_count, d.turnout_rate ?? "",
+              d.doses_administered, d.units_consumed ?? "", d.male_count ?? "", d.female_count ?? "", d.drive_status]),
+          }, { fontSize: 7 });
+          report.signatures();
+          report.save(ExportKit.fileName("vaccination-drives", "pdf"));
+          showToast(`Exported ${rows.length} drive${rows.length === 1 ? "" : "s"} to PDF.`, "success");
+        }
+
+        async function exportDrivesXlsx() {
+          const rows = sortDrives(getFilteredDrives());
+          if (!rows.length) { showToast("No drives to export with these filters.", "warning"); return; }
+          const ctx = reportsExportContext();
+          await ExportKit.xlsx(ExportKit.fileName("vaccination-drives", "xlsx"), [{
+            name: "Vaccination drives",
+            title: "Vaccination Drive Report",
+            scope: ctx.scope,
+            period: `${ctx.period} | ${driveFilterLabel()}`,
+            blocks: [{ columns: DRIVE_EXPORT_COLUMNS, rows: rows.map(driveExportRow) }],
+          }]);
+          showToast(`Exported ${rows.length} drive${rows.length === 1 ? "" : "s"} to Excel.`, "success");
+        }
+
 
         // Event Listeners
         document.getElementById("filter-bhc-select")?.addEventListener("change", renderReports);
@@ -4271,9 +4532,10 @@
             renderBhcComparativeTable();
           });
         });
-        document.getElementById("export-pdf-btn")?.addEventListener("click", () => {
-          window.print();
-        });
+        document.getElementById("export-pdf-btn")?.addEventListener("click", (e) =>
+          runExport(e.currentTarget, exportReportsPdf));
+        document.getElementById("export-xlsx-btn")?.addEventListener("click", (e) =>
+          runExport(e.currentTarget, exportReportsXlsx));
 
         // Date Presets Wiring
         document.querySelectorAll("#reports-date-presets .date-preset-btn").forEach(btn => {
@@ -4306,6 +4568,10 @@
         document.getElementById("drive-search")?.addEventListener("input", renderDriveAnalytics);
         document.getElementById("drive-roster-close")?.addEventListener("click", closeDriveRoster);
         document.getElementById("drive-export-btn")?.addEventListener("click", exportDrivesCsv);
+        document.getElementById("drive-export-pdf-btn")?.addEventListener("click", (e) =>
+          runExport(e.currentTarget, exportDrivesPdf));
+        document.getElementById("drive-export-xlsx-btn")?.addEventListener("click", (e) =>
+          runExport(e.currentTarget, exportDrivesXlsx));
         document.querySelectorAll("th[data-drive-sort]").forEach(th => {
           th.addEventListener("click", () => {
             const col = th.dataset.driveSort;
