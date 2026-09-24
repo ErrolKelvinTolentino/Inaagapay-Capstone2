@@ -11,6 +11,7 @@ class MainHeader extends StatelessWidget {
   final VoidCallback? onViewProfile;
   final VoidCallback? onSettings;
   final VoidCallback? onHelp;
+  final VoidCallback? onReports;
   final VoidCallback? onLogout;
   final bool showBackButton;
   final VoidCallback? onBack;
@@ -24,6 +25,7 @@ class MainHeader extends StatelessWidget {
     this.onViewProfile,
     this.onSettings,
     this.onHelp,
+    this.onReports,
     this.onLogout,
     this.showBackButton = false,
     this.onBack,
@@ -54,6 +56,7 @@ class MainHeader extends StatelessWidget {
               onViewProfile: onViewProfile,
               onSettings: onSettings,
               onHelp: onHelp,
+              onReports: onReports,
               onLogout: () {
                 entry.remove();
                 _confirmLogout(context);
@@ -234,6 +237,7 @@ class _ProfileMenu extends StatelessWidget {
   final VoidCallback? onViewProfile;
   final VoidCallback? onSettings;
   final VoidCallback? onHelp;
+  final VoidCallback? onReports;
   final VoidCallback? onLogout;
 
   const _ProfileMenu({
@@ -241,6 +245,7 @@ class _ProfileMenu extends StatelessWidget {
     this.onViewProfile,
     this.onSettings,
     this.onHelp,
+    this.onReports,
     this.onLogout,
   });
 
@@ -272,6 +277,15 @@ class _ProfileMenu extends StatelessWidget {
                 onViewProfile?.call();
               },
             ),
+            if (onReports != null)
+              _MenuItem(
+                icon: Icons.summarize_outlined,
+                label: 'Reports & Export',
+                onTap: () {
+                  onClose();
+                  onReports?.call();
+                },
+              ),
             _MenuItem(
               icon: Icons.settings_outlined,
               label: 'Settings',

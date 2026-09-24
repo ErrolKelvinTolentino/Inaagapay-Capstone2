@@ -130,6 +130,7 @@ class _MidwifeShellState extends State<MidwifeShell> {
               onViewProfile: () => Navigator.pushNamed(context, '/profile'),
               onSettings: () => Navigator.pushNamed(context, '/settings'),
               onHelp: () => Navigator.pushNamed(context, '/help'),
+              onReports: () => Navigator.pushNamed(context, '/midwife-reports'),
               onLogout: _logout,
             ),
             // Screen content

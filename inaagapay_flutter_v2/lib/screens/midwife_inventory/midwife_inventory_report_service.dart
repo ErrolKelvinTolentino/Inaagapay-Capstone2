@@ -317,8 +317,8 @@ class MidwifeInventoryReportService {
                   // Table Rows
                   ...transactions.map((t) {
                     final isPositive = (t.doseQuantity ?? t.quantity) > 0;
-                    final deltaStr = _formatDelta(t);
-                    final balanceStr = _formatBalance(t);
+                    final deltaStr = formatDelta(t);
+                    final balanceStr = formatBalance(t);
 
                     return pw.TableRow(
                       decoration: pw.BoxDecoration(
@@ -327,7 +327,7 @@ class MidwifeInventoryReportService {
                       children: [
                         _buildTableCell('${_dateFormat.format(t.loggedAt)}\n${_timeFormat.format(t.loggedAt)}', fontSize: 7.5),
                         _buildTableCell('${t.itemName}\nBatch: ${t.batchNumber}', isBold: true, fontSize: 8),
-                        _buildTableCell(_formatMovementType(t), fontSize: 8),
+                        _buildTableCell(formatMovementType(t), fontSize: 8),
                         _buildTableCell(
                           deltaStr,
                           align: pw.TextAlign.right,
@@ -338,7 +338,7 @@ class MidwifeInventoryReportService {
                         _buildTableCell(balanceStr, align: pw.TextAlign.right, fontSize: 8),
                         _buildTableCell(t.hasPatient ? (t.patientLabel ?? '-') : '-', fontSize: 8),
                         _buildTableCell('${t.performedByName ?? "Staff"}\n(${_formatRole(t.performedByRole)})', fontSize: 7.5),
-                        _buildTableCell(_formatNotes(t), fontSize: 7.5),
+                        _buildTableCell(formatNotes(t), fontSize: 7.5),
                       ],
                     );
                   }),
@@ -519,7 +519,7 @@ class MidwifeInventoryReportService {
     );
   }
 
-  static String _formatDelta(InventoryTransactionRecord t) {
+  static String formatDelta(InventoryTransactionRecord t) {
     final doses = t.dosesMoved;
     final qty = t.quantity;
     final isPos = (t.doseQuantity ?? qty) > 0;
@@ -534,7 +534,7 @@ class MidwifeInventoryReportService {
     return '$sign${qty.abs()} ${t.unit}${qty.abs() == 1 ? '' : 's'}';
   }
 
-  static String _formatBalance(InventoryTransactionRecord t) {
+  static String formatBalance(InventoryTransactionRecord t) {
     final remUnits = t.resultingQuantityRemaining;
     final remDoses = t.resultingOpenVialDoses;
     if (remUnits == null && remDoses == null) return '-';
@@ -549,7 +549,7 @@ class MidwifeInventoryReportService {
     return parts.join(' ');
   }
 
-  static String _formatMovementType(InventoryTransactionRecord t) {
+  static String formatMovementType(InventoryTransactionRecord t) {
     final type = t.transactionType.toLowerCase();
     switch (type) {
       case 'dispense':
@@ -583,7 +583,7 @@ class MidwifeInventoryReportService {
     return clean[0].toUpperCase() + clean.substring(1);
   }
 
-  static String _formatNotes(InventoryTransactionRecord t) {
+  static String formatNotes(InventoryTransactionRecord t) {
     final type = t.transactionType.toLowerCase();
     if (type == 'transfer') {
       final isLateral = t.referenceType.toLowerCase().contains('lateral') ||

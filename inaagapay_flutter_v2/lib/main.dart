@@ -39,6 +39,7 @@ import 'screens/midwife_inventory/midwife_inventory_page.dart';
 import 'screens/settings_screen.dart';
 import 'screens/midwife/midwife_profile_page.dart';
 import 'screens/midwife/midwife_help_page.dart';
+import 'screens/midwife/midwife_reports_screen.dart';
 import 'screens/shared/immunization_poster_screen.dart';
 
 void main() async {
@@ -317,6 +318,7 @@ class _InaagapayAppState extends State<InaagapayApp>
             '/settings': (context) => const SettingsScreen(),
             '/profile': (context) => const MidwifeProfilePage(),
             '/help': (context) => const MidwifeHelpPage(),
+            '/midwife-reports': (context) => const MidwifeReportsScreen(),
             '/midwife-mothers': (context) => const MidwifeMothersScreen(),
             '/midwife-children': (context) => const MidwifeChildrenScreen(),
             '/midwife-schedules': (context) => const MidwifeSchedulesScreen(),
