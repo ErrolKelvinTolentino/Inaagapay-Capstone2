@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Rural Health Units — InaAgapay MHO</title>
+    <title>Facility Management — InaAgapay MHO</title>
     <link rel="icon" type="image/png" href="../images/logo_icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
@@ -15,6 +15,52 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
     />
     <link rel="stylesheet" href="../styles/main.css" />
+    <style>
+      /* The facility type picker. Radio buttons styled as cards because the
+         choice decides what the rest of the form asks for, and a bare pair of
+         radios reads as a detail rather than as the first decision. */
+      .facility-type-option {
+        display: block;
+        cursor: pointer;
+        position: relative;
+      }
+
+      .facility-type-option input { position: absolute; opacity: 0; pointer-events: none; }
+
+      .facility-type-option > span {
+        display: block;
+        border: 1.5px solid var(--border-primary);
+        border-radius: var(--radius-card-sm);
+        padding: 12px 14px;
+        transition: border-color .15s ease, background .15s ease;
+      }
+
+      .facility-type-option > span strong {
+        display: block;
+        font-size: 13px;
+        color: var(--text-primary);
+        margin-bottom: 3px;
+      }
+
+      .facility-type-option > span strong i { color: var(--brand-primary); margin-right: 6px; }
+
+      .facility-type-option > span small {
+        display: block;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--text-secondary);
+      }
+
+      .facility-type-option input:checked + span {
+        border-color: var(--brand-primary);
+        background: rgba(255, 104, 165, 0.06);
+      }
+
+      .facility-type-option input:focus-visible + span {
+        outline: 2px solid var(--brand-primary);
+        outline-offset: 2px;
+      }
+    </style>
   </head>
   <body>
     <div class="app-layout">
@@ -64,15 +110,22 @@
       <main class="app-main">
         <div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
           <div>
-            <h1 class="page-title" style="margin:0;">Rural Health Units</h1>
-            <p style="margin:6px 0 0; color:var(--text-secondary); font-size:13px;">
-              The four Rural Health Units of Baliwag and the barangay health centres reporting to each.
-              Stock flows from the Municipal Warehouse to an RHU, and from an RHU to its BHCs.
+            <h1 class="page-title" style="margin:0;">Facility Management</h1>
+            <p style="margin:6px 0 0; color:var(--text-secondary); font-size:13px; max-width:720px;">
+              The Rural Health Units of the municipality and the barangay health centres reporting to
+              each. Stock flows from the Municipal Warehouse to an RHU, and from an RHU to its health
+              centres — so a centre's parent decides which depot supplies it and which office reads
+              its records.
             </p>
           </div>
-          <button class="btn btn-secondary btn-sm" id="refresh-btn">
-            <i class="fa-solid fa-arrows-rotate"></i> Refresh
-          </button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" id="refresh-btn">
+              <i class="fa-solid fa-arrows-rotate"></i> Refresh
+            </button>
+            <button class="btn btn-primary btn-sm" id="register-btn">
+              <i class="fa-solid fa-plus"></i> Register facility
+            </button>
+          </div>
         </div>
 
         <!-- Access notice, shown when a non-municipal account lands here -->
@@ -133,8 +186,8 @@
                   Barangay Health Center Assignments
                 </h3>
                 <p style="margin:4px 0 0; color:var(--text-secondary); font-size:12.5px;">
-                  Move a barangay health centre to a different Rural Health Unit. The change takes
-                  effect immediately for that RHU's stock allocation and patient scope.
+                  Rename a health centre, move it to a different Rural Health Unit, or retire one that
+                  has closed. A move takes effect immediately for stock allocation and patient scope.
                 </p>
               </div>
               <input
@@ -154,11 +207,12 @@
                     <th>Reports To</th>
                     <th style="text-align:right;">Midwives</th>
                     <th style="text-align:right;">Mothers</th>
-                    <th>Reassign</th>
+                    <th>Status</th>
+                    <th style="text-align:center;">Actions</th>
                   </tr>
                 </thead>
                 <tbody id="bhc-tbody">
-                  <tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-secondary);">Loading…</td></tr>
+                  <tr><td colspan="7" style="text-align:center; padding:40px; color:var(--text-secondary);">Loading…</td></tr>
                 </tbody>
               </table>
             </div>
@@ -171,10 +225,148 @@
       </main>
     </div>
 
+    <!-- ── Register facility ──────────────────────────────────────────────
+         The municipality was previously only editable through the SQL Editor,
+         which is how a facility ends up with no code and no parent. The form
+         asks for the type first because it decides everything else: a Rural
+         Health Unit reports to the Municipal Health Office and there is only
+         one of those, so the parent field only appears for a health centre. -->
+    <div class="modal-overlay" id="facility-modal">
+      <div class="modal" style="max-width: 560px">
+        <div class="modal-header">
+          <h2 class="modal-title" id="facility-modal-title">Register a Facility</h2>
+          <button class="modal-close" id="facility-modal-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="facility-id" />
+
+          <div class="form-group" id="facility-type-group">
+            <label class="form-label">Facility type</label>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <label class="facility-type-option" style="flex:1; min-width:210px;">
+                <input type="radio" name="facility-type" value="BHC" checked />
+                <span>
+                  <strong><i class="fa-solid fa-house-medical"></i> Barangay Health Center</strong>
+                  <small>Front-line station. Reports to a Rural Health Unit and serves one barangay.</small>
+                </span>
+              </label>
+              <label class="facility-type-option" style="flex:1; min-width:210px;">
+                <input type="radio" name="facility-type" value="RHU" />
+                <span>
+                  <strong><i class="fa-solid fa-hospital"></i> Rural Health Unit</strong>
+                  <small>Holds its own depot and supplies the health centres beneath it.</small>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="facility-name">Facility name <span style="color:var(--error)">*</span></label>
+            <input class="form-control" type="text" id="facility-name" maxlength="120"
+                   placeholder="e.g. Barangay Health Center — Tarcan" />
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+            <div class="form-group">
+              <label class="form-label" for="facility-barangay">Barangay <span style="color:var(--error)">*</span></label>
+              <input class="form-control" type="text" id="facility-barangay" maxlength="80" placeholder="e.g. Tarcan" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="facility-code">Facility code</label>
+              <input class="form-control" type="text" id="facility-code" maxlength="20"
+                     placeholder="e.g. BHC-TAR" style="text-transform:uppercase;" />
+              <small style="color:var(--text-secondary); font-size:11.5px;">
+                Optional, but it is what sorts this facility in every list.
+              </small>
+            </div>
+          </div>
+
+          <div class="form-group" id="facility-parent-group">
+            <label class="form-label" for="facility-parent">Reports to <span style="color:var(--error)">*</span></label>
+            <select class="form-select" id="facility-parent"></select>
+            <small style="color:var(--text-secondary); font-size:11.5px;">
+              Decides which depot supplies this centre and which office reads its records.
+            </small>
+          </div>
+
+          <div class="form-group" id="facility-parent-note" style="display:none;">
+            <div style="padding:10px 12px; border-radius:var(--radius-card-sm); background:var(--bg-secondary); border:1px solid var(--border-primary); font-size:12.5px; color:var(--text-secondary); line-height:1.6;">
+              <i class="fa-solid fa-circle-info"></i>
+              A Rural Health Unit reports to the Municipal Health Office. It will start with its own
+              depot and no health centres — assign those from the table below once it is registered.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="facility-street">Street address</label>
+            <input class="form-control" type="text" id="facility-street" maxlength="160" placeholder="Optional" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="facility-cancel">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="facility-save">
+            <i class="fa-solid fa-floppy-disk"></i> <span id="facility-save-text">Register facility</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Move a facility to a different parent ────────────────────────────
+         Replaces an inline <select> that fired on change behind a browser
+         confirm(). Reassignment moves stock allocation and patient scope, so it
+         says what it is about to move before it moves it. -->
+    <div class="modal-overlay" id="reassign-modal">
+      <div class="modal" style="max-width: 500px">
+        <div class="modal-header">
+          <h2 class="modal-title">Change parent Rural Health Unit</h2>
+          <button class="modal-close" id="reassign-modal-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:14px; color:var(--text-primary); line-height:1.6; margin:0 0 4px;" id="reassign-message"></p>
+          <input type="hidden" id="reassign-facility-id" />
+
+          <div class="form-group" style="margin-top:14px;">
+            <label class="form-label" for="reassign-parent">New parent</label>
+            <select class="form-select" id="reassign-parent"></select>
+          </div>
+
+          <div id="reassign-impact" style="padding:11px 13px; border-radius:var(--radius-card-sm); background:var(--warning-10); color:#92400e; font-size:12.5px; line-height:1.65;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="reassign-cancel">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="reassign-confirm">
+            <i class="fa-solid fa-diagram-project"></i> Move facility
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Retire / restore ─────────────────────────────────────────────── -->
+    <div class="modal-overlay" id="retire-modal">
+      <div class="modal" style="max-width: 500px">
+        <div class="modal-header">
+          <h2 class="modal-title" id="retire-modal-title">Retire Facility</h2>
+          <button class="modal-close" id="retire-modal-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:14px; color:var(--text-primary); line-height:1.6; margin:0;" id="retire-message"></p>
+          <input type="hidden" id="retire-facility-id" />
+          <input type="hidden" id="retire-target-state" />
+          <div id="retire-impact" style="display:none; margin-top:14px; padding:11px 13px; border-radius:var(--radius-card-sm); font-size:12.5px; line-height:1.65;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" id="retire-cancel">Cancel</button>
+          <button class="btn btn-sm" id="retire-confirm">Confirm</button>
+        </div>
+      </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="../js/supabase-client.js"></script>
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
+    <script src="data-cache.js"></script>
+    <script src="sidebar.js"></script>
     <script src="live-refresh.js"></script>
     <script src="notification-center.js"></script>
     <script>
@@ -274,11 +466,19 @@
             }
             facilities = rows;
 
+            // Cached through AdminData so the sixty-second refresh tick stops
+            // re-reading three rosters to redraw counts that rarely change.
             const [midwifeRes, motherRes, adminRes] = await Promise.all([
-              db.from("midwives").select("midwife_id, assigned_bhc_id"),
-              db.from("mothers").select("mother_id, assigned_bhc_id"),
+              window.AdminData
+                ? AdminData.rows(db, "midwives", { key: "fac:midwives", select: "midwife_id, assigned_bhc_id" })
+                    .then(data => ({ data })).catch(error => ({ error }))
+                : db.from("midwives").select("midwife_id, assigned_bhc_id"),
+              window.AdminData
+                ? AdminData.rows(db, "mothers", { key: "fac:mothers", select: "mother_id, assigned_bhc_id" })
+                    .then(data => ({ data })).catch(error => ({ error }))
+                : db.from("mothers").select("mother_id, assigned_bhc_id"),
               db.from("facility_assignments")
-                .select("facility_id, account_id, is_active, accounts!inner(account_type, status)")
+                .select("facility_id, accounts!inner(account_type, status)")
                 .eq("is_active", true),
             ]);
 
@@ -313,10 +513,13 @@
         function render() {
           const rhuList = rhus();
           const bhcList = bhcs();
-          const unassigned = bhcList.filter(b => !b.parent_facility_id).length;
+          const unassigned = bhcList.filter(b => !b.parent_facility_id && b.is_active !== false).length;
 
-          document.getElementById("stat-rhus").textContent = rhuList.length;
-          document.getElementById("stat-bhcs").textContent = bhcList.length;
+          // A retired facility is still a row, but it is not capacity. Counting
+          // it as one is how a municipality reads as covered while a barangay
+          // has nowhere open.
+          document.getElementById("stat-rhus").textContent = rhuList.filter(r => r.is_active !== false).length;
+          document.getElementById("stat-bhcs").textContent = bhcList.filter(b => b.is_active !== false).length;
           document.getElementById("stat-unassigned").textContent = unassigned;
           document.getElementById("stat-admins").textContent =
             rhuList.reduce((sum, r) => sum + (adminCounts[r.facility_id] || 0), 0);
@@ -330,11 +533,14 @@
           if (rhuList.length === 0) {
             host.innerHTML =
               '<div style="color:var(--text-secondary); font-size:13px;">' +
-              'No Rural Health Units are registered yet. Run database/migrations/20260821_mho_tier.sql to seed RHU I–IV.</div>';
+              'No Rural Health Units are registered yet. Either run ' +
+              'database/migrations/20260821_mho_tier.sql to seed the original four, or ' +
+              'use <strong>Register facility</strong> above to add them one at a time.</div>';
             return;
           }
 
           host.innerHTML = rhuList.map(rhu => {
+            const retired = rhu.is_active === false;
             const children = childrenOf(rhu.facility_id);
             const mothers = children.reduce((s, c) => s + (motherCounts[c.facility_id] || 0), 0);
             const midwives = children.reduce((s, c) => s + (midwifeCounts[c.facility_id] || 0), 0);
@@ -350,7 +556,7 @@
               : "";
 
             return `
-              <div class="card" style="padding:18px;">
+              <div class="card" style="padding:18px;${retired ? "opacity:.68;" : ""}">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
                   <div>
                     <div style="font-weight:700; font-size:15px; color:var(--brand-text);">
@@ -360,7 +566,10 @@
                       ${esc(rhu.address_detail || rhu.barangay || "Baliwag, Bulacan")}
                     </div>
                   </div>
-                  <span class="badge badge-admin">${esc(rhu.facility_code || "RHU")}</span>
+                  <div style="display:flex; flex-direction:column; gap:5px; align-items:flex-end;">
+                    <span class="badge badge-admin">${esc(rhu.facility_code || "RHU")}</span>
+                    ${retired ? '<span class="badge badge-inactive"><i class="fa-solid fa-box-archive"></i> retired</span>' : ""}
+                  </div>
                 </div>
 
                 <div style="display:flex; gap:18px; margin:14px 0 12px;">
@@ -378,6 +587,7 @@
                 ${adminWarning}
 
                 <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
+                  ${retired ? "" : `
                   <a class="btn btn-sm btn-primary" href="inventory.html?facility=${rhu.facility_id}&amp;action=issue">
                     <i class="fa-solid fa-truck-ramp-box"></i> Allocate Stock
                   </a>
@@ -387,6 +597,17 @@
                   <a class="btn btn-sm btn-secondary" href="account-create.html">
                     <i class="fa-solid fa-user-plus"></i> Add Administrator
                   </a>
+                  <button class="btn btn-sm btn-secondary" onclick="openFacilityForm(${rhu.facility_id})">
+                    <i class="fa-solid fa-pen"></i> Edit
+                  </button>
+                  <button class="btn btn-sm btn-secondary" onclick="openRetire(${rhu.facility_id}, false)"
+                          title="Retire — refused while health centres, patients or stock remain">
+                    <i class="fa-solid fa-box-archive"></i> Retire
+                  </button>`}
+                  ${retired ? `
+                  <button class="btn btn-sm btn-success" onclick="openRetire(${rhu.facility_id}, true)">
+                    <i class="fa-solid fa-rotate-left"></i> Restore to service
+                  </button>` : ""}
                 </div>
               </div>`;
           }).join("");
@@ -403,76 +624,421 @@
 
           if (rows.length === 0) {
             tbody.innerHTML =
-              '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-secondary);">' +
+              '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--text-secondary);">' +
               (bhcList.length === 0 ? "No barangay health centres are registered." : "No match for that search.") +
               "</td></tr>";
             return;
           }
 
           tbody.innerHTML = rows.map(b => {
-            const options = rhuList.map(r =>
-              `<option value="${r.facility_id}"${String(r.facility_id) === String(b.parent_facility_id) ? " selected" : ""}>${esc(r.name)}</option>`
-            ).join("");
-
             const parentLabel = b.parent_facility_id
               ? esc(b.parent_name || rhuList.find(r => String(r.facility_id) === String(b.parent_facility_id))?.name || `RHU #${b.parent_facility_id}`)
               : '<span class="badge badge-suspended">Unassigned</span>';
 
+            const retired = b.is_active === false;
+            const statusBadge = retired
+              ? '<span class="badge badge-inactive"><i class="fa-solid fa-box-archive"></i> retired</span>'
+              : '<span class="badge badge-active">in service</span>';
+
+            // A retired centre can only be restored; offering rename and move
+            // on something that is out of service invites changes nobody sees.
+            const actions = retired
+              ? `<button class="btn btn-sm btn-icon" style="background:var(--success-10);color:var(--success);border:none;"
+                         onclick="openRetire(${b.facility_id}, true)" title="Restore to service" aria-label="Restore facility">
+                   <i class="fa-solid fa-rotate-left"></i></button>`
+              : `<button class="btn btn-sm btn-outline-pink btn-icon"
+                         onclick="openFacilityForm(${b.facility_id})" title="Edit name, code or address" aria-label="Edit facility">
+                   <i class="fa-solid fa-pen"></i></button>
+                 <button class="btn btn-sm btn-icon" style="background:rgba(59,130,246,.12);color:#1d4ed8;border:none;"
+                         onclick="openReassign(${b.facility_id})" title="Change parent Rural Health Unit" aria-label="Reassign facility">
+                   <i class="fa-solid fa-diagram-project"></i></button>
+                 <button class="btn btn-sm btn-icon" style="background:var(--error-10);color:var(--error);border:none;"
+                         onclick="openRetire(${b.facility_id}, false)" title="Retire — keeps every record" aria-label="Retire facility">
+                   <i class="fa-solid fa-box-archive"></i></button>`;
+
             return `
-              <tr>
-                <td><strong>${esc(b.name)}</strong></td>
+              <tr${retired ? ' style="opacity:.65;"' : ""}>
+                <td><strong>${esc(b.name)}</strong>${b.facility_code ? `<div style="font-size:11px;color:var(--text-secondary);">${esc(b.facility_code)}</div>` : ""}</td>
                 <td>${esc(b.barangay || "—")}</td>
                 <td>${parentLabel}</td>
                 <td style="text-align:right;">${midwifeCounts[b.facility_id] || 0}</td>
                 <td style="text-align:right;">${motherCounts[b.facility_id] || 0}</td>
-                <td>
-                  <select class="form-select" style="min-width:190px;"
-                          onchange="reassignBhc(${b.facility_id}, this.value, this)">
-                    <option value="">— Select RHU —</option>
-                    ${options}
-                  </select>
+                <td>${statusBadge}</td>
+                <td style="text-align:center;">
+                  <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">${actions}</div>
                 </td>
               </tr>`;
           }).join("");
         }
 
-        window.reassignBhc = async function (facilityId, parentId, selectEl) {
-          if (!parentId) return;
-          const bhc = facilities.find(f => String(f.facility_id) === String(facilityId));
-          const rhu = facilities.find(f => String(f.facility_id) === String(parentId));
-          if (!bhc || !rhu) return;
+        /* ── Facility management ───────────────────────────────────────────
+           Registering, editing, moving and retiring a facility. Each writes
+           through an RPC in 20260926_facility_management.sql rather than
+           straight into health_facilities, because the rules that matter —
+           a health centre reports to a Rural Health Unit and only to one, a
+           code is unique, a facility with patients or stock still on it cannot
+           be retired — have to hold whoever is calling. The portal speaks to
+           Postgres over the anon key; a check that lives only here is a
+           suggestion.
 
-          if (String(bhc.parent_facility_id) === String(parentId)) return;
+           The page and the migration deploy separately, so every call detects
+           a missing function and says the feature needs the migration, instead
+           of failing with a PostgREST code.
+           ──────────────────────────────────────────────────────────────── */
 
-          if (!confirm(`Move ${bhc.name} to ${rhu.name}?\n\nIts stock requests and patient records will be handled by ${rhu.name} from now on.`)) {
-            selectEl.value = bhc.parent_facility_id || "";
+        function isMissingRpc(error) {
+          const code = String(error?.code || error?.status || "");
+          return code === "PGRST202" || code === "42883" || code === "404";
+        }
+
+        function migrationNotice() {
+          showToast(
+            "Facility management needs database/migrations/20260926_facility_management.sql. " +
+            "Run it in Supabase, then refresh.", "warning");
+        }
+
+        function activeRhus() {
+          return rhus().filter(r => r.is_active !== false);
+        }
+
+        /* ── Register / edit ───────────────────────────────────────────── */
+
+        function selectedFacilityType() {
+          const picked = document.querySelector('input[name="facility-type"]:checked');
+          return picked ? picked.value : "BHC";
+        }
+
+        /** Only a health centre has a parent to choose; an RHU's is decided for it. */
+        function syncFacilityTypeFields() {
+          const isBhc = selectedFacilityType() === "BHC";
+          document.getElementById("facility-parent-group").style.display = isBhc ? "" : "none";
+          document.getElementById("facility-parent-note").style.display = isBhc ? "none" : "";
+          document.getElementById("facility-name").placeholder = isBhc
+            ? "e.g. Barangay Health Center — Tarcan"
+            : "e.g. Rural Health Unit V";
+          document.getElementById("facility-code").placeholder = isBhc ? "e.g. BHC-TAR" : "e.g. RHU-V";
+        }
+
+        function fillParentSelect(selectId, selectedId) {
+          const select = document.getElementById(selectId);
+          const list = activeRhus();
+          select.innerHTML =
+            '<option value="">— Choose a Rural Health Unit —</option>' +
+            list.map(r =>
+              `<option value="${r.facility_id}"${String(r.facility_id) === String(selectedId) ? " selected" : ""}>` +
+              `${esc(r.name)}${r.facility_code ? " (" + esc(r.facility_code) + ")" : ""}</option>`
+            ).join("");
+          if (list.length === 0) {
+            select.innerHTML = '<option value="">No active Rural Health Unit to report to</option>';
+          }
+        }
+
+        let facilityEditTarget = null;
+
+        window.openFacilityForm = function (facilityId) {
+          facilityEditTarget = facilityId
+            ? facilities.find(f => String(f.facility_id) === String(facilityId))
+            : null;
+
+          const editing = !!facilityEditTarget;
+          document.getElementById("facility-modal-title").textContent =
+            editing ? "Edit Facility" : "Register a Facility";
+          document.getElementById("facility-save-text").textContent =
+            editing ? "Save changes" : "Register facility";
+          document.getElementById("facility-id").value = editing ? facilityEditTarget.facility_id : "";
+
+          // The type is what a facility is, not a detail of it: moving one
+          // between rungs would strand its stock, patients and postings. So it
+          // is chosen once and shown read-only afterwards.
+          document.getElementById("facility-type-group").style.display = editing ? "none" : "";
+
+          if (editing) {
+            document.getElementById("facility-name").value = facilityEditTarget.name || "";
+            document.getElementById("facility-barangay").value = facilityEditTarget.barangay || "";
+            document.getElementById("facility-code").value = facilityEditTarget.facility_code || "";
+            document.getElementById("facility-street").value = facilityEditTarget.address_street || "";
+            document.getElementById("facility-parent-group").style.display = "none";
+            document.getElementById("facility-parent-note").style.display = "none";
+          } else {
+            document.getElementById("facility-name").value = "";
+            document.getElementById("facility-barangay").value = "";
+            document.getElementById("facility-code").value = "";
+            document.getElementById("facility-street").value = "";
+            document.querySelector('input[name="facility-type"][value="BHC"]').checked = true;
+            fillParentSelect("facility-parent", "");
+            syncFacilityTypeFields();
+          }
+
+          document.getElementById("facility-modal").classList.add("show");
+          document.getElementById("facility-name").focus();
+        };
+
+        document.getElementById("register-btn").addEventListener("click", () => openFacilityForm(null));
+        document.querySelectorAll('input[name="facility-type"]').forEach(radio => {
+          radio.addEventListener("change", syncFacilityTypeFields);
+        });
+
+        ["facility-modal-close", "facility-cancel"].forEach(id => {
+          document.getElementById(id).addEventListener("click", () =>
+            document.getElementById("facility-modal").classList.remove("show"));
+        });
+        document.getElementById("facility-modal").addEventListener("click", (e) => {
+          if (e.target === e.currentTarget) e.currentTarget.classList.remove("show");
+        });
+
+        document.getElementById("facility-save").addEventListener("click", async () => {
+          const editing = !!facilityEditTarget;
+          const name = document.getElementById("facility-name").value.trim();
+          const barangay = document.getElementById("facility-barangay").value.trim();
+          const code = document.getElementById("facility-code").value.trim().toUpperCase();
+          const street = document.getElementById("facility-street").value.trim();
+          const type = selectedFacilityType();
+          const parentId = document.getElementById("facility-parent").value;
+
+          if (!name) { showToast("Give the facility a name.", "warning"); return; }
+          if (!barangay) { showToast("Which barangay is it in?", "warning"); return; }
+          if (!editing && type === "BHC" && !parentId) {
+            showToast("Choose the Rural Health Unit this health centre reports to.", "warning");
             return;
           }
 
-          selectEl.disabled = true;
+          const btn = document.getElementById("facility-save");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div>';
+
+          try {
+            const rpc = editing ? "update_health_facility" : "create_health_facility";
+            const args = editing
+              ? {
+                  p_facility_id: facilityEditTarget.facility_id,
+                  p_name: name,
+                  p_barangay: barangay,
+                  p_facility_code: code || null,
+                  p_address_street: street || null,
+                  p_address_detail: null,
+                  p_actor_id: session.account_id,
+                }
+              : {
+                  p_name: name,
+                  p_facility_type: type,
+                  p_barangay: barangay,
+                  p_parent_id: type === "BHC" ? parseInt(parentId, 10) : null,
+                  p_facility_code: code || null,
+                  p_address_street: street || null,
+                  p_address_detail: null,
+                  p_actor_id: session.account_id,
+                };
+
+            const { data, error } = await db.rpc(rpc, args);
+            if (error) throw error;
+            if (!data || data.success !== true) {
+              // The database's own sentence: it is the one that knows the name
+              // is taken or the parent is retired.
+              showToast(data?.error || "That could not be saved.", "error");
+              return;
+            }
+
+            document.getElementById("facility-modal").classList.remove("show");
+            showToast(editing ? `${name} updated.` : `${name} registered.`, "success");
+
+            // A new facility changes what this office covers, so the scope is
+            // re-read before the page is.
+            PortalScope.clear();
+            await PortalScope.refresh(db);
+            window.AdminData?.invalidate();
+            await loadData();
+          } catch (e) {
+            if (isMissingRpc(e)) migrationNotice();
+            else showToast(e.message || "That could not be saved.", "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> <span id="facility-save-text">' +
+                            (editing ? "Save changes" : "Register facility") + '</span>';
+          }
+        });
+
+        /* ── Moving a facility ─────────────────────────────────────────── */
+
+        window.openReassign = function (facilityId) {
+          const bhc = facilities.find(f => String(f.facility_id) === String(facilityId));
+          if (!bhc) return;
+
+          document.getElementById("reassign-facility-id").value = facilityId;
+          document.getElementById("reassign-message").innerHTML =
+            `Move <strong>${esc(bhc.name)}</strong> to a different Rural Health Unit.`;
+          fillParentSelect("reassign-parent", bhc.parent_facility_id);
+
+          // Say what moves with it. This used to be a browser confirm() that
+          // named neither the patients nor the stock.
+          const midwives = midwifeCounts[bhc.facility_id] || 0;
+          const mothers = motherCounts[bhc.facility_id] || 0;
+          document.getElementById("reassign-impact").innerHTML =
+            `<i class="fa-solid fa-triangle-exclamation"></i> ` +
+            `${mothers} mother${mothers === 1 ? "" : "s"} and ${midwives} midwife${midwives === 1 ? "" : "s"} ` +
+            `move with it. From then on the new Rural Health Unit supplies this centre's stock, ` +
+            `reviews its requests and reads its patient records — and the old one stops being able to.`;
+
+          document.getElementById("reassign-modal").classList.add("show");
+        };
+
+        ["reassign-modal-close", "reassign-cancel"].forEach(id => {
+          document.getElementById(id).addEventListener("click", () =>
+            document.getElementById("reassign-modal").classList.remove("show"));
+        });
+        document.getElementById("reassign-modal").addEventListener("click", (e) => {
+          if (e.target === e.currentTarget) e.currentTarget.classList.remove("show");
+        });
+
+        document.getElementById("reassign-confirm").addEventListener("click", async () => {
+          const facilityId = parseInt(document.getElementById("reassign-facility-id").value, 10);
+          const parentId = document.getElementById("reassign-parent").value;
+          const bhc = facilities.find(f => String(f.facility_id) === String(facilityId));
+          const rhu = facilities.find(f => String(f.facility_id) === String(parentId));
+
+          if (!parentId || !bhc || !rhu) {
+            showToast("Choose a Rural Health Unit.", "warning");
+            return;
+          }
+          if (String(bhc.parent_facility_id) === String(parentId)) {
+            document.getElementById("reassign-modal").classList.remove("show");
+            showToast(`${bhc.name} already reports to ${rhu.name}.`, "info");
+            return;
+          }
+
+          const btn = document.getElementById("reassign-confirm");
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div>';
+
           try {
             const { data, error } = await db.rpc("set_facility_parent", {
               p_facility_id: facilityId,
-              p_parent_id: parseInt(parentId),
+              p_parent_id: parseInt(parentId, 10),
               p_actor_id: session.account_id,
             });
             if (error) throw error;
-            if (!data || data.success !== true) throw new Error(data?.error || "Reassignment refused");
+            if (!data || data.success !== true) {
+              showToast(data?.error || "Reassignment refused.", "error");
+              return;
+            }
 
+            document.getElementById("reassign-modal").classList.remove("show");
             showToast(`${bhc.name} now reports to ${rhu.name}.`, "success");
-            // The change alters what this portal itself may see, so re-read the
-            // scope as well as the table.
+
             PortalScope.clear();
             await PortalScope.refresh(db);
+            window.AdminData?.invalidate();
             await loadData();
-          } catch (err) {
-            console.error(err);
-            showToast(err.message || "Could not reassign this facility.", "error");
-            selectEl.value = bhc.parent_facility_id || "";
+          } catch (e) {
+            if (isMissingRpc(e)) migrationNotice();
+            else showToast(e.message || "Could not reassign this facility.", "error");
           } finally {
-            selectEl.disabled = false;
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-diagram-project"></i> Move facility';
           }
+        });
+
+        /* ── Retiring and restoring ────────────────────────────────────── */
+
+        window.openRetire = function (facilityId, makeActive) {
+          const f = facilities.find(x => String(x.facility_id) === String(facilityId));
+          if (!f) return;
+
+          document.getElementById("retire-facility-id").value = facilityId;
+          document.getElementById("retire-target-state").value = makeActive ? "1" : "0";
+          document.getElementById("retire-modal-title").textContent =
+            makeActive ? "Restore Facility" : "Retire Facility";
+
+          const impact = document.getElementById("retire-impact");
+          const btn = document.getElementById("retire-confirm");
+
+          if (makeActive) {
+            document.getElementById("retire-message").innerHTML =
+              `Bring <strong>${esc(f.name)}</strong> back into service?`;
+            impact.style.display = "";
+            impact.style.background = "var(--success-10)";
+            impact.style.color = "#15803d";
+            impact.innerHTML =
+              "<i class=\"fa-solid fa-circle-check\"></i> It will reappear in stock allocation, " +
+              "patient assignment and every report. Staff postings are not restored automatically — " +
+              "reassign them from Midwife Assignment.";
+            btn.className = "btn btn-sm btn-success";
+            btn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> Restore';
+          } else {
+            const midwives = midwifeCounts[f.facility_id] || 0;
+            const mothers = motherCounts[f.facility_id] || 0;
+            const children = childrenOf(f.facility_id).filter(c => c.is_active !== false).length;
+
+            document.getElementById("retire-message").innerHTML =
+              `Retire <strong>${esc(f.name)}</strong>?`;
+            impact.style.display = "";
+            impact.style.background = "var(--warning-10)";
+            impact.style.color = "#92400e";
+            impact.innerHTML =
+              "<strong>A facility is never deleted.</strong> Stock batches, transfers and patient " +
+              "assignments all point at it, so retiring means it stops appearing in allocation, " +
+              "assignment and new records — everything already filed against it stays readable.<br><br>" +
+              (children > 0 || mothers > 0 || midwives > 0
+                ? `<i class="fa-solid fa-triangle-exclamation"></i> This will be refused while it still ` +
+                  `has ${children} health centre${children === 1 ? "" : "s"}, ${mothers} mother` +
+                  `${mothers === 1 ? "" : "s"} and ${midwives} midwife${midwives === 1 ? "" : "s"} ` +
+                  `assigned, or any usable stock on the shelf.`
+                : "Nothing is currently assigned to it, so it can be retired now.");
+            btn.className = "btn btn-sm btn-danger";
+            btn.innerHTML = '<i class="fa-solid fa-box-archive"></i> Retire';
+          }
+
+          document.getElementById("retire-modal").classList.add("show");
         };
+
+        ["retire-modal-close", "retire-cancel"].forEach(id => {
+          document.getElementById(id).addEventListener("click", () =>
+            document.getElementById("retire-modal").classList.remove("show"));
+        });
+        document.getElementById("retire-modal").addEventListener("click", (e) => {
+          if (e.target === e.currentTarget) e.currentTarget.classList.remove("show");
+        });
+
+        document.getElementById("retire-confirm").addEventListener("click", async () => {
+          const facilityId = parseInt(document.getElementById("retire-facility-id").value, 10);
+          const makeActive = document.getElementById("retire-target-state").value === "1";
+          const f = facilities.find(x => String(x.facility_id) === String(facilityId));
+          const btn = document.getElementById("retire-confirm");
+          const original = btn.innerHTML;
+
+          btn.disabled = true;
+          btn.innerHTML = '<div class="btn-loader"></div>';
+
+          try {
+            const { data, error } = await db.rpc("set_facility_active", {
+              p_facility_id: facilityId,
+              p_active: makeActive,
+              p_actor_id: session.account_id,
+            });
+            if (error) throw error;
+            if (!data || data.success !== true) {
+              // A refusal here is the guard working. It names the count that
+              // blocked it, so show that rather than a generic failure.
+              showToast(data?.error || "That could not be changed.", "error");
+              return;
+            }
+
+            document.getElementById("retire-modal").classList.remove("show");
+            showToast(
+              makeActive ? `${f.name} is back in service.` : `${f.name} retired.`,
+              "success");
+
+            PortalScope.clear();
+            await PortalScope.refresh(db);
+            window.AdminData?.invalidate();
+            await loadData();
+          } catch (e) {
+            if (isMissingRpc(e)) migrationNotice();
+            else showToast(e.message || "That could not be changed.", "error");
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = original;
+          }
+        });
 
         document.getElementById("bhc-search").addEventListener("input", (e) => {
           bhcSearch = e.target.value;

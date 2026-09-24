@@ -168,6 +168,23 @@
     get facilityCode() { return scope.facility_code; },
 
     /**
+     * "MHO", "RHU" or "BHC" — the tier this account's own office sits at.
+     *
+     * account_type alone no longer answers this. An "admin" is a Rural Health
+     * Unit administrator or a barangay health centre administrator depending on
+     * which facility they are posted to, and the two differ in what they may
+     * do: an RHU administrator staffs several health centres, a BHC one staffs
+     * its own. Screens that branch on that read this rather than guessing.
+     */
+    get facilityType() { return scope.facility_type; },
+    get isBhcAdmin() {
+      return scope.role !== "mho" && scope.facility_type === "BHC";
+    },
+    get isRhuAdmin() {
+      return scope.role !== "mho" && scope.facility_type !== "BHC";
+    },
+
+    /**
      * Where this portal's own stock sits.
      * null for the MHO, whose depot is the municipal warehouse — the same rows
      * the page has always shown as "Central Warehouse".
@@ -567,7 +584,7 @@
 
     const li = document.createElement("li");
     li.innerHTML =
-      '<a href="facilities.html"><i class="fa-solid fa-hospital"></i> Rural Health Units</a>';
+      '<a href="facilities.html"><i class="fa-solid fa-hospital"></i> Facility Management</a>';
     list.insertBefore(li, inventoryLink.closest("li").nextSibling);
 
     if (window.location.pathname.endsWith("facilities.html")) {

@@ -133,52 +133,24 @@
               ></div>
 
               <form id="create-form" novalidate>
-                <!-- Account Type -->
+                <!-- Account Type
+
+                     Drawn from admin_provisioning_options() rather than hard
+                     coded, because what an officer may create depends on the
+                     rung they sit on: the Municipal Health Office appoints
+                     administrators, an administrator hires midwives. The same
+                     rules are enforced again in create_portal_account() — this
+                     list decides what is offered, not what is allowed. -->
                 <div class="form-group">
                   <label class="form-label"
                     >Account Type <span class="req">*</span></label
                   >
-                  <div style="display: flex; gap: 12px">
-                    <label class="type-radio" id="type-midwife-label">
-                      <input
-                        type="radio"
-                        name="account_type"
-                        value="midwife"
-                        checked
-                        id="type-midwife"
-                      />
-                      <span class="type-radio-box">
-                        <i class="fa-solid fa-user-nurse"></i>
-                        <span>Midwife</span>
-                      </span>
-                    </label>
-                    <label class="type-radio" id="type-admin-label">
-                      <input
-                        type="radio"
-                        name="account_type"
-                        value="admin"
-                        id="type-admin"
-                      />
-                      <span class="type-radio-box">
-                        <i class="fa-solid fa-shield-halved"></i>
-                        <span id="type-admin-text">Admin</span>
-                      </span>
-                    </label>
-                    <!-- Only the Municipal Health Office may create another
-                         municipal officer; portal-scope.js hides this for RHUs. -->
-                    <label class="type-radio" id="type-mho-label" data-mho-only>
-                      <input
-                        type="radio"
-                        name="account_type"
-                        value="mho"
-                        id="type-mho"
-                      />
-                      <span class="type-radio-box">
-                        <i class="fa-solid fa-city"></i>
-                        <span>Municipal Officer</span>
-                      </span>
-                    </label>
+                  <div id="role-options" style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div style="color: var(--text-secondary); font-size: 13px;">
+                      <i class="fa-solid fa-spinner fa-spin"></i> Checking what this office may create…
+                    </div>
                   </div>
+                  <p class="form-hint" id="role-hint" style="margin-top: 10px; display: none;"></p>
                 </div>
 
                 <!-- Name Row -->
@@ -269,18 +241,50 @@
                   </div>
                 </div>
 
-                <!-- BHC Designation Checkbox Selector — shown for midwife only, REQUIRED -->
-                <div class="form-group" id="bhc-group">
-                  <label class="form-label" id="bhc-group-label"
-                    >Designated Barangay Health Center (BHC) <span class="req">*</span></label
+
+                <!-- Facility posting
+
+                     A midwife serves one barangay health centre, and every
+                     health centre reports to exactly one Rural Health Unit. The
+                     form therefore asks for both rungs rather than showing a
+                     flat list of every centre in the municipality — which told
+                     an officer nothing about which RHU they were staffing, and
+                     meant a municipal officer picking from twenty-seven tiles
+                     with no idea which four belonged together.
+
+                     Whichever rung the officer has no choice about is filled in
+                     and shown read-only, so the posting always reads in full. -->
+                <div class="form-group" id="posting-group">
+                  <label class="form-label" id="posting-label"
+                    >Facility Assignment <span class="req">*</span></label
                   >
-                  <input type="hidden" id="bhc_id" required />
-                  <div id="bhc-checkbox-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-top: 8px;">
-                    <div style="color: var(--text-secondary); font-size: 13px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading facilities…</div>
+                  <input type="hidden" id="facility_id" />
+
+                  <!-- Rung 1: the Rural Health Unit -->
+                  <div id="posting-rhu-wrap" style="margin-top: 6px;">
+                    <label class="form-label" for="posting-rhu"
+                           style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">
+                      <i class="fa-solid fa-hospital" style="color: var(--brand-primary);"></i>
+                      Rural Health Unit
+                    </label>
+                    <select class="form-select" id="posting-rhu"></select>
+                    <div id="posting-rhu-fixed" style="display: none; padding: 11px 14px; border: 1.5px solid var(--border-primary); border-radius: var(--radius-md); background: var(--bg-secondary); font-size: 13.5px; font-weight: 600; color: var(--text-primary);"></div>
                   </div>
-                  <p class="form-hint" style="margin-top: 10px;" id="bhc-group-hint">
-                    <i class="fa-solid fa-circle-info"></i> Click a checkbox tile above to select the designated Barangay Health Center for this midwife.
-                  </p>
+
+                  <!-- Rung 2: the barangay health centre -->
+                  <div id="posting-bhc-wrap" style="margin-top: 16px;">
+                    <label class="form-label"
+                           style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">
+                      <i class="fa-solid fa-house-medical" style="color: var(--brand-primary);"></i>
+                      Barangay Health Center
+                    </label>
+                    <div id="bhc-checkbox-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-top: 8px;">
+                      <div style="color: var(--text-secondary); font-size: 13px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading facilities…</div>
+                    </div>
+                    <div id="posting-bhc-fixed" style="display: none; padding: 11px 14px; margin-top: 8px; border: 1.5px solid var(--border-primary); border-radius: var(--radius-md); background: var(--bg-secondary); font-size: 13.5px; font-weight: 600; color: var(--text-primary);"></div>
+                  </div>
+
+                  <p class="form-hint" style="margin-top: 12px;" id="posting-hint"></p>
                 </div>
 
                 <!-- Delivery alert (for manual copy fallback) -->
@@ -369,6 +373,24 @@
                 <span id="preview-type-badge" class="badge badge-midwife"
                   >midwife</span
                 >
+
+                <!-- The posting, in full, before anything is written. An
+                     officer should be able to read "Midwife at Tarcan BHC,
+                     under RHU III" off the card rather than reconstruct it
+                     from two controls further up the page. -->
+                <div
+                  id="preview-posting"
+                  style="
+                    display: none;
+                    margin-top: 14px;
+                    padding-top: 12px;
+                    border-top: 1px dashed var(--border-primary);
+                    font-size: 12.5px;
+                    line-height: 1.6;
+                    color: var(--text-secondary);
+                    text-align: left;
+                  "
+                ></div>
               </div>
             </div>
 
@@ -507,6 +529,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
+    <script src="data-cache.js"></script>
+    <script src="sidebar.js"></script>
     <script src="live-refresh.js"></script>
     <script src="notification-center.js"></script>
     <script>
@@ -583,137 +607,492 @@
           phoneInput.classList.remove("error");
           emailErrorMsg.style.display = "none";
           phoneErrorMsg.style.display = "none";
-          // Restore BHC group (midwife is default after reset)
-          bhcGroup.style.display = "";
-          updatePreviewBadge("midwife");
+          // The role radios are rebuilt rather than restored: which of them
+          // exist depends on the office, and form.reset() only returns the
+          // first one to checked.
+          const first = document.querySelector('input[name="account_type"]');
+          if (first) first.checked = true;
+          document.getElementById("facility_id").value = "";
+          syncTypeUi();
           updatePreview();
         });
 
-        /* ── Load BHC Checkboxes with DB Resilience ── */
-        // The tiles list the facilities this office may assign someone to: an RHU
-        // assigns midwives to its own barangay health centres, the Municipal
-        // Health Office assigns administrators to its Rural Health Units.
-        async function loadBhc() {
-          let bhcList = PortalScope.childFacilities.map(f => ({
-            bhc_id: f.facility_id,
-            bhc_name: f.name,
-            subtitle: f.address_detail || f.barangay || PortalScope.childTypeLabel,
-          }));
+        /* ── Who may create what, and where ────────────────────────────────
+           The form used to hard-code the answer and hide the radios it did not
+           want: `midwifeLabel.style.display = "none"` for a municipal officer,
+           a `data-mho-only` attribute for the other direction. Hiding a control
+           is not a permission — this page reaches PostgREST over the anon key,
+           so an RHU administrator could create a municipal officer by deleting
+           one attribute in the inspector.
 
-          if (bhcList.length === 0) {
-            // Database without 20260821_mho_tier.sql: read the BHC list directly.
-            try {
-              const { data: facs } = await db
-                .from("health_facilities")
-                .select("facility_id, name, barangay")
-                .eq("facility_type", "BHC")
-                .order("name");
-              bhcList = (facs || []).map(f => ({
-                bhc_id: f.facility_id,
-                bhc_name: f.name,
-                subtitle: f.barangay || "Barangay Health Center",
-              }));
-            } catch (e) {
-              console.warn("Facility load error:", e);
-            }
+           The list now comes from admin_provisioning_options(), and the write
+           goes through create_portal_account(), which checks the same rules
+           again. This code decides what is *offered*; the database decides what
+           is *allowed*.
+
+             Municipal Health Office  appoints RHU administrators,
+                                      BHC administrators, municipal officers
+             RHU administrator        hires midwives, at any centre under it
+             BHC administrator        hires midwives, at its own centre
+
+           A midwife is posted to one barangay health centre, and every centre
+           reports to exactly one Rural Health Unit, so both rungs are asked for
+           together — the RHU narrows the centre list, and whichever rung the
+           officer has no say over is filled in and shown read-only.
+           ──────────────────────────────────────────────────────────────── */
+
+        // { actor_tier, roles: [{value, posting, label, description, icon}],
+        //   facilities: [{facility_id, name, children: [...]}] }
+        let provisioning = null;
+        let provisioningFromDatabase = false;
+
+        function isMissingRpc(error) {
+          const code = String(error?.code || error?.status || "");
+          return code === "PGRST202" || code === "42883" || code === "404";
+        }
+
+        /**
+         * The same matrix, worked out in the browser, for a database that has
+         * not run 20260927_account_provisioning.sql yet.
+         *
+         * Barangay health centre administrators are deliberately absent: until
+         * that migration is applied assign_portal_account_facility() refuses
+         * any administrator not posted to an RHU, so offering the role would
+         * create an account that cannot be posted anywhere.
+         */
+        function fallbackProvisioning() {
+          const tier = PortalScope.isMho ? "mho" : (PortalScope.isBhcAdmin ? "bhc" : "rhu");
+
+          if (tier === "mho") {
+            const rhus = (PortalScope.childFacilities || []).map(f => ({
+              facility_id: f.facility_id,
+              name: f.name,
+              facility_code: f.facility_code,
+              barangay: f.barangay,
+              children: [],
+            }));
+            return {
+              actor_tier: "mho",
+              roles: [
+                { value: "admin", posting: "RHU", label: "RHU Administrator", icon: "fa-hospital",
+                  description: "Runs one Rural Health Unit and the health centres under it." },
+                { value: "mho", posting: "MHO", label: "Municipal Officer", icon: "fa-city",
+                  description: "Municipality-wide access, including facility management." },
+              ],
+              facilities: rhus,
+            };
           }
 
-          const container = document.getElementById("bhc-checkbox-container");
-          if (bhcList.length === 0) {
-            container.innerHTML =
-              '<div style="color: var(--text-secondary); font-size: 13px;">' +
-              '<i class="fa-solid fa-triangle-exclamation"></i> No facilities are registered under this office yet.</div>';
+          // One branch: this office, and the health centres reporting to it.
+          return {
+            actor_tier: tier,
+            roles: [
+              { value: "midwife", posting: "BHC", label: "Midwife", icon: "fa-user-nurse",
+                description: "Posted to one barangay health centre under this office." },
+            ],
+            facilities: [{
+              facility_id: PortalScope.facilityId,
+              name: PortalScope.facilityName || "This office",
+              facility_code: PortalScope.facilityCode,
+              children: (PortalScope.bhcFacilities || []).map(f => ({
+                facility_id: f.facility_id,
+                name: f.name,
+                barangay: f.barangay,
+              })),
+            }],
+          };
+        }
+
+        // Switched off for good the first time the RPC answers "no such
+        // function", so a portal deployed ahead of 20260927 stops asking on
+        // every live-refresh tick for the life of the deployment gap.
+        let provisioningRpcAvailable = true;
+
+        async function loadProvisioning() {
+          if (!provisioningRpcAvailable) {
+            provisioning = fallbackProvisioning();
+            return;
+          }
+          try {
+            const { data, error } = await db.rpc("admin_provisioning_options", {
+              p_actor_id: session.account_id,
+            });
+            if (error) throw error;
+            if (data && data.success === true) {
+              provisioning = data;
+              provisioningFromDatabase = true;
+              return;
+            }
+            // A definite refusal from the database — an unassigned account, say.
+            if (data && data.error) {
+              showAlert(data.error);
+              document.getElementById("submit-btn").disabled = true;
+            }
+          } catch (e) {
+            if (isMissingRpc(e)) provisioningRpcAvailable = false;
+            else console.warn("Provisioning options unavailable:", e.message || e);
+          }
+          provisioning = fallbackProvisioning();
+        }
+
+        /* ── Role cards ────────────────────────────────────────────────── */
+
+        // A role is now a pair: 'admin' at an RHU and 'admin' at a BHC are two
+        // different appointments sharing one account_type, so the radio value
+        // carries both halves.
+        function roleKey(role) { return role.value + ":" + role.posting; }
+
+        function currentRole() {
+          const checked = document.querySelector('input[name="account_type"]:checked');
+          if (!checked || !provisioning) return null;
+          return (provisioning.roles || []).find(r => roleKey(r) === checked.value) || null;
+        }
+
+        function renderRoleOptions() {
+          const host = document.getElementById("role-options");
+          const hint = document.getElementById("role-hint");
+          const roles = (provisioning && provisioning.roles) || [];
+
+          if (roles.length === 0) {
+            host.innerHTML =
+              '<div style="color: var(--error); font-size: 13px;">' +
+              '<i class="fa-solid fa-triangle-exclamation"></i> This account cannot create other accounts.</div>';
+            document.getElementById("submit-btn").disabled = true;
             return;
           }
 
-          container.innerHTML = bhcList.map(b => `
-            <label class="bhc-tile-card" style="display: flex; align-items: center; gap: 10px; background: var(--card-bg); border: 1.5px solid var(--border-primary); padding: 12px 14px; border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease;">
-              <input type="checkbox" name="bhc_checkbox" value="${b.bhc_id}" style="width: 18px; height: 18px; accent-color: var(--brand-primary); cursor: pointer;" onchange="selectBhcTile(${b.bhc_id}, this)" />
-              <div>
-                <div style="font-weight: 600; font-size: 13.5px; color: var(--text-primary);"><i class="fa-solid fa-hospital" style="color: var(--brand-primary); margin-right: 6px;"></i>${escHtml(b.bhc_name)}</div>
-                <div style="font-size: 11px; color: var(--text-secondary);">${escHtml(b.subtitle)}</div>
-              </div>
+          host.innerHTML = roles.map((r, i) => `
+            <label class="type-radio" title="${escHtml(r.description || "")}">
+              <input type="radio" name="account_type" value="${escHtml(roleKey(r))}" ${i === 0 ? "checked" : ""} />
+              <span class="type-radio-box">
+                <i class="fa-solid ${escHtml(r.icon || "fa-user")}"></i>
+                <span>${escHtml(r.label)}</span>
+              </span>
             </label>
-          `).join('');
+          `).join("");
+
+          // Say plainly what this office may and may not appoint, rather than
+          // leaving an officer wondering where the other roles went.
+          const tier = provisioning.actor_tier;
+          hint.style.display = "";
+          hint.innerHTML = '<i class="fa-solid fa-circle-info"></i> ' + (
+            tier === "mho"
+              ? "The Municipal Health Office appoints administrators. Midwives are created by the office that runs their health centre."
+              : "An administrator hires midwives. Only the Municipal Health Office can appoint administrators."
+          ) + (provisioningFromDatabase ? "" :
+            " <em>Barangay health centre administrators need " +
+            "<code>database/migrations/20260927_account_provisioning.sql</code>.</em>");
+
+          host.querySelectorAll('input[name="account_type"]').forEach(r => {
+            r.addEventListener("change", syncTypeUi);
+          });
         }
 
-        window.selectBhcTile = function(bhcId, checkboxEl) {
+        /* ── Facility cascade ──────────────────────────────────────────── */
+
+        function rhuOptions() {
+          return (provisioning && provisioning.facilities) || [];
+        }
+
+        function selectedRhu() {
+          const value = document.getElementById("posting-rhu").value;
+          return rhuOptions().find(r => String(r.facility_id) === String(value)) || null;
+        }
+
+        function setFacility(id) {
+          document.getElementById("facility_id").value = id == null ? "" : String(id);
+        }
+
+        function renderRhuSelect(fixed) {
+          const select = document.getElementById("posting-rhu");
+          const fixedBox = document.getElementById("posting-rhu-fixed");
+          const list = rhuOptions();
+
+          if (fixed) {
+            // One possible answer. Showing it as a disabled dropdown invites a
+            // click that does nothing, so it is shown as a statement instead.
+            const only = list[0];
+            select.style.display = "none";
+            fixedBox.style.display = "";
+            fixedBox.innerHTML = only
+              ? `<i class="fa-solid fa-hospital" style="color:var(--brand-primary); margin-right:7px;"></i>${escHtml(only.name)}` +
+                (only.facility_code ? ` <span style="font-weight:500; color:var(--text-secondary);">(${escHtml(only.facility_code)})</span>` : "")
+              : '<span style="color:var(--error);">No Rural Health Unit is assigned to this office.</span>';
+            select.innerHTML = only ? `<option value="${only.facility_id}" selected></option>` : "";
+            return;
+          }
+
+          fixedBox.style.display = "none";
+          select.style.display = "";
+          const previous = select.value;
+          select.innerHTML =
+            '<option value="">— Choose a Rural Health Unit —</option>' +
+            list.map(r =>
+              `<option value="${r.facility_id}">${escHtml(r.name)}` +
+              `${r.facility_code ? " (" + escHtml(r.facility_code) + ")" : ""}</option>`
+            ).join("");
+          if (previous && list.some(r => String(r.facility_id) === String(previous))) {
+            select.value = previous;
+          }
+        }
+
+        function renderBhcTiles() {
+          const container = document.getElementById("bhc-checkbox-container");
+          const rhu = selectedRhu();
+          const children = (rhu && rhu.children) || [];
+
+          if (!rhu) {
+            container.innerHTML =
+              '<div style="color: var(--text-secondary); font-size: 13px;">' +
+              '<i class="fa-solid fa-arrow-up"></i> Choose a Rural Health Unit first.</div>';
+            setFacility(null);
+            return;
+          }
+
+          if (children.length === 0) {
+            container.innerHTML =
+              '<div style="color: var(--warning); font-size: 13px;">' +
+              '<i class="fa-solid fa-triangle-exclamation"></i> ' + escHtml(rhu.name) +
+              ' has no barangay health centres yet. Register one on the Facility Management page first.</div>';
+            setFacility(null);
+            return;
+          }
+
+          container.innerHTML = children.map(b => `
+            <label class="bhc-tile-card" style="display: flex; align-items: center; gap: 10px; background: var(--card-bg); border: 1.5px solid var(--border-primary); padding: 12px 14px; border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease;">
+              <input type="checkbox" name="bhc_checkbox" value="${b.facility_id}" style="width: 18px; height: 18px; accent-color: var(--brand-primary); cursor: pointer;" onchange="selectBhcTile(${b.facility_id}, this)" />
+              <div>
+                <div style="font-weight: 600; font-size: 13.5px; color: var(--text-primary);"><i class="fa-solid fa-house-medical" style="color: var(--brand-primary); margin-right: 6px;"></i>${escHtml(b.name)}</div>
+                <div style="font-size: 11px; color: var(--text-secondary);">${escHtml(b.barangay || "Barangay Health Center")}</div>
+              </div>
+            </label>
+          `).join("");
+          setFacility(null);
+        }
+
+        window.selectBhcTile = function (bhcId, checkboxEl) {
           document.querySelectorAll('input[name="bhc_checkbox"]').forEach(cb => {
             if (cb !== checkboxEl) cb.checked = false;
-            const card = cb.closest('.bhc-tile-card');
+            const card = cb.closest(".bhc-tile-card");
             if (card) {
-              card.style.borderColor = cb.checked ? 'var(--brand-primary)' : 'var(--border-primary)';
-              card.style.background = cb.checked ? 'rgba(255, 104, 165, 0.08)' : 'var(--card-bg)';
+              card.style.borderColor = cb.checked ? "var(--brand-primary)" : "var(--border-primary)";
+              card.style.background = cb.checked ? "rgba(255, 104, 165, 0.08)" : "var(--card-bg)";
             }
           });
-          const hiddenInput = document.getElementById("bhc_id");
-          hiddenInput.value = checkboxEl.checked ? bhcId : "";
+          setFacility(checkboxEl.checked ? bhcId : null);
+          updatePreview();
         };
 
-        /* ── Which account types this office may create ── */
-        //
-        // A Rural Health Unit staffs its own barangay health centres: midwives,
-        // plus fellow administrators for its own RHU. The Municipal Health
-        // Office instead appoints one administrator per RHU, and may add another
-        // municipal officer. Midwives are never created from municipal level,
-        // because a midwife belongs to a BHC and the MHO does not run one.
+        document.getElementById("posting-rhu").addEventListener("change", () => {
+          const role = currentRole();
+          if (role && role.posting === "RHU") {
+            setFacility(document.getElementById("posting-rhu").value || null);
+          } else {
+            renderBhcTiles();
+          }
+          updatePreview();
+        });
+
+        /* ── Which rungs this appointment needs ────────────────────────── */
+
+        function syncTypeUi() {
+          const role = currentRole();
+          const group = document.getElementById("posting-group");
+          const rhuWrap = document.getElementById("posting-rhu-wrap");
+          const bhcWrap = document.getElementById("posting-bhc-wrap");
+          const bhcFixed = document.getElementById("posting-bhc-fixed");
+          const label = document.getElementById("posting-label");
+          const hint = document.getElementById("posting-hint");
+
+          if (!role) return;
+          updatePreviewBadge(role.value);
+
+          const tier = provisioning.actor_tier;
+          // An RHU administrator has one RHU; a BHC administrator has one of
+          // each. Neither is a choice, so neither is offered as one.
+          const rhuIsFixed = tier !== "mho";
+          const bhcIsFixed = tier === "bhc";
+
+          if (role.posting === "MHO") {
+            // A municipal officer sits at the Municipal Health Office, and
+            // there is exactly one of those.
+            group.style.display = "";
+            rhuWrap.style.display = "none";
+            bhcWrap.style.display = "none";
+            bhcFixed.style.display = "none";
+            label.innerHTML = "Facility Assignment";
+            hint.innerHTML =
+              '<i class="fa-solid fa-circle-info"></i> A municipal officer is posted to the ' +
+              "Municipal Health Office and sees the whole municipality. There is nothing to choose.";
+            setFacility(null);
+            updatePreview();
+            return;
+          }
+
+          group.style.display = "";
+          rhuWrap.style.display = "";
+          renderRhuSelect(rhuIsFixed);
+
+          if (role.posting === "RHU") {
+            // An RHU administrator is posted to the Rural Health Unit itself,
+            // so the second rung does not apply.
+            bhcWrap.style.display = "none";
+            bhcFixed.style.display = "none";
+            label.innerHTML = 'Rural Health Unit to run <span class="req">*</span>';
+            hint.innerHTML =
+              '<i class="fa-solid fa-circle-info"></i> This administrator will see only that ' +
+              "Rural Health Unit's stock, staff and patients, and the health centres reporting to it.";
+            setFacility(rhuIsFixed ? (rhuOptions()[0] || {}).facility_id : (document.getElementById("posting-rhu").value || null));
+            updatePreview();
+            return;
+          }
+
+          /* posting === "BHC": both rungs. */
+          bhcWrap.style.display = "";
+          label.innerHTML = 'Facility Assignment <span class="req">*</span>';
+
+          if (bhcIsFixed) {
+            const only = (rhuOptions()[0] || {}).children || [];
+            const bhc = only[0];
+            document.getElementById("bhc-checkbox-container").style.display = "none";
+            bhcFixed.style.display = "";
+            bhcFixed.innerHTML = bhc
+              ? `<i class="fa-solid fa-house-medical" style="color:var(--brand-primary); margin-right:7px;"></i>${escHtml(bhc.name)}` +
+                (bhc.barangay ? ` <span style="font-weight:500; color:var(--text-secondary);">· ${escHtml(bhc.barangay)}</span>` : "")
+              : '<span style="color:var(--error);">This account has no health centre assigned.</span>';
+            setFacility(bhc ? bhc.facility_id : null);
+          } else {
+            document.getElementById("bhc-checkbox-container").style.display = "";
+            bhcFixed.style.display = "none";
+            renderBhcTiles();
+          }
+
+          hint.innerHTML = role.value === "midwife"
+            ? '<i class="fa-solid fa-circle-info"></i> A midwife serves exactly one barangay health ' +
+              "centre. Pick the Rural Health Unit first — it decides which centres are listed."
+            : '<i class="fa-solid fa-circle-info"></i> This administrator will run that barangay ' +
+              "health centre and the midwives posted there, and will see nothing above it.";
+
+          updatePreview();
+        }
+
+
+        /**
+         * Create the account without create_portal_account().
+         *
+         * For a database that has not run 20260927_account_provisioning.sql.
+         * This is the flow the page has always used, with one change: a failed
+         * facility posting is now a failure, not a console warning. An account
+         * with no posting signs in to an empty portal, and leaving it in place
+         * while telling the officer "created successfully" is worse than not
+         * creating it at all.
+         *
+         * Returns the new account row, or null after showing why not.
+         */
+        async function createAccountWithoutRpc(input) {
+          const { type, first, middle, last, ext, email, phone, hash, facilityId, posting } = input;
+
+          const { data: existing } = await db
+            .from("accounts")
+            .select("account_id")
+            .eq("email_address", email)
+            .limit(1);
+          if (existing && existing.length > 0) {
+            showAlert("An account with this email already exists.");
+            return null;
+          }
+
+          const payload = {
+            email_address: email,
+            password_hash: hash,
+            account_type: type,
+            first_name: first,
+            middle_name: middle || null,
+            last_name: last,
+            extension_name: ext || null,
+            phone_number: phone || null,
+            is_verified: true,
+            status: "active",
+            is_temporary_password: true,
+            created_by: String(session.account_id),
+          };
+
+          let res = await db.from("accounts").insert(payload).select().single();
+          if (res.error && String(res.error.message || "").includes("created_by")) {
+            delete payload.created_by;
+            res = await db.from("accounts").insert(payload).select().single();
+          }
+          if (res.error) throw res.error;
+          const account = res.data;
+
+          // Where this account is posted. A municipal officer goes to the
+          // Municipal Health Office, which the portal already knows; everyone
+          // else goes to the facility the form asked for.
+          const target = posting === "MHO" ? PortalScope.facilityId : facilityId;
+
+          if (type === "midwife") {
+            const midwifeRes = await db.from("midwives").insert({
+              account_id: account.account_id,
+              assigned_bhc_id: target,
+            });
+            if (midwifeRes.error) {
+              await rollbackAccount(account.account_id);
+              showAlert("Could not create the midwife record: " + midwifeRes.error.message);
+              return null;
+            }
+            const postRes = await db.from("facility_assignments").insert({
+              account_id: account.account_id,
+              facility_id: target,
+              is_active: true,
+            });
+            if (postRes.error) {
+              await rollbackAccount(account.account_id);
+              showAlert("Could not post this midwife to the health centre: " + postRes.error.message);
+              return null;
+            }
+          } else {
+            const { data: assignRes, error: assignErr } = await db.rpc(
+              "assign_portal_account_facility",
+              { p_account_id: account.account_id, p_facility_id: target },
+            );
+            if (assignErr || !assignRes || assignRes.success !== true) {
+              await rollbackAccount(account.account_id);
+              showAlert(
+                (assignRes && assignRes.error) ||
+                (assignErr && assignErr.message) ||
+                "Could not assign this account to a facility.",
+              );
+              return null;
+            }
+          }
+
+          return account;
+        }
+
+        /**
+         * Undo a half-made account.
+         *
+         * Without a transaction the account row is already committed by the
+         * time a later step fails, so the only way not to leave a broken login
+         * behind is to remove it. Safe to delete outright: it is seconds old
+         * and nothing clinical can reference it yet.
+         */
+        async function rollbackAccount(accountId) {
+          try {
+            await db.from("accounts").delete().eq("account_id", accountId);
+          } catch (e) {
+            console.warn("Could not roll back the partially created account:", e.message || e);
+          }
+        }
+
+        /* ── Start-up ──────────────────────────────────────────────────── */
         (async () => {
           await PortalScope.refresh(db);
           PortalScope.applyChrome();
-
-          const adminText = document.getElementById("type-admin-text");
-          if (adminText) {
-            adminText.textContent = PortalScope.isMho ? "RHU Administrator" : "RHU Admin";
-          }
-
-          const midwifeLabel = document.getElementById("type-midwife-label");
-          if (midwifeLabel && PortalScope.isMho) {
-            midwifeLabel.style.display = "none";
-            document.getElementById("type-admin").checked = true;
-          }
-
-          await loadBhc();
+          await loadProvisioning();
+          renderRoleOptions();
           syncTypeUi();
         })();
-
-        /* ── Account type toggle ── */
-        const bhcGroup = document.getElementById("bhc-group");
-
-        // A midwife is posted to a BHC; an RHU administrator is posted to an RHU.
-        // Both use the same tile picker — only the wording and the target list
-        // differ, and PortalScope already decides the list.
-        function typeNeedsFacility(type) {
-          if (type === "midwife") return true;
-          if (type === "admin") return PortalScope.isMho;
-          return false; // a municipal officer is assigned to the MHO itself
-        }
-
-        function syncTypeUi() {
-          const checked = document.querySelector('input[name="account_type"]:checked');
-          const type = checked ? checked.value : "midwife";
-          const needsFacility = typeNeedsFacility(type);
-
-          bhcGroup.style.display = needsFacility ? "" : "none";
-          document.getElementById("bhc_id").required = needsFacility;
-
-          const label = document.getElementById("bhc-group-label");
-          const hint = document.getElementById("bhc-group-hint");
-          if (needsFacility && label && hint) {
-            if (type === "midwife") {
-              label.innerHTML = 'Designated Barangay Health Center (BHC) <span class="req">*</span>';
-              hint.innerHTML = '<i class="fa-solid fa-circle-info"></i> Select the Barangay Health Center this midwife will serve. A midwife belongs to exactly one BHC.';
-            } else {
-              label.innerHTML = 'Assigned Rural Health Unit <span class="req">*</span>';
-              hint.innerHTML = '<i class="fa-solid fa-circle-info"></i> Select the Rural Health Unit this administrator will run. They will see only that RHU\'s stock, staff and patients.';
-            }
-          }
-
-          updatePreviewBadge(type);
-        }
-
-        document.querySelectorAll('input[name="account_type"]').forEach((r) => {
-          r.addEventListener("change", syncTypeUi);
-        });
 
         function updatePreviewBadge(type) {
           const b = document.getElementById("preview-type-badge");
@@ -776,6 +1155,46 @@
           document.getElementById("preview-name").textContent =
             [fn, ln].filter(Boolean).join(" ") || "New Account";
           document.getElementById("preview-email").textContent = em || "—";
+          updatePreviewPosting();
+        }
+
+        /** The facility line on the preview card: which RHU, and which centre under it. */
+        function updatePreviewPosting() {
+          const host = document.getElementById("preview-posting");
+          if (!host) return;
+          const role = typeof currentRole === "function" ? currentRole() : null;
+          if (!role || !provisioning) { host.style.display = "none"; return; }
+
+          const row = (icon, label, value) =>
+            `<div style="display:flex; gap:8px; align-items:baseline; margin-top:4px;">` +
+            `<i class="fa-solid ${icon}" style="color:var(--brand-primary); width:14px;"></i>` +
+            `<span><span style="color:var(--text-secondary);">${label}</span> ` +
+            `<strong style="color:var(--text-primary);">${escHtml(value)}</strong></span></div>`;
+
+          if (role.posting === "MHO") {
+            host.style.display = "";
+            host.innerHTML = row("fa-city", "Posted to", "Municipal Health Office");
+            return;
+          }
+
+          const rhu = rhuOptions().find(
+            r => String(r.facility_id) === String(document.getElementById("posting-rhu").value));
+          const facilityId = document.getElementById("facility_id").value;
+
+          let html = "";
+          if (rhu) html += row("fa-hospital", "Rural Health Unit", rhu.name);
+
+          if (role.posting === "BHC") {
+            const bhc = (rhu && rhu.children || []).find(
+              c => String(c.facility_id) === String(facilityId));
+            html += bhc
+              ? row("fa-house-medical", "Health centre", bhc.name)
+              : `<div style="margin-top:4px; color:var(--warning);">` +
+                `<i class="fa-solid fa-circle-exclamation"></i> No health centre chosen yet</div>`;
+          }
+
+          host.style.display = html ? "" : "none";
+          host.innerHTML = html;
         }
         ["first_name", "last_name"].forEach((id) =>
           document.getElementById(id).addEventListener("input", updatePreview),
@@ -829,7 +1248,9 @@
 
         async function sendCredentialsEmail(email, pwd, first, last, type) {
           try {
-            const roleName = type === "midwife" ? "Midwife" : "Administrator";
+            const roleName = type === "midwife" ? "Midwife"
+                           : type === "mho" ? "Municipal Officer"
+                           : "Administrator";
             const loginInstructions = type === "midwife" 
               ? `<strong>To access your account:</strong>
                 <ol>
@@ -969,7 +1390,9 @@
             return false;
           }
           const formatted = formatPhilippineNumber(phone);
-          const roleName = type === "midwife" ? "Midwife" : "Admin";
+          const roleName = type === "midwife" ? "Midwife"
+                         : type === "mho" ? "Municipal Officer"
+                         : "Administrator";
           const message = `Welcome to INAAGAPAY! An administrator created a ${roleName} account for you. Your temporary password is: ${pwd}\n\nPlease change it on your first login.`;
 
           try {
@@ -1050,16 +1473,18 @@
             const deliveryAlert = document.getElementById("delivery-alert");
             deliveryAlert.style.display = "none";
 
-            const type = document.querySelector(
-              'input[name="account_type"]:checked',
-            ).value;
+            const role = currentRole();
+            if (!role) {
+              return showAlert("Choose an account type.");
+            }
+            const type = role.value;
             const first = document.getElementById("first_name").value.trim();
             const middle = document.getElementById("middle_name").value.trim();
             const last = document.getElementById("last_name").value.trim();
             const ext = document.getElementById("extension_name").value.trim();
             const email = document.getElementById("email_address").value.trim().toLowerCase();
             const phone = document.getElementById("phone_number").value.trim();
-            const bhcId = document.getElementById("bhc_id").value;
+            const facilityId = document.getElementById("facility_id").value;
 
             /* Validation */
             const isEmailValid = validateEmail();
@@ -1074,11 +1499,14 @@
             if (!isPhoneValid) {
               return showAlert("Please enter a valid Philippine phone number (starts with 09 and is 11 digits).");
             }
-            if (typeNeedsFacility(type) && !bhcId) {
+            // Only a municipal officer has no facility to choose: there is one
+            // Municipal Health Office and the database resolves it.
+            if (role.posting !== "MHO" && !facilityId) {
               return showAlert(
-                type === "midwife"
-                  ? "Please select a Barangay Health Center for the midwife. Midwives can only be assigned to ONE BHC."
-                  : "Please select the Rural Health Unit this administrator will run.",
+                role.posting === "BHC"
+                  ? "Choose the Rural Health Unit and then the barangay health centre for this " +
+                    (type === "midwife" ? "midwife." : "administrator.")
+                  : "Choose the Rural Health Unit this administrator will run.",
               );
             }
 
@@ -1086,121 +1514,72 @@
             btn.disabled = true;
             btn.innerHTML = '<div class="btn-loader"></div> Creating…';
 
+            let pwd = null;
+
             try {
-              /* Check email uniqueness */
-              const { data: existing } = await db
-                .from("accounts")
-                .select("account_id")
-                .eq("email_address", email)
-                .limit(1);
-              if (existing && existing.length > 0) {
-                return showAlert("An account with this email already exists.");
-              }
-
-              /* Auto-generate password */
-              const pwd = generateSecurePassword();
-
-              /* Hash password */
+              /* Auto-generate password, then hash it here — the portal has
+                 never sent a plaintext password to the database. */
+              pwd = generateSecurePassword();
               const bcrypt = dcodeIO.bcrypt;
               const hash = await bcrypt.hash(pwd, 10);
 
-              /* Insert account with resilient created_by fallback */
-              const insertPayload = {
-                email_address: email,
-                password_hash: hash,
-                account_type: type,
-                first_name: first,
-                middle_name: middle || null,
-                last_name: last,
-                extension_name: ext || null,
-                phone_number: phone || null,
-                is_verified: true,
-                status: "active",
-                is_temporary_password: true,
-                created_by: String(session.account_id)
-              };
+              /* ── The write ───────────────────────────────────────────────
+                 create_portal_account() does the whole thing in one
+                 transaction: the account row, the midwives row, and the
+                 facility posting. It used to be four separate writes from
+                 here, three of them wrapped in try/catch blocks that only
+                 reached console.warn — so a failed posting produced an account
+                 that could sign in and see nothing, with no sign anything had
+                 gone wrong.
 
-              let res = await db.from("accounts").insert(insertPayload).select().single();
-              let newAcct = res.data;
-              let acctErr = res.error;
+                 It also re-checks who may create what. The form is drawn from
+                 the same rules, but a form is not a permission. */
+              let created = null;
+              let usedRpc = false;
 
-              if (acctErr && acctErr.message && acctErr.message.includes("created_by")) {
-                delete insertPayload.created_by;
-                res = await db.from("accounts").insert(insertPayload).select().single();
-                newAcct = res.data;
-                acctErr = res.error;
+              try {
+                const { data, error } = await db.rpc("create_portal_account", {
+                  p_actor_id: session.account_id,
+                  p_account_type: type,
+                  p_first_name: first,
+                  p_last_name: last,
+                  p_email: email,
+                  p_password_hash: hash,
+                  p_facility_id: facilityId ? parseInt(facilityId, 10) : null,
+                  p_middle_name: middle || null,
+                  p_extension_name: ext || null,
+                  p_phone: phone || null,
+                });
+                if (error) throw error;
+                usedRpc = true;
+
+                if (!data || data.success !== true) {
+                  // A refusal is the rule working. Show the database's own
+                  // sentence — it is the one that knows the e-mail is taken or
+                  // the health centre belongs to another RHU.
+                  return showAlert(data?.error || "That account could not be created.");
+                }
+                created = { account_id: data.account_id };
+              } catch (rpcErr) {
+                if (!isMissingRpc(rpcErr)) throw rpcErr;
               }
 
-              if (acctErr) throw acctErr;
+              if (!usedRpc) {
+                created = await createAccountWithoutRpc({
+                  type, first, middle, last, ext, email, phone, hash,
+                  facilityId: facilityId ? parseInt(facilityId, 10) : null,
+                  posting: role.posting,
+                });
+                if (!created) return; // createAccountWithoutRpc showed the reason
+              }
+
+              const newAcct = created;
               window.lastCreatedAccountId = newAcct ? newAcct.account_id : null;
 
-              /* If midwife, insert into midwives (assigned_bhc_id) AND facility_assignments */
-              if (type === "midwife") {
-                const parsedBhc = parseInt(bhcId);
-                
-                try {
-                  const { data: existingMidwife } = await db
-                    .from("midwives")
-                    .select("midwife_id")
-                    .eq("account_id", newAcct.account_id)
-                    .limit(1);
-                  
-                  if (existingMidwife && existingMidwife.length > 0) {
-                    await db.from("midwives").update({ assigned_bhc_id: parsedBhc }).eq("account_id", newAcct.account_id);
-                  } else {
-                    await db.from("midwives").insert({
-                      account_id: newAcct.account_id,
-                      assigned_bhc_id: parsedBhc,
-                    });
-                  }
-                } catch (mErr) { console.warn("midwives insert note:", mErr); }
-
-                // Populate facility_assignments table as fallback
-                try {
-                  await db.from("facility_assignments").insert({
-                    account_id: newAcct.account_id,
-                    facility_id: parsedBhc,
-                    is_active: true
-                  });
-                } catch (fErr) { console.warn("facility_assignments insert note:", fErr); }
-              }
-
-              /* Portal accounts are scoped by the office they are assigned to.
-                 An RHU administrator created by the MHO gets the chosen RHU; one
-                 created by an RHU inherits that RHU; a municipal officer gets the
-                 Municipal Health Office. Without this the new account would sign
-                 in with no scope at all. */
-              if (type === "admin" || type === "mho") {
-                const targetFacility =
-                  type === "mho" ? PortalScope.facilityId
-                    : (PortalScope.isMho ? parseInt(bhcId) : PortalScope.facilityId);
-
-                if (targetFacility) {
-                  try {
-                    const { data: assignRes, error: assignErr } = await db.rpc(
-                      "assign_portal_account_facility",
-                      { p_account_id: newAcct.account_id, p_facility_id: targetFacility }
-                    );
-                    if (assignErr) throw assignErr;
-                    if (assignRes && assignRes.success !== true) {
-                      console.warn("Facility assignment refused:", assignRes.error);
-                    }
-                  } catch (aErr) {
-                    console.warn("Portal facility assignment note:", aErr);
-                  }
-                }
-              }
-
-              /* Audit log - Protect Patient Privacy under Data Privacy Act (RA 10173) */
-              await db.from("audit_trail").insert({
-                account_id: session.account_id,
-                action: "create_account",
-                table_name: "accounts",
-                description: type === "mother"
-                  ? `Created patient account for Patient #${newAcct?.account_id || 'new'}`
-                  : `Created ${type} account for ${first} ${last} (${email})${type === "midwife" ? " assigned to BHC ID: " + bhcId : ""}`,
-                new_data: { account_type: type, bhc_id: type === "midwife" ? bhcId : null },
-              });
+              /* No audit_trail insert here. trg_audit_account_change fires on
+                 the INSERT into accounts and files the entry itself, with a
+                 fuller record than the hand-written one it replaced. Writing
+                 both put every created account in the trail twice. */
 
               /* Send Notifications */
               let emailSent = false;
@@ -1276,10 +1655,18 @@
             '<i class="fa-solid fa-user-plus"></i> Create Account';
         }
 
+        // A facility registered or retired elsewhere changes what this form may
+        // offer, so the whole options document is re-read rather than just the
+        // health centre tiles. Skipped while the officer is mid-form: redrawing
+        // the role cards under someone's cursor would lose what they had picked.
         window.AdminLiveRefresh?.start({
           db,
-          tables: ["bhc", "health_facilities"],
-          refresh: loadBhc,
+          tables: ["health_facilities", "facility_assignments"],
+          refresh: async () => {
+            await loadProvisioning();
+            renderRoleOptions();
+            syncTypeUi();
+          },
           canRefresh: (source) =>
             source === "manual" ||
             !document.getElementById("create-form")?.matches(":focus-within"),

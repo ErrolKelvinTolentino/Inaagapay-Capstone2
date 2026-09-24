@@ -16,7 +16,9 @@ class GroqService {
   static const String _visionModel = 'qwen/qwen3.6-27b';
   static const List<String> _visionModelFallbacks = [
     'qwen/qwen3.6-27b',
+    'qwen/qwen3.8-27b'
   ];
+
   /// Text reasoning chain, largest first.
   ///
   /// Groq removed the whole Llama 3.x line — `llama-3.3-70b-versatile`,
@@ -175,7 +177,8 @@ class GroqService {
   }
 
   /// Fast, targeted OCR summary extraction for ultrasound records
-  Future<Map<String, dynamic>> extractUltrasoundSummaryOCR(List<XFile> imageFiles) async {
+  Future<Map<String, dynamic>> extractUltrasoundSummaryOCR(
+      List<XFile> imageFiles) async {
     if (imageFiles.isEmpty) return {};
     try {
       final apiKey = _getApiKey();
@@ -211,7 +214,10 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
       _log('📄 Raw Ultrasound OCR Vision output: $rawOutput');
 
       // Strip thinking process tags (e.g. <think>...</think>) produced by reasoning models
-      String cleaned = rawOutput.replaceAll(RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false), '').trim();
+      String cleaned = rawOutput
+          .replaceAll(
+              RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false), '')
+          .trim();
 
       final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(cleaned);
       if (jsonMatch != null) {
@@ -226,8 +232,12 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
       }
 
       // Fallback regex parsing if fields are missing or JSON parse failed
-      if (data['ultrasound_date'] == null || data['ultrasound_date'].toString().isEmpty) {
-        final dateMatch = RegExp(r'(?:ultrasound_date|Date|DATE)[\s\*:="]*([A-Za-z0-9\s,-/]+)', caseSensitive: false).firstMatch(rawOutput);
+      if (data['ultrasound_date'] == null ||
+          data['ultrasound_date'].toString().isEmpty) {
+        final dateMatch = RegExp(
+                r'(?:ultrasound_date|Date|DATE)[\s\*:="]*([A-Za-z0-9\s,-/]+)',
+                caseSensitive: false)
+            .firstMatch(rawOutput);
         if (dateMatch != null) {
           final dtStr = dateMatch.group(1)!.trim().replaceAll('"', '');
           final parsedDt = _parseFlexibleDate(dtStr);
@@ -240,53 +250,85 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
       }
 
       if (data['ega_weeks'] == null) {
-        final aogMatch = RegExp(r'(?:ega_weeks|AOG|Age)[\s\*:="]*(\d{1,2})', caseSensitive: false).firstMatch(rawOutput);
+        final aogMatch = RegExp(r'(?:ega_weeks|AOG|Age)[\s\*:="]*(\d{1,2})',
+                caseSensitive: false)
+            .firstMatch(rawOutput);
         if (aogMatch != null) {
           data['ega_weeks'] = int.tryParse(aogMatch.group(1)!);
         }
       }
 
       if (data['ega_days'] == null) {
-        final daysMatch = RegExp(r'(?:ega_days)[\s\*:="]*(\d{1,2})', caseSensitive: false).firstMatch(rawOutput);
+        final daysMatch =
+            RegExp(r'(?:ega_days)[\s\*:="]*(\d{1,2})', caseSensitive: false)
+                .firstMatch(rawOutput);
         if (daysMatch != null) {
           data['ega_days'] = int.tryParse(daysMatch.group(1)!);
         }
       }
 
-      if (data['institution_name'] == null || data['institution_name'].toString().isEmpty) {
-        final instMatch = RegExp(r'(?:institution_name|institution)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (instMatch != null && _cleanExtractedText(instMatch.group(1)) != null) {
+      if (data['institution_name'] == null ||
+          data['institution_name'].toString().isEmpty) {
+        final instMatch = RegExp(
+                r'(?:institution_name|institution)[\s\*:="]*"?([^"\n\r\*]+)"?',
+                caseSensitive: false)
+            .firstMatch(rawOutput);
+        if (instMatch != null &&
+            _cleanExtractedText(instMatch.group(1)) != null) {
           data['institution_name'] = instMatch.group(1)!.trim();
         } else {
-          final headerMatch = RegExp(r'([A-Za-z\s]+(?:diagnostic center|diagnostic|center|clinic|hospital|medical center))', caseSensitive: false).firstMatch(rawOutput);
+          final headerMatch = RegExp(
+                  r'([A-Za-z\s]+(?:diagnostic center|diagnostic|center|clinic|hospital|medical center))',
+                  caseSensitive: false)
+              .firstMatch(rawOutput);
           if (headerMatch != null) {
             data['institution_name'] = headerMatch.group(1)!.trim();
           }
         }
       }
 
-      if (data['location_facility'] == null || data['location_facility'].toString().isEmpty) {
-        final locMatch = RegExp(r'(?:location_facility|location|facility)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (locMatch != null && _cleanExtractedText(locMatch.group(1)) != null) {
+      if (data['location_facility'] == null ||
+          data['location_facility'].toString().isEmpty) {
+        final locMatch = RegExp(
+                r'(?:location_facility|location|facility)[\s\*:="]*"?([^"\n\r\*]+)"?',
+                caseSensitive: false)
+            .firstMatch(rawOutput);
+        if (locMatch != null &&
+            _cleanExtractedText(locMatch.group(1)) != null) {
           data['location_facility'] = locMatch.group(1)!.trim();
         } else {
-          final addrMatch = RegExp(r'(\d+[\w\s,]+(?:Pampanga|Mexico|Santa Maria|San Fernando|Angeles|Manila|Bulacan|Cavite|Laguna|Batangas|Rizal|[A-Z][a-z]+))', caseSensitive: false).firstMatch(rawOutput);
+          final addrMatch = RegExp(
+                  r'(\d+[\w\s,]+(?:Pampanga|Mexico|Santa Maria|San Fernando|Angeles|Manila|Bulacan|Cavite|Laguna|Batangas|Rizal|[A-Z][a-z]+))',
+                  caseSensitive: false)
+              .firstMatch(rawOutput);
           if (addrMatch != null) {
             data['location_facility'] = addrMatch.group(1)!.trim();
           }
         }
       }
 
-      if (data['sonologist_name'] == null || data['sonologist_name'].toString().isEmpty || data['sonologist_name'].toString().toUpperCase().contains('RAHMI')) {
-        final physMatch = RegExp(r'(?:referring physician|physician|doctor|attending)[\s\*:="]*"?([A-Za-z\.\s-]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (physMatch != null && _cleanExtractedText(physMatch.group(1)) != null) {
+      if (data['sonologist_name'] == null ||
+          data['sonologist_name'].toString().isEmpty ||
+          data['sonologist_name'].toString().toUpperCase().contains('RAHMI')) {
+        final physMatch = RegExp(
+                r'(?:referring physician|physician|doctor|attending)[\s\*:="]*"?([A-Za-z\.\s-]+)"?',
+                caseSensitive: false)
+            .firstMatch(rawOutput);
+        if (physMatch != null &&
+            _cleanExtractedText(physMatch.group(1)) != null) {
           data['sonologist_name'] = physMatch.group(1)!.trim();
         } else {
-          final docMatch = RegExp(r'(?:sonologist_name|sonologist|physician)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-          if (docMatch != null && _cleanExtractedText(docMatch.group(1)) != null) {
+          final docMatch = RegExp(
+                  r'(?:sonologist_name|sonologist|physician)[\s\*:="]*"?([^"\n\r\*]+)"?',
+                  caseSensitive: false)
+              .firstMatch(rawOutput);
+          if (docMatch != null &&
+              _cleanExtractedText(docMatch.group(1)) != null) {
             data['sonologist_name'] = docMatch.group(1)!.trim();
           } else {
-            final docMatch2 = RegExp(r'(?:DR\.|DOCTOR)[\sA-Za-z\.-]+', caseSensitive: false).firstMatch(rawOutput);
+            final docMatch2 =
+                RegExp(r'(?:DR\.|DOCTOR)[\sA-Za-z\.-]+', caseSensitive: false)
+                    .firstMatch(rawOutput);
             if (docMatch2 != null) {
               data['sonologist_name'] = docMatch2.group(0)!.trim();
             }
@@ -302,17 +344,24 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
         }
       }
 
-      if (data['sonologist_remarks'] == null || data['sonologist_remarks'].toString().isEmpty) {
-        final remMatch = RegExp(r'(?:sonologist_remarks|remarks|IMPRESSION)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (remMatch != null && _cleanExtractedText(remMatch.group(1)) != null) {
+      if (data['sonologist_remarks'] == null ||
+          data['sonologist_remarks'].toString().isEmpty) {
+        final remMatch = RegExp(
+                r'(?:sonologist_remarks|remarks|IMPRESSION)[\s\*:="]*"?([^"\n\r\*]+)"?',
+                caseSensitive: false)
+            .firstMatch(rawOutput);
+        if (remMatch != null &&
+            _cleanExtractedText(remMatch.group(1)) != null) {
           data['sonologist_remarks'] = remMatch.group(1)!.trim();
         }
       }
 
       data['institution_name'] = _cleanExtractedText(data['institution_name']);
-      data['location_facility'] = _cleanExtractedText(data['location_facility']);
+      data['location_facility'] =
+          _cleanExtractedText(data['location_facility']);
       data['sonologist_name'] = _cleanExtractedText(data['sonologist_name']);
-      data['sonologist_remarks'] = _cleanExtractedText(data['sonologist_remarks']);
+      data['sonologist_remarks'] =
+          _cleanExtractedText(data['sonologist_remarks']);
 
       return data;
     } catch (e) {
@@ -322,7 +371,8 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
   }
 
   /// Fast, targeted OCR summary extraction for lab test reports
-  Future<Map<String, dynamic>> extractLabTestSummaryOCR(List<XFile> imageFiles) async {
+  Future<Map<String, dynamic>> extractLabTestSummaryOCR(
+      List<XFile> imageFiles) async {
     if (imageFiles.isEmpty) return {};
     try {
       final apiKey = _getApiKey();
@@ -402,7 +452,10 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
 
       _log('📄 Raw Lab Test OCR Vision output: $rawOutput');
 
-      String cleaned = rawOutput.replaceAll(RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false), '').trim();
+      String cleaned = rawOutput
+          .replaceAll(
+              RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false), '')
+          .trim();
 
       // Find valid JSON string containing target keys
       Map<String, dynamic> data = {};
@@ -410,7 +463,10 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
 
       for (final match in jsonMatches) {
         final matchStr = match.group(0)!;
-        if (matchStr.contains('"lab_test_type"') || matchStr.contains('"institution_name"') || matchStr.contains('"remarks"') || matchStr.contains('"is_lab_test"')) {
+        if (matchStr.contains('"lab_test_type"') ||
+            matchStr.contains('"institution_name"') ||
+            matchStr.contains('"remarks"') ||
+            matchStr.contains('"is_lab_test"')) {
           try {
             data = Map<String, dynamic>.from(jsonDecode(matchStr) as Map);
             _log('✅ Successfully parsed JSON block from Vision OCR');
@@ -430,8 +486,12 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
         data['is_lab_test'] = false;
       }
 
-      if (data['lab_test_date'] == null || data['lab_test_date'].toString().isEmpty) {
-        final dateMatch = RegExp(r'(?:lab_test_date|Date|DATE)[\s\*:="]*"?([A-Za-z0-9\s,-/]+)"?', caseSensitive: false).firstMatch(rawOutput);
+      if (data['lab_test_date'] == null ||
+          data['lab_test_date'].toString().isEmpty) {
+        final dateMatch = RegExp(
+                r'(?:lab_test_date|Date|DATE)[\s\*:="]*"?([A-Za-z0-9\s,-/]+)"?',
+                caseSensitive: false)
+            .firstMatch(rawOutput);
         if (dateMatch != null) {
           final dtStr = dateMatch.group(1)!.trim().replaceAll('"', '');
           final parsedDt = _parseFlexibleDate(dtStr);
@@ -443,57 +503,93 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
         }
       }
 
-      if (data['lab_test_type'] == null || data['lab_test_type'].toString().isEmpty) {
-        final typeMatch = RegExp(r'(?:lab_test_type|test_type|Test|TEST)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (typeMatch != null && _cleanExtractedText(typeMatch.group(1)) != null) {
+      if (data['lab_test_type'] == null ||
+          data['lab_test_type'].toString().isEmpty) {
+        final typeMatch = RegExp(
+                r'(?:lab_test_type|test_type|Test|TEST)[\s\*:="]*"?([^"\n\r\*]+)"?',
+                caseSensitive: false)
+            .firstMatch(rawOutput);
+        if (typeMatch != null &&
+            _cleanExtractedText(typeMatch.group(1)) != null) {
           data['lab_test_type'] = typeMatch.group(1)!.trim();
         }
       }
 
-      if (data['institution_name'] == null || data['institution_name'].toString().isEmpty || _cleanExtractedText(data['institution_name']) == null) {
-        final instMatch = RegExp(r'(?:institution_name|institution|laboratory|hospital|facility)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (instMatch != null && _cleanExtractedText(instMatch.group(1)) != null) {
+      if (data['institution_name'] == null ||
+          data['institution_name'].toString().isEmpty ||
+          _cleanExtractedText(data['institution_name']) == null) {
+        final instMatch = RegExp(
+                r'(?:institution_name|institution|laboratory|hospital|facility)[\s\*:="]*"?([^"\n\r\*]+)"?',
+                caseSensitive: false)
+            .firstMatch(rawOutput);
+        if (instMatch != null &&
+            _cleanExtractedText(instMatch.group(1)) != null) {
           data['institution_name'] = instMatch.group(1)!.trim();
         } else {
-          final headerMatch = RegExp(r'([A-Za-z\s]+(?:diagnostic center|diagnostic|center|clinic|hospital|laboratory|lab|medical center))', caseSensitive: false).firstMatch(rawOutput);
+          final headerMatch = RegExp(
+                  r'([A-Za-z\s]+(?:diagnostic center|diagnostic|center|clinic|hospital|laboratory|lab|medical center))',
+                  caseSensitive: false)
+              .firstMatch(rawOutput);
           if (headerMatch != null) {
             data['institution_name'] = headerMatch.group(1)!.trim();
           }
         }
       }
 
-      if (data['location_facility'] == null || data['location_facility'].toString().isEmpty || _cleanExtractedText(data['location_facility']) == null) {
-        final locMatch = RegExp(r'(?:location_facility|location|branch|address)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (locMatch != null && _cleanExtractedText(locMatch.group(1)) != null) {
+      if (data['location_facility'] == null ||
+          data['location_facility'].toString().isEmpty ||
+          _cleanExtractedText(data['location_facility']) == null) {
+        final locMatch = RegExp(
+                r'(?:location_facility|location|branch|address)[\s\*:="]*"?([^"\n\r\*]+)"?',
+                caseSensitive: false)
+            .firstMatch(rawOutput);
+        if (locMatch != null &&
+            _cleanExtractedText(locMatch.group(1)) != null) {
           data['location_facility'] = locMatch.group(1)!.trim();
         } else if (_cleanExtractedText(data['institution_name']) != null) {
           data['location_facility'] = data['institution_name'];
         }
       }
 
-      if (data['health_worker_name'] == null || data['health_worker_name'].toString().isEmpty || _cleanExtractedText(data['health_worker_name']) == null) {
-        final workerMatch = RegExp(r'(?:health_worker_name|pathologist|medtech|technologist|doctor|examiner|physician)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (workerMatch != null && _cleanExtractedText(workerMatch.group(1)) != null) {
+      if (data['health_worker_name'] == null ||
+          data['health_worker_name'].toString().isEmpty ||
+          _cleanExtractedText(data['health_worker_name']) == null) {
+        final workerMatch = RegExp(
+                r'(?:health_worker_name|pathologist|medtech|technologist|doctor|examiner|physician)[\s\*:="]*"?([^"\n\r\*]+)"?',
+                caseSensitive: false)
+            .firstMatch(rawOutput);
+        if (workerMatch != null &&
+            _cleanExtractedText(workerMatch.group(1)) != null) {
           data['health_worker_name'] = workerMatch.group(1)!.trim();
         } else {
-          final docMatch = RegExp(r'(?:DR\.|DOCTOR)[\sA-Za-z\.-]+', caseSensitive: false).firstMatch(rawOutput);
+          final docMatch =
+              RegExp(r'(?:DR\.|DOCTOR)[\sA-Za-z\.-]+', caseSensitive: false)
+                  .firstMatch(rawOutput);
           if (docMatch != null) {
             data['health_worker_name'] = docMatch.group(0)!.trim();
           }
         }
       }
 
-      if (data['remarks'] == null || data['remarks'].toString().isEmpty || _cleanExtractedText(data['remarks']) == null) {
-        final remMatch = RegExp(r'(?:remarks|findings|results|summary|impression)[\s\*:="]*"?([^"\n\r\*]+)"?', caseSensitive: false).firstMatch(rawOutput);
-        if (remMatch != null && _cleanExtractedText(remMatch.group(1)) != null) {
+      if (data['remarks'] == null ||
+          data['remarks'].toString().isEmpty ||
+          _cleanExtractedText(data['remarks']) == null) {
+        final remMatch = RegExp(
+                r'(?:remarks|findings|results|summary|impression)[\s\*:="]*"?([^"\n\r\*]+)"?',
+                caseSensitive: false)
+            .firstMatch(rawOutput);
+        if (remMatch != null &&
+            _cleanExtractedText(remMatch.group(1)) != null) {
           data['remarks'] = remMatch.group(1)!.trim();
         }
       }
 
       data['lab_test_type'] = _cleanExtractedText(data['lab_test_type']);
       data['institution_name'] = _cleanExtractedText(data['institution_name']);
-      data['location_facility'] = _cleanExtractedText(data['location_facility']);
-      data['health_worker_name'] = _cleanExtractedText(data['health_worker_name']);
+      data['location_facility'] =
+          _cleanExtractedText(data['location_facility']);
+      data['health_worker_name'] =
+          _cleanExtractedText(data['health_worker_name']);
       data['remarks'] = _cleanExtractedText(data['remarks']);
 
       return data;
@@ -511,12 +607,33 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
 
     try {
       final monthMap = {
-        'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
-        'apr': 4, 'april': 4, 'may': 5, 'june': 6, 'jun': 6, 'jul': 7, 'july': 7,
-        'aug': 8, 'august': 8, 'sep': 9, 'sept': 9, 'september': 9, 'oct': 10, 'october': 10,
-        'nov': 11, 'november': 11, 'dec': 12, 'december': 12
+        'jan': 1,
+        'january': 1,
+        'feb': 2,
+        'february': 2,
+        'mar': 3,
+        'march': 3,
+        'apr': 4,
+        'april': 4,
+        'may': 5,
+        'june': 6,
+        'jun': 6,
+        'jul': 7,
+        'july': 7,
+        'aug': 8,
+        'august': 8,
+        'sep': 9,
+        'sept': 9,
+        'september': 9,
+        'oct': 10,
+        'october': 10,
+        'nov': 11,
+        'november': 11,
+        'dec': 12,
+        'december': 12
       };
-      final match = RegExp(r'([A-Za-z]+)\s+(\d{1,2})[\s,]+(\d{4})').firstMatch(clean);
+      final match =
+          RegExp(r'([A-Za-z]+)\s+(\d{1,2})[\s,]+(\d{4})').firstMatch(clean);
       if (match != null) {
         final mStr = match.group(1)!.toLowerCase();
         final day = int.tryParse(match.group(2)!);
@@ -1052,7 +1169,8 @@ Rules:
     return OcrResult.fromJson(json);
   }
 
-  Future<Map<String, dynamic>> extractImmunizationCardData(XFile imageFile) async {
+  Future<Map<String, dynamic>> extractImmunizationCardData(
+      XFile imageFile) async {
     final apiKey = _getApiKey();
     _log('💉 Extracting immunization card data...');
 
@@ -1686,7 +1804,8 @@ Rules:
     required List<XFile> imageFiles,
     required String prompt,
   }) async {
-    final geminiApiKey = dotenv.env['GEMINI_API_KEY'] ?? dotenv.env['GOOGLE_API_KEY'] ?? '';
+    final geminiApiKey =
+        dotenv.env['GEMINI_API_KEY'] ?? dotenv.env['GOOGLE_API_KEY'] ?? '';
     if (geminiApiKey.isEmpty) {
       throw Exception('GEMINI_API_KEY is missing in .env');
     }
@@ -1694,36 +1813,42 @@ Rules:
     final preparedImage = await _prepareImageForGroq(imageFiles.first);
     final base64Image = base64Encode(preparedImage.bytes);
 
-    const geminiModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'];
+    const geminiModels = [
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-2.0-flash-lite'
+    ];
     Object? lastErr;
     for (final m in geminiModels) {
       try {
         final url = Uri.parse(
             'https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent?key=$geminiApiKey');
 
-        final response = await http.post(
-          url,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'contents': [
-              {
-                'parts': [
-                  {'text': prompt},
+        final response = await http
+            .post(
+              url,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'contents': [
                   {
-                    'inline_data': {
-                      'mime_type': preparedImage.mimeType,
-                      'data': base64Image,
-                    }
+                    'parts': [
+                      {'text': prompt},
+                      {
+                        'inline_data': {
+                          'mime_type': preparedImage.mimeType,
+                          'data': base64Image,
+                        }
+                      }
+                    ]
                   }
-                ]
-              }
-            ],
-            'generationConfig': {
-              'temperature': 0.1,
-              'maxOutputTokens': 2048,
-            }
-          }),
-        ).timeout(const Duration(seconds: 45));
+                ],
+                'generationConfig': {
+                  'temperature': 0.1,
+                  'maxOutputTokens': 2048,
+                }
+              }),
+            )
+            .timeout(const Duration(seconds: 45));
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
@@ -1735,7 +1860,8 @@ Rules:
             }
           }
         }
-        lastErr = Exception('Gemini ($m) response status ${response.statusCode}: ${response.body}');
+        lastErr = Exception(
+            'Gemini ($m) response status ${response.statusCode}: ${response.body}');
       } catch (e) {
         lastErr = e;
       }
@@ -1772,7 +1898,8 @@ Rules:
           messages: [
             {
               'role': 'system',
-              'content': 'You are a precise medical OCR data extractor. You MUST output ONLY raw JSON matching the schema. Never write step-by-step reasoning, markdown headers, or thinking text.'
+              'content':
+                  'You are a precise medical OCR data extractor. You MUST output ONLY raw JSON matching the schema. Never write step-by-step reasoning, markdown headers, or thinking text.'
             },
             {'role': 'user', 'content': content}
           ],
@@ -1796,7 +1923,8 @@ Rules:
       }
     }
 
-    final geminiKey = dotenv.env['GEMINI_API_KEY'] ?? dotenv.env['GOOGLE_API_KEY'];
+    final geminiKey =
+        dotenv.env['GEMINI_API_KEY'] ?? dotenv.env['GOOGLE_API_KEY'];
     if (geminiKey != null && geminiKey.trim().isNotEmpty) {
       try {
         _log('📸 Attempting vision request via Gemini fallback...');
@@ -1930,7 +2058,8 @@ Rules:
     bool allowModelFallback = true,
   }) async {
     final bool isVisionModel = model.toLowerCase().contains('vision');
-    final bool useJsonMode = (forceJsonMode || _detectJsonMode(messages)) && !isVisionModel;
+    final bool useJsonMode =
+        (forceJsonMode || _detectJsonMode(messages)) && !isVisionModel;
 
     try {
       return await _postChatCompletion(

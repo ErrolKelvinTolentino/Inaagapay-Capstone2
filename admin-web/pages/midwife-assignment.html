@@ -164,6 +164,14 @@
                 <option value="assigned">Assigned Only</option>
                 <option value="unassigned">Unassigned Only</option>
               </select>
+              <button
+                class="btn btn-secondary btn-sm"
+                id="clear-filters"
+                type="button"
+                hidden
+              >
+                <i class="fa-solid fa-rotate-left"></i> Show all midwives
+              </button>
             </div>
           </div>
 
@@ -259,6 +267,8 @@
     <script src="../js/supabase-client.js"></script>
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
+    <script src="data-cache.js"></script>
+    <script src="sidebar.js"></script>
     <script src="live-refresh.js"></script>
     <script src="notification-center.js"></script>
     <script>
@@ -360,8 +370,11 @@
               // because someone has to be able to place them.
               .filter((m) => !m.assigned_bhc_id || PortalScope.coversBhc(m.assigned_bhc_id));
 
-            // BHC filter dropdown
+            // BHC filter dropdown. Live refresh rebuilds these options, so
+            // remember what the admin picked and put it back afterwards —
+            // otherwise the table silently jumps back to every BHC.
             const sel = document.getElementById("filter-bhc");
+            const prevBhc = sel.value;
             sel.innerHTML = '<option value="">All BHCs</option>';
             bhcs.forEach((b) => {
               const o = document.createElement("option");
@@ -369,6 +382,9 @@
               o.textContent = b.bhc_name;
               sel.appendChild(o);
             });
+            sel.value = bhcs.some((b) => String(b.bhc_id) === prevBhc)
+              ? prevBhc
+              : "";
 
             updateBadges();
             renderBhcCards();
@@ -407,8 +423,11 @@
           container.innerHTML = bhcs
             .map(
               (b) => `
-            <div class="card" style="padding: 16px; border-left: 4px solid var(--brand-primary); cursor: pointer;" onclick="filterByBhc(${b.bhc_id})">
-              <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">BHC Facility</div>
+            <div class="card bhc-card" data-bhc-id="${b.bhc_id}" role="button" tabindex="0" aria-pressed="false" style="padding: 16px; border-left: 4px solid var(--brand-primary); cursor: pointer;" onclick="filterByBhc(${b.bhc_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByBhc(${b.bhc_id});}">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">BHC Facility</div>
+                <span class="bhc-card-clear" hidden style="font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--brand-primary);white-space:nowrap;"><i class="fa-solid fa-xmark"></i> Clear</span>
+              </div>
               <div style="font-size: 16px; font-weight: 700; color: var(--text-title); margin: 4px 0 2px;">${esc(b.bhc_name)}</div>
               <div style="font-size: 12px; color: var(--text-secondary);">
                 <i class="fa-solid fa-user-nurse" style="color: var(--brand-primary); margin-right: 4px;"></i>
@@ -418,10 +437,50 @@
           `
             )
             .join("");
+          syncFilterChrome();
         }
 
+        /* ── Keep the cards and the reset button in step with the filters ── */
+        function syncFilterChrome() {
+          const bhcId = document.getElementById("filter-bhc").value;
+          document.querySelectorAll(".bhc-card").forEach((card) => {
+            const active = card.dataset.bhcId === bhcId;
+            card.setAttribute("aria-pressed", active ? "true" : "false");
+            card.style.background = active ? "var(--brand-primary-10)" : "";
+            card.style.boxShadow = active
+              ? "0 0 0 2px var(--brand-primary-40)"
+              : "";
+            card.title = active
+              ? "Showing this BHC only — click again to show all midwives"
+              : "Show only midwives at this BHC";
+            const clear = card.querySelector(".bhc-card-clear");
+            if (clear) clear.hidden = !active;
+          });
+          const btn = document.getElementById("clear-filters");
+          if (btn) btn.hidden = !isFiltered();
+        }
+
+        function isFiltered() {
+          return Boolean(
+            document.getElementById("search-input").value.trim() ||
+              document.getElementById("filter-bhc").value ||
+              document.getElementById("filter-assigned").value,
+          );
+        }
+
+        /* ── Reset every filter back to the full roster ── */
+        window.clearFilters = () => {
+          document.getElementById("search-input").value = "";
+          document.getElementById("filter-bhc").value = "";
+          document.getElementById("filter-assigned").value = "";
+          applyFilters();
+        };
+
+        // Clicking the card that is already showing is the way back to every
+        // midwife, so the filter is never a one-way door.
         window.filterByBhc = (id) => {
-          document.getElementById("filter-bhc").value = id;
+          const sel = document.getElementById("filter-bhc");
+          sel.value = String(sel.value) === String(id) ? "" : String(id);
           applyFilters();
           document
             .querySelector(".card .toolbar")
@@ -447,6 +506,7 @@
             if (assigned === "unassigned" && m.assigned_bhc_id) return false;
             return true;
           });
+          syncFilterChrome();
           renderTable();
         }
 
@@ -463,12 +523,19 @@
         document
           .getElementById("filter-assigned")
           .addEventListener("change", applyFilters);
+        document
+          .getElementById("clear-filters")
+          .addEventListener("click", () => clearFilters());
 
         /* ── Render Table with Interactive Checkbox Tiles ── */
         function renderTable() {
           const tbody = document.getElementById("midwife-tbody");
           if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-user-nurse" style="font-size:32px;margin-bottom:12px;display:block;opacity:.4;color:var(--brand-primary);"></i>No midwives found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text-secondary);"><i class="fa-solid fa-user-nurse" style="font-size:32px;margin-bottom:12px;display:block;opacity:.4;color:var(--brand-primary);"></i>No midwives found.${
+              isFiltered()
+                ? `<div style="margin-top:14px;"><button class="btn btn-secondary btn-sm" onclick="clearFilters()"><i class="fa-solid fa-rotate-left"></i> Show all midwives</button></div>`
+                : ""
+            }</td></tr>`;
             return;
           }
           tbody.innerHTML = filtered

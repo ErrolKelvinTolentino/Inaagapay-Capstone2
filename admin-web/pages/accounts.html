@@ -261,20 +261,51 @@
         </div>
     </div>
 
-    <!-- Status Change Modal (Activate/Deactivate/Suspend) -->
+    <!-- Status Change Modal (Activate / Deactivate / Suspend)
+
+         The three actions used to share one confirm box that differed only in
+         wording, because they shared one implementation. They now differ in
+         what they ask for: deactivating takes an optional note, suspending
+         requires a reason, and reactivating shows the reason the account was
+         stopped so whoever lifts it knows what they are lifting. -->
     <div class="modal-overlay" id="status-modal">
-        <div class="modal" style="max-width: 420px">
+        <div class="modal" style="max-width: 480px">
             <div class="modal-header">
                 <h2 class="modal-title" id="status-modal-title">Change Account Status</h2>
                 <button class="modal-close" id="status-modal-close"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">
-                <div style="text-align:center;padding:12px 0 8px;">
-                    <i class="fa-solid" id="status-modal-icon" style="font-size:40px;margin-bottom:14px;"></i>
-                    <p style="font-size:14px;color:var(--text-primary);line-height:1.7;" id="status-modal-message"></p>
-                    <input type="hidden" id="status-account-id" />
-                    <input type="hidden" id="status-new-status" />
+                <div style="display:flex; gap:14px; align-items:flex-start; padding:4px 0 2px;">
+                    <i class="fa-solid" id="status-modal-icon" style="font-size:26px;margin-top:2px;flex-shrink:0;"></i>
+                    <div style="flex:1; min-width:0;">
+                        <p style="font-size:14px;color:var(--text-primary);line-height:1.6;margin:0 0 8px;" id="status-modal-message"></p>
+                        <p style="font-size:12.5px;color:var(--text-secondary);line-height:1.6;margin:0;" id="status-modal-effect"></p>
+                    </div>
                 </div>
+
+                <!-- What this account is currently carrying. A midwife with a
+                     live posting and patients under her is not the same
+                     decision as an account created this morning. -->
+                <div id="status-impact" style="display:none; margin-top:14px; padding:11px 13px; border-radius:var(--radius-card-sm); background:var(--warning-10); color:#92400e; font-size:12.5px; line-height:1.6;"></div>
+
+                <!-- The reason the old implementation never captured. -->
+                <div class="form-group" id="status-reason-group" style="margin-top:16px;">
+                    <label class="form-label" for="status-reason">
+                        Reason <span id="status-reason-required" style="color:var(--error);">*</span>
+                    </label>
+                    <textarea class="form-control" id="status-reason" rows="2"
+                              maxlength="300"
+                              placeholder="e.g. Resigned effective 30 September; account held pending clearance"></textarea>
+                    <small style="color:var(--text-secondary); font-size:11.5px;">
+                        Recorded against the account and written to the audit trail.
+                    </small>
+                </div>
+
+                <!-- Shown when reactivating, so the reason is not lost silently. -->
+                <div id="status-previous-reason" style="display:none; margin-top:12px; padding:10px 12px; border-radius:var(--radius-card-sm); background:var(--bg-secondary); border:1px solid var(--border-primary); font-size:12.5px; color:var(--text-secondary); line-height:1.6;"></div>
+
+                <input type="hidden" id="status-account-id" />
+                <input type="hidden" id="status-new-status" />
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-sm" id="status-cancel">Cancel</button>
@@ -283,22 +314,51 @@
         </div>
     </div>
 
-    <!-- Delete Confirm Modal -->
+    <!-- Remove Account Modal
+
+         Renamed from "Delete" because the safe outcome, and the usual one, is
+         an archive. The modal asks the database what a delete would destroy
+         before it offers one: an account with any clinical record behind it
+         gets the archive path and an explanation, and only an unused account
+         is offered permanent deletion. -->
     <div class="modal-overlay" id="delete-modal">
-        <div class="modal" style="max-width: 420px">
+        <div class="modal" style="max-width: 500px">
             <div class="modal-header">
-                <h2 class="modal-title" style="color:var(--error)">Delete Account</h2>
+                <h2 class="modal-title" id="delete-modal-title">Remove Account</h2>
                 <button class="modal-close" id="delete-modal-close"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">
-                <div style="text-align:center">
-                    <i class="fa-solid fa-triangle-exclamation" style="font-size:40px;color:var(--warning);margin-bottom:14px;"></i>
-                    <p style="color:var(--text-primary);">Are you sure you want to permanently delete <strong id="delete-name"></strong>? This action <strong>cannot be undone</strong>.</p>
+                <div id="delete-checking" style="display:flex; align-items:center; gap:10px; padding:18px 0; color:var(--text-secondary); font-size:13px;">
+                    <div class="spinner"></div> Checking what depends on this account…
+                </div>
+
+                <div id="delete-body" style="display:none;">
+                    <div style="display:flex; gap:14px; align-items:flex-start;">
+                        <i class="fa-solid" id="delete-modal-icon" style="font-size:26px;margin-top:2px;flex-shrink:0;"></i>
+                        <div style="flex:1; min-width:0;">
+                            <p style="font-size:14px;color:var(--text-primary);line-height:1.6;margin:0;" id="delete-message"></p>
+                        </div>
+                    </div>
+
+                    <!-- The itemised list of what a permanent delete would take
+                         with it. Numbers, not the phrase "cannot be undone". -->
+                    <div id="delete-impact" style="display:none; margin-top:14px; padding:12px 14px; border-radius:var(--radius-card-sm); background:var(--error-10); color:#991b1b; font-size:12.5px; line-height:1.7;"></div>
+
+                    <div class="form-group" style="margin-top:16px;">
+                        <label class="form-label" for="delete-reason">Reason</label>
+                        <input class="form-control" type="text" id="delete-reason" maxlength="300"
+                               placeholder="e.g. Duplicate record created in error" />
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-sm" id="delete-cancel">Cancel</button>
-                <button class="btn btn-danger btn-sm" id="delete-confirm"><i class="fa-solid fa-trash"></i> Delete</button>
+                <button class="btn btn-sm" id="delete-archive" style="display:none;background:var(--warning-10);color:#b45309;border:1px solid rgba(217,119,6,.3);">
+                    <i class="fa-solid fa-box-archive"></i> Archive account
+                </button>
+                <button class="btn btn-danger btn-sm" id="delete-confirm" style="display:none;">
+                    <i class="fa-solid fa-trash"></i> Delete permanently
+                </button>
             </div>
         </div>
     </div>
@@ -310,6 +370,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bcryptjs/2.4.3/bcrypt.min.js"></script>
     <script src="common-security.js"></script>
     <script src="portal-scope.js"></script>
+    <script src="data-cache.js"></script>
+    <script src="sidebar.js"></script>
     <script src="live-refresh.js"></script>
     <script src="notification-center.js"></script>
     <script>
@@ -343,17 +405,160 @@
                 setTimeout(() => { t.style.animation = "fadeOut .3s ease forwards"; t.addEventListener("animationend", () => t.remove()); }, 4500);
             }
 
+            /* ── Who this officer may act on ───────────────────────────────
+               Two separate questions, and the page used to ask neither.
+
+               VISIBILITY. This page listed every account in the municipality to
+               every officer. An RHU administrator opened it and read the names,
+               e-mail addresses and phone numbers of mothers enrolled at the
+               other three Rural Health Units, with the suspend and delete
+               buttons live on all of them. The rest of the portal has been
+               scoped through PortalScope since 20260821; this page simply never
+               called it.
+
+               AUTHORITY. Even inside its own scope an RHU administrator has no
+               business changing a portal account. Portal accounts are municipal
+               business, so 'mho' and 'admin' rows are read-only to anyone but
+               the Municipal Health Office.
+
+               Both rules are also enforced in the database by
+               20260925_account_lifecycle.sql. These are the copy that decides
+               what to draw; that one is the copy that decides what happens.
+               ───────────────────────────────────────────────────────────── */
+
+            const isMho = () => !!(window.PortalScope && PortalScope.isMho);
+
+            /** True when this officer may change or remove the given account. */
+            function canManage(account) {
+                if (!account) return false;
+                if (account.account_id === session.account_id) return false;
+                if (account.account_type === "mho" || account.account_type === "admin") {
+                    return isMho();
+                }
+                return true;
+            }
+
+            function whyNotManageable(account) {
+                if (account.account_id === session.account_id) {
+                    return "You cannot change your own account.";
+                }
+                return "Only the Municipal Health Office can manage portal accounts.";
+            }
+
             let allAccounts = [], filtered = [], page = 1, PAGE_SIZE = 15, editTarget = null, deleteTarget = null;
+
+            /**
+             * The account ids inside this office's reach.
+             *
+             * accounts carries no facility of its own, so the answer is
+             * assembled from the three tables that do: a mother's health
+             * centre, a midwife's health centre, and a portal account's
+             * facility posting. Each of those reads is scoped server-side, so
+             * an RHU never downloads another RHU's roster in order to hide it.
+             *
+             * Returns null for the municipal office, and on a database with no
+             * facility tree — both of which mean "no filter".
+             */
+            async function scopedAccountIds() {
+                if (isMho()) return null;
+                if (!window.AdminData || !window.PortalScope || !PortalScope.ready) return null;
+                const bhcIds = AdminData.bhcIds();
+                if (!bhcIds) return null;
+
+                const facilityIds = AdminData.facilityIds() || bhcIds;
+
+                const [motherRows, midwifeRows, postingRows] = await Promise.all([
+                    AdminData.rows(db, "mothers", {
+                        key: "accounts:scope:mothers",
+                        select: "account_id, assigned_bhc_id",
+                        scope: "bhc",
+                    }).catch(() => []),
+                    AdminData.rows(db, "midwives", {
+                        key: "accounts:scope:midwives",
+                        select: "account_id, assigned_bhc_id",
+                        scope: "bhc",
+                    }).catch(() => []),
+                    AdminData.read(db, "accounts:scope:postings", async () => {
+                        const { data, error } = await db
+                            .from("facility_assignments")
+                            .select("account_id, facility_id")
+                            .eq("is_active", true)
+                            .in("facility_id", facilityIds);
+                        if (error) throw error;
+                        return data || [];
+                    }, { tables: ["facility_assignments"] }).catch(() => []),
+                ]);
+
+                const ids = new Set();
+                [motherRows, midwifeRows, postingRows].forEach(rows => {
+                    (rows || []).forEach(r => { if (r.account_id) ids.add(Number(r.account_id)); });
+                });
+                // The officer's own account is always in their own list, even
+                // when the posting read fails, so the page is never empty in a
+                // way that looks like a permissions fault.
+                ids.add(Number(session.account_id));
+                return [...ids];
+            }
+
+            // status_reason, status_changed_at and archived_at arrive with
+            // 20260925_account_lifecycle.sql. Until it is applied the select
+            // naming them is rejected as a whole, so the first rejection is
+            // remembered and every later read goes straight to the columns this
+            // page has always had. Without this the page probes for three
+            // missing columns on every refresh tick, for the life of the
+            // deployment gap.
+            let hasLifecycleColumns = true;
+
+            const BASE_ACCOUNT_COLUMNS =
+                "account_id, first_name, middle_name, last_name, extension_name, " +
+                "email_address, phone_number, account_type, status, created_at";
+
+            function accountSelect() {
+                // Named columns rather than the select("*") this page used:
+                // password_hash, reset_code, verification_code and
+                // last_login_token were never displayed and have no business
+                // reaching a browser.
+                const base = window.AdminData ? AdminData.columns("accounts") : BASE_ACCOUNT_COLUMNS;
+                return hasLifecycleColumns
+                    ? base + ", status_reason, status_changed_at, archived_at"
+                    : base;
+            }
+
+            function isMissingLifecycleColumn(error) {
+                return String(error?.code) === "42703" ||
+                       /status_reason|archived_at|status_changed_at/.test(String(error?.message || ""));
+            }
 
             async function loadAccounts() {
                 try {
-                    const { data, error } = await db.from("accounts").select("account_id, first_name, middle_name, last_name, extension_name, email_address, account_type, status, created_at").order("created_at", { ascending: false });
-                    if (error) throw error;
-                    allAccounts = data || [];
+                    const allowed = await scopedAccountIds();
+                    const select = accountSelect();
+
+                    let rows;
+                    if (allowed && allowed.length > 0) {
+                        rows = await AdminData.readIn(db, "accounts", "account_id", allowed, {
+                            select, order: "created_at", ascending: false,
+                        });
+                    } else {
+                        const res = await db.from("accounts").select(select)
+                            .order("created_at", { ascending: false });
+                        if (res.error) throw res.error;
+                        rows = res.data || [];
+                    }
+
+                    allAccounts = rows || [];
                     updateStatusCounts();
                     document.getElementById("total-badge").textContent = `${allAccounts.length} accounts`;
                     applyFilters();
-                } catch (e) { showToast("Failed to load accounts: " + e.message, "error"); }
+                } catch (e) {
+                    // First run on a database that predates 20260925: drop the
+                    // lifecycle columns for good and read again.
+                    if (hasLifecycleColumns && isMissingLifecycleColumn(e)) {
+                        hasLifecycleColumns = false;
+                        return loadAccounts();
+                    }
+                    showToast("Failed to load accounts: " + e.message, "error");
+                }
             }
 
             function updateStatusCounts() {
@@ -665,11 +870,57 @@
                     const name = [a.first_name, a.middle_name, a.last_name].filter(Boolean).join(" ") + (a.extension_name ? " " + a.extension_name : "");
                     const initials = ((a.first_name?.[0] ?? "") + (a.last_name?.[0] ?? "")).toUpperCase() || "?";
                     const statusColors = { active: "badge-active", inactive: "badge-inactive", suspended: "badge-suspended" };
-                    // An admin must never be able to suspend, demote or delete their own
-                    // account — doing so can lock the organisation out of the portal.
+
+                    // Three reasons a row can be read-only, and they read
+                    // differently to the officer: it is their own account, it is
+                    // a portal account they do not have the rank to touch, or —
+                    // handled inside canManage — anything else the rules refuse.
                     const isSelf = a.account_id === session.account_id;
-                    const selfNote = `<span class="badge badge-admin" title="You cannot modify your own account"><i class="fa-solid fa-user-lock"></i> You</span>`;
-                    return `<tr>
+                    const manageable = canManage(a);
+
+                    const lockNote = isSelf
+                        ? `<span class="badge badge-admin" title="You cannot modify your own account"><i class="fa-solid fa-user-lock"></i> You</span>`
+                        : `<span class="badge badge-inactive" title="Only the Municipal Health Office can manage portal accounts"><i class="fa-solid fa-lock"></i> MHO only</span>`;
+
+                    // An archived account is inactive, but it is retired rather
+                    // than away, and conflating the two is how a retired midwife
+                    // keeps looking like staff who might come back.
+                    const archived = !!a.archived_at;
+                    const statusBadge = archived
+                        ? `<span class="badge badge-inactive" title="Retired — records kept"><i class="fa-solid fa-box-archive"></i> archived</span>`
+                        : `<span class="badge ${statusColors[a.status] || 'badge-inactive'}">${esc(a.status)}</span>`;
+
+                    // The reason, where there is one. This is the whole point of
+                    // capturing it: an officer looking at a suspended account
+                    // should not have to open the audit trail to find out why.
+                    const reasonNote = a.status_reason && a.status !== "active"
+                        ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:3px;max-width:260px;line-height:1.45;" title="${esc(a.status_reason)}">
+                             <i class="fa-solid fa-quote-left" style="opacity:.5;font-size:9px;"></i> ${esc(a.status_reason.length > 60 ? a.status_reason.slice(0, 60) + "…" : a.status_reason)}
+                           </div>`
+                        : "";
+
+                    const btn = (cls, onclick, title, icon) =>
+                        `<button class="btn btn-sm btn-icon" style="${cls}" onclick="${onclick}" title="${title}" aria-label="${title}"><i class="fa-solid ${icon}"></i></button>`;
+
+                    const actions = !manageable ? lockNote : [
+                        `<button class="btn btn-sm btn-outline-pink btn-icon" onclick="openEdit(${a.account_id})" title="Edit role" aria-label="Edit account"><i class="fa-solid fa-pen"></i></button>`,
+                        // Reactivate reads differently from a first activation,
+                        // so a suspended account gets its own wording.
+                        a.status === "suspended"
+                            ? btn("background:var(--success-10);color:var(--success);border:none;", `changeStatus(${a.account_id}, 'active')`, "Lift suspension", "fa-unlock")
+                            : a.status !== "active"
+                              ? btn("background:var(--success-10);color:var(--success);border:none;", `changeStatus(${a.account_id}, 'active')`, "Reactivate", "fa-play")
+                              : "",
+                        a.status === "active"
+                            ? btn("background:var(--warning-10);color:var(--warning);border:none;", `changeStatus(${a.account_id}, 'inactive')`, "Deactivate — blocks sign-in, keeps everything", "fa-pause")
+                            : "",
+                        a.status !== "suspended"
+                            ? btn("background:var(--error-10);color:var(--error);border:none;", `changeStatus(${a.account_id}, 'suspended')`, "Suspend — requires a reason", "fa-ban")
+                            : "",
+                        btn("background:var(--error-10);color:var(--error);border:none;", `openDelete(${a.account_id})`, "Remove — archives, or deletes if nothing depends on it", "fa-trash"),
+                    ].filter(Boolean).join("");
+
+                    return `<tr${archived ? ' style="opacity:.72;"' : ""}>
                         <td>
                             <div style="display:flex;align-items:center;gap:10px;">
                                 <div style="width:34px;height:34px;border-radius:50%;background:var(--brand-primary);display:flex;align-items:center;justify-content:center;color:white;font-size:13px;font-weight:700;">${esc(initials)}</div>
@@ -678,19 +929,10 @@
                         </td>
                         <td style="color:var(--text-secondary);">${esc(a.email_address)}</td>
                         <td><span class="badge badge-${esc(a.account_type)}">${esc(a.account_type)}</span></td>
-                        <td><span class="badge ${statusColors[a.status] || 'badge-inactive'}">${esc(a.status)}</span></td>
+                        <td>${statusBadge}${reasonNote}</td>
                         <td style="color:var(--text-secondary);font-size:12.5px;">${fmtDate(a.created_at)}</td>
                         <td style="text-align:center;">
-                            <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;align-items:center;">
-                                ${isSelf ? selfNote : `
-                                <button class="btn btn-sm btn-outline-pink btn-icon" onclick="openEdit(${a.account_id})" title="Edit" aria-label="Edit account"><i class="fa-solid fa-pen"></i></button>
-                                ${a.status !== 'active' ? `<button class="btn btn-sm btn-icon" style="background:var(--success-10);color:var(--success);border:none;" onclick="changeStatus(${a.account_id}, 'active')" title="Activate" aria-label="Activate account"><i class="fa-solid fa-play"></i></button>` : ''}
-                                ${a.status === 'active' ? `<button class="btn btn-sm btn-icon" style="background:var(--warning-10);color:var(--warning);border:none;" onclick="changeStatus(${a.account_id}, 'inactive')" title="Deactivate" aria-label="Deactivate account"><i class="fa-solid fa-pause"></i></button>` : ''}
-                                ${a.status === 'active' ? `<button class="btn btn-sm btn-icon" style="background:var(--error-10);color:var(--error);border:none;" onclick="changeStatus(${a.account_id}, 'suspended')" title="Suspend" aria-label="Suspend account"><i class="fa-solid fa-ban"></i></button>` : ''}
-                                ${a.status === 'suspended' ? `<button class="btn btn-sm btn-icon" style="background:var(--success-10);color:var(--success);border:none;" onclick="changeStatus(${a.account_id}, 'active')" title="Reactivate" aria-label="Reactivate account"><i class="fa-solid fa-undo"></i></button>` : ''}
-                                <button class="btn btn-sm btn-icon" style="background:var(--error-10);color:var(--error);border:none;" onclick="openDelete(${a.account_id})" title="Delete" aria-label="Delete account"><i class="fa-solid fa-trash"></i></button>
-                                `}
-                            </div>
+                            <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;align-items:center;">${actions}</div>
                         </td>
                     </tr>`;
                 }).join("");
@@ -750,73 +992,254 @@
 
             initAccountsDateConstraints();
 
-            // Change Status Function
-            window.changeStatus = (accountId, newStatus) => {
+            /* ── The three actions ─────────────────────────────────────────
+               Deactivate, suspend and delete were one implementation wearing
+               three labels: the same UPDATE to accounts.status, with a
+               different sentence in the confirm box. They now differ in what
+               they mean, what they ask for, and what they do.
+
+                 Deactivate  reversible, administrative. Staff on leave, a
+                             mother who has moved away. A note is optional.
+
+                 Suspend     a hold placed on an account. Requires a reason,
+                             because the person cannot lift it themselves and
+                             somebody will ask why in a month's time.
+
+                 Remove      asks the database what a deletion would destroy
+                             before offering one. See openDelete().
+
+               Each writes through an RPC in 20260925_account_lifecycle.sql so
+               the role and last-administrator rules hold even though every
+               page here speaks to Postgres over the anon key. When that
+               migration has not been applied the page falls back to the plain
+               UPDATE it has always done — the portal and the SQL deploy
+               separately and each has to work without the other.
+               ───────────────────────────────────────────────────────────── */
+
+            /** True when an RPC is simply not on this database yet. */
+            function isMissingRpc(error) {
+                const code = String(error?.code || error?.status || "");
+                return code === "PGRST202" || code === "42883" || code === "404";
+            }
+
+            // Switched off for good the first time one of the lifecycle
+            // functions answers "no such function", so a portal deployed ahead
+            // of 20260925 stops asking on every modal open.
+            let lifecycleRpcAvailable = true;
+
+            /**
+             * Call one of the lifecycle functions, or report that this database
+             * does not have them yet. Returns { available, data } rather than
+             * throwing, because "not migrated" is a deployment fact every caller
+             * has to handle and not an error any of them can fix.
+             */
+            async function lifecycleRpc(name, args) {
+                if (!lifecycleRpcAvailable) return { available: false };
+                try {
+                    const { data, error } = await db.rpc(name, args);
+                    if (error) throw error;
+                    return { available: true, data };
+                } catch (e) {
+                    if (isMissingRpc(e)) {
+                        lifecycleRpcAvailable = false;
+                        return { available: false };
+                    }
+                    throw e;
+                }
+            }
+
+            const STATUS_CONFIG = {
+                active: {
+                    icon: "fa-solid fa-play", color: "var(--success)",
+                    title: "Reactivate Account", btnClass: "btn-success", btnText: "Reactivate",
+                    effect: "They will be able to sign in again immediately, with the same password and the same records.",
+                    reasonRequired: false,
+                    reasonLabel: "Note (optional)",
+                    placeholder: "e.g. Returned from maternity leave",
+                },
+                inactive: {
+                    icon: "fa-solid fa-pause", color: "var(--warning)",
+                    title: "Deactivate Account", btnClass: "btn-outline-pink", btnText: "Deactivate",
+                    effect: "Sign-in is blocked. Nothing is deleted, the posting is kept, and reactivating restores access straight away. Use this for someone who is expected back.",
+                    reasonRequired: false,
+                    reasonLabel: "Note (optional)",
+                    placeholder: "e.g. On study leave until January",
+                },
+                suspended: {
+                    icon: "fa-solid fa-ban", color: "var(--error)",
+                    title: "Suspend Account", btnClass: "btn-danger", btnText: "Suspend",
+                    effect: "Sign-in is blocked and the account cannot be lifted by the holder. Use this for a hold placed on an account rather than for ordinary absence.",
+                    reasonRequired: true,
+                    reasonLabel: "Reason for suspension",
+                    placeholder: "e.g. Pending investigation of records filed on 12 September",
+                },
+            };
+
+            /** What this account is currently carrying, in one sentence. */
+            function describeImpact(account, deps) {
+                const bits = [];
+                if (!deps) return "";
+                if (deps.active_assignments > 0 && account.account_type !== "mother") {
+                    bits.push(`it holds ${deps.active_assignments} active facility ${deps.active_assignments === 1 ? "posting" : "postings"}`);
+                }
+                if (deps.doses_administered > 0) {
+                    bits.push(`${deps.doses_administered} immunisation ${deps.doses_administered === 1 ? "record names" : "records name"} this midwife as the one who gave the dose`);
+                }
+                if (deps.pregnancies > 0) {
+                    bits.push(`${deps.pregnancies} ${deps.pregnancies === 1 ? "pregnancy is" : "pregnancies are"} recorded against it`);
+                }
+                if (deps.children > 0) {
+                    bits.push(`${deps.children} ${deps.children === 1 ? "child is" : "children are"} linked to it`);
+                }
+                if (bits.length === 0) return "";
+                return `Before you do: ${bits.join(", ")}. Blocking sign-in does not remove any of it — the records stay exactly where they are.`;
+            }
+
+            window.changeStatus = async (accountId, newStatus) => {
                 const account = allAccounts.find(a => a.account_id === accountId);
                 if (!account) return;
-                if (accountId === session.account_id) {
-                    showToast("You cannot change the status of your own account.", "error");
+                if (!canManage(account)) {
+                    showToast(whyNotManageable(account), "error");
                     return;
                 }
 
-                const statusConfig = {
-                    active: { icon: "fa-solid fa-play", color: "var(--success)", title: "Activate Account", message: `Are you sure you want to activate ${account.first_name} ${account.last_name}'s account?`, btnClass: "btn-success", btnText: "Activate" },
-                    inactive: { icon: "fa-solid fa-pause", color: "var(--warning)", title: "Deactivate Account", message: `Are you sure you want to deactivate ${account.first_name} ${account.last_name}'s account? They will not be able to log in.`, btnClass: "btn-outline-pink", btnText: "Deactivate" },
-                    suspended: { icon: "fa-solid fa-ban", color: "var(--error)", title: "Suspend Account", message: `Are you sure you want to suspend ${account.first_name} ${account.last_name}'s account? This will block all access.`, btnClass: "btn-danger", btnText: "Suspend" }
-                };
-                
-                const config = statusConfig[newStatus];
+                const config = STATUS_CONFIG[newStatus];
                 if (!config) return;
-                
+
+                const name = account.account_type === "mother"
+                    ? `Patient #${account.account_id}`
+                    : ([account.first_name, account.last_name].filter(Boolean).join(" ") || account.email_address);
+
                 document.getElementById("status-modal-title").textContent = config.title;
                 document.getElementById("status-modal-icon").className = config.icon;
                 document.getElementById("status-modal-icon").style.color = config.color;
-                document.getElementById("status-modal-message").innerHTML = config.message;
+                document.getElementById("status-modal-message").innerHTML =
+                    `${config.title.split(" ")[0]} <strong>${esc(name)}</strong>?`;
+                document.getElementById("status-modal-effect").textContent = config.effect;
                 document.getElementById("status-account-id").value = accountId;
                 document.getElementById("status-new-status").value = newStatus;
-                document.getElementById("status-confirm").className = `btn btn-sm ${config.btnClass}`;
-                document.getElementById("status-confirm").innerHTML = `<i class="fa-solid ${config.icon.split(' ')[1]}"></i> ${config.btnText}`;
+
+                const reasonInput = document.getElementById("status-reason");
+                const reasonLabel = document.querySelector('label[for="status-reason"]');
+                const requiredMark = document.getElementById("status-reason-required");
+                reasonInput.value = "";
+                reasonInput.placeholder = config.placeholder;
+                if (reasonLabel) {
+                    reasonLabel.childNodes[0].nodeValue = config.reasonLabel + " ";
+                }
+                if (requiredMark) requiredMark.style.display = config.reasonRequired ? "" : "none";
+
+                // Reactivating: show why it was stopped, so the officer lifting
+                // the hold can see what they are lifting.
+                const prev = document.getElementById("status-previous-reason");
+                if (newStatus === "active" && account.status_reason) {
+                    prev.style.display = "";
+                    prev.innerHTML =
+                        `<strong>Recorded when the account was ${esc(account.status)}:</strong><br>${esc(account.status_reason)}` +
+                        (account.status_changed_at ? `<br><span style="font-size:11.5px;">${fmtDate(account.status_changed_at)}</span>` : "");
+                } else {
+                    prev.style.display = "none";
+                    prev.innerHTML = "";
+                }
+
+                const btn = document.getElementById("status-confirm");
+                btn.className = `btn btn-sm ${config.btnClass}`;
+                btn.innerHTML = `<i class="${config.icon}"></i> ${config.btnText}`;
+                btn.disabled = false;
+
                 document.getElementById("status-modal").classList.add("show");
+
+                // What the account is carrying, filled in once the database
+                // answers. Asked after the modal is shown rather than before,
+                // so the button never waits on a round trip.
+                const impact = document.getElementById("status-impact");
+                impact.style.display = "none";
+                impact.textContent = "";
+                if (newStatus !== "active") {
+                    try {
+                        const res = await lifecycleRpc("admin_account_dependents", { p_account_id: accountId });
+                        if (res.available) {
+                            const text = describeImpact(account, res.data);
+                            if (text) { impact.textContent = text; impact.style.display = ""; }
+                        }
+                    } catch (e) {
+                        console.warn("Dependent check failed:", e.message || e);
+                    }
+                }
             };
 
             document.getElementById("status-confirm").addEventListener("click", async () => {
                 const accountId = parseInt(document.getElementById("status-account-id").value);
                 const newStatus = document.getElementById("status-new-status").value;
+                const reason = document.getElementById("status-reason").value.trim();
+                const config = STATUS_CONFIG[newStatus];
                 const btn = document.getElementById("status-confirm");
+
+                if (config.reasonRequired && !reason) {
+                    showToast("A suspension needs a recorded reason.", "warning");
+                    document.getElementById("status-reason").focus();
+                    return;
+                }
+
+                const account = allAccounts.find(a => a.account_id === accountId);
+                if (!account) return;
+
                 btn.disabled = true;
                 btn.innerHTML = '<div class="btn-loader"></div>';
-                
+
                 try {
-                    const account = allAccounts.find(a => a.account_id === accountId);
                     const oldStatus = account.status;
-                    
-                    const { error } = await db.from("accounts").update({ status: newStatus }).eq("account_id", accountId);
-                    if (error) throw error;
-                    
-                    const statusAction = { active: "activated", inactive: "deactivated", suspended: "suspended" };
-                    const isMother = account?.account_type === "mother";
-                    const targetLabel = isMother ? `Patient #${accountId}` : `account #${accountId} (${account.email_address})`;
-                    await db.from("audit_trail").insert({
-                        account_id: session.account_id,
-                        action: "update_account",
-                        table_name: "accounts",
-                        description: `${statusAction[newStatus]} ${targetLabel} from ${oldStatus} to ${newStatus}`,
-                        old_data: { status: oldStatus },
-                        new_data: { status: newStatus }
+                    let applied = false;
+
+                    const res = await lifecycleRpc("admin_set_account_status", {
+                        p_account_id: accountId,
+                        p_status: newStatus,
+                        p_reason: reason || null,
+                        p_actor_id: session.account_id,
                     });
-                    
+                    if (res.available) {
+                        if (!res.data || res.data.success !== true) {
+                            // A refusal is the rule working, not a fault. Show
+                            // the sentence the database returned: it is the one
+                            // that knows this was the last active administrator.
+                            showToast(res.data?.error || "That change was refused.", "error");
+                            return;
+                        }
+                        applied = true;
+                    }
+
+                    if (!applied) {
+                        // Pre-20260925 fallback. The reason columns do not exist
+                        // yet, so only the status is written — which is exactly
+                        // what this page did before.
+                        const { error } = await db.from("accounts")
+                            .update({ status: newStatus }).eq("account_id", accountId);
+                        if (error) throw error;
+                    }
+
+                    // No audit_trail insert here. trg_audit_account_change fires
+                    // on this UPDATE and files the entry itself, with a fuller
+                    // record than the hand-written one it replaced. Writing both
+                    // put every status change in the trail twice.
+
                     const idx = allAccounts.findIndex(a => a.account_id === accountId);
-                    if (idx !== -1) allAccounts[idx].status = newStatus;
-                    
+                    if (idx !== -1) {
+                        allAccounts[idx].status = newStatus;
+                        allAccounts[idx].status_reason = reason || null;
+                        allAccounts[idx].status_changed_at = new Date().toISOString();
+                    }
+
                     updateStatusCounts();
                     applyFilters();
                     document.getElementById("status-modal").classList.remove("show");
-                    showToast(`Account ${statusAction[newStatus]} successfully.`, "success");
+
+                    const past = { active: "reactivated", inactive: "deactivated", suspended: "suspended" };
+                    showToast(`Account ${past[newStatus]}.`, "success");
                 } catch (e) {
                     showToast("Status change failed: " + e.message, "error");
                 } finally {
                     btn.disabled = false;
-                    btn.innerHTML = `<i class="fa-solid ${document.getElementById("status-modal-icon").className.split(' ')[1]}"></i> Confirm`;
+                    btn.innerHTML = `<i class="${config.icon}"></i> ${config.btnText}`;
                 }
             });
 
@@ -829,8 +1252,8 @@
             window.openEdit = (id) => {
                 editTarget = allAccounts.find(a => a.account_id === id);
                 if (!editTarget) return;
-                if (id === session.account_id) {
-                    showToast("You cannot edit your own account type or status.", "error");
+                if (!canManage(editTarget)) {
+                    showToast(whyNotManageable(editTarget), "error");
                     return;
                 }
                 const name = [editTarget.first_name, editTarget.last_name].filter(Boolean).join(" ") || "—";
@@ -858,26 +1281,68 @@
                 btn.innerHTML = '<div class="btn-loader"></div>';
                 try {
                     const old = { ...editTarget };
-                    const { error } = await db.from("accounts").update({ account_type: type, status }).eq("account_id", id);
-                    if (error) throw error;
-                    const isMother = type === "mother" || old.account_type === "mother";
-                    const targetLabel = isMother ? `Patient #${id}` : `account #${id}`;
-                    await db.from("audit_trail").insert({
-                        account_id: session.account_id,
-                        action: "update_account",
-                        table_name: "accounts",
-                        description: `Updated ${targetLabel} — type: ${type}, status: ${status}`,
-                        old_data: { account_type: old.account_type, status: old.status },
-                        new_data: { account_type: type, status }
-                    });
-                    const idx = allAccounts.findIndex(a => a.account_id === id);
-                    if (idx !== -1) {
-                        allAccounts[idx].account_type = type;
-                        allAccounts[idx].status = status;
+
+                    // Promoting somebody into 'mho' or 'admin' hands them the
+                    // whole municipality; only the municipal office may do it.
+                    if ((type === "mho" || type === "admin") && !isMho()) {
+                        showToast("Only the Municipal Health Office can assign a portal role.", "error");
+                        return;
                     }
+
+                    // A status change carries a reason and a set of rules, and
+                    // this dropdown has neither. Route it through the same path
+                    // the dedicated buttons use rather than writing the column
+                    // directly, so the last-administrator rule cannot be walked
+                    // around through the edit modal.
+                    if (status !== old.status) {
+                        document.getElementById("edit-modal").classList.remove("show");
+                        window.changeStatus(id, status);
+                        return;
+                    }
+
+                    if (type === old.account_type) {
+                        document.getElementById("edit-modal").classList.remove("show");
+                        showToast("Nothing changed.", "info");
+                        return;
+                    }
+
+                    const { error } = await db.from("accounts").update({ account_type: type }).eq("account_id", id);
+                    if (error) throw error;
+
+                    // trg_audit_account_change files this change itself. The
+                    // hand-written insert that used to sit here duplicated it.
+                    const idx = allAccounts.findIndex(a => a.account_id === id);
+                    if (idx !== -1) allAccounts[idx].account_type = type;
                     updateStatusCounts();
                     applyFilters();
                     document.getElementById("edit-modal").classList.remove("show");
+
+                    // A portal account is scoped by the office it is posted to.
+                    // Account Creation always sets one; this dropdown does not,
+                    // so promoting somebody here can leave an administrator who
+                    // signs in to an empty portal and no hint as to why. Check,
+                    // and say where to fix it.
+                    if (type === "mho" || type === "admin") {
+                        let posted = true;
+                        try {
+                            const { data } = await db
+                                .from("facility_assignments")
+                                .select("facility_id")
+                                .eq("account_id", id)
+                                .eq("is_active", true)
+                                .limit(1);
+                            posted = !!(data && data.length > 0);
+                        } catch (e) { /* leave it alone rather than cry wolf */ }
+
+                        if (!posted) {
+                            showToast(
+                                "Role changed, but this account is not posted to any facility yet — " +
+                                "it will sign in to an empty portal. Assign it on Facility Management.",
+                                "warning");
+                            return;
+                        }
+                    }
+
                     showToast("Account updated successfully.", "success");
                 } catch (e) {
                     showToast("Update failed: " + e.message, "error");
@@ -887,40 +1352,227 @@
                 }
             });
 
-            // Delete Modal
-            window.openDelete = (id) => {
+            /* ── Removing an account ───────────────────────────────────────
+               What this used to do: DELETE FROM accounts, behind a confirm box
+               reading "this action cannot be undone".
+
+               What that actually did: `mothers` references accounts ON DELETE
+               CASCADE, `pregnancies` references mothers the same way, and
+               `clinical_encounters` references pregnancies the same way again.
+               So one click on a mother's row destroyed her pregnancy history,
+               every prenatal encounter recorded in it and every risk
+               assessment — and blanked the audit trail's record of who did it,
+               because audit_trail.account_id is ON DELETE SET NULL. Her
+               children were orphaned rather than deleted, which is arguably
+               worse: the records survive with nobody attached.
+
+               What it does now: asks the database what a deletion would take
+               with it, then offers the appropriate action.
+
+                 nothing depends on it  ->  permanent delete, as before. This is
+                                            the real use for the button: an
+                                            account typed in wrongly that has
+                                            never been used.
+
+                 anything depends on it ->  archive. The account is deactivated,
+                                            marked as retired, its facility
+                                            posting is ended, and every clinical
+                                            record stays where it is. The modal
+                                            lists what would have been destroyed
+                                            so the decision is visible rather
+                                            than merely prevented.
+               ───────────────────────────────────────────────────────────── */
+
+            function accountLabel(account) {
+                if (!account) return "";
+                return account.account_type === "mother"
+                    ? `Patient #${account.account_id}`
+                    : ([account.first_name, account.last_name].filter(Boolean).join(" ") || account.email_address);
+            }
+
+            window.openDelete = async (id) => {
                 deleteTarget = allAccounts.find(a => a.account_id === id);
                 if (!deleteTarget) return;
-                if (id === session.account_id) {
-                    showToast("You cannot delete your own account.", "error");
+                if (!canManage(deleteTarget)) {
+                    showToast(whyNotManageable(deleteTarget), "error");
                     return;
                 }
-                const name = deleteTarget.account_type === "mother" ? `Patient #${deleteTarget.account_id}` : ([deleteTarget.first_name, deleteTarget.last_name].filter(Boolean).join(" ") || deleteTarget.email_address);
-                document.getElementById("delete-name").textContent = name;
+
+                const name = accountLabel(deleteTarget);
+                document.getElementById("delete-modal-title").textContent = "Remove Account";
+                document.getElementById("delete-reason").value = "";
+                document.getElementById("delete-checking").style.display = "";
+                document.getElementById("delete-body").style.display = "none";
+                document.getElementById("delete-archive").style.display = "none";
+                document.getElementById("delete-confirm").style.display = "none";
                 document.getElementById("delete-modal").classList.add("show");
+
+                let deps = null;
+                try {
+                    const res = await lifecycleRpc("admin_account_dependents", { p_account_id: id });
+                    if (res.available && res.data && res.data.success) deps = res.data;
+                } catch (e) {
+                    console.warn("Dependent check failed:", e.message || e);
+                }
+
+                document.getElementById("delete-checking").style.display = "none";
+                document.getElementById("delete-body").style.display = "";
+
+                const icon = document.getElementById("delete-modal-icon");
+                const message = document.getElementById("delete-message");
+                const impact = document.getElementById("delete-impact");
+
+                if (!deps) {
+                    // 20260925 is not applied here, so the portal cannot ask what
+                    // a delete would destroy. Refusing to guess: offer the safe
+                    // action, and say plainly why the destructive one is absent.
+                    icon.className = "fa-solid fa-box-archive";
+                    icon.style.color = "var(--warning)";
+                    message.innerHTML =
+                        `Archive <strong>${esc(name)}</strong>?<br>` +
+                        `<span style="font-size:12.5px;color:var(--text-secondary);">` +
+                        `Sign-in is blocked and the facility posting is ended. Every record stays.</span>`;
+                    impact.style.display = "";
+                    impact.style.background = "var(--bg-secondary)";
+                    impact.style.color = "var(--text-secondary)";
+                    impact.innerHTML =
+                        "<strong>Permanent deletion is unavailable on this database.</strong><br>" +
+                        "It cannot be offered safely until <code>database/migrations/20260925_account_lifecycle.sql</code> " +
+                        "has been run, because until then there is no way to check whether clinical " +
+                        "records depend on this account — and deleting one that has them destroys " +
+                        "the pregnancy and encounter history behind it.";
+                    document.getElementById("delete-archive").style.display = "";
+                    return;
+                }
+
+                if (deps.deletable) {
+                    icon.className = "fa-solid fa-triangle-exclamation";
+                    icon.style.color = "var(--error)";
+                    message.innerHTML =
+                        `Permanently delete <strong>${esc(name)}</strong>?<br>` +
+                        `<span style="font-size:12.5px;color:var(--text-secondary);">` +
+                        `Nothing clinical depends on this account, so deleting it destroys no patient record. ` +
+                        `It cannot be undone.</span>`;
+                    impact.style.display = "none";
+                    document.getElementById("delete-confirm").style.display = "";
+                    document.getElementById("delete-archive").style.display = "";
+                    return;
+                }
+
+                // The interesting case: this account is load-bearing.
+                const lines = [];
+                if (deps.pregnancies > 0)  lines.push(`${deps.pregnancies} ${deps.pregnancies === 1 ? "pregnancy" : "pregnancies"}`);
+                if (deps.encounters > 0)   lines.push(`${deps.encounters} prenatal ${deps.encounters === 1 ? "encounter" : "encounters"}`);
+                if (deps.children > 0)     lines.push(`${deps.children} ${deps.children === 1 ? "child record" : "child records"}`);
+                if (deps.immunizations > 0) lines.push(`${deps.immunizations} immunisation ${deps.immunizations === 1 ? "record" : "records"}`);
+                if (deps.growth_records > 0) lines.push(`${deps.growth_records} growth ${deps.growth_records === 1 ? "measurement" : "measurements"}`);
+                if (deps.doses_administered > 0) lines.push(`${deps.doses_administered} ${deps.doses_administered === 1 ? "dose" : "doses"} recorded as given by this midwife`);
+
+                icon.className = "fa-solid fa-box-archive";
+                icon.style.color = "var(--warning)";
+                message.innerHTML =
+                    `Archive <strong>${esc(name)}</strong>?<br>` +
+                    `<span style="font-size:12.5px;color:var(--text-secondary);">` +
+                    `Sign-in is blocked, the facility posting is ended, and every record below is kept.</span>`;
+
+                impact.style.display = "";
+                impact.style.background = "var(--error-10)";
+                impact.style.color = "#991b1b";
+                impact.innerHTML =
+                    "<strong><i class=\"fa-solid fa-shield-halved\"></i> Permanent deletion is blocked for this account.</strong><br>" +
+                    "Deleting it would destroy " +
+                    `<strong>${esc(lines.join(", "))}</strong>. ` +
+                    "Maternal and child health records are kept even when the account that holds them " +
+                    "is retired, so the only option here is to archive.";
+
+                document.getElementById("delete-archive").style.display = "";
+                document.getElementById("delete-confirm").style.display = "none";
             };
 
-            ["delete-modal-close", "delete-cancel"].forEach(id => {
-                document.getElementById(id).addEventListener("click", () => document.getElementById("delete-modal").classList.remove("show"));
-            });
-            document.getElementById("delete-modal").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("show"); });
+            /** Retire the account, keeping every record behind it. */
+            document.getElementById("delete-archive").addEventListener("click", async () => {
+                if (!deleteTarget) return;
+                const btn = document.getElementById("delete-archive");
+                const reason = document.getElementById("delete-reason").value.trim();
+                btn.disabled = true;
+                btn.innerHTML = '<div class="btn-loader"></div>';
 
+                try {
+                    let archived = false;
+                    const res = await lifecycleRpc("admin_archive_account", {
+                        p_account_id: deleteTarget.account_id,
+                        p_reason: reason || null,
+                        p_actor_id: session.account_id,
+                    });
+                    if (res.available) {
+                        if (!res.data || res.data.success !== true) {
+                            showToast(res.data?.error || "That account could not be archived.", "error");
+                            return;
+                        }
+                        archived = true;
+                    }
+
+                    if (!archived) {
+                        // Pre-20260925: no archived_at column, so the closest
+                        // truthful thing is a deactivation plus ending the
+                        // posting, which is what archiving does minus the flag.
+                        const { error } = await db.from("accounts")
+                            .update({ status: "inactive" }).eq("account_id", deleteTarget.account_id);
+                        if (error) throw error;
+                        await db.from("facility_assignments")
+                            .update({ is_active: false, ended_at: new Date().toISOString() })
+                            .eq("account_id", deleteTarget.account_id)
+                            .eq("is_active", true);
+                    }
+
+                    const idx = allAccounts.findIndex(a => a.account_id === deleteTarget.account_id);
+                    if (idx !== -1) {
+                        allAccounts[idx].status = "inactive";
+                        allAccounts[idx].archived_at = new Date().toISOString();
+                        allAccounts[idx].status_reason = reason || "Account retired";
+                    }
+
+                    updateStatusCounts();
+                    applyFilters();
+                    document.getElementById("delete-modal").classList.remove("show");
+                    showToast(`${accountLabel(deleteTarget)} archived. Records kept.`, "success");
+                } catch (e) {
+                    showToast("Archive failed: " + e.message, "error");
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-box-archive"></i> Archive account';
+                }
+            });
+
+            /** Permanent deletion, only ever offered for an account with nothing behind it. */
             document.getElementById("delete-confirm").addEventListener("click", async () => {
                 if (!deleteTarget) return;
                 const btn = document.getElementById("delete-confirm");
+                const reason = document.getElementById("delete-reason").value.trim();
                 btn.disabled = true;
                 btn.innerHTML = '<div class="btn-loader"></div>';
+
                 try {
-                    const { error } = await db.from("accounts").delete().eq("account_id", deleteTarget.account_id);
-                    if (error) throw error;
-                    const isMother = deleteTarget.account_type === "mother";
-                    const targetLabel = isMother ? `Patient #${deleteTarget.account_id}` : `account #${deleteTarget.account_id} (${deleteTarget.email_address})`;
-                    await db.from("audit_trail").insert({
-                        account_id: session.account_id,
-                        action: "delete_account",
-                        table_name: "accounts",
-                        description: `Deleted ${targetLabel}`
+                    const { data, error } = await db.rpc("admin_delete_account", {
+                        p_account_id: deleteTarget.account_id,
+                        p_actor_id: session.account_id,
+                        p_reason: reason || null,
                     });
+                    if (error) throw error;
+
+                    if (!data || data.success !== true) {
+                        // The database re-checks the dependents at the moment of
+                        // the write, so a record created between opening this
+                        // modal and confirming it still stops the delete.
+                        showToast(data?.error || "That account could not be deleted.", "error");
+                        if (data?.code === "has_clinical_records") {
+                            window.openDelete(deleteTarget.account_id);
+                        }
+                        return;
+                    }
+
+                    // No hand-written audit row: trg_audit_account_change files
+                    // the deletion, including the snapshot of what was removed.
                     allAccounts = allAccounts.filter(a => a.account_id !== deleteTarget.account_id);
                     updateStatusCounts();
                     document.getElementById("total-badge").textContent = `${allAccounts.length} accounts`;
@@ -931,9 +1583,14 @@
                     showToast("Delete failed: " + e.message, "error");
                 } finally {
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete';
+                    btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete permanently';
                 }
             });
+
+            ["delete-modal-close", "delete-cancel"].forEach(id => {
+                document.getElementById(id).addEventListener("click", () => document.getElementById("delete-modal").classList.remove("show"));
+            });
+            document.getElementById("delete-modal").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("show"); });
 
             // Search Input Clear Button
             const searchInput = document.getElementById("search-input");
@@ -950,12 +1607,38 @@
             });
 
 
-            loadAccounts();
-            window.AdminLiveRefresh?.start({
-                db,
-                tables: ["accounts", "midwives", "facility_assignments"],
-                refresh: loadAccounts,
-            });
+            // The scope decides which accounts this office may even see, so it
+            // is resolved before the first read rather than after it. Without
+            // this the page renders the whole municipality for a second and
+            // then narrows, which is both a flicker and a disclosure.
+            (async () => {
+                await PortalScope.refresh(db);
+                PortalScope.applyChrome();
+                applyTierWording();
+                await loadAccounts();
+
+                window.AdminLiveRefresh?.start({
+                    db,
+                    tables: ["accounts", "midwives", "mothers", "facility_assignments"],
+                    refresh: loadAccounts,
+                });
+            })();
+
+            /** Say which office's accounts these are, rather than "all". */
+            function applyTierWording() {
+                const subtitle = document.querySelector(".page-subtitle");
+                if (subtitle) {
+                    subtitle.textContent = isMho()
+                        ? "Every account in the municipality — activate, deactivate, suspend or remove"
+                        : `Accounts at ${PortalScope.facilityName || "this Rural Health Unit"} and its health centres`;
+                }
+                // Municipal Officer is not a role an RHU administrator can
+                // assign, so it should not be in the dropdown they are shown.
+                if (!isMho()) {
+                    document.querySelectorAll('#filter-type option[value="mho"], #edit-type option[value="mho"], #filter-type option[value="admin"], #edit-type option[value="admin"]')
+                        .forEach(opt => opt.remove());
+                }
+            }
         })();
     </script>
 </body>

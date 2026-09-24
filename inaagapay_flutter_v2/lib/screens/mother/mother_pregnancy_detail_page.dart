@@ -905,16 +905,14 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
               .select('factor, risk_influence')
               .inFilter('pregnancy_risk_id', riskIds);
 
-          if (factorsData != null) {
-            for (final f in factorsData) {
-              final factor = f['factor']?.toString().trim() ?? '';
-              final influence = f['risk_influence']?.toString().trim() ?? '';
-              if (factor.isNotEmpty) {
-                final display =
-                    influence.isNotEmpty ? '$factor ($influence)' : factor;
-                if (!allRiskFactors.contains(display)) {
-                  allRiskFactors.add(display);
-                }
+          for (final f in factorsData) {
+            final factor = f['factor']?.toString().trim() ?? '';
+            final influence = f['risk_influence']?.toString().trim() ?? '';
+            if (factor.isNotEmpty) {
+              final display =
+                  influence.isNotEmpty ? '$factor ($influence)' : factor;
+              if (!allRiskFactors.contains(display)) {
+                allRiskFactors.add(display);
               }
             }
           }
@@ -940,16 +938,14 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
             .select('condition_name, status')
             .eq('mother_id', motherId);
 
-        if (conditions != null) {
-          for (final c in conditions) {
-            final name = c['condition_name']?.toString().trim() ?? '';
-            final status = c['status']?.toString().toLowerCase().trim() ?? '';
-            if (name.isNotEmpty &&
-                (status == 'active' || status == 'ongoing' || status.isEmpty)) {
-              final display = 'Condition: $name';
-              if (!allRiskFactors.contains(display)) {
-                allRiskFactors.add(display);
-              }
+        for (final c in conditions) {
+          final name = c['condition_name']?.toString().trim() ?? '';
+          final status = c['status']?.toString().toLowerCase().trim() ?? '';
+          if (name.isNotEmpty &&
+              (status == 'active' || status == 'ongoing' || status.isEmpty)) {
+            final display = 'Condition: $name';
+            if (!allRiskFactors.contains(display)) {
+              allRiskFactors.add(display);
             }
           }
         }
@@ -991,39 +987,37 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           .eq('pregnancy_id', widget.pregnancyId)
           .order('checkup_datetime', ascending: false);
 
-      if (encounters != null) {
-        for (final enc in encounters) {
-          final dateStr = enc['checkup_datetime'] ?? enc['created_at'] ?? '';
-          final date = DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
-          final sys = enc['bp_systolic'] as int?;
-          final dia = enc['bp_diastolic'] as int?;
-          final notes = enc['notes']?.toString().trim() ?? '';
-          final diag = enc['diagnosis']?.toString().trim() ?? '';
-          final risk = enc['risk_level']?.toString().toLowerCase().trim() ?? '';
+      for (final enc in encounters) {
+        final dateStr = enc['checkup_datetime'] ?? enc['created_at'] ?? '';
+        final date = DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
+        final sys = enc['bp_systolic'] as int?;
+        final dia = enc['bp_diastolic'] as int?;
+        final notes = enc['notes']?.toString().trim() ?? '';
+        final diag = enc['diagnosis']?.toString().trim() ?? '';
+        final risk = enc['risk_level']?.toString().toLowerCase().trim() ?? '';
 
-          if (risk == 'high' ||
-              (sys != null && sys >= 140) ||
-              (dia != null && dia >= 90) ||
-              notes.isNotEmpty ||
-              diag.isNotEmpty) {
-            String summary = '';
-            if (sys != null && dia != null && (sys >= 140 || dia >= 90)) {
-              summary = 'Blood Pressure: $sys/$dia mmHg (Elevated reading)';
-            } else if (diag.isNotEmpty) {
-              summary = diag;
-            } else if (notes.isNotEmpty) {
-              summary = notes;
-            } else {
-              summary =
-                  'Recorded as needing closer monitoring during clinical check-up.';
-            }
-
-            findings.add({
-              'type': 'Prenatal Checkup',
-              'date': date,
-              'summary': summary,
-            });
+        if (risk == 'high' ||
+            (sys != null && sys >= 140) ||
+            (dia != null && dia >= 90) ||
+            notes.isNotEmpty ||
+            diag.isNotEmpty) {
+          String summary = '';
+          if (sys != null && dia != null && (sys >= 140 || dia >= 90)) {
+            summary = 'Blood Pressure: $sys/$dia mmHg (Elevated reading)';
+          } else if (diag.isNotEmpty) {
+            summary = diag;
+          } else if (notes.isNotEmpty) {
+            summary = notes;
+          } else {
+            summary =
+                'Recorded as needing closer monitoring during clinical check-up.';
           }
+
+          findings.add({
+            'type': 'Prenatal Checkup',
+            'date': date,
+            'summary': summary,
+          });
         }
       }
 
@@ -1035,28 +1029,23 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           .eq('pregnancy_id', widget.pregnancyId)
           .order('ultrasound_date', ascending: false);
 
-      if (ultrasounds != null) {
-        for (final us in ultrasounds) {
-          final classification = us['monitoring_classification']
-                  ?.toString()
-                  .toLowerCase()
-                  .trim() ??
-              '';
-          final remarks = us['remarks']?.toString().trim() ?? '';
-          if (classification.contains('closer') ||
-              classification.contains('monitoring') ||
-              remarks.isNotEmpty) {
-            final dateStr = us['ultrasound_date'] ?? us['created_at'] ?? '';
-            final date =
-                DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
-            findings.add({
-              'type': 'Ultrasound',
-              'date': date,
-              'summary': remarks.isNotEmpty
-                  ? remarks
-                  : 'Requires closer monitoring based on scan findings.',
-            });
-          }
+      for (final us in ultrasounds) {
+        final classification =
+            us['monitoring_classification']?.toString().toLowerCase().trim() ??
+                '';
+        final remarks = us['remarks']?.toString().trim() ?? '';
+        if (classification.contains('closer') ||
+            classification.contains('monitoring') ||
+            remarks.isNotEmpty) {
+          final dateStr = us['ultrasound_date'] ?? us['created_at'] ?? '';
+          final date = DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
+          findings.add({
+            'type': 'Ultrasound',
+            'date': date,
+            'summary': remarks.isNotEmpty
+                ? remarks
+                : 'Requires closer monitoring based on scan findings.',
+          });
         }
       }
 
@@ -1068,23 +1057,20 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
           .eq('pregnancy_id', widget.pregnancyId)
           .order('lab_test_date', ascending: false);
 
-      if (labTests != null) {
-        for (final lab in labTests) {
-          final isAbnormal = lab['is_abnormal'] == true;
-          final summary = lab['result_summary']?.toString().trim() ?? '';
-          if (isAbnormal || summary.isNotEmpty) {
-            final dateStr = lab['lab_test_date'] ?? lab['created_at'] ?? '';
-            final date =
-                DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
-            final type = lab['lab_test_type']?.toString().trim() ?? 'Lab Test';
-            findings.add({
-              'type': type,
-              'date': date,
-              'summary': summary.isNotEmpty
-                  ? summary
-                  : 'Abnormal test result marked for observation.',
-            });
-          }
+      for (final lab in labTests) {
+        final isAbnormal = lab['is_abnormal'] == true;
+        final summary = lab['result_summary']?.toString().trim() ?? '';
+        if (isAbnormal || summary.isNotEmpty) {
+          final dateStr = lab['lab_test_date'] ?? lab['created_at'] ?? '';
+          final date = DateTime.tryParse(dateStr.toString()) ?? DateTime.now();
+          final type = lab['lab_test_type']?.toString().trim() ?? 'Lab Test';
+          findings.add({
+            'type': type,
+            'date': date,
+            'summary': summary.isNotEmpty
+                ? summary
+                : 'Abnormal test result marked for observation.',
+          });
         }
       }
 

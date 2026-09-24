@@ -5444,3 +5444,209 @@ table.data-table tbody tr:hover td {
     max-height: 60vh;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Collapsible sidebar (desktop)
+
+   The shell is a CSS grid whose first column is `var(--sidebar-w)`, and
+   .app-sidebar sizes itself from the same token. Redefining that one custom
+   property on .app-layout therefore moves the grid column and the panel
+   together — no second set of widths to keep in step, and no JS measuring
+   anything.
+
+   Below 993px the sidebar is already a fixed overlay drawer driven by
+   `.open`, and collapsing has no meaning there: the panel is not taking space
+   from anything. So every rule here is inside the desktop query, and the
+   header button keeps its drawer behaviour on small screens.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* THE WIDTH CHANGE IS DELIBERATELY NOT ANIMATED.
+
+   Two attempts at animating it both failed, in ways worth recording so the
+   next person does not try a third:
+
+     transition: grid-template-columns
+       Animated shut on the first collapse and then stayed collapsed for good.
+       The change arrives through a custom property, and the engine never
+       restarts the transition when that property changes back.
+
+     @property --sidebar-w + transition: --sidebar-w
+       Correct while the tab is painting, but a throttled tab (backgrounded, or
+       any context where rAF is not running) freezes the transition at its start
+       value — and that start value is the *previous* state's width. The class
+       then says collapsed while the layout says expanded, and stays that way
+       until something forces a repaint.
+
+   Both failures leave the layout wrong rather than merely unanimated, which is
+   a bad trade for 240ms of easing on a control that is pressed a few times a
+   day. The panel now snaps, which is instant, correct in every state, and what
+   most editors do anyway. Only cosmetic properties are transitioned below. */
+
+@media (min-width: 993px) {
+  /* The rail is wide enough for a 44px hit target with breathing room either
+     side, which is what keeps a collapsed icon from reading as cramped. */
+  .app-layout.sidebar-collapsed {
+    --sidebar-w: 76px;
+  }
+
+  /* The header button is the drawer toggle on small screens and the collapse
+     toggle here. One control, one mental model. */
+  .header-sidebar-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    font-size: 17px;
+    border-radius: 10px;
+    border: 1px solid var(--border-primary);
+    background: #fff;
+    color: var(--text-secondary);
+    transition: color var(--transition), background var(--transition),
+                border-color var(--transition);
+  }
+
+  .header-sidebar-toggle:hover {
+    color: var(--brand-primary);
+    border-color: var(--brand-primary-30);
+    background: var(--brand-primary-10);
+  }
+
+  /* ── Collapsed rail ────────────────────────────────────────────────── */
+
+  .sidebar-collapsed .app-sidebar {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .sidebar-collapsed .sidebar-nav,
+  .sidebar-collapsed .sidebar-footer-nav {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .sidebar-collapsed .sidebar-nav a,
+  .sidebar-collapsed .sidebar-logout {
+    justify-content: center;
+    gap: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* The label is wrapped at runtime by sidebar.js, because the markup carries
+     it as a bare text node beside the icon and a text node cannot be hidden
+     from CSS. */
+  .sidebar-collapsed .nav-label {
+    display: none;
+  }
+
+  /* Section headings have nothing to caption once the labels are gone. They
+     collapse to nothing rather than to a truncated word. */
+  .sidebar-collapsed .sidebar-section-label {
+    height: 0;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    opacity: 0;
+  }
+
+  /* The rules between groups become the only grouping cue, so they earn a
+     little more room than they had. */
+  .sidebar-collapsed .sidebar-divider {
+    margin: 10px 18px;
+  }
+
+  /* A count has no room to sit beside a hidden label, so it becomes a dot on
+     the icon — still visible, still an alert, no longer a number nobody can
+     read. sidebar.js copies the count into a title so it stays available. */
+  .sidebar-collapsed .sidebar-nav a .nav-counter-badge {
+    position: absolute;
+    top: 6px;
+    right: 14px;
+    min-width: 9px;
+    width: 9px;
+    height: 9px;
+    padding: 0;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    font-size: 0;
+    line-height: 0;
+    overflow: hidden;
+  }
+
+  .sidebar-collapsed .app-sidebar .sidebar-nav a.active .nav-counter-badge {
+    border-color: var(--brand-primary);
+  }
+
+  /* ── Tooltips ──────────────────────────────────────────────────────────
+     Positioned from JS into document.body rather than drawn with ::after on
+     the link itself: .app-sidebar is an overflow-y:auto scroll container, so
+     anything a child paints outside the rail is clipped by it. */
+  .sidebar-tip {
+    position: fixed;
+    z-index: 400;
+    padding: 7px 11px;
+    border-radius: 8px;
+    background: #0f172a;
+    color: #fff;
+    font-family: var(--font);
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.14s ease, transform 0.14s ease;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.22);
+  }
+
+  .sidebar-tip.is-visible {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .sidebar-tip::before {
+    content: "";
+    position: absolute;
+    left: -4px;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    transform: translateY(-50%) rotate(45deg);
+    background: inherit;
+  }
+
+  .sidebar-tip-count {
+    display: inline-block;
+    margin-left: 7px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--brand-primary);
+    color: #fff;
+    font-size: 11px;
+  }
+}
+
+/* A pointer-less device gets no hover tooltip, and a reader who has asked for
+   less motion gets the state change without the slide. */
+@media (hover: none) {
+  .sidebar-tip { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-tip {
+    transition: none !important;
+  }
+}
+
+/* ── Using the space the sidebar gives back ──────────────────────────────
+   Collapsing is only worth doing if the content actually widens into it.
+   .app-main had a fixed 28px gutter, which on a wide screen left the reclaimed
+   200px as more whitespace rather than more table. The gutter now scales with
+   the viewport instead. */
+@media (min-width: 993px) {
+  .app-main {
+    padding: 24px clamp(20px, 2.2vw, 40px);
+  }
+}

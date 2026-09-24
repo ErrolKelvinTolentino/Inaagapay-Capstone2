@@ -84,16 +84,41 @@
 
     /** Read the catalogue, every batch in scope, and register health facilities. */
     async load(db) {
-      const [itemRes, batchRes] = await Promise.all([
-        db.from("inventory_items").select("*").order("name"),
-        db.from("inventory_batches").select("*").order("expiration_date"),
-      ]);
+      // Both reads were select("*") over the whole table, re-run on every
+      // refresh tick by dashboard.html and reports.html alike. The catalogue is
+      // small but the batch ledger is not, and an RHU was pulling every other
+      // RHU's batches only to drop them in inScope() below.
+      //
+      // AdminData names the eight columns this file actually reads, pushes the
+      // facility scope into the query, and caches the answer so two pages (or
+      // two refreshes inside the TTL) share one read. It falls back to
+      // select("*") by itself if a column here is missing on this database.
+      if (window.AdminData) {
+        const [itemRows, batchRows] = await Promise.all([
+          AdminData.rows(db, "inventory_items", {
+            key: "stock:items",
+            order: "name",
+          }),
+          AdminData.rows(db, "inventory_batches", {
+            key: "stock:batches",
+            scope: "facility",
+            order: "expiration_date",
+          }),
+        ]);
+        items = itemRows || [];
+        batches = (batchRows || []).filter((b) => inScope(b.facility_id));
+      } else {
+        const [itemRes, batchRes] = await Promise.all([
+          db.from("inventory_items").select("*").order("name"),
+          db.from("inventory_batches").select("*").order("expiration_date"),
+        ]);
 
-      if (itemRes.error) throw itemRes.error;
-      if (batchRes.error) throw batchRes.error;
+        if (itemRes.error) throw itemRes.error;
+        if (batchRes.error) throw batchRes.error;
 
-      items = itemRes.data || [];
-      batches = (batchRes.data || []).filter((b) => inScope(b.facility_id));
+        items = itemRes.data || [];
+        batches = (batchRes.data || []).filter((b) => inScope(b.facility_id));
+      }
 
       // Resolve facilities in scope if not already set
       if (facilities.length === 0) {

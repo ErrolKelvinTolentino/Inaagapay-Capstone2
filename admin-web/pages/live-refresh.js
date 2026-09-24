@@ -10,8 +10,20 @@
 (function () {
   "use strict";
 
-  const DEFAULT_INTERVAL_MS = 60 * 1000;
-  const DEFAULT_STALE_MS = 15 * 1000;
+  // Two very different intervals, because they do two different jobs.
+  //
+  // When Realtime is subscribed the page already learns about every change the
+  // moment it happens; the timer is only there to catch a socket that has gone
+  // quiet without saying so. Ten minutes is plenty for that, and the old
+  // sixty-second tick was re-reading whole tables 600 times a day per open tab
+  // to discover nothing had changed. That single number was the largest source
+  // of egress in the portal.
+  //
+  // With Realtime down the timer is the only way the page learns anything, so
+  // it stays brisk.
+  const LIVE_HEARTBEAT_MS = 10 * 60 * 1000;
+  const FALLBACK_INTERVAL_MS = 2 * 60 * 1000;
+  const DEFAULT_STALE_MS = 30 * 1000;
   const REALTIME_DEBOUNCE_MS = 650;
   let activeController = null;
 
@@ -60,9 +72,9 @@
       return null;
     }
 
-    const intervalMs = Number.isFinite(options.intervalMs)
+    const overrideIntervalMs = Number.isFinite(options.intervalMs)
       ? Math.max(0, options.intervalMs)
-      : DEFAULT_INTERVAL_MS;
+      : null;
     const staleMs = Number.isFinite(options.staleMs)
       ? Math.max(0, options.staleMs)
       : DEFAULT_STALE_MS;
@@ -81,8 +93,13 @@
     let realtimeConnected = false;
     let lastRefreshAt = Date.now();
     let intervalId = null;
+    let intervalPeriod = null;
     let realtimeTimer = null;
     let channel = null;
+    // Tables named by realtime events since the last refresh. Only the cached
+    // reads built from these are dropped, so a change to one account does not
+    // cost a re-read of every inventory batch in the municipality.
+    let dirtyTables = new Set();
 
     function updateState(state, text, detail) {
       if (!control || !label) return;
@@ -128,6 +145,19 @@
       inFlight = true;
       queued = false;
       updateState("syncing", "Syncing", "Refreshing page data");
+
+      // Drop the cached reads this refresh is meant to supersede. A realtime
+      // tick knows exactly which tables moved; every other trigger is a human
+      // or a heartbeat asking for the current picture, so nothing is kept.
+      if (window.AdminData) {
+        if (source === "realtime" && dirtyTables.size > 0) {
+          window.AdminData.invalidateTables([...dirtyTables]);
+        } else {
+          window.AdminData.invalidate();
+        }
+      }
+      dirtyTables = new Set();
+
       try {
         await refreshCallback(source);
         lastRefreshAt = Date.now();
@@ -154,6 +184,7 @@
       if (watchedTables.size && tableName && !watchedTables.has(tableName)) {
         return;
       }
+      if (tableName) dirtyTables.add(String(tableName));
       window.clearTimeout(realtimeTimer);
       realtimeTimer = window.setTimeout(
         () => refresh("realtime"),
@@ -188,11 +219,27 @@
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    if (intervalMs > 0) {
+    // The timer's period depends on whether Realtime is carrying the updates,
+    // so it is rebuilt whenever that changes rather than fixed at start-up.
+    function rescheduleInterval() {
+      const period = overrideIntervalMs !== null
+        ? overrideIntervalMs
+        : (realtimeConnected ? LIVE_HEARTBEAT_MS : FALLBACK_INTERVAL_MS);
+
+      if (intervalId !== null && period === intervalPeriod) return;
+      window.clearInterval(intervalId);
+      intervalId = null;
+      intervalPeriod = period;
+      if (period <= 0) return;
+
       intervalId = window.setInterval(() => {
+        // A background tab that nobody is looking at has no reason to pull
+        // rows. It re-reads on the visibilitychange that brings it forward.
         if (!document.hidden) refresh("interval");
-      }, intervalMs);
+      }, period);
     }
+
+    rescheduleInterval();
 
     updateState("connecting", "Connecting", "Connecting live page updates");
     try {
@@ -212,6 +259,9 @@
           if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
             console.warn("Realtime unavailable; periodic refresh remains active.");
           }
+          // Losing the socket means the timer becomes the only source of
+          // updates, and regaining it means the timer can stand down again.
+          rescheduleInterval();
           restingState();
         });
     } catch (error) {

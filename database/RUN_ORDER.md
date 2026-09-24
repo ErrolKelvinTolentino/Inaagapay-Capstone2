@@ -189,3 +189,127 @@ was created before step 7 was applied.
 keeps them in `database/migrations/` and has never used the CLI ledger. Running
 these through the SQL Editor keeps that consistent. `supabase db dump` and
 `db diff` need Docker Desktop, which is not installed on this machine.
+
+---
+
+# Account lifecycle and facility management (2026-09-16)
+
+Two migrations, independent of the inventory sequence above and of each other.
+Neither is required by anything else, and the portal works without both — each
+page detects a missing function and falls back to what it did before. Run them
+when convenient, in either order.
+
+## `migrations/20260925_account_lifecycle.sql`
+
+Gives suspend, deactivate and delete three different meanings instead of one.
+
+Adds `accounts.status_reason`, `status_changed_at`, `status_changed_by` and
+`archived_at`, plus four functions: `admin_account_dependents`,
+`admin_set_account_status`, `admin_delete_account` and `admin_archive_account`.
+
+**Why it matters more than it sounds.** `mothers` references `accounts` with
+ON DELETE CASCADE, `pregnancies` references `mothers` the same way, and
+`clinical_encounters` references `pregnancies` the same way again. The Delete
+button on Account Management was a plain `DELETE FROM accounts`, so one click on
+a mother's row destroyed her pregnancy history, every prenatal encounter in it
+and every risk assessment — and blanked the audit trail's record of who did it,
+because `audit_trail.account_id` is ON DELETE SET NULL.
+
+Until this is applied, accounts.html will not offer permanent deletion at all:
+it cannot check what depends on an account, so it offers Archive and says why.
+That is deliberate, and it is safe to leave in that state indefinitely.
+
+Idempotent. Verify with:
+
+```sql
+SELECT public.admin_account_dependents(
+  (SELECT account_id FROM public.accounts WHERE account_type = 'mother' LIMIT 1));
+```
+
+Expect `deletable: false` for any mother who has a pregnancy on file.
+
+## `migrations/20260926_facility_management.sql`
+
+Lets the Municipal Health Office register and maintain the facility tree from
+the portal. Requires `20260821_mho_tier.sql`.
+
+Adds `is_municipal_officer`, `create_health_facility`, `update_health_facility`
+and `set_facility_active`. Facilities are never deleted — `facility_assignments`
+references them ON DELETE RESTRICT and stock, transfers and patient assignments
+all point at them — so retirement is `is_active = false`, refused while the
+facility still has active children, assigned mothers or midwives, or usable
+stock on the shelf.
+
+Until this is applied, the Register / Edit / Retire controls on facilities.html
+say the migration is needed. Reassigning a health centre between RHUs keeps
+working either way: that is `set_facility_parent`, which shipped with 20260821.
+
+Idempotent. Verify with:
+
+```sql
+SELECT facility_id, name, facility_type, facility_code, parent_facility_id, is_active
+  FROM public.health_facilities ORDER BY facility_type, facility_code;
+```
+
+Then register a test health centre through the portal and confirm it appears
+with a parent, a code and `is_active = true`.
+
+## `migrations/20260927_account_provisioning.sql`
+
+Who may create which account, and where that account is posted. Requires
+`20260821_mho_tier.sql`; independent of the two files above.
+
+    Municipal Health Office   appoints  RHU administrators,
+                                        BHC administrators,
+                                        municipal officers
+    RHU administrator         hires     midwives, at any centre under it
+    BHC administrator         hires     midwives, at its own centre
+
+Adds `portal_account_tier`, `admin_provisioning_options` and
+`create_portal_account`, and relaxes `assign_portal_account_facility` so an
+`admin` may be posted to a barangay health centre as well as to an RHU. No
+schema change: a BHC administrator is an `admin` account whose facility happens
+to be a BHC.
+
+**Why it matters.** The rule previously lived in account-create.html as two
+`style.display = "none"` calls. Hiding a radio button is not a permission — the
+page reaches PostgREST over the anon key, so an RHU administrator could create a
+municipal officer by deleting one attribute in the inspector. It also let an RHU
+administrator appoint fellow RHU administrators, which is how an office ends up
+with administrators nobody remembers hiring.
+
+`create_portal_account` also makes the write atomic. The portal used to issue
+four separate writes — accounts, midwives, facility_assignments, then the
+assignment RPC — with the last three in try/catch blocks that only reached
+`console.warn`. A failed posting produced an account that could sign in and see
+nothing, reported on screen as "created successfully".
+
+⚠ **Re-run hazard.** `assign_portal_account_facility` is defined in both this
+file and `20260821_mho_tier.sql`. Re-running 20260821 reverts the relaxation and
+BHC administrators stop being assignable — run this file again afterwards. Same
+class of problem as the `deduct_immunization_stock` note above.
+
+Until this is applied, account-create.html falls back to the rules it has always
+had, minus BHC administrators, and says so under the role cards.
+
+Idempotent. Verify with:
+
+```sql
+SELECT a.account_id, a.email_address,
+       public.portal_account_tier(a.account_id) AS tier,
+       jsonb_array_length(public.admin_provisioning_options(a.account_id)->'roles') AS role_count
+  FROM public.accounts a
+ WHERE a.account_type IN ('mho', 'admin') AND a.status = 'active'
+ ORDER BY 1;
+```
+
+Expect `tier = 'mho'` with 3 roles for the municipal officer, and `tier = 'rhu'`
+with 1 role for each RHU administrator. Then confirm the refusal path:
+
+```sql
+SELECT public.create_portal_account(
+         <rhu_admin_id>, 'mho', 'Test', 'Officer',
+         'never-created@example.test', 'x', NULL);
+```
+
+Expect `success: false` — "An administrator can only create midwife accounts."

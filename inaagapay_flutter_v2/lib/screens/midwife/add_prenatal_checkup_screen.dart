@@ -3350,8 +3350,9 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                         final v = int.tryParse(_fetalBeatCtrl.text.trim());
                         if (v == null) return AppColors.textSecondary;
                         final assessment = FetalHeartRateReference.assess(v);
-                        if (!assessment.isOutsideBaseline)
+                        if (!assessment.isOutsideBaseline) {
                           return AppColors.success;
+                        }
                         return AppColors.error;
                       }(),
                     ),

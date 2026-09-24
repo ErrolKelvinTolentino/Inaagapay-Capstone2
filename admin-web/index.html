@@ -672,6 +672,28 @@
         const alertBox = document.getElementById("login-alert");
         const alertMsgSpan = document.getElementById("login-alert-msg");
 
+        // Somebody whose account was suspended or deactivated while they were
+        // signed in is returned here by common-security.js. Landing on a blank
+        // login form reads as a fault with the portal; saying what happened
+        // sends them to the right person instead of to the helpdesk.
+        (function explainSignOut() {
+          let note = null;
+          try {
+            note = JSON.parse(sessionStorage.getItem("inaagapay_signout_reason"));
+            sessionStorage.removeItem("inaagapay_signout_reason");
+          } catch (e) { return; }
+          if (!note || !note.status) return;
+
+          const wording = note.status === "suspended"
+            ? "Your account has been suspended, so you were signed out."
+            : "Your account has been deactivated, so you were signed out.";
+
+          alertMsgSpan.textContent = note.reason
+            ? wording + " Reason given: " + note.reason
+            : wording + " Contact your administrator.";
+          alertBox.classList.remove("hidden");
+        })();
+
         form.addEventListener("submit", async (e) => {
           e.preventDefault();
           const email = emailInput.value.trim();

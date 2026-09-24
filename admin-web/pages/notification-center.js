@@ -37,8 +37,19 @@
 
   // Slow on purpose. The realtime feed is the fast path; this only exists so a
   // page with no live refresh, or one whose socket has dropped, still catches
-  // up within a couple of minutes.
-  const POLL_MS = 90 * 1000;
+  // up eventually.
+  //
+  // It used to run every ninety seconds on top of a refresh for every
+  // inaagapay:data-refreshed event, every focus and every visibilitychange --
+  // and the two tab events fire together, so switching back to the tab cost two
+  // full reads plus an inventory-alert scan of the whole municipality. The poll
+  // is now a genuine backstop and MIN_GAP_MS collapses the duplicates.
+  const POLL_MS = 5 * 60 * 1000;
+
+  // No two reads closer together than this, whatever asked for them. A refresh
+  // that arrives inside the window is dropped, not queued: every caller here
+  // wants "the current list", and the read that just finished is that list.
+  const MIN_GAP_MS = 20 * 1000;
 
   // Enough to cover a long weekend without turning the panel into an archive.
   const PAGE_SIZE = 30;
@@ -54,6 +65,7 @@
   // so a portal deployed ahead of its migration stops asking every 90 seconds.
   let livePreviewAvailable = true;
   let pollId = null;
+  let lastRefreshAt = 0;
   let bell = null;
   let panel = null;
 
@@ -414,7 +426,7 @@
       document.getElementById("admin-notif-list")?.focus();
       // Opening is also the cheapest moment to notice anything that arrived
       // while the socket was down.
-      refresh();
+      refresh({ force: true });
     }
   }
 
@@ -449,8 +461,11 @@
     }
   }
 
-  async function refresh() {
+  async function refresh(opts) {
     if (!db || !session?.account_id || loading) return;
+    // `force` is the bell being opened or a notification being marked read --
+    // a direct request from the operator, which always reads.
+    if (!opts?.force && Date.now() - lastRefreshAt < MIN_GAP_MS) return;
     loading = true;
     try {
       // Live alerts never fail the panel: loadLive() swallows its own errors
@@ -478,6 +493,7 @@
       loadFailed = true;
       console.warn("Notification centre read failed:", e.message || e);
     } finally {
+      lastRefreshAt = Date.now();
       loading = false;
       renderCount();
       if (panel && !panel.hidden) renderList();
@@ -718,7 +734,7 @@
         .eq("is_read", false);
     } catch (e) {
       console.warn("Could not mark all notifications read:", e.message || e);
-      refresh();
+      refresh({ force: true });
     }
   }
 
@@ -749,7 +765,7 @@
 
       if (!buildBell()) return;
 
-      refresh();
+      refresh({ force: true });
 
       // The fast path: live-refresh.js already owns the realtime channel and
       // announces every refresh it does.
@@ -761,7 +777,6 @@
         if (document.visibilityState === "visible") refresh();
       }, POLL_MS);
 
-      window.addEventListener("focus", () => refresh());
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") refresh();
       });

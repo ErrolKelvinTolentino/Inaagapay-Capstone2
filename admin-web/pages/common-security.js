@@ -206,24 +206,79 @@
   }
 
   // 4. Async Security DB Verification (Tamper Protection)
-  window.verifyAdminSessionWithDB = async function (dbInstance) {
+  //
+  // Suspending an account used to take effect only at the suspended person's
+  // next page load. Someone already signed in kept full use of the portal --
+  // reading patients, approving stock, editing records -- until they happened
+  // to navigate. For an account suspended because of what its holder is doing,
+  // that is the one moment the block needs to work.
+  //
+  // This now runs on every live-refresh tick as well as at page load, so a
+  // suspension lands within the refresh interval instead of whenever the
+  // browser next changes page.
+  let lastSessionCheck = 0;
+  const SESSION_RECHECK_MS = 60 * 1000;
+
+  window.verifyAdminSessionWithDB = async function (dbInstance, opts) {
     if (!session || !session.account_id || !dbInstance) return;
+    // One extra single-row read per minute at most. Cheap next to what it
+    // prevents, and far cheaper than what this portal was spending elsewhere.
+    if (!opts?.force && Date.now() - lastSessionCheck < SESSION_RECHECK_MS) return;
+    lastSessionCheck = Date.now();
+
     try {
       const { data, error } = await dbInstance
         .from("accounts")
-        .select("account_id, status, account_type")
+        .select("account_id, status, account_type, status_reason")
         .eq("account_id", session.account_id)
-        .single();
+        .maybeSingle();
 
-      if (error || !data || data.status !== "active" || !PORTAL_ACCOUNT_TYPES.includes(data.account_type)) {
-        console.warn("Security Alert: Invalid or suspended session detected.");
-        localStorage.removeItem(SESSION_KEY);
-        window.location.href = isLoginPage ? "index.html" : "../index.html";
+      // A failed read is not proof of a suspension -- a dropped request would
+      // otherwise sign people out mid-shift -- so only a definite answer ends
+      // the session.
+      if (error) {
+        if (String(error.code) === "42703" || /status_reason/.test(String(error.message || ""))) {
+          // Pre-20260925 database: retry without the reason column.
+          const retry = await dbInstance
+            .from("accounts")
+            .select("account_id, status, account_type")
+            .eq("account_id", session.account_id)
+            .maybeSingle();
+          if (retry.error) return;
+          return endSessionIfBlocked(retry.data);
+        }
+        return;
       }
+      endSessionIfBlocked(data);
     } catch (e) {
       console.warn("Session verification warning:", e);
     }
   };
+
+  function endSessionIfBlocked(account) {
+    if (!account) return;
+    if (account.status === "active" && PORTAL_ACCOUNT_TYPES.includes(account.account_type)) return;
+
+    console.warn("Session ended: account is " + account.status + ".");
+    try {
+      // Carried to the login screen so the person is told why they were signed
+      // out, rather than being dropped at a login form with no explanation.
+      sessionStorage.setItem("inaagapay_signout_reason", JSON.stringify({
+        status: account.status,
+        reason: account.status_reason || null,
+      }));
+    } catch (e) { /* private browsing */ }
+
+    localStorage.removeItem(SESSION_KEY);
+    window.PortalScope?.clear();
+    window.location.href = isLoginPage ? "index.html" : "../index.html";
+  }
+
+  // Every page announces its refreshes; this listens rather than keeping a
+  // timer of its own.
+  document.addEventListener("inaagapay:data-refreshed", () => {
+    if (window.db) window.verifyAdminSessionWithDB(window.db);
+  });
 
   // 5. Shared Masking & Validation Helpers
   window.escHtml = function (value) {
