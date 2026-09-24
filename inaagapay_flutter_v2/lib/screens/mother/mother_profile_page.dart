@@ -29,6 +29,7 @@ import '../../services/lab_test_reference.dart';
 import '../../services/fetal_heart_rate_reference.dart';
 import '../../services/maternal_td_service.dart';
 import '../../widgets/branded_date_picker.dart';
+import '../../widgets/transfer_mother_sheet.dart';
 
 // Blood type is no longer chosen on this screen, so the option list that used
 // to back a dropdown here is gone. It listed 'Unknown' as a ninth choice, which
@@ -7500,6 +7501,20 @@ class _MotherProfilePageState extends State<MotherProfilePage>
   // HEADER
   // ══════════════════════════════════════════════════════════════════════════
 
+  /// A mother who has moved house belongs to another health center. After
+  /// the move she no longer belongs on this midwife's list, so the page closes.
+  Future<void> _transferMother() async {
+    final profile = _cachedProfile ?? await _profileFuture;
+    if (!mounted) return;
+    final moved = await showTransferMotherSheet(
+      context,
+      motherId: widget.motherId,
+      motherName: profile['full_name']?.toString() ?? 'This mother',
+      currentBhcId: (profile['assigned_bhc_id'] as num?)?.toInt(),
+    );
+    if (moved && mounted) Navigator.pop(context, true);
+  }
+
   Widget _buildHeader() {
     return Container(
       decoration: BoxDecoration(
@@ -7551,6 +7566,17 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 ),
               ),
               const Spacer(),
+              if (!widget.readOnly) ...[
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Transfer to another health center',
+                  onPressed: _transferMother,
+                  icon: const Icon(Icons.swap_horiz_rounded,
+                      size: 24, color: AppColors.textPrimary),
+                ),
+                const SizedBox(width: 14),
+              ],
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),

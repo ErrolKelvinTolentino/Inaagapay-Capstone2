@@ -856,7 +856,9 @@ checks(sort_order, migration, requirement, present) AS (
     (8202, '20260927_account_provisioning.sql', 'function admin_provisioning_options()',
           EXISTS (SELECT 1 FROM procs WHERE proname = 'admin_provisioning_options')),
     (8203, '20260927_account_provisioning.sql', 'function create_portal_account()',
-          EXISTS (SELECT 1 FROM procs WHERE proname = 'create_portal_account'))
+          EXISTS (SELECT 1 FROM procs WHERE proname = 'create_portal_account')),
+    (8300, '20260928_mother_transfer.sql', 'function transfer_mother()',
+          EXISTS (SELECT 1 FROM procs WHERE proname = 'transfer_mother'))
 ),
 per_file AS (
   SELECT migration,

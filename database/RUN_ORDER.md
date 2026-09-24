@@ -318,3 +318,21 @@ SELECT public.create_portal_account(
 ```
 
 Expect `success: false` — "An administrator can only create midwife accounts."
+
+---
+
+# Mother transfers (2026-09-24)
+
+## `migrations/20260928_mother_transfer.sql`
+
+Adds `transfer_mother(actor, mother, to_bhc, reason, move_children, new_barangay)`:
+moves a mother, her patient number and (optionally) her children to another
+barangay health center in one transaction, ends her old posting, writes the
+audit trail and notifies the midwives at both centers. Clinical records keep
+the facility where they happened. Allowed for the Municipal Health Office, an
+administrator over her current center, or her own midwife.
+
+Used by the Transfer action on Account Management (portal) and the transfer
+icon on a mother's profile (midwife app). Both say the update is needed when
+the function is missing. Requires `20260821_mho_tier.sql` and
+`20260909_notification_reference_ids.sql`. Idempotent.

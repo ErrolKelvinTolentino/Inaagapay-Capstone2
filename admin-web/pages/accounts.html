@@ -314,6 +314,52 @@
         </div>
     </div>
 
+    <!-- Transfer Mother Modal
+
+         A mother who moves house belongs to another health center. The move
+         is one database call (transfer_mother, 20260928): her record, her
+         patient number and her children go to the new center together, and
+         the midwives at both ends are told. Her clinical history stays where
+         it happened. -->
+    <div class="modal-overlay" id="transfer-modal">
+        <div class="modal" style="max-width: 500px">
+            <div class="modal-header">
+                <h2 class="modal-title"><i class="fa-solid fa-right-left" style="color:var(--brand-primary);margin-right:6px;"></i> Transfer Mother</h2>
+                <button class="modal-close" id="transfer-modal-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:14px;color:var(--text-primary);line-height:1.6;margin:0 0 4px;" id="transfer-who"></p>
+                <p style="font-size:12.5px;color:var(--text-secondary);line-height:1.6;margin:0 0 14px;" id="transfer-current"></p>
+
+                <div class="form-group">
+                    <label class="form-label" for="transfer-destination">Move to <span style="color:var(--error);">*</span></label>
+                    <select class="form-select" id="transfer-destination"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="transfer-barangay">New barangay (optional)</label>
+                    <input type="text" class="form-control" id="transfer-barangay" maxlength="100"
+                           placeholder="Leave blank to keep her current address" />
+                </div>
+                <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:4px 0 12px;cursor:pointer;">
+                    <input type="checkbox" id="transfer-children" checked style="margin-top:3px;" />
+                    <span>Move her children to the new health center too <span style="color:var(--text-secondary);">(they get new child numbers there)</span></span>
+                </label>
+                <div class="form-group">
+                    <label class="form-label" for="transfer-reason">Reason <span style="color:var(--error);">*</span></label>
+                    <textarea class="form-control" id="transfer-reason" rows="2" maxlength="300"
+                              placeholder="e.g. Moved to Sabang with her family in September"></textarea>
+                    <small style="color:var(--text-secondary); font-size:11.5px;">Written to the audit trail.</small>
+                </div>
+                <div id="transfer-note" style="display:none;margin-top:10px;padding:10px 12px;border-radius:var(--radius-card-sm);background:var(--warning-10);color:#92400e;font-size:12.5px;line-height:1.6;"></div>
+                <input type="hidden" id="transfer-mother-id" />
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" id="transfer-cancel">Cancel</button>
+                <button class="btn btn-primary btn-sm" id="transfer-confirm"><i class="fa-solid fa-right-left"></i> Transfer</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Remove Account Modal
 
          Renamed from "Delete" because the safe outcome, and the usual one, is
@@ -917,6 +963,9 @@
                         a.status !== "suspended"
                             ? btn("background:var(--error-10);color:var(--error);border:none;", `changeStatus(${a.account_id}, 'suspended')`, "Suspend — requires a reason", "fa-ban")
                             : "",
+                        a.account_type === "mother" && a.status === "active"
+                            ? btn("background:var(--info-10, #eff6ff);color:var(--info, #2563eb);border:none;", `openTransfer(${a.account_id})`, "Transfer to another health center", "fa-right-left")
+                            : "",
                         btn("background:var(--error-10);color:var(--error);border:none;", `openDelete(${a.account_id})`, "Remove — archives, or deletes if nothing depends on it", "fa-trash"),
                     ].filter(Boolean).join("");
 
@@ -1094,6 +1143,112 @@
                 if (bits.length === 0) return "";
                 return `Before you do: ${bits.join(", ")}. Blocking sign-in does not remove any of it — the records stay exactly where they are.`;
             }
+
+
+            /* ── Transfer a mother to another health center ─────────────── */
+
+            let transferFacilities = null;
+
+            async function transferDestinations() {
+                if (transferFacilities) return transferFacilities;
+                const { data, error } = await db.from("health_facilities")
+                    .select("facility_id, name, barangay, parent_facility_id, is_active")
+                    .eq("facility_type", "BHC")
+                    .order("name");
+                if (error) throw error;
+                transferFacilities = (data || []).filter(f => f.is_active !== false);
+                return transferFacilities;
+            }
+
+            function closeTransfer() {
+                document.getElementById("transfer-modal").classList.remove("show");
+            }
+
+            window.openTransfer = async (accountId) => {
+                const account = allAccounts.find(a => a.account_id === accountId);
+                if (!account) return;
+                const name = [account.first_name, account.last_name].filter(Boolean).join(" ") || accountLabel(account);
+                const note = document.getElementById("transfer-note");
+                note.style.display = "none";
+                document.getElementById("transfer-reason").value = "";
+                document.getElementById("transfer-barangay").value = "";
+                document.getElementById("transfer-children").checked = true;
+                document.getElementById("transfer-who").innerHTML = `Transfer <strong>${esc(name)}</strong> to another barangay health center.`;
+                document.getElementById("transfer-current").textContent = "Looking up her current health center…";
+                const select = document.getElementById("transfer-destination");
+                select.innerHTML = "<option value=''>Loading…</option>";
+                document.getElementById("transfer-modal").classList.add("show");
+
+                try {
+                    const [{ data: mother, error: motherErr }, facilities] = await Promise.all([
+                        db.from("mothers").select("mother_id, assigned_bhc_id, barangay").eq("account_id", accountId).maybeSingle(),
+                        transferDestinations(),
+                    ]);
+                    if (motherErr) throw motherErr;
+                    if (!mother) {
+                        document.getElementById("transfer-current").textContent = "";
+                        note.textContent = "This account has no mother record yet, so there is nothing to transfer.";
+                        note.style.display = "";
+                        select.innerHTML = "";
+                        return;
+                    }
+                    document.getElementById("transfer-mother-id").value = mother.mother_id;
+                    const current = facilities.find(f => String(f.facility_id) === String(mother.assigned_bhc_id));
+                    document.getElementById("transfer-current").textContent =
+                        `Currently at ${current ? current.name : "no health center"}${mother.barangay ? " · Barangay " + mother.barangay : ""}.`;
+                    select.innerHTML = "<option value=''>Choose a health center…</option>" + facilities
+                        .filter(f => String(f.facility_id) !== String(mother.assigned_bhc_id))
+                        .map(f => `<option value="${f.facility_id}">${esc(f.name)}${f.barangay ? " (" + esc(f.barangay) + ")" : ""}</option>`)
+                        .join("");
+                } catch (e) {
+                    document.getElementById("transfer-current").textContent = "";
+                    note.textContent = "Could not load health centers: " + (e.message || e);
+                    note.style.display = "";
+                }
+            };
+
+            document.getElementById("transfer-confirm")?.addEventListener("click", async () => {
+                const motherId = Number(document.getElementById("transfer-mother-id").value);
+                const toBhc = Number(document.getElementById("transfer-destination").value);
+                const reason = document.getElementById("transfer-reason").value.trim();
+                const note = document.getElementById("transfer-note");
+                if (!motherId || !toBhc) { showToast("Choose the health center she is moving to.", "warning"); return; }
+                if (reason.length < 5) { showToast("Say briefly why she is being transferred.", "warning"); return; }
+
+                const button = document.getElementById("transfer-confirm");
+                button.disabled = true;
+                try {
+                    const { data, error } = await db.rpc("transfer_mother", {
+                        p_actor_id: session.account_id,
+                        p_mother_id: motherId,
+                        p_to_bhc_id: toBhc,
+                        p_reason: reason,
+                        p_move_children: document.getElementById("transfer-children").checked,
+                        p_new_barangay: document.getElementById("transfer-barangay").value.trim() || null,
+                    });
+                    if (error) throw error;
+                    if (!data || !data.success) {
+                        note.textContent = (data && data.error) || "The transfer was refused.";
+                        note.style.display = "";
+                        return;
+                    }
+                    closeTransfer();
+                    const kids = data.children_moved
+                        ? ` with ${data.children_moved} ${data.children_moved === 1 ? "child" : "children"}`
+                        : "";
+                    showToast(`Transferred to ${data.to_name}${kids}. New patient no. ${data.patient_number ?? "-"}.`, "success");
+                    if (typeof loadAccounts === "function") loadAccounts();
+                } catch (e) {
+                    note.textContent = isMissingRpc(e)
+                        ? "Transfers need the 20260928_mother_transfer.sql database update. Ask your administrator to run it."
+                        : "The transfer failed: " + (e.message || e);
+                    note.style.display = "";
+                } finally {
+                    button.disabled = false;
+                }
+            });
+            ["transfer-modal-close", "transfer-cancel"].forEach(id =>
+                document.getElementById(id)?.addEventListener("click", closeTransfer));
 
             window.changeStatus = async (accountId, newStatus) => {
                 const account = allAccounts.find(a => a.account_id === accountId);
