@@ -780,6 +780,11 @@
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") refresh();
       });
+
+      // Coming back from another application with the portal still on screen
+      // -- a second monitor, a window beside the SMS dashboard -- changes focus
+      // but never visibility. MIN_GAP_MS absorbs the case where both fire.
+      window.addEventListener("focus", () => refresh());
     },
 
     refresh,

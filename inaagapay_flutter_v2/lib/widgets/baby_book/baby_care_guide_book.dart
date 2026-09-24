@@ -473,174 +473,178 @@ class _GuidePaperPage extends StatelessWidget {
             child: ColoredBox(color: data.accent),
           ),
           Padding(
-                padding: const EdgeInsets.fromLTRB(26, 20, 20, 17),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.fromLTRB(26, 20, 20, 17),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: data.accent.withValues(alpha: 0.11),
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child: Text(
-                            'PAGE ${data.number}',
-                            style: TextStyle(
-                              color: data.accent,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(data.icon, color: data.accent, size: 23),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      data.title,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontFamily: 'Georgia',
-                        fontSize: 21,
-                        height: 1.2,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 13),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(15),
-                      child: AspectRatio(
-                        aspectRatio: 2,
-                        child: Image.asset(
-                          data.imagePath,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: data.accent.withValues(alpha: 0.08),
-                              alignment: Alignment.center,
-                              child: Icon(
-                                data.icon,
-                                color: data.accent,
-                                size: 40,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    // The takeaway, before the prose.
-                    //
-                    // A mother who reads only this has still got the page.
                     Container(
-                      width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: data.accent.withValues(alpha: 0.09),
-                        borderRadius: BorderRadius.circular(14),
+                        color: data.accent.withValues(alpha: 0.11),
+                        borderRadius: BorderRadius.circular(30),
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.push_pin_rounded,
-                              size: 15, color: data.accent),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: Text(
-                              data.takeaway,
-                              style: TextStyle(
-                                color: data.accent,
-                                fontSize: 14.5,
-                                height: 1.35,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    for (var index = 0;
-                        index < data.paragraphs.length;
-                        index++) ...[
-                      Text(
-                        data.paragraphs[index],
-                        // Ragged right, not justified.
-                        //
-                        // Justifying a narrow column stretches the spaces to
-                        // force each line flush, which opens rivers of white
-                        // down the paragraph and gives the eye nothing to track
-                        // — it is measurably harder to read, and hardest for
-                        // people who already read slowly. On a phone-width
-                        // column of 50-word paragraphs it was the worst
-                        // possible setting.
-                        textAlign: TextAlign.start,
-                        style: const TextStyle(
-                          color: Color(0xFF544C45),
-                          fontFamily: 'Georgia',
-                          // 13pt serif on a low-density screen is small. The
-                          // book feel is worth keeping; the strain is not.
-                          fontSize: 14.5,
-                          height: 1.7,
+                      child: Text(
+                        'PAGE ${data.number}',
+                        style: TextStyle(
+                          color: data.accent,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1,
                         ),
                       ),
-                      if (index != data.paragraphs.length - 1)
-                        const SizedBox(height: 14),
-                    ],
-                    const SizedBox(height: 17),
-                    Container(height: 1, color: const Color(0xFFEDE4D7)),
-                    const SizedBox(height: 4),
-                    // The citation, folded away.
-                    //
-                    // "SOURCE NOTES • DOH/UNICEF Baby Book: PDF pp. 32–33, 38,
-                    // 41, 58, 74, 88" sat open at the foot of all eight pages.
-                    // A source should be available — a mother is entitled to
-                    // know where advice about her baby comes from — but page
-                    // numbers into a PDF she has never seen are apparatus, not
-                    // information, and they closed every page on a line she
-                    // could not use.
-                    Theme(
-                      data: Theme.of(context)
-                          .copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        title: Text(
-                          'Where this comes from',
+                    ),
+                    const Spacer(),
+                    Icon(data.icon, color: data.accent, size: 23),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  data.title,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontFamily: 'Georgia',
+                    fontSize: 21,
+                    height: 1.2,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 13),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(15),
+                  child: AspectRatio(
+                    aspectRatio: 2,
+                    child: Image.asset(
+                      data.imagePath,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: data.accent.withValues(alpha: 0.08),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            data.icon,
+                            color: data.accent,
+                            size: 40,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                // The takeaway, before the prose.
+                //
+                // A mother who reads only this has still got the page.
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: data.accent.withValues(alpha: 0.09),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.push_pin_rounded,
+                          size: 15, color: data.accent),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          data.takeaway,
                           style: TextStyle(
                             color: data.accent,
-                            fontSize: 11.5,
+                            fontSize: 14.5,
+                            height: 1.35,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        tilePadding: EdgeInsets.zero,
-                        childrenPadding:
-                            const EdgeInsets.only(bottom: 6),
-                        dense: true,
-                        children: [
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              data.source,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 10,
-                                height: 1.45,
-                              ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 15),
+                for (var index = 0;
+                    index < data.paragraphs.length;
+                    index++) ...[
+                  Text(
+                    data.paragraphs[index],
+                    // Ragged right, not justified.
+                    //
+                    // Justifying a narrow column stretches the spaces to
+                    // force each line flush, which opens rivers of white
+                    // down the paragraph and gives the eye nothing to track
+                    // — it is measurably harder to read, and hardest for
+                    // people who already read slowly. On a phone-width
+                    // column of 50-word paragraphs it was the worst
+                    // possible setting.
+                    textAlign: TextAlign.start,
+                    style: const TextStyle(
+                      color: Color(0xFF544C45),
+                      fontFamily: 'Georgia',
+                      // 13pt serif on a low-density screen is small. The
+                      // book feel is worth keeping; the strain is not.
+                      fontSize: 14.5,
+                      height: 1.7,
+                    ),
+                  ),
+                  if (index != data.paragraphs.length - 1)
+                    const SizedBox(height: 14),
+                ],
+                const SizedBox(height: 17),
+                Container(height: 1, color: const Color(0xFFEDE4D7)),
+                const SizedBox(height: 4),
+                // The citation, folded away.
+                //
+                // "SOURCE NOTES • DOH/UNICEF Baby Book: PDF pp. 32–33, 38,
+                // 41, 58, 74, 88" sat open at the foot of all eight pages.
+                // A source should be available — a mother is entitled to
+                // know where advice about her baby comes from — but page
+                // numbers into a PDF she has never seen are apparatus, not
+                // information, and they closed every page on a line she
+                // could not use.
+                Theme(
+                  data: Theme.of(context)
+                      .copyWith(dividerColor: Colors.transparent),
+                  child: Material(
+                    // Its own surface, so the tap ripple draws above the card's
+                    // background instead of under it.
+                    type: MaterialType.transparency,
+                    child: ExpansionTile(
+                      title: Text(
+                        'Where this comes from',
+                        style: TextStyle(
+                          color: data.accent,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      tilePadding: EdgeInsets.zero,
+                      childrenPadding: const EdgeInsets.only(bottom: 6),
+                      dense: true,
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            data.source,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 10,
+                              height: 1.45,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
+            ),
+          ),
         ],
       ),
     );

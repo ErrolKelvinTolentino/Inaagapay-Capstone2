@@ -56,7 +56,10 @@ void main() {
 
     testWidgets('the resting state is pink', (tester) async {
       await _pump(tester, const StockStatusCard(message: '40 doses here.'));
-      expect(_bgOf(tester, StockStatusCard), AppColors.brandSecondary);
+      // A faint wash of the brand pink since the children-page restyle, which
+      // reads the same as brandSecondary on a white card.
+      expect(_bgOf(tester, StockStatusCard),
+          AppColors.brandPrimary.withValues(alpha: 0.04));
     });
 
     testWidgets('long copy wraps instead of overflowing', (tester) async {

@@ -535,7 +535,8 @@ class _GrowthSummaryCardState extends State<GrowthSummaryCard> {
         capturing = true;
         continue;
       }
-      if (heading == alternate || (heading == 'tagalog' && !widget.isFilipino)) {
+      if (heading == alternate ||
+          (heading == 'tagalog' && !widget.isFilipino)) {
         capturing = false;
         continue;
       }
@@ -598,8 +599,10 @@ class _GrowthSummaryCardState extends State<GrowthSummaryCard> {
     final parts = <String>[...findings];
 
     if (within.isNotEmpty) {
-      final english = _joinWords(within.map(_plainLabelEnglish).toList(), 'and');
-      final filipino = _joinWords(within.map(_plainLabelFilipino).toList(), 'at');
+      final english =
+          _joinWords(within.map(_plainLabelEnglish).toList(), 'and');
+      final filipino =
+          _joinWords(within.map(_plainLabelFilipino).toList(), 'at');
       parts.add(_t(
         '${_capitalise(english)} ${within.length == 1 ? 'is' : 'are'} within '
             'the standard range for this age.',
@@ -684,40 +687,45 @@ class _GrowthSummaryCardState extends State<GrowthSummaryCard> {
 
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        title: Text(
-          _t('See the numbers', 'Tingnan ang mga numero'),
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
+      child: Material(
+        // Its own surface, so the tap ripple draws above the card's
+        // background instead of under it.
+        type: MaterialType.transparency,
+        child: ExpansionTile(
+          title: Text(
+            _t('See the numbers', 'Tingnan ang mga numero'),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.brandPrimary,
+            ),
+          ),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(top: 2, bottom: 6),
+          dense: true,
+          onExpansionChanged: (v) => setState(() => _numbersExpanded = v),
+          trailing: Icon(
+            _numbersExpanded ? Icons.expand_less : Icons.expand_more,
+            size: 20,
             color: AppColors.brandPrimary,
           ),
-        ),
-        tilePadding: EdgeInsets.zero,
-        childrenPadding: const EdgeInsets.only(top: 2, bottom: 6),
-        dense: true,
-        onExpansionChanged: (v) => setState(() => _numbersExpanded = v),
-        trailing: Icon(
-          _numbersExpanded ? Icons.expand_less : Icons.expand_more,
-          size: 20,
-          color: AppColors.brandPrimary,
-        ),
-        children: [
-          for (final metric in GrowthMetric.values)
-            _buildNumberRow(metric, latest),
-          const SizedBox(height: 10),
-          Text(
-            _t(
-              'Ranges follow the WHO Child Growth Standards (±2 SD for age and sex). This is a guide for monitoring, not a diagnosis.',
-              'Ang saklaw ay batay sa WHO Child Growth Standards (±2 SD ayon sa edad at kasarian). Gabay ito sa pagsubaybay, hindi diagnosis.',
+          children: [
+            for (final metric in GrowthMetric.values)
+              _buildNumberRow(metric, latest),
+            const SizedBox(height: 10),
+            Text(
+              _t(
+                'Ranges follow the WHO Child Growth Standards (±2 SD for age and sex). This is a guide for monitoring, not a diagnosis.',
+                'Ang saklaw ay batay sa WHO Child Growth Standards (±2 SD ayon sa edad at kasarian). Gabay ito sa pagsubaybay, hindi diagnosis.',
+              ),
+              style: TextStyle(
+                fontSize: 10,
+                height: 1.4,
+                color: Colors.grey.shade600,
+              ),
             ),
-            style: TextStyle(
-              fontSize: 10,
-              height: 1.4,
-              color: Colors.grey.shade600,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -816,104 +824,109 @@ class _GrowthSummaryCardState extends State<GrowthSummaryCard> {
   Widget _buildDisclaimerAndReferences() {
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        title: Text(
-          _t('Clinical Disclaimer & References',
-              'Clinical Disclaimer at Sanggunian'),
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: AppColors.brandPrimary,
+      child: Material(
+        // Its own surface, so the tap ripple draws above the card's
+        // background instead of under it.
+        type: MaterialType.transparency,
+        child: ExpansionTile(
+          title: Text(
+            _t('Clinical Disclaimer & References',
+                'Clinical Disclaimer at Sanggunian'),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.brandPrimary,
+            ),
           ),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(top: 2, bottom: 6),
+          dense: true,
+          // The sibling tile two methods up sets a pink trailing icon; this one
+          // did not, so it fell back to the theme default and drew the only
+          // black chevron on the card, directly under a pink one.
+          iconColor: AppColors.brandPrimary,
+          collapsedIconColor: AppColors.brandPrimary,
+          children: [
+            Text(
+              _t(
+                'Disclaimer: This card compares a measurement against the WHO '
+                    'Child Growth Standards for the child\'s age and sex and '
+                    'reports which band it falls in. It does not diagnose '
+                    'undernutrition, stunting, wasting or overweight — those are '
+                    'assessments made by a clinician. It is for growth monitoring '
+                    'support only and does not replace professional assessment.',
+                'Paalala: Inihahambing lamang ng card na ito ang sukat sa WHO '
+                    'Child Growth Standards ayon sa edad at kasarian ng bata, at '
+                    'ipinapakita kung saang saklaw ito nahuhulog. Hindi ito '
+                    'nagbibigay ng diagnosis ng malnutrisyon, stunting, wasting o '
+                    'sobrang timbang — ang mga iyon ay pagsusuri ng doktor o '
+                    'midwife. Gabay lamang ito sa pagsubaybay ng paglaki at hindi '
+                    'kapalit ng propesyonal na pagsusuri.',
+              ),
+              style: TextStyle(
+                fontSize: 10,
+                height: 1.4,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _t(
+                'Bands: a measurement is reported as within the standard range '
+                    'when it sits inside ±2 SD of the WHO median for age and sex, '
+                    'and below or above the range outside that. Body proportion '
+                    'is BMI-for-age; for under-fives it is supporting context, '
+                    'while weight-for-age and height-for-age are the indicators '
+                    'routine growth monitoring is built on.',
+                'Saklaw: itinuturing na nasa tamang saklaw ang sukat kapag nasa '
+                    'loob ito ng ±2 SD ng WHO median ayon sa edad at kasarian, at '
+                    'mababa o mataas kung lampas doon. Ang hubog ng katawan ay '
+                    'BMI-for-age; para sa wala pang limang taon, karagdagang '
+                    'konteksto lamang ito, samantalang ang timbang sa edad at '
+                    'tangkad sa edad ang batayan ng regular na pagsubaybay.',
+              ),
+              style: TextStyle(
+                fontSize: 10,
+                height: 1.4,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'References:\n'
+              '• WHO Multicentre Growth Reference Study Group. (2006). WHO Child '
+              'Growth Standards: Length/height-for-age, weight-for-age, '
+              'weight-for-length, weight-for-height and body mass index-for-age: '
+              'Methods and development. Geneva: World Health Organization.\n'
+              '• World Health Organization. (2006). WHO Child Growth Standards: '
+              'Simplified field tables (z-scores), birth to 5 years. '
+              'https://www.who.int/tools/child-growth-standards/standards',
+              style: TextStyle(
+                fontSize: 10,
+                height: 1.4,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _t(
+                'Values in this app are read from the WHO simplified field tables '
+                    'for weight-for-age, length/height-for-age and BMI-for-age, '
+                    'with separate tables for boys and girls.',
+                'Ang mga halaga sa app na ito ay mula sa WHO simplified field '
+                    'tables para sa timbang sa edad, tangkad sa edad at '
+                    'BMI-for-age, na may magkahiwalay na talahanayan para sa mga '
+                    'batang lalaki at babae.',
+              ),
+              style: TextStyle(
+                fontSize: 10,
+                height: 1.4,
+                fontStyle: FontStyle.italic,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
         ),
-        tilePadding: EdgeInsets.zero,
-        childrenPadding: const EdgeInsets.only(top: 2, bottom: 6),
-        dense: true,
-        // The sibling tile two methods up sets a pink trailing icon; this one
-        // did not, so it fell back to the theme default and drew the only
-        // black chevron on the card, directly under a pink one.
-        iconColor: AppColors.brandPrimary,
-        collapsedIconColor: AppColors.brandPrimary,
-        children: [
-          Text(
-            _t(
-              'Disclaimer: This card compares a measurement against the WHO '
-                  'Child Growth Standards for the child\'s age and sex and '
-                  'reports which band it falls in. It does not diagnose '
-                  'undernutrition, stunting, wasting or overweight — those are '
-                  'assessments made by a clinician. It is for growth monitoring '
-                  'support only and does not replace professional assessment.',
-              'Paalala: Inihahambing lamang ng card na ito ang sukat sa WHO '
-                  'Child Growth Standards ayon sa edad at kasarian ng bata, at '
-                  'ipinapakita kung saang saklaw ito nahuhulog. Hindi ito '
-                  'nagbibigay ng diagnosis ng malnutrisyon, stunting, wasting o '
-                  'sobrang timbang — ang mga iyon ay pagsusuri ng doktor o '
-                  'midwife. Gabay lamang ito sa pagsubaybay ng paglaki at hindi '
-                  'kapalit ng propesyonal na pagsusuri.',
-            ),
-            style: TextStyle(
-              fontSize: 10,
-              height: 1.4,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _t(
-              'Bands: a measurement is reported as within the standard range '
-                  'when it sits inside ±2 SD of the WHO median for age and sex, '
-                  'and below or above the range outside that. Body proportion '
-                  'is BMI-for-age; for under-fives it is supporting context, '
-                  'while weight-for-age and height-for-age are the indicators '
-                  'routine growth monitoring is built on.',
-              'Saklaw: itinuturing na nasa tamang saklaw ang sukat kapag nasa '
-                  'loob ito ng ±2 SD ng WHO median ayon sa edad at kasarian, at '
-                  'mababa o mataas kung lampas doon. Ang hubog ng katawan ay '
-                  'BMI-for-age; para sa wala pang limang taon, karagdagang '
-                  'konteksto lamang ito, samantalang ang timbang sa edad at '
-                  'tangkad sa edad ang batayan ng regular na pagsubaybay.',
-            ),
-            style: TextStyle(
-              fontSize: 10,
-              height: 1.4,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'References:\n'
-            '• WHO Multicentre Growth Reference Study Group. (2006). WHO Child '
-            'Growth Standards: Length/height-for-age, weight-for-age, '
-            'weight-for-length, weight-for-height and body mass index-for-age: '
-            'Methods and development. Geneva: World Health Organization.\n'
-            '• World Health Organization. (2006). WHO Child Growth Standards: '
-            'Simplified field tables (z-scores), birth to 5 years. '
-            'https://www.who.int/tools/child-growth-standards/standards',
-            style: TextStyle(
-              fontSize: 10,
-              height: 1.4,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _t(
-              'Values in this app are read from the WHO simplified field tables '
-                  'for weight-for-age, length/height-for-age and BMI-for-age, '
-                  'with separate tables for boys and girls.',
-              'Ang mga halaga sa app na ito ay mula sa WHO simplified field '
-                  'tables para sa timbang sa edad, tangkad sa edad at '
-                  'BMI-for-age, na may magkahiwalay na talahanayan para sa mga '
-                  'batang lalaki at babae.',
-            ),
-            style: TextStyle(
-              fontSize: 10,
-              height: 1.4,
-              fontStyle: FontStyle.italic,
-              color: Colors.grey.shade600,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1009,9 +1022,8 @@ class _VerdictChip extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected
-              ? color.withValues(alpha: 0.07)
-              : Colors.transparent,
+          color:
+              isSelected ? color.withValues(alpha: 0.07) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected

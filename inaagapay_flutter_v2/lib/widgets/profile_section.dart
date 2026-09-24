@@ -129,38 +129,43 @@ class ProfileSection extends StatelessWidget {
           dividerColor: Colors.transparent,
           splashColor: Colors.transparent,
         ),
-        child: ExpansionTile(
-          initiallyExpanded: initiallyExpanded,
-          tilePadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          childrenPadding: EdgeInsets.zero,
-          leading: Container(
-            padding: const EdgeInsets.all(9),
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(10),
+        child: Material(
+          // Its own surface, so the tap ripple draws above the card's
+          // background instead of under it.
+          type: MaterialType.transparency,
+          child: ExpansionTile(
+            initiallyExpanded: initiallyExpanded,
+            tilePadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            childrenPadding: EdgeInsets.zero,
+            leading: Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: accent, size: 18),
             ),
-            child: Icon(icon, color: accent, size: 18),
-          ),
-          title: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          trailing: trailing,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: children,
+            title: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
               ),
             ),
-          ],
+            trailing: trailing,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: children,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

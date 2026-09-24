@@ -70,7 +70,13 @@ void main() {
     test('a vaccine already named "… Vaccine" is not doubled', () {
       final source = _codeOf(_screen);
 
-      expect(source, contains('_withoutTrailingVaccine'),
+      // The card is titled by the vaccine alone since the drive redesign, so
+      // nothing is appended that could double a name already ending in
+      // "Vaccine".
+      expect(
+          source,
+          matches(RegExp(
+              r"'mother_name':\s*vaccineName\.isEmpty\s*\?\s*'Vaccine Drive'\s*:\s*vaccineName,")),
           reason: '"BCG Vaccine" + " Vaccine Drive" reads as '
               '"BCG Vaccine Vaccine Drive" on the card');
       expect(source.contains("'\$vaccineName Vaccine Drive'"), isFalse);

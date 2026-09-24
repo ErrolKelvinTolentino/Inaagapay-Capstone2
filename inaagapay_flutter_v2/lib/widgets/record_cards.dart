@@ -36,8 +36,9 @@ class CheckupRecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateCreated = formatProfileDateTime(
-        checkup['created_at'] ?? checkup['createdAt'] ?? checkup['checkup_datetime']);
+    final dateCreated = formatProfileDateTime(checkup['created_at'] ??
+        checkup['createdAt'] ??
+        checkup['checkup_datetime']);
 
     return _RecordCardShell(
       accentColor: AppColors.brandPrimary,
@@ -66,7 +67,8 @@ class UltrasoundRecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateCreated = formatProfileDateTime(ultrasound['created_at'] ?? ultrasound['createdAt']);
+    final dateCreated = formatProfileDateTime(
+        ultrasound['created_at'] ?? ultrasound['createdAt']);
     final dateConducted = formatProfileDate(ultrasound['ultrasound_date']);
 
     final sameDay = _isSameDay(
@@ -109,7 +111,8 @@ class LabTestRecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateCreated = formatProfileDateTime(labTest['created_at'] ?? labTest['createdAt']);
+    final dateCreated =
+        formatProfileDateTime(labTest['created_at'] ?? labTest['createdAt']);
     final dateConducted = formatProfileDate(labTest['lab_test_date']);
     final type = labTest['lab_test_type']?.toString() ?? 'Lab Test';
 
@@ -164,7 +167,6 @@ class MaternalVitalRecordCard extends StatelessWidget {
     );
   }
 }
-
 
 // ── Maternal Td Vaccine Card ──────────────────────────────────────────────
 
@@ -531,86 +533,93 @@ class HistoryRecordSection extends StatelessWidget {
           splashColor: color.withValues(alpha: 0.05),
           highlightColor: Colors.transparent,
         ),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-          iconColor: color,
-          collapsedIconColor: color.withValues(alpha: 0.7),
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 16),
-          ),
-          title: Row(
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+        child: Material(
+          // Its own surface, so the tap ripple draws above the card's
+          // background instead of under it.
+          type: MaterialType.transparency,
+          child: ExpansionTile(
+            tilePadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+            iconColor: color,
+            collapsedIconColor: color.withValues(alpha: 0.7),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: count > 0
-                      ? color.withValues(alpha: 0.10)
-                      : AppColors.bgSecondary,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
+              child: Icon(icon, color: color, size: 16),
+            ),
+            title: Row(
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
                     color: count > 0
-                        ? color.withValues(alpha: 0.25)
-                        : AppColors.borderPrimary,
-                    width: 1,
+                        ? color.withValues(alpha: 0.10)
+                        : AppColors.bgSecondary,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: count > 0
+                          ? color.withValues(alpha: 0.25)
+                          : AppColors.borderPrimary,
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: count > 0 ? color : AppColors.textSecondary,
+                    ),
                   ),
                 ),
-                child: Text(
-                  '$count',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: count > 0 ? color : AppColors.textSecondary,
-                  ),
-                ),
+              ],
+            ),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                child: count == 0
+                    ? Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        decoration: BoxDecoration(
+                          color: AppColors.bgSecondary.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.borderPrimary),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.info_outline,
+                                size: 16, color: color.withValues(alpha: 0.6)),
+                            const SizedBox(width: 8),
+                            Text(
+                              emptyMessage,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Column(children: children),
               ),
             ],
           ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: count == 0
-                  ? Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      decoration: BoxDecoration(
-                        color: AppColors.bgSecondary.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.borderPrimary),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.info_outline,
-                              size: 16, color: color.withValues(alpha: 0.6)),
-                          const SizedBox(width: 8),
-                          Text(
-                            emptyMessage,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : Column(children: children),
-            ),
-          ],
         ),
       ),
     );
