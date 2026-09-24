@@ -1,5 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/apk",
+      "destination": "https://github.com/ErrolKelvinTolentino/Inaagapay-Capstone2/releases/latest/download/inaagapay.apk",
+      "permanent": false
+    },
+    {
+      "source": "/app",
+      "destination": "/download.html?auto=1",
+      "permanent": false
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
