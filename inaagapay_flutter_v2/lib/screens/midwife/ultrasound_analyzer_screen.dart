@@ -1385,52 +1385,58 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          expandedCrossAxisAlignment: CrossAxisAlignment.start,
-          leading: Icon(
-            Icons.menu_book_outlined,
-            size: 15,
-            color: AppColors.textSecondary.withValues(alpha: 0.6),
-          ),
-          title: Text(
-            _selectedLanguage == 'filipino'
-                ? 'Batayan ng Klinikal na Paliwanag'
-                : 'Clinical Reference Basis',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary.withValues(alpha: 0.7),
+        child: Material(
+          // Its own surface, so the tap ripple draws above the card's
+          // background instead of under it.
+          type: MaterialType.transparency,
+          child: ExpansionTile(
+            tilePadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+            childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            expandedCrossAxisAlignment: CrossAxisAlignment.start,
+            leading: Icon(
+              Icons.menu_book_outlined,
+              size: 15,
+              color: AppColors.textSecondary.withValues(alpha: 0.6),
             ),
-          ),
-          iconColor: AppColors.textSecondary.withValues(alpha: 0.5),
-          collapsedIconColor: AppColors.textSecondary.withValues(alpha: 0.4),
-          children: [
-            _buildCitationRow(
-              authors: UltrasoundInterpretationEngine.citation1Authors,
-              full: UltrasoundInterpretationEngine.citation1Full,
-              url: UltrasoundInterpretationEngine.citation1Url,
-            ),
-            const SizedBox(height: 8),
-            _buildCitationRow(
-              authors: UltrasoundInterpretationEngine.citation2Authors,
-              full: UltrasoundInterpretationEngine.citation2Full,
-              url: UltrasoundInterpretationEngine.citation2Url,
-            ),
-            const SizedBox(height: 8),
-            Text(
+            title: Text(
               _selectedLanguage == 'filipino'
-                  ? 'Para lamang sa pagsubaybay ng kalusugan at hindi kapalit ng medikal na konsultasyon.'
-                  : 'For health monitoring support only. Does not replace professional medical consultation.',
+                  ? 'Batayan ng Klinikal na Paliwanag'
+                  : 'Clinical Reference Basis',
               style: TextStyle(
-                fontSize: 10,
-                color: AppColors.textSecondary.withValues(alpha: 0.55),
-                fontStyle: FontStyle.italic,
-                height: 1.4,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary.withValues(alpha: 0.7),
               ),
             ),
-          ],
+            iconColor: AppColors.textSecondary.withValues(alpha: 0.5),
+            collapsedIconColor: AppColors.textSecondary.withValues(alpha: 0.4),
+            children: [
+              _buildCitationRow(
+                authors: UltrasoundInterpretationEngine.citation1Authors,
+                full: UltrasoundInterpretationEngine.citation1Full,
+                url: UltrasoundInterpretationEngine.citation1Url,
+              ),
+              const SizedBox(height: 8),
+              _buildCitationRow(
+                authors: UltrasoundInterpretationEngine.citation2Authors,
+                full: UltrasoundInterpretationEngine.citation2Full,
+                url: UltrasoundInterpretationEngine.citation2Url,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _selectedLanguage == 'filipino'
+                    ? 'Para lamang sa pagsubaybay ng kalusugan at hindi kapalit ng medikal na konsultasyon.'
+                    : 'For health monitoring support only. Does not replace professional medical consultation.',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textSecondary.withValues(alpha: 0.55),
+                  fontStyle: FontStyle.italic,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2990,23 +2996,28 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
                 Theme(
                   data: Theme.of(context)
                       .copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    title: Text(
-                      _selectedLanguage == 'filipino'
-                          ? 'Tingnan ang Detalyadong Sukat (Para sa Midwife)'
-                          : 'View Detailed Measurements (Healthcare Personnel)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: accentColor,
+                  child: Material(
+                    // Its own surface, so the tap ripple draws above the card's
+                    // background instead of under it.
+                    type: MaterialType.transparency,
+                    child: ExpansionTile(
+                      title: Text(
+                        _selectedLanguage == 'filipino'
+                            ? 'Tingnan ang Detalyadong Sukat (Para sa Midwife)'
+                            : 'View Detailed Measurements (Healthcare Personnel)',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: accentColor,
+                        ),
                       ),
+                      iconColor: accentColor,
+                      collapsedIconColor: accentColor,
+                      childrenPadding: const EdgeInsets.only(top: 8),
+                      children: [
+                        _buildMetricsList(lines),
+                      ],
                     ),
-                    iconColor: accentColor,
-                    collapsedIconColor: accentColor,
-                    childrenPadding: const EdgeInsets.only(top: 8),
-                    children: [
-                      _buildMetricsList(lines),
-                    ],
                   ),
                 ),
               ] else if (isAnatomical) ...[
@@ -4382,44 +4393,49 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
                     Theme(
                       data: Theme.of(context)
                           .copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        initiallyExpanded: _showDetailedUltrasoundValues,
-                        onExpansionChanged: (expanded) {
-                          setState(() {
-                            _showDetailedUltrasoundValues = expanded;
-                          });
-                        },
-                        title: Row(
-                          children: [
-                            const Icon(Icons.settings_outlined,
-                                color: AppColors.brandPrimary, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _selectedLanguage == 'filipino'
-                                    ? 'Detalyadong Resulta ng Ultrasound (Para sa Midwife)'
-                                    : 'Detailed Ultrasound Findings (Healthcare Personnel View)',
-                                style: const TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.brandPrimary,
+                      child: Material(
+                        // Its own surface, so the tap ripple draws above the card's
+                        // background instead of under it.
+                        type: MaterialType.transparency,
+                        child: ExpansionTile(
+                          initiallyExpanded: _showDetailedUltrasoundValues,
+                          onExpansionChanged: (expanded) {
+                            setState(() {
+                              _showDetailedUltrasoundValues = expanded;
+                            });
+                          },
+                          title: Row(
+                            children: [
+                              const Icon(Icons.settings_outlined,
+                                  color: AppColors.brandPrimary, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _selectedLanguage == 'filipino'
+                                      ? 'Detalyadong Resulta ng Ultrasound (Para sa Midwife)'
+                                      : 'Detailed Ultrasound Findings (Healthcare Personnel View)',
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.brandPrimary,
+                                  ),
                                 ),
                               ),
-                            ),
+                            ],
+                          ),
+                          tilePadding: EdgeInsets.zero,
+                          children: [
+                            const SizedBox(height: 12),
+
+                            // Progression card
+                            _buildPregnancyProgressionCard(),
+
+                            // Reference basis
+                            if (_combinedResponse != null)
+                              _buildClinicalReferenceTile(),
+                            const SizedBox(height: 16),
                           ],
                         ),
-                        tilePadding: EdgeInsets.zero,
-                        children: [
-                          const SizedBox(height: 12),
-
-                          // Progression card
-                          _buildPregnancyProgressionCard(),
-
-                          // Reference basis
-                          if (_combinedResponse != null)
-                            _buildClinicalReferenceTile(),
-                          const SizedBox(height: 16),
-                        ],
                       ),
                     ),
                     const SizedBox(height: 16),

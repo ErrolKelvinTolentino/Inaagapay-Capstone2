@@ -14,6 +14,11 @@ import '../../widgets/confirmation_dialog_box.dart';
 import '../../widgets/dialog_box.dart';
 import '../../widgets/secondary_header.dart';
 import '../../widgets/branded_date_picker.dart';
+import '../../widgets/export_menu_button.dart';
+import '../../services/export_actions.dart';
+import '../../services/midwife_report_service.dart';
+import '../../services/report_export_service.dart';
+import '../../services/td_record_export.dart';
 
 /// Dedicated maternal Td (tetanus-diphtheria) immunization module.
 ///
@@ -817,6 +822,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
         child: SecondaryHeader(
           title: 'Maternal Td Immunization',
           onBack: () => Navigator.pop(context, true),
+          trailing: _isLoading ? null : ExportMenuButton(onSelected: _exportTdRecord),
         ),
       ),
       body: _isLoading
@@ -835,6 +841,50 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  /// Her whole Td record — protection and all five doses — as a PDF or
+  /// workbook, the digital twin of the card she carries.
+  Future<void> _exportTdRecord(ExportAction action) async {
+    if (_status.readFailed) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Her Td doses could not be read, so the record would be '
+            'incomplete. Reload the screen and try again.'),
+      ));
+      return;
+    }
+
+    ReportDocument? document;
+    Future<ReportDocument> build() async {
+      if (document != null) return document!;
+      var preparedBy = 'Midwife-in-Charge';
+      var facility = _bhcName;
+      try {
+        final scope = await MidwifeReportService.resolveScope();
+        preparedBy = scope.preparedBy;
+        facility = scope.facilityName;
+      } catch (_) {}
+      String? patientNumber;
+      try {
+        patientNumber =
+            await SupabaseService.getPatientNumberForMother(widget.motherId);
+      } catch (_) {}
+      return document = TdRecordExport.document(
+        status: _status,
+        motherName: _motherFullName,
+        patientNumber: patientNumber,
+        facilityName: facility,
+        preparedBy: preparedBy,
+      );
+    }
+
+    await ExportActions.run(
+      context,
+      action,
+      fileStem: ExportActions.fileStem(['td-record', _motherFullName]),
+      buildPdf: () async => ReportExportService.toPdf(await build()),
+      buildExcel: () async => ReportExportService.toXlsx(await build()),
     );
   }
 

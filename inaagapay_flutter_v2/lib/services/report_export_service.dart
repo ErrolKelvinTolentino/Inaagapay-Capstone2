@@ -29,6 +29,7 @@ class ReportBlock {
     this.columnFlex,
     this.numericColumns = const {},
     this.emptyText = 'No records for this period.',
+    this.showRowCount = true,
   });
 
   final String title;
@@ -51,6 +52,9 @@ class ReportBlock {
   final Set<int> numericColumns;
 
   final String emptyText;
+
+  /// "12 rows" under the table. Noise on a field/value block.
+  final bool showRowCount;
 }
 
 class ReportDocument {
@@ -61,6 +65,9 @@ class ReportDocument {
     required this.preparedBy,
     required this.blocks,
     this.landscape = true,
+    this.facilityLabel = 'Facility',
+    this.periodCaption = 'Period',
+    this.preparedByLabel = 'Prepared by',
     DateTime? generatedAt,
   }) : generatedAt = generatedAt ?? DateTime.now();
 
@@ -68,6 +75,12 @@ class ReportDocument {
   final String facilityName;
   final String periodLabel;
   final String preparedBy;
+
+  /// What the three header lines are called. A single patient record reads
+  /// "Patient / Record date / Recorded by" rather than facility and period.
+  final String facilityLabel;
+  final String periodCaption;
+  final String preparedByLabel;
   final List<ReportBlock> blocks;
   final bool landscape;
   final DateTime generatedAt;
@@ -188,8 +201,8 @@ class ReportExportService {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
-              _pdfMeta('Period', doc.periodLabel),
-              _pdfMeta('Prepared by', doc.preparedBy),
+              _pdfMeta(doc.periodCaption, doc.periodLabel),
+              _pdfMeta(doc.preparedByLabel, doc.preparedBy),
               _pdfMeta('Generated', _stamp.format(doc.generatedAt)),
             ],
           ),
@@ -328,13 +341,15 @@ class ReportExportService {
                   i: pw.FlexColumnWidth(flex[i]),
               },
       ));
-      widgets.add(pw.Padding(
-        padding: const pw.EdgeInsets.only(top: 3),
-        child: pw.Text(
-          '${block.rows.length} ${block.rows.length == 1 ? 'row' : 'rows'}',
-          style: const pw.TextStyle(fontSize: 7.5, color: _muted),
-        ),
-      ));
+      if (block.showRowCount) {
+        widgets.add(pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 3),
+          child: pw.Text(
+            '${block.rows.length} ${block.rows.length == 1 ? 'row' : 'rows'}',
+            style: const pw.TextStyle(fontSize: 7.5, color: _muted),
+          ),
+        ));
+      }
     }
 
     for (final note in block.notes) {
@@ -457,9 +472,9 @@ class ReportExportService {
     put(0, xl.TextCellValue(doc.title), titleStyle);
     row++;
     for (final meta in [
-      ['Facility', doc.facilityName],
-      ['Period', doc.periodLabel],
-      ['Prepared by', doc.preparedBy],
+      [doc.facilityLabel, doc.facilityName],
+      [doc.periodCaption, doc.periodLabel],
+      [doc.preparedByLabel, doc.preparedBy],
       ['Generated', _stamp.format(doc.generatedAt)],
     ]) {
       put(0, xl.TextCellValue(meta[0]), metaLabel);

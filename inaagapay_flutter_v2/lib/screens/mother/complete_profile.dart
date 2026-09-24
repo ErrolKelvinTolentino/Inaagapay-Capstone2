@@ -1626,7 +1626,11 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           const SizedBox(height: 8),
           Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
+            child: Material(
+              // Its own surface, so the tap ripple draws above the card's
+              // background instead of under it.
+              type: MaterialType.transparency,
+              child: ExpansionTile(
               title: const Text(
                 'Clinical Disclaimer & References',
                 style: TextStyle(
@@ -1659,6 +1663,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                       fontSize: 10, height: 1.4, color: Colors.grey.shade600),
                 ),
               ],
+            ),
             ),
           ),
         ],

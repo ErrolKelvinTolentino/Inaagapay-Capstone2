@@ -2824,7 +2824,11 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
             // when open — two more hard lines on a page that had several.
             data: Theme.of(context)
                 .copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
+            child: Material(
+              // Its own surface, so the tap ripple draws above the card's
+              // background instead of under it.
+              type: MaterialType.transparency,
+              child: ExpansionTile(
             title: Text(
               _t(faq.questionEn, faq.questionTl),
               style: const TextStyle(
@@ -2891,6 +2895,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                 ),
               ),
             ],
+            ),
             ),
           ),
         );

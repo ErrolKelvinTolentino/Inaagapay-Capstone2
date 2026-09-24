@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:http/http.dart' as http;
 
 import '../../theme/app_colors.dart';
@@ -13,6 +12,9 @@ import '../../services/language_service.dart';
 import '../../widgets/full_screen_image_viewer.dart';
 import '../../widgets/record_image.dart';
 import '../../widgets/secondary_header.dart';
+import '../../widgets/export_menu_button.dart';
+import '../../services/export_actions.dart';
+import '../../services/report_export_service.dart';
 import '../../widgets/profile_section.dart';
 import '../../widgets/profile_header_card.dart';
 import '../../services/blood_pressure_reference.dart';
@@ -472,656 +474,759 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     }
   }
 
-  Future<void> _exportToPdf() async {
-    // Show loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => Center(
-        child: Container(
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.12),
-                blurRadius: 20,
-              ),
-            ],
+  /// The record as a PDF: the same document for saving, sharing and
+  /// printing.
+  Future<Uint8List> _buildRecordPdf() async {
+    // ── A document palette, not the app's ──
+    //
+    // This printed in six colours: a pink header box, pink section bars,
+    // pink labels, green for the weight panel, amber for the disclaimer and
+    // red for risk. On paper — and photocopied at a health centre, which is
+    // what happens to these — colour stops carrying meaning and only makes
+    // the page harder to read.
+    //
+    // One accent remains, for the wordmark and the rules under headings.
+    // Everything else is ink and grey, and structure is carried by weight
+    // and spacing the way a printed form does it.
+    const brandAccent = PdfColor.fromInt(0xFFC73578);
+    const textPrimary = PdfColor.fromInt(0xFF1F1F1F);
+    const textSecondary = PdfColor.fromInt(0xFF6B6B6B);
+    const bgSecondary = PdfColor.fromInt(0xFFF7F7F7);
+    const borderLight = PdfColor.fromInt(0xFFDDDDDD);
+
+    // Kept as names so the call sites below need no rewriting, but they all
+    // resolve to the same neutral ink: a printed record should not colour
+    // one finding differently from another.
+    const brandPink = borderLight;
+    const successColor = textSecondary;
+    const warningColor = textSecondary;
+    const errorColor = textSecondary;
+
+    // ── Download images from network ──
+    final List<Uint8List> imageDataList = [];
+    if (_images.isNotEmpty) {
+      for (final url in _images) {
+        try {
+          final response = await http.get(Uri.parse(url));
+          if (response.statusCode == 200) {
+            imageDataList.add(response.bodyBytes);
+          }
+        } catch (_) {
+          // Skip images that fail to download
+        }
+      }
+    }
+
+    // ── Build the PDF document ──
+    final pdf = pw.Document();
+
+    // Helper: Section Title widget
+    // A heading and a rule under it, the way a printed form does it — not a
+    // coloured bar down the left of every section.
+    pw.Widget pdfSectionTitle(String title, {PdfColor color = textPrimary}) {
+      return pw.Container(
+        margin: const pw.EdgeInsets.only(top: 16, bottom: 8),
+        padding: const pw.EdgeInsets.only(bottom: 4),
+        decoration: const pw.BoxDecoration(
+          border: pw.Border(
+            bottom: pw.BorderSide(color: borderLight, width: 0.8),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(
-                color: AppColors.brandPrimary,
-                strokeWidth: 3,
+        ),
+        child: pw.Text(
+          title.toUpperCase(),
+          style: pw.TextStyle(
+            fontSize: 10,
+            fontWeight: pw.FontWeight.bold,
+            letterSpacing: 0.8,
+            color: color,
+          ),
+        ),
+      );
+    }
+
+    // Helper: Detail row (label: value)
+    pw.Widget pdfDetailRow(String label, String value) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 2),
+        child: pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.SizedBox(
+              width: 160,
+              child: pw.Text(
+                label,
+                style: pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                  color: textSecondary,
+                ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                _t('Generating PDF report...', 'Gumagawa ng PDF report...'),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                  decoration: TextDecoration.none,
+            ),
+            pw.Expanded(
+              child: pw.Text(
+                value,
+                style: const pw.TextStyle(
+                  fontSize: 11,
+                  color: textPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Helper: Info box
+    pw.Widget pdfInfoBox(String text, {PdfColor bg = bgSecondary, PdfColor border = brandPink}) {
+      return pw.Container(
+        width: double.infinity,
+        margin: const pw.EdgeInsets.only(top: 4, bottom: 4),
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(
+          color: bg,
+          border: pw.Border.all(color: border, width: 0.5),
+          borderRadius: pw.BorderRadius.circular(6),
+        ),
+        child: pw.Text(
+          text,
+          style: const pw.TextStyle(fontSize: 10, color: textPrimary),
+        ),
+      );
+    }
+
+    // Helper: Risk chip
+    pw.Widget pdfRiskChip(String label, PdfColor color) {
+      return pw.Container(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        margin: const pw.EdgeInsets.only(right: 6, bottom: 4),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: color, width: 0.8),
+          borderRadius: pw.BorderRadius.circular(12),
+        ),
+        child: pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontSize: 9,
+            fontWeight: pw.FontWeight.bold,
+            color: color,
+          ),
+        ),
+      );
+    }
+
+    // ── Collect all content widgets ──
+    final List<pw.Widget> content = [];
+
+    // ── HEADER ──
+    content.add(
+      pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.only(bottom: 10),
+        decoration: const pw.BoxDecoration(
+          border: pw.Border(
+            bottom: pw.BorderSide(color: brandAccent, width: 1.2),
+          ),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'INAAGAPAY',
+              style: pw.TextStyle(
+                fontSize: 18,
+                fontWeight: pw.FontWeight.bold,
+                color: brandAccent,
+                letterSpacing: 2,
+              ),
+            ),
+            pw.SizedBox(height: 2),
+            pw.Text(
+              'Maternal & Child Health Information System',
+              style: const pw.TextStyle(
+                fontSize: 8.5,
+                color: textSecondary,
+              ),
+            ),
+            pw.SizedBox(height: 10),
+            pw.Text(
+              widget.title.toUpperCase(),
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: textPrimary,
+                letterSpacing: 0.5,
+              ),
+            ),
+            if (widget.subtitle != null && widget.subtitle!.trim().isNotEmpty) ...[
+              pw.SizedBox(height: 3),
+              pw.Text(
+                widget.subtitle!.trim(),
+                style: const pw.TextStyle(
+                  fontSize: 9.5,
+                  color: textSecondary,
                 ),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
 
-    try {
-      // ── A document palette, not the app's ──
-      //
-      // This printed in six colours: a pink header box, pink section bars,
-      // pink labels, green for the weight panel, amber for the disclaimer and
-      // red for risk. On paper — and photocopied at a health centre, which is
-      // what happens to these — colour stops carrying meaning and only makes
-      // the page harder to read.
-      //
-      // One accent remains, for the wordmark and the rules under headings.
-      // Everything else is ink and grey, and structure is carried by weight
-      // and spacing the way a printed form does it.
-      const brandAccent = PdfColor.fromInt(0xFFC73578);
-      const textPrimary = PdfColor.fromInt(0xFF1F1F1F);
-      const textSecondary = PdfColor.fromInt(0xFF6B6B6B);
-      const bgSecondary = PdfColor.fromInt(0xFFF7F7F7);
-      const borderLight = PdfColor.fromInt(0xFFDDDDDD);
+    // ── WHOSE RECORD THIS IS ──
+    //
+    // The export carried no patient at all: a printout of a prenatal
+    // checkup that did not say whose checkup it was. On paper that is not a
+    // record, and a page that reaches a chart or a referral without a name
+    // on it is worse than no page.
+    final pdfPatient = widget.patient;
+    if (pdfPatient != null && !pdfPatient.isEmpty) {
+      content.add(pdfSectionTitle(_t('Patient', 'Pasyente')));
+      content.add(pdfDetailRow(_t('Name', 'Pangalan'), pdfPatient.name));
+      if ((pdfPatient.idLabel ?? '').trim().isNotEmpty) {
+        content.add(pdfDetailRow(
+            _t('Patient number', 'Numero ng pasyente'),
+            pdfPatient.idLabel!.trim()));
+      }
+      if ((pdfPatient.age ?? '').trim().isNotEmpty) {
+        content.add(
+            pdfDetailRow(_t('Age', 'Edad'), pdfPatient.age!.trim()));
+      }
+      if ((pdfPatient.obstetric ?? '').trim().isNotEmpty) {
+        content.add(pdfDetailRow(_t('Obstetric score', 'Obstetric score'),
+            pdfPatient.obstetric!.trim()));
+      }
+      if ((pdfPatient.bloodType ?? '').trim().isNotEmpty) {
+        content.add(pdfDetailRow(
+            _t('Blood type', 'Uri ng dugo'), pdfPatient.bloodType!.trim()));
+      }
+    }
 
-      // Kept as names so the call sites below need no rewriting, but they all
-      // resolve to the same neutral ink: a printed record should not colour
-      // one finding differently from another.
-      const brandPink = borderLight;
-      const successColor = textSecondary;
-      const warningColor = textSecondary;
-      const errorColor = textSecondary;
+    // Who took the record. A clinical document has to be attributable, and
+    // this was on the screen and missing from the export.
+    final recordedBy = (widget.approvedByName ?? '').trim();
+    if (recordedBy.isNotEmpty) {
+      content.add(pdfDetailRow(
+          _t('Recorded by', 'Itinala ni'), recordedBy));
+    }
 
-      // ── Download images from network ──
-      final List<Uint8List> imageDataList = [];
-      if (_images.isNotEmpty) {
-        for (final url in _images) {
-          try {
-            final response = await http.get(Uri.parse(url));
-            if (response.statusCode == 200) {
-              imageDataList.add(response.bodyBytes);
-            }
-          } catch (_) {
-            // Skip images that fail to download
-          }
+    // ── THE RESULT ──
+    //
+    // A lab record's results are the reason anyone opens it, and they were
+    // on the screen but missing from the export — which printed who typed
+    // the record and where, and not the haemoglobin or the blood group.
+    if (widget.resultRows.isNotEmpty) {
+      content.add(pdfSectionTitle(
+          widget.resultsTitle ?? _t('Results', 'Mga Resulta')));
+      for (final row in widget.resultRows) {
+        content.add(pdfDetailRow(row.key, row.value));
+      }
+    }
+
+    final classification = _classificationLabel();
+    if (classification != null) {
+      content.add(pdfSectionTitle(
+          _t('Monitoring classification', 'Klasipikasyon ng pagsubaybay')));
+      content.add(pdfDetailRow(
+          _t('Classification', 'Klasipikasyon'), classification));
+    }
+
+    if (widget.isMidwifeApproved == true) {
+      content.add(pdfDetailRow(
+        _t('Assessed and approved by', 'Sinuri at inaprubahan ni'),
+        (widget.approvedByName ?? '').trim().isEmpty
+            ? _t('Midwife', 'Midwife')
+            : widget.approvedByName!.trim(),
+      ));
+    }
+
+    // ── ATTACHED IMAGES ──
+    if (imageDataList.isNotEmpty) {
+      content.add(pdfSectionTitle(_t('Attached Images', 'Mga Kalakip na Larawan')));
+
+      final List<pw.Widget> imageWidgets = [];
+      for (final imgBytes in imageDataList) {
+        try {
+          final image = pw.MemoryImage(imgBytes);
+          imageWidgets.add(
+            pw.Container(
+              width: 160,
+              height: 160,
+              margin: const pw.EdgeInsets.only(right: 8, bottom: 8),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: borderLight, width: 0.5),
+                borderRadius: pw.BorderRadius.circular(6),
+              ),
+              child: pw.ClipRRect(
+                horizontalRadius: 6,
+                verticalRadius: 6,
+                child: pw.Image(image, fit: pw.BoxFit.cover),
+              ),
+            ),
+          );
+        } catch (_) {
+          // Skip invalid images
         }
       }
 
-      // ── Build the PDF document ──
-      final pdf = pw.Document();
-
-      // Helper: Section Title widget
-      // A heading and a rule under it, the way a printed form does it — not a
-      // coloured bar down the left of every section.
-      pw.Widget pdfSectionTitle(String title, {PdfColor color = textPrimary}) {
-        return pw.Container(
-          margin: const pw.EdgeInsets.only(top: 16, bottom: 8),
-          padding: const pw.EdgeInsets.only(bottom: 4),
-          decoration: const pw.BoxDecoration(
-            border: pw.Border(
-              bottom: pw.BorderSide(color: borderLight, width: 0.8),
-            ),
-          ),
-          child: pw.Text(
-            title.toUpperCase(),
-            style: pw.TextStyle(
-              fontSize: 10,
-              fontWeight: pw.FontWeight.bold,
-              letterSpacing: 0.8,
-              color: color,
-            ),
+      if (imageWidgets.isNotEmpty) {
+        content.add(
+          pw.Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: imageWidgets,
           ),
         );
       }
+    }
 
-      // Helper: Detail row (label: value)
-      pw.Widget pdfDetailRow(String label, String value) {
-        return pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(vertical: 2),
-          child: pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.SizedBox(
-                width: 160,
-                child: pw.Text(
-                  label,
-                  style: pw.TextStyle(
-                    fontSize: 10,
-                    fontWeight: pw.FontWeight.bold,
-                    color: textSecondary,
-                  ),
-                ),
-              ),
-              pw.Expanded(
-                child: pw.Text(
-                  value,
-                  style: const pw.TextStyle(
-                    fontSize: 11,
-                    color: textPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
+    // ── RECORD DETAILS (grouped) ──
+    final rows = _normalizedDisplayRows();
+    final sections = _groupRows(rows);
+    for (final entry in sections.entries) {
+      if (entry.value.isEmpty) continue;
+      content.add(pdfSectionTitle(_localizedSectionTitle(entry.key)));
+      for (final row in entry.value) {
+        content.add(pdfDetailRow(row.key, row.value));
       }
+    }
 
-      // Helper: Info box
-      pw.Widget pdfInfoBox(String text, {PdfColor bg = bgSecondary, PdfColor border = brandPink}) {
-        return pw.Container(
-          width: double.infinity,
-          margin: const pw.EdgeInsets.only(top: 4, bottom: 4),
-          padding: const pw.EdgeInsets.all(10),
-          decoration: pw.BoxDecoration(
-            color: bg,
-            border: pw.Border.all(color: border, width: 0.5),
-            borderRadius: pw.BorderRadius.circular(6),
-          ),
-          child: pw.Text(
-            text,
-            style: const pw.TextStyle(fontSize: 10, color: textPrimary),
-          ),
-        );
-      }
+    // ── WEIGHT GAIN EVALUATION ──
+    if (widget.weightGainEval != null) {
+      final eval = widget.weightGainEval!;
+      content.add(pdfSectionTitle(
+        _t('Weight Gain Monitor', 'Pagsubaybay sa Timbang'),
+        color: textPrimary,
+      ));
+      final weightBuf = StringBuffer();
+      if (eval['status'] != null) weightBuf.writeln('Status: ${eval['status']}');
+      if (eval['bmi_category'] != null) weightBuf.writeln('BMI Category: ${eval['bmi_category']}');
+      if (eval['message'] != null) weightBuf.writeln(eval['message']);
+      content.add(pdfInfoBox(
+        weightBuf.toString().trim(),
+        bg: bgSecondary,
+        border: borderLight,
+      ));
+    }
 
-      // Helper: Risk chip
-      pw.Widget pdfRiskChip(String label, PdfColor color) {
-        return pw.Container(
-          padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          margin: const pw.EdgeInsets.only(right: 6, bottom: 4),
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: color, width: 0.8),
-            borderRadius: pw.BorderRadius.circular(12),
-          ),
-          child: pw.Text(
-            label,
-            style: pw.TextStyle(
-              fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
-              color: color,
-            ),
-          ),
-        );
-      }
+    // ── PRENATAL RISK SUMMARY ──
+    if (widget.riskLevel != null && widget.riskLevel!.trim().isNotEmpty) {
+      final isHighRisk = widget.riskLevel!.toLowerCase().contains('high');
+      final riskColor = isHighRisk ? errorColor : successColor;
+      content.add(pdfSectionTitle(
+        _t('Prenatal Risk Summary', 'Buod ng Prenatal Risk'),
+        color: riskColor,
+      ));
 
-      // ── Collect all content widgets ──
-      final List<pw.Widget> content = [];
-
-      // ── HEADER ──
       content.add(
         pw.Container(
           width: double.infinity,
-          padding: const pw.EdgeInsets.only(bottom: 10),
-          decoration: const pw.BoxDecoration(
-            border: pw.Border(
-              bottom: pw.BorderSide(color: brandAccent, width: 1.2),
-            ),
+          padding: const pw.EdgeInsets.all(10),
+          margin: const pw.EdgeInsets.only(bottom: 6),
+          decoration: pw.BoxDecoration(
+            color: isHighRisk
+                ? bgSecondary
+                : bgSecondary,
+            border: pw.Border.all(color: riskColor, width: 0.5),
+            borderRadius: pw.BorderRadius.circular(6),
           ),
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(
-                'INAAGAPAY',
+                '${_t("Risk Level", "Antas ng Panganib")}: ${widget.riskLevel!.toUpperCase()}',
                 style: pw.TextStyle(
-                  fontSize: 18,
+                  fontSize: 11,
                   fontWeight: pw.FontWeight.bold,
-                  color: brandAccent,
-                  letterSpacing: 2,
+                  color: riskColor,
                 ),
               ),
-              pw.SizedBox(height: 2),
-              pw.Text(
-                'Maternal & Child Health Information System',
-                style: const pw.TextStyle(
-                  fontSize: 8.5,
-                  color: textSecondary,
-                ),
-              ),
-              pw.SizedBox(height: 10),
-              pw.Text(
-                widget.title.toUpperCase(),
-                style: pw.TextStyle(
-                  fontSize: 14,
-                  fontWeight: pw.FontWeight.bold,
-                  color: textPrimary,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              if (widget.subtitle != null && widget.subtitle!.trim().isNotEmpty) ...[
-                pw.SizedBox(height: 3),
-                pw.Text(
-                  widget.subtitle!.trim(),
-                  style: const pw.TextStyle(
-                    fontSize: 9.5,
-                    color: textSecondary,
-                  ),
-                ),
-              ],
             ],
           ),
         ),
       );
+    }
 
-      // ── WHOSE RECORD THIS IS ──
-      //
-      // The export carried no patient at all: a printout of a prenatal
-      // checkup that did not say whose checkup it was. On paper that is not a
-      // record, and a page that reaches a chart or a referral without a name
-      // on it is worse than no page.
-      final pdfPatient = widget.patient;
-      if (pdfPatient != null && !pdfPatient.isEmpty) {
-        content.add(pdfSectionTitle(_t('Patient', 'Pasyente')));
-        content.add(pdfDetailRow(_t('Name', 'Pangalan'), pdfPatient.name));
-        if ((pdfPatient.idLabel ?? '').trim().isNotEmpty) {
-          content.add(pdfDetailRow(
-              _t('Patient number', 'Numero ng pasyente'),
-              pdfPatient.idLabel!.trim()));
-        }
-        if ((pdfPatient.age ?? '').trim().isNotEmpty) {
-          content.add(
-              pdfDetailRow(_t('Age', 'Edad'), pdfPatient.age!.trim()));
-        }
-        if ((pdfPatient.obstetric ?? '').trim().isNotEmpty) {
-          content.add(pdfDetailRow(_t('Obstetric score', 'Obstetric score'),
-              pdfPatient.obstetric!.trim()));
-        }
-        if ((pdfPatient.bloodType ?? '').trim().isNotEmpty) {
-          content.add(pdfDetailRow(
-              _t('Blood type', 'Uri ng dugo'), pdfPatient.bloodType!.trim()));
-        }
-      }
-
-      // Who took the record. A clinical document has to be attributable, and
-      // this was on the screen and missing from the export.
-      final recordedBy = (widget.approvedByName ?? '').trim();
-      if (recordedBy.isNotEmpty) {
-        content.add(pdfDetailRow(
-            _t('Recorded by', 'Itinala ni'), recordedBy));
-      }
-
-      // ── ATTACHED IMAGES ──
-      if (imageDataList.isNotEmpty) {
-        content.add(pdfSectionTitle(_t('Attached Images', 'Mga Kalakip na Larawan')));
-
-        final List<pw.Widget> imageWidgets = [];
-        for (final imgBytes in imageDataList) {
-          try {
-            final image = pw.MemoryImage(imgBytes);
-            imageWidgets.add(
-              pw.Container(
-                width: 160,
-                height: 160,
-                margin: const pw.EdgeInsets.only(right: 8, bottom: 8),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: borderLight, width: 0.5),
-                  borderRadius: pw.BorderRadius.circular(6),
-                ),
-                child: pw.ClipRRect(
-                  horizontalRadius: 6,
-                  verticalRadius: 6,
-                  child: pw.Image(image, fit: pw.BoxFit.cover),
-                ),
-              ),
-            );
-          } catch (_) {
-            // Skip invalid images
-          }
-        }
-
-        if (imageWidgets.isNotEmpty) {
-          content.add(
-            pw.Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: imageWidgets,
-            ),
-          );
-        }
-      }
-
-      // ── RECORD DETAILS (grouped) ──
-      final rows = _normalizedDisplayRows();
-      final sections = _groupRows(rows);
-      for (final entry in sections.entries) {
-        if (entry.value.isEmpty) continue;
-        content.add(pdfSectionTitle(_localizedSectionTitle(entry.key)));
-        for (final row in entry.value) {
-          content.add(pdfDetailRow(row.key, row.value));
-        }
-      }
-
-      // ── WEIGHT GAIN EVALUATION ──
-      if (widget.weightGainEval != null) {
-        final eval = widget.weightGainEval!;
-        content.add(pdfSectionTitle(
-          _t('Weight Gain Monitor', 'Pagsubaybay sa Timbang'),
-          color: textPrimary,
-        ));
-        final weightBuf = StringBuffer();
-        if (eval['status'] != null) weightBuf.writeln('Status: ${eval['status']}');
-        if (eval['bmi_category'] != null) weightBuf.writeln('BMI Category: ${eval['bmi_category']}');
-        if (eval['message'] != null) weightBuf.writeln(eval['message']);
-        content.add(pdfInfoBox(
-          weightBuf.toString().trim(),
-          bg: bgSecondary,
-          border: borderLight,
-        ));
-      }
-
-      // ── PRENATAL RISK SUMMARY ──
-      if (widget.riskLevel != null && widget.riskLevel!.trim().isNotEmpty) {
-        final isHighRisk = widget.riskLevel!.toLowerCase().contains('high');
-        final riskColor = isHighRisk ? errorColor : successColor;
-        content.add(pdfSectionTitle(
-          _t('Prenatal Risk Summary', 'Buod ng Prenatal Risk'),
-          color: riskColor,
-        ));
-
-        content.add(
-          pw.Container(
-            width: double.infinity,
-            padding: const pw.EdgeInsets.all(10),
-            margin: const pw.EdgeInsets.only(bottom: 6),
-            decoration: pw.BoxDecoration(
-              color: isHighRisk
-                  ? bgSecondary
-                  : bgSecondary,
-              border: pw.Border.all(color: riskColor, width: 0.5),
-              borderRadius: pw.BorderRadius.circular(6),
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  '${_t("Risk Level", "Antas ng Panganib")}: ${widget.riskLevel!.toUpperCase()}',
-                  style: pw.TextStyle(
-                    fontSize: 11,
-                    fontWeight: pw.FontWeight.bold,
-                    color: riskColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-
-      if (widget.riskFactors != null && widget.riskFactors!.isNotEmpty) {
-        content.add(
-          pw.Padding(
-            padding: const pw.EdgeInsets.only(left: 8, bottom: 4),
-            child: pw.Text(
-              _t('Risk Factors:', 'Mga Salik ng Panganib:'),
-              style: pw.TextStyle(
-                fontSize: 10,
-                fontWeight: pw.FontWeight.bold,
-                color: textSecondary,
-              ),
-            ),
-          ),
-        );
-        content.add(
-          pw.Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: widget.riskFactors!.map((f) {
-              final isHigh = f.toLowerCase().contains('high');
-              return pdfRiskChip(f, isHigh ? errorColor : warningColor);
-            }).toList(),
-          ),
-        );
-      }
-
-      if (widget.suggestedActions != null && widget.suggestedActions!.isNotEmpty) {
-        content.add(
-          pw.Padding(
-            padding: const pw.EdgeInsets.only(left: 8, top: 8, bottom: 4),
-            child: pw.Text(
-              _t('Suggested Actions:', 'Mga Iminumungkahing Aksyon:'),
-              style: pw.TextStyle(
-                fontSize: 10,
-                fontWeight: pw.FontWeight.bold,
-                color: textSecondary,
-              ),
-            ),
-          ),
-        );
-        for (int i = 0; i < widget.suggestedActions!.length; i++) {
-          content.add(
-            pw.Padding(
-              padding: const pw.EdgeInsets.only(left: 16, bottom: 2),
-              child: pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    '${i + 1}. ',
-                    style: pw.TextStyle(
-                      fontSize: 10,
-                      fontWeight: pw.FontWeight.bold,
-                      color: brandAccent,
-                    ),
-                  ),
-                  pw.Expanded(
-                    child: pw.Text(
-                      widget.suggestedActions![i],
-                      style: const pw.TextStyle(fontSize: 10, color: textPrimary),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-      }
-
-      // ── AI ANALYSIS ──
-      if (widget.aiAnalysis != null && widget.aiAnalysis!.trim().isNotEmpty) {
-        final aiText = _getAiTextForLanguage(widget.aiAnalysis!.trim());
-        content.add(pdfSectionTitle(_tAi('Remarks', 'Mga Tala')));
-
-        // How the remarks came to exist, printed.
-        //
-        // The export stamped every summary "AI Generated" regardless — which
-        // claims authorship of text a midwife wrote herself, and hides the
-        // case that matters most, where a midwife read the AI's draft and
-        // corrected it. The screen has recorded that distinction from
-        // `remarks_source` for a while; the printed copy, which is the one
-        // that ends up in a chart or a referral, did not carry it.
-        //
-        // Same rule as the screen, read from the same field, so a printout
-        // cannot claim something the app does not.
-        final pdfProvenance = _summaryProvenance().label;
-
-        content.add(
-          pw.Container(
-            width: double.infinity,
-            padding: const pw.EdgeInsets.all(12),
-            margin: const pw.EdgeInsets.only(bottom: 6),
-            decoration: pw.BoxDecoration(
-              color: bgSecondary,
-              border: pw.Border.all(color: borderLight, width: 0.5),
-              borderRadius: pw.BorderRadius.circular(6),
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                if (pdfProvenance.isNotEmpty)
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.only(bottom: 8),
-                    child: pw.Text(
-                      _tAi('Source: $pdfProvenance', 'Pinagmulan: $pdfProvenance'),
-                      style: pw.TextStyle(
-                        fontSize: 8.5,
-                        fontWeight: pw.FontWeight.bold,
-                        letterSpacing: 0.3,
-                        color: textSecondary,
-                      ),
-                    ),
-                  ),
-                pw.Text(
-                  aiText,
-                  style: const pw.TextStyle(
-                    fontSize: 10,
-                    color: textPrimary,
-                    lineSpacing: 4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-
-        // Recommendations
-        final recommendations = _extractRecommendations(aiText);
-        if (recommendations.isNotEmpty) {
-          content.add(pdfSectionTitle(
-            _tAi('Recommendations', 'Mga Rekomendasyon'),
-            color: textPrimary,
-          ));
-          content.add(
-            pw.Container(
-              width: double.infinity,
-              padding: const pw.EdgeInsets.all(10),
-              decoration: pw.BoxDecoration(
-                color: bgSecondary,
-                border: pw.Border.all(
-                  color: borderLight,
-                  width: 0.5,
-                ),
-                borderRadius: pw.BorderRadius.circular(6),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: recommendations.asMap().entries.map((entry) {
-                  return pw.Padding(
-                    padding: const pw.EdgeInsets.only(bottom: 4),
-                    child: pw.Row(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(
-                          '${entry.key + 1}. ',
-                          style: pw.TextStyle(
-                            fontSize: 10,
-                            fontWeight: pw.FontWeight.bold,
-                            color: textPrimary,
-                          ),
-                        ),
-                        pw.Expanded(
-                          child: pw.Text(
-                            entry.value,
-                            style: const pw.TextStyle(
-                              fontSize: 10,
-                              color: textPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          );
-        }
-      }
-
-      // ── DISCLAIMER ──
-      content.add(pw.SizedBox(height: 12));
+    if (widget.riskFactors != null && widget.riskFactors!.isNotEmpty) {
       content.add(
-        pw.Container(
-          width: double.infinity,
-          padding: const pw.EdgeInsets.all(10),
-          decoration: pw.BoxDecoration(
-            color: bgSecondary,
-            border: pw.Border.all(
-              color: borderLight,
-              width: 0.5,
-            ),
-            borderRadius: pw.BorderRadius.circular(6),
-          ),
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(left: 8, bottom: 4),
           child: pw.Text(
-            _tAi(
-              'Disclaimer: This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation. This document is not a medical prescription.',
-              'Paunawa: Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife. Ang dokumentong ito ay hindi medikal na reseta.',
-            ),
-            style: const pw.TextStyle(
-              fontSize: 8.5,
+            _t('Risk Factors:', 'Mga Salik ng Panganib:'),
+            style: pw.TextStyle(
+              fontSize: 10,
+              fontWeight: pw.FontWeight.bold,
               color: textSecondary,
             ),
           ),
         ),
       );
-
-      // ── Build Multi-Page PDF ──
-      pdf.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(32),
-          footer: (pw.Context ctx) {
-            return pw.Container(
-              alignment: pw.Alignment.center,
-              padding: const pw.EdgeInsets.only(top: 8),
-              decoration: const pw.BoxDecoration(
-                border: pw.Border(
-                  top: pw.BorderSide(color: borderLight, width: 0.5),
-                ),
-              ),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Generated by InaAgapay Health System',
-                    style: const pw.TextStyle(fontSize: 8, color: textSecondary),
-                  ),
-                  pw.Text(
-                    'Page ${ctx.pageNumber} of ${ctx.pagesCount}',
-                    style: const pw.TextStyle(fontSize: 8, color: textSecondary),
-                  ),
-                ],
-              ),
-            );
-          },
-          build: (pw.Context context) => content,
+      content.add(
+        pw.Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: widget.riskFactors!.map((f) {
+            final isHigh = f.toLowerCase().contains('high');
+            return pdfRiskChip(f, isHigh ? errorColor : warningColor);
+          }).toList(),
         ),
       );
+    }
 
-      // ── Share / Save the PDF ──
-      final pdfBytes = await pdf.save();
-
-      if (mounted) {
-        Navigator.of(context).pop(); // dismiss loading dialog
-      }
-
-      final sanitizedTitle = widget.title
-          .replaceAll(RegExp(r'[^a-zA-Z0-9\s]'), '')
-          .replaceAll(RegExp(r'\s+'), '_')
-          .toLowerCase();
-      final fileName = 'inaagapay_${sanitizedTitle}_report.pdf';
-
-      await Printing.sharePdf(bytes: pdfBytes, filename: fileName);
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop(); // dismiss loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_t(
-              'Failed to generate PDF. Please try again.',
-              'Hindi nagawa ang PDF. Pakisubukan muli.',
-            )),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    if (widget.suggestedActions != null && widget.suggestedActions!.isNotEmpty) {
+      content.add(
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(left: 8, top: 8, bottom: 4),
+          child: pw.Text(
+            _t('Suggested Actions:', 'Mga Iminumungkahing Aksyon:'),
+            style: pw.TextStyle(
+              fontSize: 10,
+              fontWeight: pw.FontWeight.bold,
+              color: textSecondary,
+            ),
+          ),
+        ),
+      );
+      for (int i = 0; i < widget.suggestedActions!.length; i++) {
+        content.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(left: 16, bottom: 2),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  '${i + 1}. ',
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    fontWeight: pw.FontWeight.bold,
+                    color: brandAccent,
+                  ),
+                ),
+                pw.Expanded(
+                  child: pw.Text(
+                    widget.suggestedActions![i],
+                    style: const pw.TextStyle(fontSize: 10, color: textPrimary),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       }
     }
+
+    // ── AI ANALYSIS ──
+    if (widget.aiAnalysis != null && widget.aiAnalysis!.trim().isNotEmpty) {
+      final aiText = _getAiTextForLanguage(widget.aiAnalysis!.trim());
+      content.add(pdfSectionTitle(_tAi('Remarks', 'Mga Tala')));
+
+      // How the remarks came to exist, printed.
+      //
+      // The export stamped every summary "AI Generated" regardless — which
+      // claims authorship of text a midwife wrote herself, and hides the
+      // case that matters most, where a midwife read the AI's draft and
+      // corrected it. The screen has recorded that distinction from
+      // `remarks_source` for a while; the printed copy, which is the one
+      // that ends up in a chart or a referral, did not carry it.
+      //
+      // Same rule as the screen, read from the same field, so a printout
+      // cannot claim something the app does not.
+      final pdfProvenance = _summaryProvenance().label;
+
+      content.add(
+        pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.all(12),
+          margin: const pw.EdgeInsets.only(bottom: 6),
+          decoration: pw.BoxDecoration(
+            color: bgSecondary,
+            border: pw.Border.all(color: borderLight, width: 0.5),
+            borderRadius: pw.BorderRadius.circular(6),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              if (pdfProvenance.isNotEmpty)
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 8),
+                  child: pw.Text(
+                    _tAi('Source: $pdfProvenance', 'Pinagmulan: $pdfProvenance'),
+                    style: pw.TextStyle(
+                      fontSize: 8.5,
+                      fontWeight: pw.FontWeight.bold,
+                      letterSpacing: 0.3,
+                      color: textSecondary,
+                    ),
+                  ),
+                ),
+              pw.Text(
+                aiText,
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  color: textPrimary,
+                  lineSpacing: 4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      // Recommendations
+      final recommendations = _extractRecommendations(aiText);
+      if (recommendations.isNotEmpty) {
+        content.add(pdfSectionTitle(
+          _tAi('Recommendations', 'Mga Rekomendasyon'),
+          color: textPrimary,
+        ));
+        content.add(
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.all(10),
+            decoration: pw.BoxDecoration(
+              color: bgSecondary,
+              border: pw.Border.all(
+                color: borderLight,
+                width: 0.5,
+              ),
+              borderRadius: pw.BorderRadius.circular(6),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: recommendations.asMap().entries.map((entry) {
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 4),
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        '${entry.key + 1}. ',
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          fontWeight: pw.FontWeight.bold,
+                          color: textPrimary,
+                        ),
+                      ),
+                      pw.Expanded(
+                        child: pw.Text(
+                          entry.value,
+                          style: const pw.TextStyle(
+                            fontSize: 10,
+                            color: textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      }
+    }
+
+    // ── DISCLAIMER ──
+    //
+    // The AI wording printed on every record, including a checkup a
+    // midwife wrote herself, where it described text that was not there.
+    final hasAiText =
+        widget.aiAnalysis != null && widget.aiAnalysis!.trim().isNotEmpty;
+    content.add(pw.SizedBox(height: 12));
+    content.add(
+      pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(
+          color: bgSecondary,
+          border: pw.Border.all(
+            color: borderLight,
+            width: 0.5,
+          ),
+          borderRadius: pw.BorderRadius.circular(6),
+        ),
+        child: pw.Text(
+          hasAiText
+              ? _tAi(
+                  'Disclaimer: This AI-assisted explanation restates the findings recorded by the sonologist in simpler words, adds nothing of its own, and is intended only for healthcare monitoring support and does not replace professional medical consultation. This document is not a medical prescription.',
+                  'Paunawa: Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang ang natuklasan ng sonologist at gabay lamang para sa pagsubaybay sa kalusugan at hindi pamalit sa konsultasyon sa doktor o midwife. Ang dokumentong ito ay hindi medikal na reseta.',
+                )
+              : _t(
+                  'This is a copy of a record kept in InaAgapay. It is not a medical prescription. Confidential patient information, handled under the Data Privacy Act of 2012 (RA 10173).',
+                  'Ito ay kopya ng rekord sa InaAgapay. Hindi ito medikal na reseta. Kumpidensyal na impormasyon ng pasyente, alinsunod sa Data Privacy Act of 2012 (RA 10173).',
+                ),
+          style: const pw.TextStyle(
+            fontSize: 8.5,
+            color: textSecondary,
+          ),
+        ),
+      ),
+    );
+
+    // ── Build Multi-Page PDF ──
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        footer: (pw.Context ctx) {
+          return pw.Container(
+            alignment: pw.Alignment.center,
+            padding: const pw.EdgeInsets.only(top: 8),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                top: pw.BorderSide(color: borderLight, width: 0.5),
+              ),
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Generated by InaAgapay Health System',
+                  style: const pw.TextStyle(fontSize: 8, color: textSecondary),
+                ),
+                pw.Text(
+                  'Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+                  style: const pw.TextStyle(fontSize: 8, color: textSecondary),
+                ),
+              ],
+            ),
+          );
+        },
+        build: (pw.Context context) => content,
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  @visibleForTesting
+  Future<Uint8List> buildPdfForTest() => _buildRecordPdf();
+
+  @visibleForTesting
+  ReportDocument recordDocumentForTest() => _recordDocument();
+
+  /// "Requires closer monitoring", from the stored classification.
+  String? _classificationLabel() {
+    final raw = widget.ultrasoundClassification?.trim() ?? '';
+    if (raw.isEmpty) return null;
+    final text = raw.replaceAll('_', ' ').toLowerCase();
+    return text[0].toUpperCase() + text.substring(1);
+  }
+
+  /// The record as a workbook: the same patient, results, sections and
+  /// assessment the PDF prints, one block each, so the two cannot disagree.
+  ReportDocument _recordDocument() {
+    String? clean(String? value) =>
+        (value ?? '').trim().isEmpty ? null : value!.trim();
+    List<Object?> pair(String label, String value) => [label, value];
+    const fieldColumns = ['Field', 'Value'];
+    const flex = [1.0, 2.2];
+
+    final patient = widget.patient;
+    final recordedBy = clean(widget.approvedByName);
+    final blocks = <ReportBlock>[
+      ReportBlock(
+        title: _t('Patient', 'Pasyente'),
+        columns: fieldColumns,
+        columnFlex: flex,
+        showRowCount: false,
+        rows: [
+          if (patient != null && !patient.isEmpty)
+            pair(_t('Name', 'Pangalan'), patient.name),
+          if (clean(patient?.idLabel) != null)
+            pair(_t('Patient number', 'Numero ng pasyente'), patient!.idLabel!.trim()),
+          if (clean(patient?.age) != null)
+            pair(_t('Age', 'Edad'), patient!.age!.trim()),
+          if (clean(patient?.obstetric) != null)
+            pair(_t('Obstetric score', 'Obstetric score'), patient!.obstetric!.trim()),
+          if (clean(patient?.bloodType) != null)
+            pair(_t('Blood type', 'Uri ng dugo'), patient!.bloodType!.trim()),
+          if (recordedBy != null) pair(_t('Recorded by', 'Itinala ni'), recordedBy),
+        ],
+        emptyText: _t('No patient details on this record.',
+            'Walang detalye ng pasyente sa rekord na ito.'),
+      ),
+      if (widget.resultRows.isNotEmpty)
+        ReportBlock(
+          title: widget.resultsTitle ?? _t('Results', 'Mga Resulta'),
+          columns: const ['Test', 'Result'],
+          columnFlex: flex,
+          showRowCount: false,
+          rows: [for (final row in widget.resultRows) pair(row.key, row.value)],
+        ),
+      for (final entry in _groupRows(_normalizedDisplayRows()).entries)
+        if (entry.value.isNotEmpty)
+          ReportBlock(
+            title: _localizedSectionTitle(entry.key),
+            columns: fieldColumns,
+            columnFlex: flex,
+            showRowCount: false,
+            rows: [for (final row in entry.value) pair(row.key, row.value)],
+          ),
+    ];
+
+    final eval = widget.weightGainEval;
+    final assessment = <List<Object?>>[
+      if (_classificationLabel() != null)
+        pair(_t('Monitoring classification', 'Klasipikasyon'), _classificationLabel()!),
+      if (clean(widget.riskLevel) != null)
+        pair(_t('Risk level', 'Antas ng panganib'), widget.riskLevel!.trim().toUpperCase()),
+      if ((widget.riskFactors ?? const []).isNotEmpty)
+        pair(_t('Risk factors', 'Mga salik ng panganib'), widget.riskFactors!.join('; ')),
+      if (eval != null && eval['status'] != null)
+        pair(_t('Weight gain', 'Pagtaas ng timbang'), eval['status'].toString()),
+      if (eval != null && eval['bmi_category'] != null)
+        pair(_t('BMI category', 'Kategorya ng BMI'), eval['bmi_category'].toString()),
+      if (eval != null && eval['message'] != null)
+        pair(_t('Weight gain note', 'Tala sa timbang'), eval['message'].toString()),
+      if (widget.isMidwifeApproved == true)
+        pair(_t('Assessed and approved by', 'Sinuri at inaprubahan ni'),
+            recordedBy ?? _t('Midwife', 'Midwife')),
+    ];
+    if (assessment.isNotEmpty) {
+      blocks.add(ReportBlock(
+        title: _t('Assessment', 'Pagsusuri'),
+        columns: fieldColumns,
+        columnFlex: flex,
+        showRowCount: false,
+        rows: assessment,
+      ));
+    }
+
+    final actions = widget.suggestedActions ?? const <String>[];
+    if (actions.isNotEmpty) {
+      blocks.add(ReportBlock(
+        title: _t('Suggested actions', 'Mga iminumungkahing aksyon'),
+        columns: const ['#', 'Action'],
+        columnFlex: const [0.3, 3],
+        rows: [
+          for (var i = 0; i < actions.length; i++) [i + 1, actions[i]],
+        ],
+      ));
+    }
+
+    if (widget.aiAnalysis != null && widget.aiAnalysis!.trim().isNotEmpty) {
+      final provenance = _summaryProvenance().label;
+      blocks.add(ReportBlock(
+        title: _tAi('Remarks', 'Mga Tala'),
+        lead: [if (provenance.isNotEmpty) _tAi('Source: $provenance', 'Pinagmulan: $provenance')],
+        columns: const ['Remarks'],
+        rows: [
+          [_getAiTextForLanguage(widget.aiAnalysis!.trim())],
+        ],
+      ));
+    }
+
+    return ReportDocument(
+      title: widget.title,
+      facilityName: patient?.name ?? '',
+      facilityLabel: _t('Patient', 'Pasyente'),
+      periodLabel: clean(widget.subtitle) ?? '',
+      periodCaption: _t('Record', 'Rekord'),
+      preparedBy: recordedBy ?? 'InaAgapay',
+      preparedByLabel: _t('Recorded by', 'Itinala ni'),
+      landscape: false,
+      blocks: blocks,
+    );
   }
 
   @override
@@ -1137,11 +1242,16 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           SecondaryHeader(
             title: widget.title,
             onBack: () => Navigator.pop(context),
-            trailing: IconButton(
-              icon: const Icon(Icons.picture_as_pdf_rounded),
-              tooltip: _t('Export to PDF', 'I-export sa PDF'),
-              onPressed: _exportToPdf,
-              color: AppColors.brandPrimary,
+            trailing: ExportMenuButton(
+              onSelected: (action) => ExportActions.run(
+                context,
+                action,
+                fileStem: ExportActions.fileStem(
+                    [widget.title, widget.patient?.name]),
+                buildPdf: _buildRecordPdf,
+                buildExcel: () async =>
+                    ReportExportService.toXlsx(_recordDocument()),
+              ),
             ),
           ),
           Expanded(
@@ -3604,7 +3714,11 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           padding: const EdgeInsets.only(top: 8, bottom: 8),
           child: Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
+            child: Material(
+              // Its own surface, so the tap ripple draws above the card's
+              // background instead of under it.
+              type: MaterialType.transparency,
+              child: ExpansionTile(
               title: Row(
                 children: [
                   const Icon(Icons.settings_outlined, color: AppColors.brandPrimary, size: 18),
@@ -3626,6 +3740,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               tilePadding: EdgeInsets.zero,
               childrenPadding: const EdgeInsets.only(top: 8),
               children: detailedWidgets,
+            ),
             ),
           ),
         ),
@@ -4042,7 +4157,11 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           padding: const EdgeInsets.only(top: 8, bottom: 8),
           child: Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
+            child: Material(
+              // Its own surface, so the tap ripple draws above the card's
+              // background instead of under it.
+              type: MaterialType.transparency,
+              child: ExpansionTile(
               title: Row(
                 children: [
                   const Icon(Icons.settings_outlined, color: AppColors.brandPrimary, size: 18),
@@ -4064,6 +4183,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               tilePadding: EdgeInsets.zero,
               childrenPadding: const EdgeInsets.only(top: 8),
               children: detailedWidgets,
+            ),
             ),
           ),
         ),
@@ -4269,7 +4389,11 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           padding: const EdgeInsets.only(top: 8, bottom: 8),
           child: Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
+            child: Material(
+              // Its own surface, so the tap ripple draws above the card's
+              // background instead of under it.
+              type: MaterialType.transparency,
+              child: ExpansionTile(
               title: Row(
                 children: [
                   const Icon(Icons.settings_outlined, color: AppColors.brandPrimary, size: 18),
@@ -4293,6 +4417,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               childrenPadding: const EdgeInsets.only(top: 8),
               children: detailedWidgets,
             ),
+            ),
           ),
         ),
       );
@@ -4304,7 +4429,11 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           padding: const EdgeInsets.only(top: 8, bottom: 8),
           child: Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
+            child: Material(
+              // Its own surface, so the tap ripple draws above the card's
+              // background instead of under it.
+              type: MaterialType.transparency,
+              child: ExpansionTile(
               title: Row(
                 children: [
                   const Icon(Icons.settings_outlined, color: AppColors.brandPrimary, size: 18),
@@ -4327,6 +4456,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               tilePadding: EdgeInsets.zero,
               childrenPadding: const EdgeInsets.only(top: 8),
               children: detailedWidgets,
+            ),
             ),
           ),
         ),
@@ -4878,7 +5008,11 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
+        child: Material(
+          // Its own surface, so the tap ripple draws above the card's
+          // background instead of under it.
+          type: MaterialType.transparency,
+          child: ExpansionTile(
           leading: const Icon(Icons.menu_book_outlined, color: AppColors.brandPrimary, size: 20),
           title: Text(
             title,
@@ -4941,6 +5075,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                   ),
                 )),
           ],
+        ),
         ),
       ),
     );

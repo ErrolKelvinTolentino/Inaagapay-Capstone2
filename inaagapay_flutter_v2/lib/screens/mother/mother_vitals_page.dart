@@ -1222,7 +1222,11 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                 const SizedBox(height: 8),
                 Theme(
                   data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
+                  child: Material(
+                    // Its own surface, so the tap ripple draws above the card's
+                    // background instead of under it.
+                    type: MaterialType.transparency,
+                    child: ExpansionTile(
                     title: Text(
                       _t('Clinical Disclaimer & References', 'Klinikal na Disclaimer at mga Sanggunian'),
                       style: const TextStyle(
@@ -1259,6 +1263,7 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                         ),
                       ),
                     ],
+                  ),
                   ),
                 ),
               ],

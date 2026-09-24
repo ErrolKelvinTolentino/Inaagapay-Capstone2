@@ -680,7 +680,11 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           // Expansion Tile for Disclaimer
           Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
+            child: Material(
+              // Its own surface, so the tap ripple draws above the card's
+              // background instead of under it.
+              type: MaterialType.transparency,
+              child: ExpansionTile(
               title: const Text(
                 'Clinical Disclaimer & References',
                 style: TextStyle(
@@ -711,6 +715,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                   ),
                 ),
               ],
+            ),
             ),
           ),
         ],
@@ -5937,7 +5942,11 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         // and the full wording sits behind a tap.
         Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
+          child: Material(
+            // Its own surface, so the tap ripple draws above the card's
+            // background instead of under it.
+            type: MaterialType.transparency,
+            child: ExpansionTile(
             title: const Text(
               'Clinical Disclaimer & References',
               style: TextStyle(
@@ -5990,6 +5999,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 ),
               ),
             ],
+          ),
           ),
         ),
       ],
