@@ -54,7 +54,8 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
       
       final ctx = await SupabaseService.getMidwifeContext(accountId);
       if (ctx['success'] != true) {
-        throw Exception('Failed to load midwife context');
+        throw Exception(
+            ctx['message'] ?? 'Failed to load midwife context');
       }
 
       _assignedBhcId = ctx['assigned_bhc_id'] as int?;

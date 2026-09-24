@@ -5,6 +5,7 @@ import '../../widgets/app_input_field.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/clickable_text.dart';
 import '../../services/supabase_service.dart';
+import '../../services/account_status_guard.dart';
 import '../../services/auth_storage.dart';
 import '../../widgets/validation_message.dart';
 import '../../services/push_notification_service.dart';
@@ -53,6 +54,13 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     if (kDebugMode) {
       debugPrint('=== LOGIN SCREEN INITIALIZED ===');
+    }
+    // Set when a session was ended because the account stopped being
+    // active; says why instead of leaving a blank form.
+    final notice = AccountStatusGuard.takeSignOutNotice();
+    if (notice != null) {
+      _hasError = true;
+      _errorMessage = notice;
     }
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -6,6 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_colors.dart';
+import 'services/account_status_guard.dart';
 import 'services/auth_storage.dart';
 import 'services/supabase_service.dart';
 import 'screens/auth/login.dart';
@@ -106,24 +109,53 @@ class InaagapayApp extends StatefulWidget {
 /// Call from anywhere to refresh the app theme after dark mode toggle.
 void refreshAppTheme() {}
 
-class _InaagapayAppState extends State<InaagapayApp> {
+class _InaagapayAppState extends State<InaagapayApp>
+    with WidgetsBindingObserver {
   static _InaagapayAppState? _instance;
+
+  /// Resolved once. Building it inside build() re-ran the whole start-up
+  /// routing — and now the account status check — on every rebuild.
+  late final Future<Widget> _startScreen = _determineStartScreen();
+
+  Timer? _statusTimer;
 
   @override
   void initState() {
     super.initState();
     _instance = this;
+    WidgetsBinding.instance.addObserver(this);
+    _statusTimer = Timer.periodic(
+      AccountStatusGuard.recheckInterval,
+      (_) => AccountStatusGuard.enforce(),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Returning from the background is when a long-open session is most
+    // likely to be stale.
+    if (state == AppLifecycleState.resumed) {
+      AccountStatusGuard.enforce(force: true);
+    }
   }
 
   @override
   void dispose() {
     if (_instance == this) _instance = null;
+    WidgetsBinding.instance.removeObserver(this);
+    _statusTimer?.cancel();
     super.dispose();
   }
 
   Future<Widget> _determineStartScreen() async {
     final isLoggedIn = await AuthStorage.isLoggedIn();
     if (!isLoggedIn) return const LoginScreen();
+
+    // A session restored from storage is checked against the server before
+    // anything opens, so a suspension made while the app was closed holds.
+    if (await AccountStatusGuard.enforce(force: true)) {
+      return const LoginScreen();
+    }
 
     final role = await AuthStorage.getUserRole();
 
@@ -220,7 +252,7 @@ class _InaagapayAppState extends State<InaagapayApp> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Widget>(
-      future: _determineStartScreen(),
+      future: _startScreen,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const MaterialApp(
@@ -236,6 +268,7 @@ class _InaagapayAppState extends State<InaagapayApp> {
         }
 
         return MaterialApp(
+          navigatorKey: AccountStatusGuard.navigatorKey,
           debugShowCheckedModeBanner: false,
           title: 'Inaagapay',
           theme: AppTheme.lightTheme.copyWith(

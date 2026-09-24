@@ -848,7 +848,12 @@ class SupabaseService {
               detail: 'The account status is '
                   '"${accountResponse['status']}", so sign-in was refused.');
         }
-        return {'success': false, 'message': 'Account inactive'};
+        return {
+          'success': false,
+          'message': accountResponse['status'] == 'suspended'
+              ? 'This account is suspended. Please contact your health center.'
+              : 'This account is deactivated. Please contact your health center.',
+        };
       }
 
       final createdBy = accountResponse['created_by'] as String? ?? 'self';
@@ -1314,156 +1319,134 @@ class SupabaseService {
   }
 
   // Get midwife context
+  //
+  // Resolves the signed-in midwife's midwife_id and health centre. Every add
+  // flow files its record against the centre returned here, so a wrong answer
+  // is worse than none: it puts a patient's record, or a dose's stock
+  // movement, under another centre.
+  //
+  // The previous version could not tell "this midwife has no posting" from
+  // "the request failed". A dropped request fell through to posting her —
+  // permanently, in the midwives row — to the lowest-numbered BHC, and an
+  // exception anywhere returned BHC #1 with success: true. Both are gone:
+  //
+  //   * a lookup that failed returns success: false and is not cached, so the
+  //     next call tries again;
+  //   * a midwife who genuinely has no posting also gets success: false, with
+  //     a message saying so, instead of being posted somewhere at random.
+  //     Accounts created through create_portal_account (20260927) are always
+  //     posted, so this only affects older accounts, which an administrator
+  //     fixes on the Midwife Assignment page.
   static Future<Map<String, dynamic>> getMidwifeContext(int accountId) async {
     if (_midwifeContextCache.containsKey(accountId)) {
       return _midwifeContextCache[accountId]!;
     }
 
-    try {
-      if (kDebugMode) {
-        debugPrint('=== GET MIDWIFE CONTEXT ===');
-        debugPrint('Account ID: $accountId');
-      }
+    const unreachable = 'Could not confirm your health center. Check your '
+        'connection and try again.';
 
-      int? midwifeId;
-      int? assignedBhcId;
-      int? patientNumber;
-
-      // 1. Get or create midwife_id from midwives table
-      try {
-        final midwifeRow = await client
-            .from('midwives')
-            .select('midwife_id')
-            .eq('account_id', accountId)
-            .maybeSingle();
-
-        if (midwifeRow != null) {
-          midwifeId = midwifeRow['midwife_id'] as int?;
-        } else {
-          final newMidwife = await client
-              .from('midwives')
-              .insert({'account_id': accountId})
-              .select('midwife_id')
-              .maybeSingle();
-          midwifeId = newMidwife?['midwife_id'] as int?;
-        }
-      } catch (e) {
-        if (kDebugMode) debugPrint('Midwives query note: $e');
-      }
-
-      // 2. The midwife's own posting is the authoritative one.
-      try {
-        final midwifeRow = await client
-            .from('midwives')
-            .select('assigned_bhc_id')
-            .eq('account_id', accountId)
-            .maybeSingle();
-        assignedBhcId = (midwifeRow?['assigned_bhc_id'] as num?)?.toInt();
-      } catch (e) {
-        if (kDebugMode) debugPrint('Midwife posting query note: $e');
-      }
-
-      // 3. Otherwise fall back to facility_assignments.
-      //
-      // Deliberately NOT maybeSingle(): that throws a 406 as soon as an account
-      // has more than one active row, and the old catch-and-guess below then
-      // inserted yet another one — so every login added a row and the next login
-      // was guaranteed to fail again. Take the most recent instead.
-      if (assignedBhcId == null) {
-        try {
-          final faRows = await client
-              .from('facility_assignments')
-              .select('facility_id, patient_number, assigned_at')
-              .eq('account_id', accountId)
-              .eq('is_active', true)
-              .order('assigned_at', ascending: false)
-              .limit(1);
-
-          final rows = faRows as List<dynamic>;
-          if (rows.isNotEmpty) {
-            final fa = Map<String, dynamic>.from(rows.first as Map);
-            assignedBhcId = (fa['facility_id'] as num?)?.toInt();
-            patientNumber = (fa['patient_number'] as num?)?.toInt();
-          }
-        } catch (e) {
-          if (kDebugMode) debugPrint('Facility assignment query note: $e');
-        }
-      }
-
-      // 4. Still nothing. Post the midwife to the first barangay health centre
-      //    so the app stays usable, and record it once.
-      //
-      //    The previous version guessed the centre from a substring of the
-      //    e-mail address ('tarcan', 'makinabang', ...). That silently attached
-      //    doses to the wrong centre's stock whenever the address did not follow
-      //    the convention, which is most of them.
-      if (assignedBhcId == null) {
-        try {
-          final firstBhc = await client
-              .from('health_facilities')
-              .select('facility_id')
-              .eq('facility_type', 'BHC')
-              .order('facility_id', ascending: true)
-              .limit(1);
-
-          final bhcRows = firstBhc as List<dynamic>;
-          if (bhcRows.isNotEmpty) {
-            assignedBhcId =
-                ((bhcRows.first as Map)['facility_id'] as num?)?.toInt();
-          }
-        } catch (e) {
-          if (kDebugMode) debugPrint('Default BHC lookup note: $e');
-        }
-
-        if (assignedBhcId != null) {
-          // Write it to the midwife row, which is where the rest of the app
-          // reads from, rather than stacking another facility_assignments row.
-          try {
-            await client
-                .from('midwives')
-                .update({'assigned_bhc_id': assignedBhcId})
-                .eq('account_id', accountId);
-          } catch (e) {
-            if (kDebugMode) debugPrint('Default BHC write note: $e');
-          }
-        }
-      }
-
-      // 5. Fetch facility name. assignedBhcId can now legitimately still be null
-      //    — a database with no barangay health centres at all — so guard it
-      //    rather than sending null into the filter.
-      String bhcName = 'Barangay Health Center';
-      if (assignedBhcId != null) {
-        try {
-          final facility = await client
-              .from('health_facilities')
-              .select('name')
-              .eq('facility_id', assignedBhcId)
-              .maybeSingle();
-          if (facility != null && facility['name'] != null) {
-            bhcName = facility['name'].toString();
-          }
-        } catch (_) {}
-      }
-
-      final result = {
-        'success': true,
-        'midwife_id': midwifeId ?? accountId,
-        'assigned_bhc_id': assignedBhcId,
-        'bhc_name': bhcName,
-        'patient_number': patientNumber,
-      };
-      _midwifeContextCache[accountId] = result;
-      return result;
-    } catch (e) {
-      if (kDebugMode) debugPrint('getMidwifeContext error: $e');
-      return {
-        'success': true,
-        'midwife_id': accountId,
-        'assigned_bhc_id': 1,
-        'bhc_name': 'Barangay Health Center',
-      };
+    if (kDebugMode) {
+      debugPrint('=== GET MIDWIFE CONTEXT ===');
+      debugPrint('Account ID: $accountId');
     }
+
+    int? midwifeId;
+    int? assignedBhcId;
+    int? patientNumber;
+
+    // 1 + 2. The midwife row carries both the midwife_id and her posting,
+    //        which is the authoritative one. Created on first use.
+    try {
+      var midwifeRow = await client
+          .from('midwives')
+          .select('midwife_id, assigned_bhc_id')
+          .eq('account_id', accountId)
+          .maybeSingle();
+
+      midwifeRow ??= await client
+          .from('midwives')
+          .insert({'account_id': accountId})
+          .select('midwife_id, assigned_bhc_id')
+          .maybeSingle();
+
+      midwifeId = (midwifeRow?['midwife_id'] as num?)?.toInt();
+      assignedBhcId = (midwifeRow?['assigned_bhc_id'] as num?)?.toInt();
+    } catch (e) {
+      if (kDebugMode) debugPrint('Midwife row lookup failed: $e');
+      return _midwifeContextFailure(unreachable);
+    }
+
+    // 3. Otherwise fall back to facility_assignments.
+    //
+    // Deliberately NOT maybeSingle(): that throws a 406 as soon as an account
+    // has more than one active row. Take the most recent instead.
+    try {
+      final faRows = await client
+          .from('facility_assignments')
+          .select('facility_id, patient_number, assigned_at')
+          .eq('account_id', accountId)
+          .eq('is_active', true)
+          .order('assigned_at', ascending: false)
+          .limit(1);
+
+      final rows = faRows as List<dynamic>;
+      if (rows.isNotEmpty) {
+        final fa = Map<String, dynamic>.from(rows.first as Map);
+        assignedBhcId ??= (fa['facility_id'] as num?)?.toInt();
+        patientNumber = (fa['patient_number'] as num?)?.toInt();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Facility assignment lookup failed: $e');
+      if (assignedBhcId == null) {
+        return _midwifeContextFailure(unreachable, midwifeId: midwifeId);
+      }
+    }
+
+    // 4. No posting on record. Say so; never guess one.
+    if (assignedBhcId == null) {
+      return _midwifeContextFailure(
+        'Your account is not assigned to a health center yet. Ask your '
+        'administrator to assign you on the Midwife Assignment page.',
+        midwifeId: midwifeId,
+      );
+    }
+
+    // 5. Facility name, for display only.
+    String bhcName = 'Barangay Health Center';
+    try {
+      final facility = await client
+          .from('health_facilities')
+          .select('name')
+          .eq('facility_id', assignedBhcId)
+          .maybeSingle();
+      if (facility != null && facility['name'] != null) {
+        bhcName = facility['name'].toString();
+      }
+    } catch (_) {}
+
+    final result = <String, dynamic>{
+      'success': true,
+      'midwife_id': midwifeId,
+      'assigned_bhc_id': assignedBhcId,
+      'bhc_name': bhcName,
+      'patient_number': patientNumber,
+    };
+    _midwifeContextCache[accountId] = result;
+    return result;
+  }
+
+  /// A context with no health centre. Never cached, so the next call retries.
+  static Map<String, dynamic> _midwifeContextFailure(
+    String message, {
+    int? midwifeId,
+  }) {
+    return {
+      'success': false,
+      'message': message,
+      'midwife_id': midwifeId,
+      'assigned_bhc_id': null,
+      'bhc_name': null,
+    };
   }
 
   /// Display format for the BHC patient number stored in
