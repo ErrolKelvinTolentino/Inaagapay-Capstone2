@@ -1,5 +1,10 @@
 # Supabase run order — inventory & vaccine corrections
 
+> **Is everything applied?** Run `migrations/00_check_migration_state.sql` in
+> the SQL Editor. It is read-only and prints one row per migration file, OK or
+> MISSING, with what is missing. After adding a migration, regenerate it with
+> `python database/tools/gen_migration_checker.py`.
+
 Verified against the live project `krooorixhjwygcsdoomg` on 2026-08-23 by probing
 for each migration's own objects. There is no migration ledger in this project
 (`supabase migration list` returns empty) — everything has been run by hand in

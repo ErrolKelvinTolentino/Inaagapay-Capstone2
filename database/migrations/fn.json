@@ -1,0 +1,1747 @@
+{
+ "versions": {
+  "deduct_immunization_stock": [
+   "link_vaccines_and_inventory.sql",
+   "20260815_fix_deduct_immunization_stock_performed_by.sql",
+   "20260818_advanced_inventory_features.sql",
+   "20260818_inventory_comprehensive_upgrades.sql",
+   "20260819_fix_open_vial_deduction_and_linkage.sql",
+   "20260819_solidify_multi_dose_open_vial_system.sql",
+   "20260821_inventory_and_td_fixes.sql"
+  ],
+  "inventory_touch_updated_at": [
+   "20260803_inventory_distribution_workflow.sql"
+  ],
+  "inventory_midwife_facility_id": [
+   "20260803_inventory_distribution_workflow.sql"
+  ],
+  "inventory_assert_actor": [
+   "20260803_inventory_distribution_workflow.sql",
+   "20260904_rhu_stock_requests_to_mho.sql"
+  ],
+  "submit_inventory_stock_request": [
+   "20260803_inventory_distribution_workflow.sql",
+   "20260821_mho_tier.sql",
+   "20260904_rhu_stock_requests_to_mho.sql"
+  ],
+  "approve_inventory_stock_request": [
+   "20260803_inventory_distribution_workflow.sql",
+   "20260909_notification_reference_ids.sql"
+  ],
+  "reject_inventory_stock_request": [
+   "20260803_inventory_distribution_workflow.sql",
+   "20260909_notification_reference_ids.sql"
+  ],
+  "issue_inventory_transfer": [
+   "20260803_inventory_distribution_workflow.sql",
+   "20260807_issue_respects_approved_quantity.sql",
+   "20260818_advanced_inventory_features.sql",
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "receive_inventory_transfer": [
+   "20260803_inventory_distribution_workflow.sql",
+   "20260821_mho_tier.sql",
+   "20260829_inventory_transfer_directions.sql",
+   "20260920_lateral_transfer_notifications.sql"
+  ],
+  "emit_admin_change_event": [
+   "20260804_admin_web_live_refresh.sql"
+  ],
+  "set_child_number": [
+   "20260804_child_number.sql"
+  ],
+  "approve_inventory_stock_request_with_quantity": [
+   "20260806_inventory_audit_fixes.sql",
+   "20260909_notification_reference_ids.sql"
+  ],
+  "record_inventory_disposal": [
+   "20260806_inventory_audit_fixes.sql"
+  ],
+  "update_inventory_transfer_delivery": [
+   "20260806_inventory_transfer_delivery_updates.sql",
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "record_midwife_inventory_activity": [
+   "20260811_midwife_inventory_stock_activity.sql",
+   "20260910_midwife_dose_level_dispense.sql"
+  ],
+  "auto_schedule_next_checkup": [
+   "20260817_checkup_schedule.sql"
+  ],
+  "run_daily_reminders": [
+   "20260817_daily_reminder_job.sql"
+  ],
+  "preview_daily_reminders": [
+   "20260817_daily_reminder_job.sql"
+  ],
+  "discard_open_vial_doses": [
+   "20260818_advanced_inventory_features.sql",
+   "20260819_solidify_multi_dose_open_vial_system.sql",
+   "20260821_inventory_and_td_fixes.sql"
+  ],
+  "get_bhc_monthly_demand_forecast": [
+   "20260818_advanced_inventory_features.sql"
+  ],
+  "deduct_prenatal_encounter_inventory": [
+   "20260818_inventory_comprehensive_upgrades.sql",
+   "20260819_prenatal_td_and_supplements_inventory_sync.sql",
+   "20260819_solidify_multi_dose_open_vial_system.sql",
+   "20260823_prenatal_dispense_fixes.sql",
+   "20260901_prenatal_deduction_column_fix.sql"
+  ],
+  "administer_maternal_td_dose": [
+   "20260819_maternal_td_records_and_sync.sql",
+   "20260821_inventory_and_td_fixes.sql"
+  ],
+  "backfill_maternal_td_history": [
+   "20260819_maternal_td_records_and_sync.sql"
+  ],
+  "normalize_td_dose": [
+   "20260819_td_canonical_sync.sql",
+   "20260821_inventory_and_td_fixes.sql"
+  ],
+  "td_dose_schedule": [
+   "20260819_td_canonical_sync.sql",
+   "20260821_inventory_and_td_fixes.sql"
+  ],
+  "sync_prenatal_td_to_maternal_records": [
+   "20260819_td_canonical_sync.sql",
+   "20260905_maternal_td_deduction_flag_truthful.sql"
+  ],
+  "resolve_actor_account_id": [
+   "20260821_inventory_and_td_fixes.sql"
+  ],
+  "facility_subtree_ids": [
+   "20260821_mho_tier.sql"
+  ],
+  "admin_assigned_facility_id": [
+   "20260821_mho_tier.sql"
+  ],
+  "admin_portal_context": [
+   "20260821_mho_tier.sql"
+  ],
+  "assign_portal_account_facility": [
+   "20260821_mho_tier.sql",
+   "20260927_account_provisioning.sql"
+  ],
+  "set_facility_parent": [
+   "20260821_mho_tier.sql"
+  ],
+  "inventory_actor_facility_id": [
+   "20260821_mho_tier.sql"
+  ],
+  "batch_doses_per_unit": [
+   "20260822_dose_accounting.sql",
+   "20260831_dose_presentation_single_source.sql"
+  ],
+  "inventory_transactions_fill_dose_quantity": [
+   "20260822_dose_accounting.sql"
+  ],
+  "dispense_stock_doses": [
+   "20260822_dose_accounting.sql",
+   "20260831_dose_presentation_single_source.sql"
+  ],
+  "tag_inventory_notification": [
+   "20260824_inventory_integration_fixes.sql",
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "announce_inventory_transfer": [
+   "20260824_inventory_integration_fixes.sql",
+   "20260826_audit_trail_completeness.sql",
+   "20260829_inventory_transfer_directions.sql",
+   "20260909_notification_reference_ids.sql",
+   "20260920_lateral_transfer_notifications.sql"
+  ],
+  "audit_kv": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_section": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_ts": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_date": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_qty": [
+   "20260826_audit_trail_completeness.sql",
+   "20260911_audit_dose_level_summary.sql"
+  ],
+  "audit_bigint": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_utc": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_redact": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_actor": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_facility_label": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_batch_context": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_batch_label": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_module_for": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_severity_for": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_write": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_trail_enrich": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_inventory_stock_request": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_inventory_transfer": [
+   "20260826_audit_trail_completeness.sql",
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "audit_inventory_transaction": [
+   "20260826_audit_trail_completeness.sql",
+   "20260911_audit_dose_level_summary.sql"
+  ],
+  "audit_inventory_batch": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_inventory_disposal": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_inventory_item": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_account_change": [
+   "20260826_audit_trail_completeness.sql",
+   "20260913_fix_audit_account_change_type_mismatch.sql",
+   "20260923_auth_session_audit.sql"
+  ],
+  "audit_facility_assignment": [
+   "20260826_audit_trail_completeness.sql"
+  ],
+  "audit_clinical_change": [
+   "20260826_audit_trail_completeness.sql",
+   "20260922_audit_clinical_encounter_tables.sql"
+  ],
+  "inventory_mho_facility_id": [
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "inventory_place_id": [
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "inventory_stock_location_id": [
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "inventory_same_place": [
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "inventory_transfer_direction": [
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "inventory_direction_label": [
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "inventory_transfer_stamp_route": [
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "inventory_assert_may_transfer": [
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "inventory_notify_facility": [
+   "20260829_inventory_transfer_directions.sql",
+   "20260909_notification_reference_ids.sql"
+  ],
+  "inventory_notify_supervisor": [
+   "20260829_inventory_transfer_directions.sql",
+   "20260909_notification_reference_ids.sql"
+  ],
+  "cancel_inventory_transfer": [
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "audit_transfer_route_rows": [
+   "20260829_inventory_transfer_directions.sql"
+  ],
+  "inventory_transactions_fill_open_vial_level": [
+   "20260830_dose_traceability.sql"
+  ],
+  "item_dose_presentation": [
+   "20260831_dose_presentation_single_source.sql"
+  ],
+  "inventory_stock_request_block_self_review": [
+   "20260904_rhu_stock_requests_to_mho.sql",
+   "20260906_stock_request_review_scope.sql"
+  ],
+  "maternal_td_mark_deducted": [
+   "20260905_maternal_td_deduction_flag_truthful.sql"
+  ],
+  "inventory_place_label": [
+   "20260915_inventory_alert_notifications.sql"
+  ],
+  "inventory_alert_rank": [
+   "20260915_inventory_alert_notifications.sql"
+  ],
+  "inventory_alert_key": [
+   "20260915_inventory_alert_notifications.sql"
+  ],
+  "scan_inventory_alerts": [
+   "20260915_inventory_alert_notifications.sql"
+  ],
+  "raise_inventory_alerts": [
+   "20260915_inventory_alert_notifications.sql"
+  ],
+  "preview_inventory_alerts": [
+   "20260915_inventory_alert_notifications.sql"
+  ],
+  "inventory_assert_count_actor": [
+   "20260917_inventory_physical_count.sql"
+  ],
+  "inventory_assert_posting_actor": [
+   "20260917_inventory_physical_count.sql"
+  ],
+  "open_inventory_count": [
+   "20260917_inventory_physical_count.sql"
+  ],
+  "record_inventory_count": [
+   "20260917_inventory_physical_count.sql"
+  ],
+  "submit_inventory_count": [
+   "20260917_inventory_physical_count.sql"
+  ],
+  "post_inventory_count": [
+   "20260917_inventory_physical_count.sql",
+   "20260921_count_overage_raises_received.sql"
+  ],
+  "cancel_inventory_count": [
+   "20260917_inventory_physical_count.sql"
+  ],
+  "record_auth_event": [
+   "20260923_auth_session_audit.sql"
+  ],
+  "admin_account_dependents": [
+   "20260925_account_lifecycle.sql"
+  ],
+  "admin_set_account_status": [
+   "20260925_account_lifecycle.sql"
+  ],
+  "admin_delete_account": [
+   "20260925_account_lifecycle.sql"
+  ],
+  "admin_archive_account": [
+   "20260925_account_lifecycle.sql"
+  ],
+  "is_municipal_officer": [
+   "20260926_facility_management.sql"
+  ],
+  "create_health_facility": [
+   "20260926_facility_management.sql"
+  ],
+  "update_health_facility": [
+   "20260926_facility_management.sql"
+  ],
+  "set_facility_active": [
+   "20260926_facility_management.sql"
+  ],
+  "portal_account_tier": [
+   "20260927_account_provisioning.sql"
+  ],
+  "admin_provisioning_options": [
+   "20260927_account_provisioning.sql"
+  ],
+  "create_portal_account": [
+   "20260927_account_provisioning.sql"
+  ]
+ },
+ "markers": {
+  "link_vaccines_and_inventory.sql": {
+   "deduct_immunization_stock": {
+    "n": 7,
+    "idx": 0,
+    "cand": [
+     "SELECT ir.*, v.inventory_item_id, m.assigned_bhc_id, m.account_id AS midwife_account_id",
+     "LEFT JOIN midwives m ON m.midwife_id = COALESCE(ir.administered_by, ir.recorded_by)",
+     "RETURN jsonb_build_object('success', true, 'message', 'No stock deduction required');"
+    ]
+   }
+  },
+  "20260815_fix_deduct_immunization_stock_performed_by.sql": {
+   "deduct_immunization_stock": {
+    "n": 7,
+    "idx": 1,
+    "cand": []
+   }
+  },
+  "20260818_advanced_inventory_features.sql": {
+   "deduct_immunization_stock": {
+    "n": 7,
+    "idx": 2,
+    "cand": [
+     "v_hours_open := EXTRACT(EPOCH FROM (NOW() - v_batch.vial_opened_at)) / 3600.0;",
+     "'Auto-expired open vial (' || ROUND(v_hours_open, 1) || ' hrs open, limit ' || v_shelf_hours || ' hrs)'",
+     "open_vials_count = CASE WHEN (doses_remaining_in_open_vial - 1) = 0 THEN GREATEST(0, open_vials_count - 1) ELSE open_vials_count END,"
+    ]
+   },
+   "issue_inventory_transfer": {
+    "n": 4,
+    "idx": 2,
+    "cand": [
+     "IF v_source.facility_id IS NOT NULL AND v_source.facility_id = p_destination_facility_id THEN",
+     "RAISE EXCEPTION 'Insufficient stock in source batch: only % available',",
+     "RAISE EXCEPTION 'Destination facility not found' USING ERRCODE = '23503';"
+    ]
+   },
+   "discard_open_vial_doses": {
+    "n": 3,
+    "idx": 0,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'message', 'Batch not found');",
+     "RETURN jsonb_build_object('success', false, 'message', 'No open vial doses remaining in this batch');",
+     "'Discarded ' || v_doses_wasted || ' open dose(s) of ' || COALESCE(v_item.name, 'Vaccine') || ' \u2014 Reason: ' || COALESCE(p_reason, 'Expired open vial'),"
+    ]
+   },
+   "get_bhc_monthly_demand_forecast": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT f.facility_id AS f_id, f.name::TEXT AS f_name, f.barangay::TEXT AS f_brgy",
+     "LEFT JOIN public.facility_assignments fa ON fa.facility_id = tf.f_id AND fa.is_active = true",
+     "OR (m.barangay IS NOT NULL AND (tf.f_brgy ILIKE '%' || m.barangay || '%' OR m.barangay ILIKE '%' || tf.f_brgy || '%'))"
+    ]
+   }
+  },
+  "20260818_inventory_comprehensive_upgrades.sql": {
+   "deduct_immunization_stock": {
+    "n": 7,
+    "idx": 3,
+    "cand": [
+     "RETURN jsonb_build_object('success', true, 'batch_number', v_batch.batch_number, 'mode', 'new_vial_opened');"
+    ]
+   },
+   "deduct_prenatal_encounter_inventory": {
+    "n": 5,
+    "idx": 0,
+    "cand": []
+   }
+  },
+  "20260819_fix_open_vial_deduction_and_linkage.sql": {
+   "deduct_immunization_stock": {
+    "n": 7,
+    "idx": 4,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'error', 'Immunization record #' || p_immunization_record_id || ' not found');",
+     "RETURN jsonb_build_object('success', true, 'mode', 'outside', 'message', 'Outside immunization recorded (no stock deducted)');",
+     "OR (v_rec.vaccine_name ILIKE '%bcg%' AND (name ILIKE '%bcg%' OR generic_name ILIKE '%bcg%'))"
+    ]
+   }
+  },
+  "20260819_solidify_multi_dose_open_vial_system.sql": {
+   "deduct_immunization_stock": {
+    "n": 7,
+    "idx": 5,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'error', 'Immunization record not found');",
+     "RETURN jsonb_build_object('success', true, 'mode', 'outside', 'message', 'Outside immunization, no stock deducted');",
+     "RETURN jsonb_build_object('success', false, 'error', 'No matching inventory item found for vaccine: ' || v_rec.vaccine_name);"
+    ]
+   },
+   "discard_open_vial_doses": {
+    "n": 3,
+    "idx": 1,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'error', 'Batch not found');",
+     "v_doses_discarded := COALESCE(v_batch.doses_remaining_in_open_vial, 0);",
+     "RETURN jsonb_build_object('success', true, 'message', 'No active open doses in this vial', 'doses_discarded', 0);"
+    ]
+   },
+   "deduct_prenatal_encounter_inventory": {
+    "n": 5,
+    "idx": 2,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'error', 'Prenatal encounter not found');",
+     "IF p_deduct_td AND v_pc.td_vaccine_dose IS NOT NULL AND v_pc.td_vaccine_dose != '' AND p_facility_id IS NOT NULL THEN",
+     "v_hours_open := EXTRACT(EPOCH FROM (NOW() - v_td_batch.vial_opened_at)) / 3600;"
+    ]
+   }
+  },
+  "20260821_inventory_and_td_fixes.sql": {
+   "deduct_immunization_stock": {
+    "n": 7,
+    "idx": 6,
+    "cand": [
+     "'message', 'Recorded as given outside this facility - no stock deducted');",
+     "OR (v_rec.vaccine_name ILIKE '%bcg%'     AND (name ILIKE '%bcg%'     OR generic_name ILIKE '%bcg%'))",
+     "OR (v_rec.vaccine_name ILIKE '%opv%'     AND (name ILIKE '%opv%'     OR generic_name ILIKE '%polio%'))"
+    ]
+   },
+   "discard_open_vial_doses": {
+    "n": 3,
+    "idx": 2,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'error', 'Batch #' || p_batch_id || ' not found');",
+     "RETURN jsonb_build_object('success', false, 'error', 'This batch has no open-vial doses left to discard');",
+     "SELECT name INTO v_item_name FROM public.inventory_items WHERE item_id = v_batch.item_id;"
+    ]
+   },
+   "administer_maternal_td_dose": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'error', 'Invalid dose number: ' || COALESCE(p_dose_number, 'null'));",
+     "IF p_vaccination_date IS NULL OR p_vaccination_date > CURRENT_DATE THEN",
+     "RETURN jsonb_build_object('success', false, 'error', 'The vaccination date cannot be in the future');"
+    ]
+   },
+   "normalize_td_dose": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "v_num    INTEGER;"
+    ]
+   },
+   "td_dose_schedule": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "WHEN 'Td1' THEN o_protection_until := NULL;                         o_next_due := p_date + INTERVAL '28 days';",
+     "WHEN 'Td2' THEN o_protection_until := p_date + INTERVAL '3 years';  o_next_due := p_date + INTERVAL '180 days';",
+     "WHEN 'Td3' THEN o_protection_until := p_date + INTERVAL '5 years';  o_next_due := p_date + INTERVAL '365 days';"
+    ]
+   },
+   "resolve_actor_account_id": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT account_id INTO v_account",
+     "SELECT account_id INTO v_account",
+     "IF v_account IS NOT NULL THEN"
+    ]
+   }
+  },
+  "20260803_inventory_distribution_workflow.sql": {
+   "inventory_touch_updated_at": {
+    "n": 1,
+    "idx": 0,
+    "cand": []
+   },
+   "inventory_midwife_facility_id": {
+    "n": 1,
+    "idx": 0,
+    "cand": []
+   },
+   "inventory_assert_actor": {
+    "n": 2,
+    "idx": 0,
+    "cand": []
+   },
+   "submit_inventory_stock_request": {
+    "n": 3,
+    "idx": 0,
+    "cand": []
+   },
+   "approve_inventory_stock_request": {
+    "n": 2,
+    "idx": 0,
+    "cand": []
+   },
+   "reject_inventory_stock_request": {
+    "n": 2,
+    "idx": 0,
+    "cand": []
+   },
+   "issue_inventory_transfer": {
+    "n": 4,
+    "idx": 0,
+    "cand": []
+   },
+   "receive_inventory_transfer": {
+    "n": 4,
+    "idx": 0,
+    "cand": []
+   }
+  },
+  "20260904_rhu_stock_requests_to_mho.sql": {
+   "inventory_assert_actor": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "OR (p_required_role = 'admin' AND account_type = 'mho')"
+    ]
+   },
+   "submit_inventory_stock_request": {
+    "n": 3,
+    "idx": 2,
+    "cand": [
+     "RAISE EXCEPTION 'An active midwife, RHU or municipal account is required to request stock'",
+     "RAISE EXCEPTION 'This account has no facility assignment, so it has no shelf to request stock onto'",
+     "'% is the highest office in the municipality and has nowhere to request stock from. Record a receipt instead.',"
+    ]
+   },
+   "inventory_stock_request_block_self_review": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "v_actor_facility := public.inventory_actor_facility_id(NEW.reviewed_by);",
+     "'Request #% was raised by % and cannot be decided there. It is for the office above to approve or reject.',",
+     "FROM public.health_facilities WHERE facility_id = NEW.facility_id;"
+    ]
+   }
+  },
+  "20260821_mho_tier.sql": {
+   "submit_inventory_stock_request": {
+    "n": 3,
+    "idx": 1,
+    "cand": [
+     "SELECT name INTO v_item_name FROM public.inventory_items WHERE item_id = p_item_id;",
+     "facility_id, item_id, requested_quantity, reason, remarks, status, requested_by",
+     "format('%s requested %s units of %s.', v_facility_name, p_requested_quantity, v_item_name),"
+    ]
+   },
+   "receive_inventory_transfer": {
+    "n": 4,
+    "idx": 1,
+    "cand": [
+     "v_actor_facility_id := public.inventory_actor_facility_id(p_received_by);",
+     "RAISE EXCEPTION 'An active midwife or portal account with an assigned facility is required'",
+     "RAISE EXCEPTION 'Transfer source batch no longer exists' USING ERRCODE = 'P0002';"
+    ]
+   },
+   "facility_subtree_ids": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "JOIN tree ON child.parent_facility_id = tree.facility_id",
+     "WHERE hf.facility_id = p_facility_id",
+     "FROM public.health_facilities child"
+    ]
+   },
+   "admin_assigned_facility_id": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "ORDER BY fa.assigned_at DESC NULLS LAST, fa.facility_assignment_id DESC",
+     "JOIN public.health_facilities hf ON hf.facility_id = fa.facility_id",
+     "AND hf.facility_type IN ('MHO', 'RHU')"
+    ]
+   },
+   "admin_portal_context": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'error', 'Account not found');",
+     "RETURN jsonb_build_object('success', false, 'error', 'Not a portal account');",
+     "v_role := CASE WHEN v_account.account_type = 'mho' THEN 'mho' ELSE 'rhu' END;"
+    ]
+   },
+   "assign_portal_account_facility": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "SELECT account_type INTO v_type FROM public.accounts WHERE account_id = p_account_id;",
+     "RETURN jsonb_build_object('success', false, 'error', 'Account not found');",
+     "RETURN jsonb_build_object('success', false, 'error', 'Only portal accounts are assigned to an office');"
+    ]
+   },
+   "set_facility_parent": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT * INTO v_child FROM public.health_facilities WHERE facility_id = p_facility_id;",
+     "RETURN jsonb_build_object('success', false, 'error', 'Facility not found');",
+     "SELECT * INTO v_parent FROM public.health_facilities WHERE facility_id = p_parent_id;"
+    ]
+   },
+   "inventory_actor_facility_id": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "RETURN public.inventory_midwife_facility_id(p_account_id);",
+     "RETURN public.admin_assigned_facility_id(p_account_id);",
+     "WHERE account_id = p_account_id AND status = 'active';"
+    ]
+   }
+  },
+  "20260909_notification_reference_ids.sql": {
+   "approve_inventory_stock_request": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "account_id, title, message, type, reference_type, reference_id",
+     "'inventory_stock_requests',"
+    ]
+   },
+   "reject_inventory_stock_request": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "account_id, title, message, type, reference_type, reference_id",
+     "'inventory_stock_requests',"
+    ]
+   },
+   "approve_inventory_stock_request_with_quantity": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "account_id, title, message, type, reference_type, reference_id",
+     "'inventory_stock_requests',"
+    ]
+   },
+   "announce_inventory_transfer": {
+    "n": 5,
+    "idx": 3,
+    "cand": []
+   },
+   "inventory_notify_facility": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "account_id, title, message, type, reference_type, reference_id",
+     "SELECT DISTINCT a.account_id, p_title, p_message, 'inventory',",
+     "p_reference_type, p_reference_id"
+    ]
+   },
+   "inventory_notify_supervisor": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "v_parent, p_title, p_message, true, p_exclude_account_id,",
+     "p_reference_type, p_reference_id);"
+    ]
+   }
+  },
+  "20260807_issue_respects_approved_quantity.sql": {
+   "issue_inventory_transfer": {
+    "n": 4,
+    "idx": 1,
+    "cand": [
+     "RAISE EXCEPTION 'A linked request must be issued in its approved quantity (%)',",
+     "v_expected_quantity := coalesce(v_request.approved_quantity,",
+     "IF p_quantity <> v_expected_quantity THEN"
+    ]
+   }
+  },
+  "20260829_inventory_transfer_directions.sql": {
+   "issue_inventory_transfer": {
+    "n": 4,
+    "idx": 3,
+    "cand": [
+     "RAISE EXCEPTION '% is not an active facility and cannot receive stock', v_dest_name",
+     "IF public.inventory_same_place(v_source.facility_id, p_destination_facility_id) THEN",
+     "RAISE EXCEPTION 'A facility cannot transfer stock to itself: % is both the source and the destination',"
+    ]
+   },
+   "receive_inventory_transfer": {
+    "n": 4,
+    "idx": 2,
+    "cand": [
+     "IF NOT public.inventory_same_place(v_transfer.destination_facility_id, v_actor_facility_id) THEN",
+     "v_stock_location_id := public.inventory_stock_location_id(v_transfer.destination_facility_id);",
+     "v_facility_name := public.audit_facility_label(v_transfer.destination_facility_id);"
+    ]
+   },
+   "update_inventory_transfer_delivery": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "RAISE EXCEPTION 'Select a valid delivery situation' USING ERRCODE = '22023';",
+     "regexp_replace(btrim(coalesce(p_note, '')), '[[:space:]]+', ' ', 'g'), '');",
+     "RAISE EXCEPTION 'Transfer source batch no longer exists' USING ERRCODE = 'P0002';"
+    ]
+   },
+   "tag_inventory_notification": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "'incoming stocks have nobody to receive them',",
+     "'facilities moved stock between themselves',",
+     "'stock dispatched from your facility',"
+    ]
+   },
+   "announce_inventory_transfer": {
+    "n": 5,
+    "idx": 2,
+    "cand": [
+     "v_dest_name   := public.audit_facility_label(NEW.destination_facility_id);",
+     "format('%s unit(s) of %s from %s are waiting for your receipt confirmation.%s',",
+     "WHEN 'return'  THEN ' This is a return - confirm receipt promptly so the stock is usable again.'"
+    ]
+   },
+   "audit_inventory_transfer": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "v_src_fac   := COALESCE(NEW.source_facility_id, (v_src->>'facility_id')::bigint);",
+     "public.inventory_transfer_direction(v_src_fac, NEW.destination_facility_id));",
+     "|| public.audit_transfer_route_rows(v_src_fac, NEW.destination_facility_id, v_direction)"
+    ]
+   },
+   "inventory_mho_facility_id": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "FROM public.health_facilities",
+     "WHERE facility_type = 'MHO'",
+     "ORDER BY facility_id"
+    ]
+   },
+   "inventory_place_id": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT COALESCE(p_facility_id, public.inventory_mho_facility_id());"
+    ]
+   },
+   "inventory_stock_location_id": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "WHEN p_facility_id = public.inventory_mho_facility_id() THEN NULL",
+     "WHEN p_facility_id IS NULL THEN NULL",
+     "ELSE p_facility_id"
+    ]
+   },
+   "inventory_same_place": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT public.inventory_place_id(p_a) IS NOT DISTINCT FROM public.inventory_place_id(p_b);"
+    ]
+   },
+   "inventory_transfer_direction": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "v_src        BIGINT := public.inventory_place_id(p_source_facility_id);",
+     "v_dst        BIGINT := public.inventory_place_id(p_destination_facility_id);",
+     "IF EXISTS (SELECT 1 FROM public.facility_subtree_ids(v_src) s WHERE s.facility_id = v_dst) THEN"
+    ]
+   },
+   "inventory_direction_label": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "WHEN 'lateral'    THEN 'Lateral transfer (between peers)'",
+     "WHEN 'allocation' THEN 'Allocation (downward)'",
+     "SELECT CASE COALESCE(p_direction, 'external')"
+    ]
+   },
+   "inventory_transfer_stamp_route": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "v_restamp := NEW.source_batch_id IS DISTINCT FROM OLD.source_batch_id;",
+     "NEW.transfer_direction := public.inventory_transfer_direction(",
+     "NEW.source_facility_id, NEW.destination_facility_id);"
+    ]
+   },
+   "inventory_assert_may_transfer": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "RAISE EXCEPTION 'A midwife may only send stock out of their own health centre'",
+     "RAISE EXCEPTION 'That stock sits outside the facilities this account administers'",
+     "v_source   BIGINT := public.inventory_place_id(p_source_facility_id);"
+    ]
+   },
+   "inventory_notify_facility": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "INSERT INTO public.notifications (account_id, title, message, type)",
+     "v_target  BIGINT := public.inventory_place_id(p_facility_id);",
+     "SELECT DISTINCT a.account_id, p_title, p_message, 'inventory'"
+    ]
+   },
+   "inventory_notify_supervisor": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "WHERE facility_id = public.inventory_place_id(p_facility_id);",
+     "v_parent, p_title, p_message, true, p_exclude_account_id);",
+     "RETURN public.inventory_notify_facility("
+    ]
+   },
+   "cancel_inventory_transfer": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "RAISE EXCEPTION 'Inventory transfer not found' USING ERRCODE = 'P0002';",
+     "RAISE EXCEPTION 'Only a transfer still awaiting receipt can be cancelled'",
+     "RAISE EXCEPTION 'The source batch no longer exists, so this stock cannot be returned to it'"
+    ]
+   },
+   "audit_transfer_route_rows": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT public.audit_kv('Direction', public.inventory_direction_label(p_direction))",
+     "THEN 'Stock moving up the hierarchy is a spoilage rescue - power interruption, cold-chain failure or a facility that cannot use it before expiry.'",
+     "THEN 'Peer facilities may share stock directly; the supervising office is notified rather than asked to approve.'"
+    ]
+   }
+  },
+  "20260920_lateral_transfer_notifications.sql": {
+   "receive_inventory_transfer": {
+    "n": 4,
+    "idx": 3,
+    "cand": [
+     "SET quantity_received  = quantity_received  + v_transfer.quantity_issued,",
+     "format('%s confirmed receipt of %s unit(s) of %s (transfer #%s). Transfer complete.',",
+     "WHEN 'lateral' THEN format('Peer transfer completed: %s \u2192 %s', COALESCE(v_source_name, 'Source BHC'), v_facility_name)"
+    ]
+   },
+   "announce_inventory_transfer": {
+    "n": 5,
+    "idx": 4,
+    "cand": [
+     "format('%s unit(s) of %s from %s are waiting for your receipt confirmation.%s%s',",
+     "WHEN 'lateral' THEN ' This is a peer transfer from a neighbouring BHC.'",
+     "format('%s unit(s) of %s were sent to %s (transfer #%s). Stock has left your count and is awaiting confirmation at %s.%s',"
+    ]
+   }
+  },
+  "20260804_admin_web_live_refresh.sql": {
+   "emit_admin_change_event": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "INSERT INTO public.admin_change_events(table_name, operation)",
+     "WHERE changed_at < now() - interval '7 days';",
+     "DELETE FROM public.admin_change_events"
+    ]
+   }
+  },
+  "20260804_child_number.sql": {
+   "set_child_number": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "IF NEW.assigned_bhc_id IS NOT NULL AND NEW.child_number IS NULL THEN",
+     "WHERE assigned_bhc_id = NEW.assigned_bhc_id",
+     "SELECT COALESCE(MAX(child_number), 0) + 1"
+    ]
+   }
+  },
+  "20260806_inventory_audit_fixes.sql": {
+   "approve_inventory_stock_request_with_quantity": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "RAISE EXCEPTION 'Approved quantity (%) cannot exceed the requested quantity (%)',",
+     "format('Your stock request #%s was partially approved by RHU Main: %s of %s units.',",
+     "format('Your stock request #%s was approved by RHU Main.', p_request_id)"
+    ]
+   },
+   "record_inventory_disposal": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "batch_id, facility_id, transaction_type, quantity, reference_type, performed_by",
+     "SET certificate_no = 'DISP-' || to_char(v_disposal.disposed_at, 'YYYY')",
+     "format('Disposal via %s (Officer: %s)', p_method, p_officer),"
+    ]
+   }
+  },
+  "20260806_inventory_transfer_delivery_updates.sql": {
+   "update_inventory_transfer_delivery": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "IF p_expected_arrival_date IS NULL OR p_expected_arrival_date < CURRENT_DATE THEN",
+     "regexp_replace(btrim(coalesce(p_note, '')), '[[:space:]]+', ' ', 'g'),",
+     "RAISE EXCEPTION 'Inventory transfer not found' USING ERRCODE = 'P0002';"
+    ]
+   }
+  },
+  "20260811_midwife_inventory_stock_activity.sql": {
+   "record_midwife_inventory_activity": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "v_facility_id := public.inventory_midwife_facility_id(p_performed_by);",
+     "OR v_existing.transaction_type IS DISTINCT FROM v_expected_transaction_type",
+     "RAISE EXCEPTION 'Operation key was already used for different stock activity'"
+    ]
+   }
+  },
+  "20260910_midwife_dose_level_dispense.sql": {
+   "record_midwife_inventory_activity": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "v_quantity_kind TEXT := lower(btrim(coalesce(p_quantity_kind, 'units')));",
+     "AND abs(COALESCE(v_existing.dose_quantity, 0)) IS DISTINCT FROM p_quantity)",
+     "SELECT * INTO v_pres FROM public.item_dose_presentation(v_batch.item_id);"
+    ]
+   }
+  },
+  "20260817_checkup_schedule.sql": {
+   "auto_schedule_next_checkup": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "INSERT INTO public.checkup_schedule (mother_id, scheduled_date, notes)",
+     "RAISE WARNING 'auto_schedule_next_checkup failed: %', SQLERRM;",
+     "ON CONFLICT (mother_id, scheduled_date) DO NOTHING;"
+    ]
+   }
+  },
+  "20260817_daily_reminder_job.sql": {
+   "run_daily_reminders": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT value INTO v_url FROM public.job_settings WHERE key = 'project_url';",
+     "SELECT value INTO v_key FROM public.job_settings WHERE key = 'service_role_key';",
+     "RAISE WARNING 'run_daily_reminders: job_settings not filled in; nothing sent';"
+    ]
+   },
+   "preview_daily_reminders": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT value INTO v_url FROM public.job_settings WHERE key = 'project_url';",
+     "SELECT value INTO v_key FROM public.job_settings WHERE key = 'service_role_key';",
+     "RAISE WARNING 'preview_daily_reminders: job_settings not filled in';"
+    ]
+   }
+  },
+  "20260819_prenatal_td_and_supplements_inventory_sync.sql": {
+   "deduct_prenatal_encounter_inventory": {
+    "n": 5,
+    "idx": 1,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'error', 'Prenatal encounter #' || p_encounter_id || ' not found');",
+     "OR (v_enc.mother_id IS NOT NULL AND gm.mother_id = v_enc.mother_id AND gm.date_given = COALESCE(v_enc.encounter_date::date, CURRENT_DATE))",
+     "OR (v_pc.mother_id IS NOT NULL AND gm.mother_id = v_pc.mother_id AND gm.date_given = CURRENT_DATE)"
+    ]
+   }
+  },
+  "20260823_prenatal_dispense_fixes.sql": {
+   "deduct_prenatal_encounter_inventory": {
+    "n": 5,
+    "idx": 3,
+    "cand": [
+     "(v_med.given_medication_name || ' is not in the inventory catalogue, so nothing was deducted')::text);",
+     "('No ' || v_med.given_medication_name || ' in stock at this health center ('",
+     "|| ' of ' || v_qty_needed || ' could not be deducted \u2014 stock ran out')::text);"
+    ]
+   }
+  },
+  "20260901_prenatal_deduction_column_fix.sql": {
+   "deduct_prenatal_encounter_inventory": {
+    "n": 5,
+    "idx": 4,
+    "cand": [
+     "AND gm.date_given = COALESCE(v_enc.encounter_datetime::date, CURRENT_DATE))",
+     "AND v_enc.mother_id IS NOT NULL",
+     "OR (gm.encounter_id IS NULL"
+    ]
+   }
+  },
+  "20260819_maternal_td_records_and_sync.sql": {
+   "administer_maternal_td_dose": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'error', 'Invalid dose number: ' || p_dose_number);",
+     "v_days_since_prev := p_vaccination_date - v_prev_dose.vaccination_date;",
+     "'error', 'DOH interval requirement not met: ' || p_dose_number || ' requires at least ' || v_min_interval_days || ' days after previous dose (' || v_days_since_prev || ' days elapsed).'"
+    ]
+   },
+   "backfill_maternal_td_history": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'error', 'Invalid records format: Expected JSON array');",
+     "'error', 'DOH Interval Violation: ' || v_dose || ' (' || v_date || ') must be at least ' || v_min_int || ' days after previous dose (' || v_prev_date || ').'",
+     "FOR v_elem IN SELECT * FROM jsonb_array_elements(v_arr)"
+    ]
+   }
+  },
+  "20260819_td_canonical_sync.sql": {
+   "normalize_td_dose": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "IF v_num < 1 OR v_num > 5 THEN RETURN NULL; END IF;",
+     "IF v_digits IS NULL THEN RETURN NULL; END IF;",
+     "IF p_raw IS NULL THEN RETURN NULL; END IF;"
+    ]
+   },
+   "td_dose_schedule": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "WHEN 'Td1' THEN o_protection_until := NULL;                        o_next_due := p_date + INTERVAL '28 days';",
+     "WHEN 'Td2' THEN o_protection_until := p_date + INTERVAL '3 years'; o_next_due := p_date + INTERVAL '180 days';",
+     "WHEN 'Td3' THEN o_protection_until := p_date + INTERVAL '5 years'; o_next_due := p_date + INTERVAL '365 days';"
+    ]
+   },
+   "sync_prenatal_td_to_maternal_records": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "COALESCE(ce.encounter_datetime::DATE, ce.created_at::DATE, CURRENT_DATE),",
+     "SELECT midwife_id INTO v_admin FROM public.midwives WHERE midwife_id = v_recorded_by;",
+     "administered_by, inventory_deducted, protection_until, next_due_date, remarks"
+    ]
+   }
+  },
+  "20260905_maternal_td_deduction_flag_truthful.sql": {
+   "sync_prenatal_td_to_maternal_records": {
+    "n": 2,
+    "idx": 1,
+    "cand": []
+   },
+   "maternal_td_mark_deducted": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "JOIN public.prenatal_checkups pc ON pc.encounter_id = ce.encounter_id",
+     "SET inventory_batch_id = COALESCE(inventory_batch_id, NEW.batch_id),",
+     "IF COALESCE(NEW.reference_type, '') <> 'Maternal Td Immunization'"
+    ]
+   }
+  },
+  "20260927_account_provisioning.sql": {
+   "assign_portal_account_facility": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "'error', 'An administrator is assigned to a Rural Health Unit or a barangay health centre');",
+     "IF v_type = 'admin' AND v_fac_type NOT IN ('RHU', 'BHC') THEN",
+     "'facility_name', v_fac_name,"
+    ]
+   },
+   "portal_account_tier": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "WHERE hf.facility_id = public.admin_assigned_facility_id(p_account_id);",
+     "RETURN CASE WHEN v_fac = 'BHC' THEN 'bhc' ELSE 'rhu' END;",
+     "WHERE account_id = p_account_id AND status = 'active';"
+    ]
+   },
+   "admin_provisioning_options": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT * INTO v_fac FROM public.health_facilities WHERE facility_id = v_fac_id;",
+     "'error', 'This account is not assigned to a facility yet, so it cannot '",
+     "'description', 'Runs one Rural Health Unit and the health centres under it.',"
+    ]
+   },
+   "create_portal_account": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "'error', 'Unknown account type: ' || COALESCE(p_account_type, 'null'));",
+     "/* \u2500\u2500 The matrix \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */",
+     "'error', 'Midwives are created by the office that runs their health centre, '"
+    ]
+   }
+  },
+  "20260822_dose_accounting.sql": {
+   "batch_doses_per_unit": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "JOIN public.inventory_items i ON i.item_id = b.item_id",
+     "SELECT GREATEST(1, COALESCE(i.doses_per_unit, 1))",
+     "FROM public.inventory_batches b"
+    ]
+   },
+   "inventory_transactions_fill_dose_quantity": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "IF v_ref IN ('Open Vial Discard', 'Open Vial Expiry', 'open_vial_expired') THEN",
+     "ELSIF v_ref IN ('Child Immunization', 'Maternal Td Immunization') THEN",
+     "NEW.dose_quantity := NEW.quantity * public.batch_doses_per_unit(NEW.batch_id);"
+    ]
+   },
+   "dispense_stock_doses": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'error', 'Enter a dose count greater than zero');",
+     "RETURN jsonb_build_object('success', false, 'error', 'Batch #' || p_batch_id || ' not found');",
+     "SELECT * INTO v_item FROM public.inventory_items WHERE item_id = v_batch.item_id;"
+    ]
+   }
+  },
+  "20260831_dose_presentation_single_source.sql": {
+   "batch_doses_per_unit": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "CROSS JOIN LATERAL public.item_dose_presentation(b.item_id) p",
+     "WHERE b.batch_id = p_batch_id),",
+     "(SELECT p.doses_per_unit"
+    ]
+   },
+   "dispense_stock_doses": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "SELECT * INTO v_pres FROM public.item_dose_presentation(v_batch.item_id);",
+     "v_dpu         := GREATEST(1, COALESCE(v_pres.doses_per_unit, 1));",
+     "v_shelf_hours := COALESCE(v_pres.open_vial_shelf_hours, 0);"
+    ]
+   },
+   "item_dose_presentation": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT * INTO v_item FROM public.inventory_items WHERE item_id = p_item_id;",
+     "ELSIF v_name LIKE '%measles%' OR v_name LIKE '%mmr%' OR v_name LIKE '%rubella%' THEN",
+     "ELSIF v_name LIKE '%td %' OR v_name LIKE '%tetanus%' OR v_name LIKE '%td vaccine%' THEN"
+    ]
+   }
+  },
+  "20260824_inventory_integration_fixes.sql": {
+   "tag_inventory_notification": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "IF NEW.type IS DISTINCT FROM 'inventory'",
+     "AND lower(coalesce(NEW.title, '')) IN (",
+     "'incoming stocks from rhu main',"
+    ]
+   },
+   "announce_inventory_transfer": {
+    "n": 5,
+    "idx": 0,
+    "cand": [
+     "FROM public.health_facilities WHERE facility_id = NEW.destination_facility_id;",
+     "LEFT JOIN public.health_facilities hf ON hf.facility_id = b.facility_id",
+     "format('%s units of %s from %s are waiting for your receipt confirmation.',"
+    ]
+   }
+  },
+  "20260826_audit_trail_completeness.sql": {
+   "announce_inventory_transfer": {
+    "n": 5,
+    "idx": 1,
+    "cand": []
+   },
+   "audit_kv": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "jsonb_build_object('label', p_label, 'value', btrim(p_value)))",
+     "WHEN p_value IS NULL OR btrim(p_value) = '' THEN '[]'::jsonb",
+     "ELSE jsonb_build_array("
+    ]
+   },
+   "audit_section": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "WHEN p_rows IS NULL OR jsonb_array_length(p_rows) = 0 THEN '[]'::jsonb",
+     "jsonb_build_object('title', p_title, 'rows', p_rows))",
+     "ELSE jsonb_build_array("
+    ]
+   },
+   "audit_ts": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "to_char(p_ts AT TIME ZONE 'Asia/Manila', 'FMHH12:MI AM')",
+     "ELSE to_char(p_ts AT TIME ZONE 'Asia/Manila',",
+     "'FMDay, FMDD FMMonth YYYY') || ' at ' ||"
+    ]
+   },
+   "audit_date": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "ELSE to_char(p_date, 'FMDD FMMonth YYYY')",
+     "WHEN p_date IS NULL THEN NULL"
+    ]
+   },
+   "audit_qty": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "ELSE trim(to_char(abs(p_qty), 'FM999G999G990')) || ' ' ||",
+     "p_unit || CASE WHEN abs(p_qty) = 1 THEN '' ELSE 's' END",
+     "WHEN p_qty IS NULL THEN NULL"
+    ]
+   },
+   "audit_bigint": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "WHEN p_value ~ '^-?[0-9]{1,18}$' THEN p_value::bigint"
+    ]
+   },
+   "audit_utc": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT p_ts AT TIME ZONE 'UTC';"
+    ]
+   },
+   "audit_redact": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "CASE WHEN key IN ('password_hash', 'password', 'pending_password_hash',",
+     "WHEN p_data IS NULL OR jsonb_typeof(p_data) <> 'object' THEN p_data",
+     "'temporary_password', 'verification_code', 'reset_code',"
+    ]
+   },
+   "audit_actor": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "ORDER BY fa.assigned_at DESC NULLS LAST, fa.facility_assignment_id DESC",
+     "WHEN a.account_type = 'mother' THEN 'Patient #' || a.account_id::text",
+     "JOIN public.health_facilities hf ON hf.facility_id = fa.facility_id"
+    ]
+   },
+   "audit_facility_label": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "FROM public.health_facilities WHERE facility_id = p_facility_id;",
+     "RETURN v_name || COALESCE(' (' || v_type || ')', '');",
+     "SELECT name, facility_type INTO v_name, v_type"
+    ]
+   },
+   "audit_batch_context": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "RETURN COALESCE(v, jsonb_build_object('batch_id', p_batch_id));",
+     "'doses_per_unit',  GREATEST(1, COALESCE(i.doses_per_unit, 1)),",
+     "'facility_label',  public.audit_facility_label(b.facility_id),"
+    ]
+   },
+   "audit_batch_label": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "|| COALESCE(' (exp. ' || public.audit_date((p_ctx->>'expiration_date')::date) || ')', '');",
+     "|| COALESCE(' - Batch ' || (p_ctx->>'batch_number'), '')",
+     "SELECT COALESCE(p_ctx->>'item_name', 'Stock item')"
+    ]
+   },
+   "audit_module_for": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "WHEN COALESCE(p_table, '') LIKE 'inventory%'                              THEN 'Inventory'",
+     "OR p_action ILIKE '%vial%'      OR p_action ILIKE '%dispos%'            THEN 'Inventory'",
+     "OR p_action ILIKE '%verif%'                                            THEN 'Security'"
+    ]
+   },
+   "audit_severity_for": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "OR p_action ILIKE '%database_restore%' OR p_action ILIKE '%remove_account%' THEN 'critical'",
+     "OR p_action ILIKE '%adjust%'                                           THEN 'warning'",
+     "OR p_action ILIKE '%create_account%' OR p_action ILIKE '%update_account%'"
+    ]
+   },
+   "audit_write": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "account_id, action, table_name, row_id, old_data, new_data, description,",
+     "concat_ws(':', p_table, p_row_id, COALESCE(p_event_suffix, p_action)),",
+     "jsonb_build_object('sections', COALESCE(p_sections, '[]'::jsonb)),"
+    ]
+   },
+   "audit_trail_enrich": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "NEW.module     := COALESCE(NEW.module, public.audit_module_for(NEW.table_name, NEW.action));",
+     "NEW.severity   := COALESCE(NEW.severity, public.audit_severity_for(NEW.action));",
+     "NEW.actor_facility_id   := nullif(v_actor->>'facility_id', '')::bigint;"
+    ]
+   },
+   "audit_inventory_stock_request": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "v_approved := COALESCE(NEW.approved_quantity, NEW.requested_quantity);",
+     "v_entity   := format('Stock request #%s - %s', NEW.request_id, v_item);",
+     "v_facility, public.audit_qty(NEW.requested_quantity, v_unit), v_item);"
+    ]
+   },
+   "audit_inventory_transfer": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "v_src        JSONB := public.audit_batch_context(NEW.source_batch_id);",
+     "v_from := COALESCE(v_src->>'facility_label', 'an unrecorded location');",
+     "v_doses := NEW.quantity_issued * GREATEST(1, COALESCE((v_src->>'doses_per_unit')::int, 1));"
+    ]
+   },
+   "audit_inventory_transaction": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "v_doses   := COALESCE(public.audit_bigint(v_json->>'dose_quantity'), NEW.quantity);",
+     "v_balance := public.audit_bigint(v_json->>'resulting_quantity_remaining');",
+     "v_where := COALESCE(public.audit_facility_label(NEW.facility_id), v_ctx->>'facility_label');"
+    ]
+   },
+   "audit_inventory_batch": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "v_vials_new := COALESCE(public.audit_bigint(to_jsonb(NEW)->>'open_vials_count'), 0);",
+     "v_doses_new := COALESCE(public.audit_bigint(to_jsonb(NEW)->>'doses_remaining_in_open_vial'), 0);",
+     "v_vials_old := COALESCE(public.audit_bigint(to_jsonb(OLD)->>'open_vials_count'), 0);"
+    ]
+   },
+   "audit_inventory_disposal": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "v_doses := NEW.quantity_disposed * GREATEST(1, COALESCE((v_ctx->>'doses_per_unit')::int, 1));",
+     "'Stock was DESTROYED and permanently removed from the system. %s of %s from batch %s at %s was disposed of by %s on %s, '",
+     "'witnessed by authorised officer %s. Disposal method: %s. That is %s taken out of circulation. '"
+    ]
+   },
+   "audit_inventory_item": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "WHEN v_arch_new AND NOT v_arch_old       THEN 'archive_inventory_item'",
+     "WHEN NOT v_arch_new AND v_arch_old       THEN 'restore_inventory_item'",
+     "|| public.audit_kv('Type', initcap(replace(COALESCE(NEW.item_type, ''), '_', ' ')))"
+    ]
+   },
+   "audit_account_change": {
+    "n": 3,
+    "idx": 0,
+    "cand": [
+     "'password_hash', 'verification_code', 'reset_code', 'last_login_token'",
+     "v_name := COALESCE(nullif(btrim(concat_ws(' ', v_row.first_name, v_row.last_name)), ''),",
+     "v_summary := format('Created patient account for Patient #%s', NEW.account_id);"
+    ]
+   },
+   "audit_facility_assignment": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "v_noun    := CASE WHEN v_patient THEN 'patient enrolment' ELSE 'staff posting' END;",
+     "AND COALESCE(OLD.is_active, true) IS NOT DISTINCT FROM COALESCE(NEW.is_active, true) THEN",
+     "WHEN TG_OP = 'UPDATE' AND NOT COALESCE(NEW.is_active, true) THEN 'end_facility_assignment'"
+    ]
+   },
+   "audit_clinical_change": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "CASE TG_OP WHEN 'INSERT' THEN 'recorded' WHEN 'DELETE' THEN 'deleted' ELSE 'amended' END,",
+     "'A %s record was %s. The record is #%s in %s. %s%s The clinical values themselves are held in the '",
+     "'before and after snapshots on this entry and are shown only to accounts cleared to read patient data.',"
+    ]
+   }
+  },
+  "20260911_audit_dose_level_summary.sql": {
+   "audit_qty": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "regexp_replace(p_unit, 's$', '', 'i') ||"
+    ]
+   },
+   "audit_inventory_transaction": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "WHEN COALESCE(NEW.quantity, 0) = 0 AND COALESCE(v_doses, 0) <> 0",
+     "v_kind, public.audit_qty(v_doses, 'dose'), v_item, v_where)",
+     "THEN format('%s: %s from an open vial of %s at %s',"
+    ]
+   }
+  },
+  "20260913_fix_audit_account_change_type_mismatch.sql": {
+   "audit_account_change": {
+    "n": 3,
+    "idx": 1,
+    "cand": [
+     "|| CASE WHEN v_row.account_type = 'mother' THEN '[]'::jsonb ELSE public.audit_kv('E-mail', v_row.email_address) END",
+     "|| CASE WHEN v_row.account_type = 'mother' THEN '[]'::jsonb ELSE public.audit_kv('Contact number', v_row.phone_number) END"
+    ]
+   }
+  },
+  "20260923_auth_session_audit.sql": {
+   "audit_account_change": {
+    "n": 3,
+    "idx": 2,
+    "cand": [
+     "v_row.account_id, 'login', 'accounts', v_row.account_id::text, v_name,",
+     "format('%s (%s) signed in at %s. The account status at the time was \"%s\".',",
+     "IS NOT DISTINCT FROM to_jsonb(NEW)->>'last_login_token' THEN"
+    ]
+   },
+   "record_auth_event": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "IF v_event NOT IN ('login', 'logout', 'login_failed', 'session_expired') THEN",
+     "SELECT * INTO v_acct FROM public.accounts WHERE account_id = p_account_id;",
+     "RAISE EXCEPTION 'No account numbered %', p_account_id USING ERRCODE = 'P0002';"
+    ]
+   }
+  },
+  "20260922_audit_clinical_encounter_tables.sql": {
+   "audit_clinical_change": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "WHERE ce.encounter_id = public.audit_bigint(v_json->>'encounter_id');",
+     "IF v_actor IS NULL AND v_json ? 'encounter_id' THEN",
+     "SELECT ce.recorded_by INTO v_actor"
+    ]
+   }
+  },
+  "20260830_dose_traceability.sql": {
+   "inventory_transactions_fill_open_vial_level": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "IF v_ref IN ('Open Vial Discard', 'Open Vial Expiry', 'open_vial_expired') THEN",
+     "SELECT COALESCE(b.doses_remaining_in_open_vial, 0)",
+     "IF NEW.resulting_open_vial_doses IS NOT NULL THEN"
+    ]
+   }
+  },
+  "20260906_stock_request_review_scope.sql": {
+   "inventory_stock_request_block_self_review": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "FROM public.health_facilities WHERE facility_id = v_actor_facility;",
+     "'% is not under %, so this account cannot decide request #%.',",
+     "SELECT 1 FROM public.facility_subtree_ids(v_actor_facility) s"
+    ]
+   }
+  },
+  "20260915_inventory_alert_notifications.sql": {
+   "inventory_place_label": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "(SELECT f.name FROM public.health_facilities f",
+     "WHERE f.facility_id = p_facility_id),",
+     "'the Municipal Warehouse'"
+    ]
+   },
+   "inventory_alert_rank": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT CASE p_severity",
+     "WHEN 'watch'    THEN 1",
+     "WHEN 'low'      THEN 2"
+    ]
+   },
+   "inventory_alert_key": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "|| '|' || COALESCE(p_facility_id::text, 'depot')",
+     "|| '|' || COALESCE(p_batch_id::text, '-');",
+     "|| '|' || COALESCE(p_item_id::text, '-')"
+    ]
+   },
+   "scan_inventory_alerts": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "ELSE ' is down to ' || h.available || ' ' || i.unit_of_measure || '.' END",
+     "|| ' The reorder threshold is ' || COALESCE(i.minimum_stock_threshold, 50)",
+     "WHEN b.expiration_date <= CURRENT_DATE + 7 THEN 'Expiring this week: '"
+    ]
+   },
+   "raise_inventory_alerts": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "v_recipients := v_recipients + COALESCE(public.inventory_notify_supervisor(",
+     "times_raised, first_raised_at, last_raised_at, last_seen_at, resolved_at",
+     "v_key, a.alert_kind, a.facility_id, a.item_id, a.batch_id, a.severity,"
+    ]
+   },
+   "preview_inventory_alerts": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "ORDER BY public.inventory_alert_rank(s.severity) DESC, s.alert_kind, s.facility_id;",
+     "s.alert_kind, s.facility_id, s.item_id, s.batch_id)",
+     "WHERE st.alert_key = public.inventory_alert_key("
+    ]
+   }
+  },
+  "20260917_inventory_physical_count.sql": {
+   "inventory_assert_count_actor": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "RAISE EXCEPTION 'An active midwife, RHU or MHO account is required to count stock'",
+     "AND account_type IN ('midwife', 'admin', 'mho')",
+     "WHERE account_id = p_account_id"
+    ]
+   },
+   "inventory_assert_posting_actor": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "RAISE EXCEPTION 'Only an RHU or MHO account may post a stock count'",
+     "AND account_type IN ('admin', 'mho')",
+     "WHERE account_id = p_account_id"
+    ]
+   },
+   "open_inventory_count": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "INSERT INTO public.inventory_count_sessions (facility_id, opened_by, notes)",
+     "VALUES (p_facility_id, p_actor_id, nullif(btrim(coalesce(p_notes, '')), ''))",
+     "INSERT INTO public.inventory_count_lines (count_id, batch_id, system_quantity)"
+    ]
+   },
+   "record_inventory_count": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "RAISE EXCEPTION 'Counted quantity must be zero or more' USING ERRCODE = '22023';",
+     "RAISE EXCEPTION 'Counts can only be entered while the session is open (this one is %)', v_status",
+     "RAISE EXCEPTION 'That batch is not on this count sheet' USING ERRCODE = 'P0002';"
+    ]
+   },
+   "submit_inventory_count": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "RAISE EXCEPTION 'Only an open count can be submitted (this one is %)', v_session.status",
+     "RAISE EXCEPTION '% batch(es) on this sheet have not been counted yet', v_missing",
+     "SET status = 'review', submitted_by = p_actor_id, submitted_at = now()"
+    ]
+   },
+   "post_inventory_count": {
+    "n": 2,
+    "idx": 0,
+    "cand": [
+     "RAISE EXCEPTION 'Only a submitted count can be posted (this one is %)', v_session.status",
+     "'Stock moved during this count and it can no longer be posted as counted. Recount: %',",
+     "lines_total := 0; lines_adjusted := 0; units_gained := 0; units_lost := 0;"
+    ]
+   },
+   "cancel_inventory_count": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "RAISE EXCEPTION 'A reason is required to cancel a stock count' USING ERRCODE = '22023';",
+     "SET status = 'cancelled', cancelled_by = p_actor_id, cancelled_at = now(),",
+     "format('The count at %s was cancelled without being posted. Reason: %s',"
+    ]
+   }
+  },
+  "20260921_count_overage_raises_received.sql": {
+   "post_inventory_count": {
+    "n": 2,
+    "idx": 1,
+    "cand": [
+     "quantity_received  = GREATEST(quantity_received, v_line.counted_quantity)",
+     "SET quantity_remaining = v_line.counted_quantity,"
+    ]
+   }
+  },
+  "20260925_account_lifecycle.sql": {
+   "admin_account_dependents": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT * INTO v_account FROM public.accounts WHERE account_id = p_account_id;",
+     "RETURN jsonb_build_object('success', false, 'error', 'Account not found');",
+     "SELECT mother_id  INTO v_mother_id  FROM public.mothers  WHERE account_id = p_account_id;"
+    ]
+   },
+   "admin_set_account_status": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "RETURN jsonb_build_object('success', false, 'error', 'Unknown status: ' || p_status);",
+     "SELECT * INTO v_target FROM public.accounts WHERE account_id = p_account_id;",
+     "RETURN jsonb_build_object('success', false, 'error', 'Account not found');"
+    ]
+   },
+   "admin_delete_account": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "SELECT * INTO v_target FROM public.accounts WHERE account_id = p_account_id;",
+     "RETURN jsonb_build_object('success', false, 'error', 'Account not found');",
+     "SELECT * INTO v_actor FROM public.accounts WHERE account_id = p_actor_id;"
+    ]
+   },
+   "admin_archive_account": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "COALESCE(NULLIF(btrim(COALESCE(p_reason, '')), ''), 'Account retired'),",
+     "RETURN jsonb_build_object('success', true, 'account_id', p_account_id, 'archived', true);",
+     "IF (v_result->>'success')::boolean IS NOT TRUE THEN"
+    ]
+   }
+  },
+  "20260926_facility_management.sql": {
+   "is_municipal_officer": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "WHERE account_id = p_account_id",
+     "SELECT 1 FROM public.accounts",
+     "AND account_type = 'mho'"
+    ]
+   },
+   "create_health_facility": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "v_code       TEXT := NULLIF(upper(btrim(COALESCE(p_facility_code, ''))), '');",
+     "IF p_actor_id IS NOT NULL AND NOT public.is_municipal_officer(p_actor_id) THEN",
+     "'error', 'Only the Municipal Health Office can register a facility.');"
+    ]
+   },
+   "update_health_facility": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "v_code TEXT := NULLIF(upper(btrim(COALESCE(p_facility_code, ''))), '');",
+     "IF p_actor_id IS NOT NULL AND NOT public.is_municipal_officer(p_actor_id) THEN",
+     "SELECT * INTO v_row FROM public.health_facilities WHERE facility_id = p_facility_id;"
+    ]
+   },
+   "set_facility_active": {
+    "n": 1,
+    "idx": 0,
+    "cand": [
+     "IF p_actor_id IS NOT NULL AND NOT public.is_municipal_officer(p_actor_id) THEN",
+     "'error', 'Only the Municipal Health Office can retire or restore a facility.');",
+     "SELECT * INTO v_row FROM public.health_facilities WHERE facility_id = p_facility_id;"
+    ]
+   }
+  }
+ }
+}
