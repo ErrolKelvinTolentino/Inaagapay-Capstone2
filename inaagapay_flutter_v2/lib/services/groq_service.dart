@@ -13,10 +13,13 @@ import '../models/ocr_result.dart';
 class GroqService {
   // ── Model Configuration ─────────────────────────────────────────────────
 
-  static const String _visionModel = 'qwen/qwen3.6-27b';
+  /// Checked against GET /openai/v1/models on 2026-09-24: Groq no longer
+  /// serves qwen3.6-27b, which was the only vision model here, so every
+  /// photo-to-form read (registration, immunization card, ultrasound and lab
+  /// summaries) was failing on its first request.
+  static const String _visionModel = 'qwen/qwen3.8-27b';
   static const List<String> _visionModelFallbacks = [
-    'qwen/qwen3.6-27b',
-    'qwen/qwen3.8-27b'
+    _visionModel,
   ];
 
   /// Text reasoning chain, largest first.
@@ -34,7 +37,7 @@ class GroqService {
   /// Deliberately a different model family from the first two, so a fault in
   /// one family does not take the last fallback down with it. It is also the
   /// vision model, so it is the one model here already proven in this app.
-  static const String _secondFallbackReasoningModel = 'qwen/qwen3.6-27b';
+  static const String _secondFallbackReasoningModel = 'qwen/qwen3.8-27b';
 
   static const String childGrowthSystemPrompt =
       'You are a caring, knowledgeable midwife assistant in the Philippines who genuinely cares about every mother and child. '
@@ -75,10 +78,25 @@ class GroqService {
   /// Vision models are deliberately absent: that path already falls back to
   /// Gemini in [_sendVisionRequest], and NVIDIA's VLMs expect a different
   /// image payload shape than the OpenAI-style `image_url` blocks we send.
+  ///
+  /// NVIDIA's catalogue (GET /v1/models, 2026-09-24) carries gpt-oss-20b but
+  /// not gpt-oss-120b, so the largest model falls back to its smaller sibling
+  /// — same family, same prompt behaviour — rather than to an id that 404s.
   static const Map<String, String> _nvidiaModelEquivalents = {
-    _reasoningModel: 'openai/gpt-oss-120b',
+    _reasoningModel: 'openai/gpt-oss-20b',
     _firstFallbackReasoningModel: 'openai/gpt-oss-20b',
+    _secondFallbackReasoningModel: 'openai/gpt-oss-20b',
   };
+
+  /// The last provider, for text and images alike. Gemini 2.0 is shut down
+  /// and 1.5 long gone; these are current per ai.google.dev (2026-09-24).
+  /// Newest first, Flash-Lite last because it is the most likely to have
+  /// quota left when the others do not.
+  static const List<String> _geminiModels = [
+    'gemini-3.8-flash',
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
+  ];
 
   static const int _maxBase64Size = 4 * 1024 * 1024;
   static const int _maxImagesPerRequest = 5;
@@ -1139,28 +1157,13 @@ Rules:
 - Return ONLY the JSON — no extra text.
 ''';
 
-    final preparedImage = await _prepareImageForGroq(imageFile);
-    final base64Image = base64Encode(preparedImage.bytes);
-
-    final raw = await _sendChatCompletion(
-      messages: [
-        {
-          'role': 'user',
-          'content': [
-            {'type': 'text', 'text': prompt},
-            {
-              'type': 'image_url',
-              'image_url': {
-                'url': 'data:${preparedImage.mimeType};base64,$base64Image'
-              }
-            }
-          ]
-        }
-      ],
+    // Through the vision chain, so a Groq outage falls back to Gemini instead
+    // of failing the form. It used to call one model directly.
+    final raw = await _sendVisionRequest(
+      imageFiles: [imageFile],
       apiKey: apiKey,
-      model: _visionModel,
-      temperature: 0.1,
-      maxOutputTokens: 4096,
+      prompt: prompt,
+      maxTokens: 4096,
     );
 
     final cleaned = _stripMarkdownFences(raw);
@@ -1203,28 +1206,13 @@ Rules:
 - Return ONLY the JSON object.
 ''';
 
-    final preparedImage = await _prepareImageForGroq(imageFile);
-    final base64Image = base64Encode(preparedImage.bytes);
-
-    final raw = await _sendChatCompletion(
-      messages: [
-        {
-          'role': 'user',
-          'content': [
-            {'type': 'text', 'text': prompt},
-            {
-              'type': 'image_url',
-              'image_url': {
-                'url': 'data:${preparedImage.mimeType};base64,$base64Image'
-              }
-            }
-          ]
-        }
-      ],
+    // Through the vision chain, so a Groq outage falls back to Gemini instead
+    // of failing the form. It used to call one model directly.
+    final raw = await _sendVisionRequest(
+      imageFiles: [imageFile],
       apiKey: apiKey,
-      model: _visionModel,
-      temperature: 0.1,
-      maxOutputTokens: 4096,
+      prompt: prompt,
+      maxTokens: 4096,
     );
 
     final cleaned = _stripMarkdownFences(raw);
@@ -1800,75 +1788,6 @@ Rules:
     }
   }
 
-  Future<String> _sendGeminiVisionRequest({
-    required List<XFile> imageFiles,
-    required String prompt,
-  }) async {
-    final geminiApiKey =
-        dotenv.env['GEMINI_API_KEY'] ?? dotenv.env['GOOGLE_API_KEY'] ?? '';
-    if (geminiApiKey.isEmpty) {
-      throw Exception('GEMINI_API_KEY is missing in .env');
-    }
-
-    final preparedImage = await _prepareImageForGroq(imageFiles.first);
-    final base64Image = base64Encode(preparedImage.bytes);
-
-    const geminiModels = [
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-2.0-flash-lite'
-    ];
-    Object? lastErr;
-    for (final m in geminiModels) {
-      try {
-        final url = Uri.parse(
-            'https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent?key=$geminiApiKey');
-
-        final response = await http
-            .post(
-              url,
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({
-                'contents': [
-                  {
-                    'parts': [
-                      {'text': prompt},
-                      {
-                        'inline_data': {
-                          'mime_type': preparedImage.mimeType,
-                          'data': base64Image,
-                        }
-                      }
-                    ]
-                  }
-                ],
-                'generationConfig': {
-                  'temperature': 0.1,
-                  'maxOutputTokens': 2048,
-                }
-              }),
-            )
-            .timeout(const Duration(seconds: 45));
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final candidates = data['candidates'] as List?;
-          if (candidates != null && candidates.isNotEmpty) {
-            final parts = candidates.first['content']?['parts'] as List?;
-            if (parts != null && parts.isNotEmpty) {
-              return parts.first['text']?.toString() ?? '';
-            }
-          }
-        }
-        lastErr = Exception(
-            'Gemini ($m) response status ${response.statusCode}: ${response.body}');
-      } catch (e) {
-        lastErr = e;
-      }
-    }
-    throw lastErr ?? Exception('Gemini Vision request failed.');
-  }
-
   Future<String> _sendVisionRequest({
     required List<XFile> imageFiles,
     required String apiKey,
@@ -1907,6 +1826,8 @@ Rules:
           model: modelName,
           temperature: 0.1,
           maxOutputTokens: maxTokens,
+          // Gemini is tried once below, after every Groq vision model.
+          allowProviderFallback: false,
         );
       } catch (e) {
         _log('⚠️ Groq Vision request failed for $modelName: $e');
@@ -1923,20 +1844,21 @@ Rules:
       }
     }
 
-    final geminiKey =
-        dotenv.env['GEMINI_API_KEY'] ?? dotenv.env['GOOGLE_API_KEY'];
-    if (geminiKey != null && geminiKey.trim().isNotEmpty) {
-      try {
-        _log('📸 Attempting vision request via Gemini fallback...');
-        return await _sendGeminiVisionRequest(
-          imageFiles: imageFiles,
-          prompt: prompt,
-        );
-      } catch (e) {
-        _log('⚠️ Gemini Vision failed ($e)');
-        lastException = e;
-      }
-    }
+    _log('📸 Attempting vision request via Gemini fallback...');
+    final gemini = await _tryGeminiFallback(
+      messages: [
+        {
+          'role': 'system',
+          'content':
+              'You are a precise medical OCR data extractor. You MUST output ONLY raw JSON matching the schema. Never write step-by-step reasoning, markdown headers, or thinking text.'
+        },
+        {'role': 'user', 'content': content}
+      ],
+      temperature: 0.1,
+      maxOutputTokens: maxTokens,
+      useJsonMode: false,
+    );
+    if (gemini != null) return gemini;
 
     throw lastException ?? Exception('All vision models failed.');
   }
@@ -2056,6 +1978,7 @@ Rules:
     required int maxOutputTokens,
     bool forceJsonMode = false,
     bool allowModelFallback = true,
+    bool allowProviderFallback = true,
   }) async {
     final bool isVisionModel = model.toLowerCase().contains('vision');
     final bool useJsonMode =
@@ -2075,9 +1998,12 @@ Rules:
     } catch (e) {
       final errorMessage = e.toString();
 
-      // Fallback 1 — same provider, smaller model. The prompt was too large
-      // for this model, so switching hosts would not help.
-      if (allowModelFallback && _isTokenLimitError(errorMessage)) {
+      // Fallback 1 — same provider, next model: the prompt was too large for
+      // this one, or Groq has stopped serving it. Switching hosts would not
+      // help the first, and the second is a Groq catalogue change.
+      if (allowModelFallback &&
+          (_isTokenLimitError(errorMessage) ||
+              _isModelUnavailableError(errorMessage))) {
         final nextModel = _nextReasoningFallbackModel(model);
         if (nextModel != null) {
           _log(
@@ -2090,13 +2016,17 @@ Rules:
             maxOutputTokens: maxOutputTokens,
             forceJsonMode: forceJsonMode,
             allowModelFallback: true,
+            allowProviderFallback: allowProviderFallback,
           );
         }
       }
 
-      // Fallback 2 — different provider. Groq itself is rate-limited, down,
-      // or unreachable, so retry the same request against NVIDIA NIM.
-      if (_isProviderOutageError(errorMessage)) {
+      // Fallback 2 and 3 — different providers. Groq itself is rate-limited,
+      // down or unreachable: NVIDIA NIM first (same model family), then
+      // Gemini.
+      if (allowProviderFallback &&
+          (_isProviderOutageError(errorMessage) ||
+              _isModelUnavailableError(errorMessage))) {
         final nvidiaResult = await _tryNvidiaFallback(
           messages: messages,
           groqModel: model,
@@ -2105,6 +2035,14 @@ Rules:
           useJsonMode: useJsonMode,
         );
         if (nvidiaResult != null) return nvidiaResult;
+
+        final geminiResult = await _tryGeminiFallback(
+          messages: messages,
+          temperature: temperature,
+          maxOutputTokens: maxOutputTokens,
+          useJsonMode: useJsonMode,
+        );
+        if (geminiResult != null) return geminiResult;
       }
 
       rethrow;
@@ -2241,6 +2179,153 @@ Rules:
 
   /// True when the failure is about provider availability rather than the
   /// request itself — the only case where retrying on another host helps.
+  // ── Gemini ────────────────────────────────────────────────────────────
+
+  /// Optional — null when no Gemini key is configured.
+  String? _getGeminiApiKey() {
+    final key = dotenv.env['GEMINI_API_KEY'] ?? dotenv.env['GOOGLE_API_KEY'];
+    if (key == null || key.trim().isEmpty) return null;
+    return key.trim();
+  }
+
+  /// The app's OpenAI-style messages as a Gemini generateContent body: system
+  /// messages become the system instruction, assistant turns become "model",
+  /// and data-URL images become inline data.
+  @visibleForTesting
+  static Map<String, dynamic> geminiRequestBody({
+    required List<Map<String, dynamic>> messages,
+    required double temperature,
+    required int maxOutputTokens,
+    required bool useJsonMode,
+  }) {
+    final system = <String>[];
+    final contents = <Map<String, dynamic>>[];
+
+    for (final message in messages) {
+      final content = message['content'];
+      final parts = <Map<String, dynamic>>[];
+      if (content is String) {
+        parts.add({'text': content});
+      } else if (content is List) {
+        for (final part in content) {
+          if (part is! Map) continue;
+          if (part['type'] == 'text') {
+            parts.add({'text': part['text']?.toString() ?? ''});
+          } else if (part['type'] == 'image_url') {
+            final url = (part['image_url'] as Map?)?['url']?.toString() ?? '';
+            final match = RegExp(r'^data:([^;]+);base64,(.*)$', dotAll: true)
+                .firstMatch(url);
+            if (match != null) {
+              parts.add({
+                'inline_data': {
+                  'mime_type': match.group(1),
+                  'data': match.group(2),
+                }
+              });
+            }
+          }
+        }
+      }
+      if (parts.isEmpty) continue;
+
+      if (message['role'] == 'system') {
+        system.addAll(parts
+            .map((part) => part['text'])
+            .whereType<String>()
+            .where((text) => text.isNotEmpty));
+      } else {
+        contents.add({
+          'role': message['role'] == 'assistant' ? 'model' : 'user',
+          'parts': parts,
+        });
+      }
+    }
+
+    return {
+      if (system.isNotEmpty)
+        'systemInstruction': {
+          'parts': [
+            {'text': system.join('\n\n')}
+          ]
+        },
+      'contents': contents,
+      'generationConfig': {
+        'temperature': temperature,
+        'maxOutputTokens': maxOutputTokens,
+        if (useJsonMode) 'responseMimeType': 'application/json',
+      },
+    };
+  }
+
+  /// Retries a failed request against Gemini. Returns null — rather than
+  /// throwing — when there is no key or every Gemini model fails, so the
+  /// caller surfaces the original error.
+  Future<String?> _tryGeminiFallback({
+    required List<Map<String, dynamic>> messages,
+    required double temperature,
+    required int maxOutputTokens,
+    required bool useJsonMode,
+  }) async {
+    final key = _getGeminiApiKey();
+    if (key == null) {
+      _log('ℹ️ No GEMINI_API_KEY set; skipping the Gemini fallback.');
+      return null;
+    }
+
+    final body = jsonEncode(geminiRequestBody(
+      messages: messages,
+      temperature: temperature,
+      maxOutputTokens: maxOutputTokens,
+      useJsonMode: useJsonMode,
+    ));
+
+    for (final model in _geminiModels) {
+      try {
+        _log('🔁 Falling back to Gemini ($model)');
+        // The key goes in a header, not the query string, so it never
+        // appears in a logged URL.
+        final response = await http
+            .post(
+              Uri.parse('https://generativelanguage.googleapis.com/v1beta/'
+                  'models/$model:generateContent'),
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': key,
+              },
+              body: body,
+            )
+            .timeout(const Duration(seconds: 90));
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          final candidates = data['candidates'] as List?;
+          final parts = (candidates != null && candidates.isNotEmpty)
+              ? (candidates.first['content']?['parts'] as List?)
+              : null;
+          final text = (parts ?? const [])
+              .map((part) => (part as Map)['text']?.toString() ?? '')
+              .join()
+              .trim();
+          if (text.isNotEmpty) return text;
+          _log('⚠️ Gemini ($model) returned no text');
+          continue;
+        }
+
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          // Every model would refuse the same key.
+          _log('⚠️ Gemini rejected GEMINI_API_KEY (${response.statusCode}). '
+              'It must be a Gemini API key from Google AI Studio, which '
+              'starts with "AIza".');
+          return null;
+        }
+        _log('⚠️ Gemini ($model) status ${response.statusCode}');
+      } catch (e) {
+        _log('⚠️ Gemini ($model) failed: $e');
+      }
+    }
+    return null;
+  }
+
   bool _isProviderOutageError(String message) {
     final normalized = message.toLowerCase();
     if (normalized.contains('network error') ||
@@ -2251,6 +2336,16 @@ Rules:
     }
     return RegExp(r'api error \((429|500|502|503|504|529)\)')
         .hasMatch(normalized);
+  }
+
+  /// Groq has stopped serving the model: it answers 404 model_not_found or
+  /// 400 "decommissioned" rather than failing for load.
+  bool _isModelUnavailableError(String message) {
+    final normalized = message.toLowerCase();
+    return normalized.contains('model_not_found') ||
+        normalized.contains('decommissioned') ||
+        normalized.contains('does not exist') ||
+        RegExp(r'api error \(404\)').hasMatch(normalized);
   }
 
   bool _isTokenLimitError(String message) {
