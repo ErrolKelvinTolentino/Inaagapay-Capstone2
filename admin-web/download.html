@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Get the InaAgapay App</title>
+  <meta name="description" content="Download the InaAgapay maternal and child health app for Android." />
+  <link rel="icon" type="image/png" href="images/logo_icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <!--
+    The page midwives point mothers to, and the QR code on the poster at every
+    health center. Deliberately standalone: no portal scripts, no sign-in, so
+    it works for anyone with the link.
+
+    WHERE THE APK COMES FROM
+
+    The download button points at the latest GitHub release asset named
+    "inaagapay.apk". To publish a new version:
+
+      cd inaagapay_flutter_v2
+      flutter build apk --release
+      (rename build/app/outputs/flutter-apk/app-release.apk to inaagapay.apk)
+
+    then create a release on GitHub and attach inaagapay.apk. The link below
+    always resolves to the newest release, so this page never needs editing for
+    a new build. Update APP.version below when the version number changes.
+
+    Keep one signing key for every release build. Android refuses to install an
+    update signed with a different key, and the debug key differs per machine.
+  -->
+  <style>
+    :root {
+      --brand-primary: #FF68A5;
+      --brand-accent: #E6398D;
+      --brand-text: #C73578;
+      --brand-soft: #FFF5F8;
+      --ink: #2D2D2D;
+      --muted: #6F6A6D;
+      --line: #F0E4EA;
+      --card: #FFFFFF;
+      --bg: #FAFAFA;
+      --radius: 20px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      font-family: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--brand-text); }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+
+    header.top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 0;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+    .brand img { width: 40px; height: 40px; }
+    .brand strong { font-size: 18px; letter-spacing: 0.2px; }
+    .staff-link { font-size: 14px; font-weight: 600; text-decoration: none; }
+
+    .hero {
+      display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 32px; align-items: center;
+      background: linear-gradient(135deg, #FFF0F6 0%, #FFFFFF 70%);
+      border: 1px solid var(--line); border-radius: 28px;
+      padding: 40px;
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 700; color: var(--brand-text);
+      background: #FFE3EF; padding: 6px 12px; border-radius: 999px;
+    }
+    h1 { font-size: 40px; line-height: 1.15; margin: 14px 0 10px; letter-spacing: -0.5px; }
+    .lede { font-size: 17px; color: var(--muted); margin: 0 0 6px; max-width: 34em; }
+    .lede-fil { font-size: 15px; color: var(--muted); margin: 0 0 24px; font-style: italic; }
+
+    .download {
+      display: inline-flex; align-items: center; gap: 12px;
+      background: var(--brand-accent); color: #fff; text-decoration: none;
+      padding: 16px 26px; border-radius: 999px; font-size: 17px; font-weight: 700;
+      box-shadow: 0 10px 24px rgba(230, 57, 141, 0.28);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .download:hover { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(230, 57, 141, 0.34); }
+    .download:focus-visible { outline: 3px solid #FFB3D1; outline-offset: 3px; }
+    .download i { font-size: 22px; }
+    .meta { margin-top: 12px; font-size: 13.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+    .meta span { display: inline-flex; align-items: center; gap: 6px; }
+
+    .hero-art { position: relative; text-align: center; }
+    .hero-art img { width: 100%; max-width: 360px; border-radius: 24px; }
+
+    section { margin-top: 28px; }
+    h2 { font-size: 22px; margin: 0 0 14px; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 22px;
+    }
+    .card h3 { margin: 0 0 6px; font-size: 17px; display: flex; align-items: center; gap: 10px; }
+    .card h3 i { color: var(--brand-primary); }
+    .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+    .card ul { margin: 10px 0 0; padding-left: 18px; color: var(--ink); font-size: 14.5px; }
+    .card li { margin: 4px 0; }
+
+    .steps { counter-reset: step; list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+    .steps li {
+      counter-increment: step; position: relative;
+      background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+      padding: 16px 16px 16px 60px;
+    }
+    .steps li::before {
+      content: counter(step); position: absolute; left: 16px; top: 16px;
+      width: 30px; height: 30px; border-radius: 50%;
+      background: var(--brand-soft); color: var(--brand-text);
+      font-weight: 700; display: grid; place-items: center;
+    }
+    .steps strong { display: block; font-size: 15px; }
+    .steps span { display: block; color: var(--muted); font-size: 14px; }
+    .steps em { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+    .qr-card { display: flex; gap: 22px; align-items: center; }
+    #qr { width: 168px; height: 168px; flex-shrink: 0; padding: 10px; background: #fff; border: 1px solid var(--line); border-radius: 16px; }
+    #qr img, #qr canvas { width: 100% !important; height: 100% !important; }
+    .qr-url { font-size: 13px; color: var(--muted); word-break: break-all; margin-top: 8px; }
+    .ghost {
+      display: inline-flex; align-items: center; gap: 8px; margin-top: 12px;
+      border: 1.5px solid var(--brand-primary); color: var(--brand-text); background: #fff;
+      padding: 10px 18px; border-radius: 999px; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer;
+    }
+    .ghost:hover { background: var(--brand-soft); }
+
+    .notice {
+      display: flex; gap: 12px; align-items: flex-start;
+      background: #FFFBEB; border: 1px solid #FDE68A; color: #78350F;
+      border-radius: 16px; padding: 14px 16px; font-size: 14px;
+    }
+    .notice i { margin-top: 3px; }
+
+    footer { margin: 40px 0 28px; font-size: 13px; color: var(--muted); text-align: center; }
+
+    .poster-only { display: none; }
+
+    @media (max-width: 820px) {
+      .hero { grid-template-columns: 1fr; padding: 26px 20px; }
+      .hero-art { order: -1; }
+      .hero-art img { max-width: 240px; }
+      h1 { font-size: 30px; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .qr-card { flex-direction: column; text-align: center; }
+      .download { width: 100%; justify-content: center; }
+    }
+
+    /* The poster: what gets taped to the wall at the health center. */
+    @media print {
+      @page { size: A4 portrait; margin: 16mm; }
+      body { background: #fff; }
+      .screen-only { display: none !important; }
+      .poster-only { display: block !important; text-align: center; }
+      .poster-only img.logo { width: 90px; }
+      .poster-only h1 { font-size: 34px; margin: 10px 0 4px; }
+      .poster-only p { font-size: 17px; color: #444; margin: 0 0 4px; }
+      .poster-only #poster-qr { width: 300px; height: 300px; margin: 26px auto 14px; }
+      .poster-only #poster-qr img, .poster-only #poster-qr canvas { width: 100% !important; height: 100% !important; }
+      .poster-only ol { text-align: left; max-width: 480px; margin: 18px auto 0; font-size: 16px; }
+      .poster-only li { margin: 8px 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap screen-only">
+    <header class="top">
+      <a class="brand" href="download.html">
+        <img src="images/logo_icon.png" alt="" />
+        <strong>InaAgapay</strong>
+      </a>
+      <a class="staff-link" href="index.html"><i class="fa-solid fa-right-to-bracket"></i> Staff portal</a>
+    </header>
+
+    <main>
+      <div class="hero">
+        <div>
+          <span class="eyebrow"><i class="fa-brands fa-android"></i> For Android phones</span>
+          <h1>Your pregnancy and your baby's health, in one app.</h1>
+          <p class="lede">
+            InaAgapay keeps your checkups, vaccines and your child's growth in your pocket,
+            and reminds you before every visit to your health center.
+          </p>
+          <p class="lede-fil">Ang iyong pagbubuntis at kalusugan ng iyong anak, nasa isang app.</p>
+
+          <a class="download" id="download-btn" href="#" rel="noopener">
+            <i class="fa-solid fa-download"></i>
+            <span>Download for Android</span>
+          </a>
+          <div class="meta">
+            <span><i class="fa-solid fa-code-branch"></i> Version <b id="app-version"></b></span>
+            <span><i class="fa-brands fa-android"></i> Android 8.0 or newer</span>
+            <span><i class="fa-solid fa-hand-holding-heart"></i> Free</span>
+          </div>
+        </div>
+        <div class="hero-art">
+          <img src="images/pregnant_mother3.png" alt="Illustration of a pregnant mother" />
+        </div>
+      </div>
+
+      <section>
+        <h2>Who it is for</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3><i class="fa-solid fa-person-pregnant"></i> Mothers</h3>
+            <p>Your midwife creates your account at the health center, or you can register with your mobile number.</p>
+            <ul>
+              <li>Checkup, ultrasound and lab results as your midwife records them</li>
+              <li>Reminders before each checkup and vaccine</li>
+              <li>Your child's growth, vaccines and baby book</li>
+              <li>Danger signs to watch for, in English and Filipino</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3><i class="fa-solid fa-user-nurse"></i> Midwives</h3>
+            <p>Sign in with the account your RHU created for you.</p>
+            <ul>
+              <li>Record checkups, ultrasounds, lab tests, Td and child vaccines</li>
+              <li>See who is due, overdue or high-risk at a glance</li>
+              <li>Manage your health center's vaccine and medicine stock</li>
+              <li>Export records and statistics to PDF and Excel</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>How to install</h2>
+        <ol class="steps">
+          <li>
+            <strong>Tap "Download for Android".</strong>
+            <span>The file is called <b>inaagapay.apk</b>. Wait for it to finish.</span>
+            <em>I-tap ang "Download for Android" at hintaying matapos.</em>
+          </li>
+          <li>
+            <strong>Open the downloaded file.</strong>
+            <span>If your phone asks, allow your browser to <b>install unknown apps</b>. This only allows apps you choose to open.</span>
+            <em>Kung magtanong ang phone, payagan ang browser na mag-install ng app.</em>
+          </li>
+          <li>
+            <strong>Tap Install, then Open.</strong>
+            <span>Sign in with the email or mobile number and password your health center gave you.</span>
+            <em>Mag-sign in gamit ang account na ibinigay ng iyong health center.</em>
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <div class="card qr-card">
+          <div id="qr" aria-label="QR code for this page"></div>
+          <div>
+            <h3><i class="fa-solid fa-qrcode"></i> On a computer? Scan this with your phone.</h3>
+            <p>The code opens this page on your phone so you can download the app there.</p>
+            <div class="qr-url" id="qr-url"></div>
+            <button class="ghost" id="print-poster" type="button"><i class="fa-solid fa-print"></i> Print a poster for the health center</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="notice">
+          <i class="fa-solid fa-shield-halved"></i>
+          <div>
+            Only install InaAgapay from this page or from your health center. If anyone sends you
+            the app another way, ask your midwife first.
+            <span id="checksum-line"></span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      InaAgapay Maternal and Child Health Information System &middot; Protected under the Data Privacy Act of 2012 (RA 10173)
+    </footer>
+  </div>
+
+  <div class="poster-only">
+    <img class="logo" src="images/logo_icon.png" alt="" />
+    <h1>Get the InaAgapay app</h1>
+    <p>Your pregnancy and your baby's health, in one app.</p>
+    <p><i>Ang iyong pagbubuntis at kalusugan ng iyong anak, nasa isang app.</i></p>
+    <div id="poster-qr"></div>
+    <p><b>Scan with your phone's camera</b></p>
+    <ol>
+      <li>Scan the code and tap <b>Download for Android</b>.</li>
+      <li>Open the file. Allow "install unknown apps" if asked.</li>
+      <li>Install, open, and sign in with the account from your health center.</li>
+    </ol>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    // Change these when publishing a new build. apkUrl always resolves to the
+    // newest GitHub release asset named inaagapay.apk.
+    const APP = {
+      version: "1.0.0",
+      apkUrl: "https://github.com/ErrolKelvinTolentino/Inaagapay-Capstone2/releases/latest/download/inaagapay.apk",
+      sha256: "",
+    };
+
+    document.getElementById("app-version").textContent = APP.version;
+    const button = document.getElementById("download-btn");
+    button.href = APP.apkUrl;
+    button.setAttribute("download", "inaagapay.apk");
+
+    if (APP.sha256) {
+      document.getElementById("checksum-line").innerHTML =
+        ` SHA-256 of this version: <code style="word-break:break-all;">${APP.sha256}</code>`;
+    }
+
+    // The QR code points at this page rather than at the file, so a poster
+    // printed today still works after the next release.
+    const pageUrl = location.origin + location.pathname;
+    document.getElementById("qr-url").textContent = pageUrl;
+
+    function drawQr(elementId, size) {
+      const host = document.getElementById(elementId);
+      if (!host) return;
+      host.innerHTML = "";
+      if (typeof QRCode === "undefined") {
+        host.textContent = pageUrl;
+        host.style.fontSize = "12px";
+        return;
+      }
+      new QRCode(host, {
+        text: pageUrl,
+        width: size,
+        height: size,
+        colorDark: "#2D2D2D",
+        colorLight: "#FFFFFF",
+        correctLevel: QRCode.CorrectLevel.M,
+      });
+    }
+    drawQr("qr", 300);
+    drawQr("poster-qr", 600);
+
+    document.getElementById("print-poster").addEventListener("click", () => window.print());
+  </script>
+</body>
+</html>
