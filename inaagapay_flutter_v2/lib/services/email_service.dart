@@ -74,6 +74,35 @@ class EmailService {
     );
   }
 
+  /// Tells the old address that the account's contact details changed.
+  ///
+  /// Sent after the change, to the address that is no longer on file, so a
+  /// change the owner did not make is noticed by the one person who can say so.
+  static Future<bool> sendContactChangedNotice({
+    required String email,
+    required String what,
+    required String newValueHint,
+  }) {
+    return _queueEmail(
+      email: email,
+      subject: 'Your InaAgapay $what was changed',
+      htmlContent: '''
+<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#2D2D2D">
+  <h2 style="color:#E6398D;margin-bottom:4px">Your $what was changed</h2>
+  <p>The $what on your InaAgapay account was changed to <strong>$newValueHint</strong>.</p>
+  <p>If you made this change, there is nothing else to do.</p>
+  <p style="background:#FFF5F8;padding:12px;border-radius:8px">
+    <strong>If you did not,</strong> contact your health center right away so
+    they can secure your account.
+  </p>
+  <p style="font-size:12px;color:#8A8A8A">Kung hindi ikaw ang gumawa nito,
+    makipag-ugnayan agad sa iyong health center.</p>
+  <p style="font-size:12px;color:#8A8A8A">&mdash; InaAgapay</p>
+</div>
+''',
+    );
+  }
+
   // Send verification code via preferred channel (email or SMS)
   static Future<bool> sendVerificationCode({
     required String contact,

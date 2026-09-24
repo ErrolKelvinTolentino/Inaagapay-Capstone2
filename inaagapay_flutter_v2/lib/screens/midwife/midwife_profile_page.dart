@@ -14,9 +14,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../services/auth_storage.dart';
+import '../../services/contact_change_service.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_input_field.dart';
+import '../../widgets/contact_change_sheet.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/profile_header_card.dart';
 import '../../widgets/profile_section.dart';
@@ -315,6 +317,55 @@ class _MidwifeProfilePageState extends State<MidwifeProfilePage> {
     );
   }
 
+  /// A contact detail with its Change / Add action. The new value is saved
+  /// only once the code sent to it comes back — it is how she signs in.
+  Widget _contactRow(String label, String? value, ContactKind kind) {
+    final has = (value ?? '').trim().isNotEmpty;
+    return ProfileInfoRow(
+      label: label,
+      valueWidget: Row(
+        children: [
+          Expanded(
+            child: Text(
+              has ? value! : 'Not set',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: has ? AppColors.textPrimary : AppColors.textSecondary,
+              ),
+            ),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(0, 32),
+            ),
+            onPressed: () => _changeContact(kind, value),
+            child: Text(has ? 'Change' : 'Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _changeContact(ContactKind kind, String? current) async {
+    final accountId = await AuthStorage.getUserId();
+    if (accountId == null || !mounted) return;
+    final saved = await showContactChangeSheet(
+      context,
+      accountId: accountId,
+      kind: kind,
+      currentValue: current,
+    );
+    if (saved == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(kind == ContactKind.email
+          ? 'Email address updated.'
+          : 'Mobile number updated.'),
+    ));
+    await _load();
+  }
+
   Widget _buildAccountSection() {
     final a = _account!;
     return ProfileCardSection(
@@ -325,18 +376,9 @@ class _MidwifeProfilePageState extends State<MidwifeProfilePage> {
           label: 'Role',
           value: _roleLabel(a['account_type']?.toString()),
         ),
-        ProfileInfoRow(
-          label: 'Email',
-          value: a['email_address']?.toString().trim().isNotEmpty == true
-              ? a['email_address'].toString()
-              : 'Not set',
-        ),
-        ProfileInfoRow(
-          label: 'Mobile number',
-          value: a['phone_number']?.toString().trim().isNotEmpty == true
-              ? a['phone_number'].toString()
-              : 'Not set',
-        ),
+        _contactRow('Email', a['email_address']?.toString(), ContactKind.email),
+        _contactRow(
+            'Mobile number', a['phone_number']?.toString(), ContactKind.phone),
         ProfileInfoRow(
           label: 'Account ID',
           value: '#${a['account_id']}',

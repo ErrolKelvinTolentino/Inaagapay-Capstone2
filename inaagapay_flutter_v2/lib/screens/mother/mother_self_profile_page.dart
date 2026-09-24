@@ -15,6 +15,9 @@ import '../../models/password_strength.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/branded_date_picker.dart';
+import '../../widgets/contact_change_sheet.dart';
+import '../../services/auth_storage.dart';
+import '../../services/contact_change_service.dart';
 
 const List<String> _commonConditions = [
   'Anemia',
@@ -344,6 +347,8 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
                 ],
                 _buildMedicalInfoSection(profile),
                 const SizedBox(height: 14),
+                _buildContactSection(email, phone),
+                const SizedBox(height: 14),
                 _buildAddressSection(profile),
                 const SizedBox(height: 14),
                 _buildMedicalConditionsSection(medicalConditions),
@@ -493,6 +498,67 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
         ),
       ],
     );
+  }
+
+  /// Email and mobile number, each changed only through a code sent to the
+  /// new address — they are how she signs in and how reminders reach her.
+  Widget _buildContactSection(String? email, String? phone) {
+    Widget row(IconData icon, String label, String? value, ContactKind kind) {
+      final has = (value ?? '').trim().isNotEmpty;
+      return ProfileInfoRow(
+        icon: icon,
+        label: label,
+        valueWidget: Row(
+          children: [
+            Expanded(
+              child: Text(
+                has ? value! : _t('Not added', 'Wala pa'),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: has ? AppColors.textPrimary : AppColors.textSecondary,
+                ),
+              ),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32),
+              ),
+              onPressed: () => _changeContact(kind, value),
+              child: Text(has ? _t('Change', 'Palitan') : _t('Add', 'Idagdag')),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ProfileCardSection(
+      title: _t('Contact details', 'Contact details'),
+      icon: Icons.contact_mail_outlined,
+      children: [
+        row(Icons.alternate_email_rounded, _t('Email', 'Email'), email, ContactKind.email),
+        row(Icons.phone_iphone_rounded, _t('Mobile', 'Mobile'), phone, ContactKind.phone),
+      ],
+    );
+  }
+
+  Future<void> _changeContact(ContactKind kind, String? current) async {
+    final accountId = await AuthStorage.getUserId();
+    if (accountId == null || !mounted) return;
+    final saved = await showContactChangeSheet(
+      context,
+      accountId: accountId,
+      kind: kind,
+      currentValue: current,
+    );
+    if (saved == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(kind == ContactKind.email
+          ? _t('Email address updated.', 'Na-update ang email address.')
+          : _t('Mobile number updated.', 'Na-update ang mobile number.')),
+    ));
+    _refresh();
   }
 
   Widget _buildAddressSection(Map<String, dynamic> profile) {
