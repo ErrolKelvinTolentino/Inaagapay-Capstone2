@@ -68,6 +68,8 @@ enum AnalyticsIcon {
   stock,
   expiry,
   demand,
+  stage,
+  drive,
 }
 
 /// Which visual a metric wants. The card shell is identical either way.

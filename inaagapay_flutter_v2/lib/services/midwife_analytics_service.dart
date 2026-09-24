@@ -30,6 +30,7 @@ import 'package:intl/intl.dart';
 import '../models/midwife_analytics.dart';
 import 'gestational_diabetes_screening.dart';
 import 'immunization_schedule.dart';
+import 'pregnancy_stage.dart';
 import 'supabase_service.dart';
 
 class MidwifeAnalyticsService {
@@ -138,6 +139,21 @@ class MidwifeAnalyticsService {
             'glucose results',
           );
 
+    // Allowed to come back null for the same reason as the glucose read: the
+    // view arrives with 20260912_vaccination_drive_analytics.sql, and "the
+    // query failed" must read as "not set up", never as "no drives".
+    final drivesFuture = _rowsOrNull(
+      SupabaseService.client
+          .from('vaccination_drive_analytics')
+          .select('drive_id, schedule_date, vaccine_name, audience, '
+              'drive_status, invited_count, invited_attended, attended_count, '
+              'walk_in_count, no_show_count, doses_administered')
+          .eq('facility_id', bhcId)
+          .order('schedule_date', ascending: false)
+          .limit(30),
+      'vaccination drives',
+    );
+
     final stage2 = await Future.wait([
       pregnancyIds.isEmpty
           ? _none()
@@ -242,6 +258,7 @@ class MidwifeAnalyticsService {
     final inventoryItems = stage2[7];
     final inventoryBatches = stage2[8];
     final glucoseRows = await glucoseFuture;
+    final drives = await drivesFuture;
 
     // ===== SHARED DERIVATIONS =====
     final mothersById = {
@@ -268,6 +285,7 @@ class MidwifeAnalyticsService {
       title: 'Mothers',
       metrics: [
         _ageDistribution(mothers, ongoing, now),
+        _pregnancyStage(ongoing, now),
         _riskLevels(ongoing),
         _riskDrivers(ongoing, riskAssessments),
         _gdmScreening(ongoing, gdm, glucoseRows != null),
@@ -283,6 +301,8 @@ class MidwifeAnalyticsService {
         _childAgeBands(children, now),
         _growthFindings(children, growthRecords, now),
         _immunizationCoverage(childDoses, immunizations, now),
+        _vaccinationStatus(childDoses),
+        _vaccinationDrives(drives, now),
       ],
     );
 
@@ -430,6 +450,172 @@ class MidwifeAnalyticsService {
               'birthdate on file and ${missing == 1 ? 'is' : 'are'} not counted here.'
           : null,
       prescription: tails > 0
+          ? const AnalyticsPrescription(
+              label: 'Open mother list',
+              action: AnalyticsAction.viewMothers,
+            )
+          : null,
+    );
+  }
+
+  // Test seams for the cards built from plain rows. The live path is load().
+  @visibleForTesting
+  static AnalyticsMetric pregnancyStageCard(
+    List<Map<String, dynamic>> ongoing,
+    DateTime now,
+  ) =>
+      _pregnancyStage(ongoing, now);
+
+  @visibleForTesting
+  static AnalyticsMetric vaccinationStatusCard({
+    required List<Map<String, dynamic>> children,
+    required List<Map<String, dynamic>> vaccines,
+    required List<Map<String, dynamic>> records,
+    required DateTime now,
+  }) =>
+      _vaccinationStatus(_childDoseStatuses(children, vaccines, records, now));
+
+  @visibleForTesting
+  static AnalyticsMetric vaccinationDrivesCard(
+    List<Map<String, dynamic>>? drives,
+    DateTime now,
+  ) =>
+      _vaccinationDrives(drives, now);
+
+  /// Where the ongoing pregnancies are, and who comes next. The caseload card
+  /// above this one already counts trimesters; this is the reading of them.
+  /// Three groups change what the next visit is for: mothers due within four
+  /// weeks (birth plan, where to deliver), pregnancies past 40 weeks (has she
+  /// delivered? does she need referral?), and pregnancies with no dates at all,
+  /// which no schedule can place.
+  static AnalyticsMetric _pregnancyStage(
+    List<Map<String, dynamic>> ongoing,
+    DateTime now,
+  ) {
+    const title = 'Stage of pregnancy';
+
+    if (ongoing.isEmpty) {
+      return const AnalyticsMetric.empty(
+        title: title,
+        icon: AnalyticsIcon.stage,
+        message: 'No ongoing pregnancies are recorded at this centre yet.',
+      );
+    }
+
+    int first = 0, second = 0, third = 0;
+    int pastTerm = 0, postTerm = 0, dueSoon = 0, undated = 0;
+    for (final row in ongoing) {
+      final days = PregnancyStage.gestationalDays(
+        lmp: _date(row['last_menstrual_period']),
+        edd: _date(row['expected_date_of_delivery']),
+        now: now,
+      );
+      if (days == null || days < 0) {
+        undated++;
+        continue;
+      }
+      if (days >= PregnancyStage.termDays) {
+        pastTerm++;
+        if (PregnancyStage.completedWeeks(days) >= 42) postTerm++;
+        continue;
+      }
+      if (PregnancyStage.termDays - days <= 28) dueSoon++;
+      switch (PregnancyStage.trimesterOf(days)) {
+        case Trimester.first:
+          first++;
+          break;
+        case Trimester.second:
+          second++;
+          break;
+        case Trimester.third:
+          third++;
+          break;
+      }
+    }
+
+    final bands = [
+      AnalyticsBand(label: 'First trimester', shortLabel: '1st', count: first),
+      AnalyticsBand(label: 'Second trimester', shortLabel: '2nd', count: second),
+      AnalyticsBand(
+        label: 'Third trimester',
+        shortLabel: '3rd',
+        count: third,
+        detail: dueSoon > 0 ? '$dueSoon due within 4 weeks' : null,
+      ),
+      AnalyticsBand(
+        label: 'Past 40 weeks',
+        shortLabel: '40+',
+        count: pastTerm,
+        severity: AnalyticsSeverity.alert,
+        detail: postTerm > 0 ? '$postTerm past 42 weeks' : null,
+      ),
+      AnalyticsBand(
+        label: 'No dates recorded',
+        shortLabel: 'Undated',
+        count: undated,
+        severity: AnalyticsSeverity.unknown,
+      ),
+    ];
+
+    String headline;
+    String caption;
+    AnalyticsInsight insight;
+    if (pastTerm > 0) {
+      headline = '$pastTerm';
+      caption = '${_plural(pastTerm, 'pregnancy is', 'pregnancies are')} past '
+          '40 weeks';
+      insight = AnalyticsInsight(
+        '$pastTerm ongoing ${_plural(pastTerm, 'pregnancy is', 'pregnancies are')} '
+        'past the due date. Confirm whether '
+        '${pastTerm == 1 ? 'she has' : 'they have'} delivered and conclude the '
+        'record, or refer for post-term care.',
+        tone: AnalyticsTone.alert,
+        evidence: postTerm > 0
+            ? '$postTerm ${_plural(postTerm, 'is', 'are')} past 42 weeks, '
+                'the post-term threshold.'
+            : 'A pregnancy stays "ongoing" here until it is concluded in the app.',
+      );
+    } else if (dueSoon > 0) {
+      headline = '$dueSoon';
+      caption =
+          '${_plural(dueSoon, 'mother is', 'mothers are')} due within 4 weeks';
+      insight = AnalyticsInsight(
+        '$dueSoon ${_plural(dueSoon, 'mother is', 'mothers are')} due within '
+        'four weeks. Check that each has a birth plan and knows which facility '
+        'to go to when labour starts.',
+        tone: AnalyticsTone.watch,
+      );
+    } else if (undated > 0) {
+      headline = '$undated';
+      caption = 'of ${ongoing.length} ongoing '
+          '${_plural(ongoing.length, 'pregnancy', 'pregnancies')} undated';
+      insight = AnalyticsInsight(
+        '$undated ${_plural(undated, 'pregnancy has', 'pregnancies have')} no '
+        'last menstrual period or due date, so ${undated == 1 ? 'it' : 'they'} '
+        'cannot be placed on the visit schedule.',
+        tone: AnalyticsTone.watch,
+      );
+    } else {
+      headline = '${ongoing.length}';
+      caption = 'ongoing ${_plural(ongoing.length, 'pregnancy', 'pregnancies')}';
+      insight = const AnalyticsInsight(
+        'No mother is due within the next four weeks, and every pregnancy is '
+        'dated.',
+        tone: AnalyticsTone.good,
+      );
+    }
+
+    return AnalyticsMetric(
+      title: title,
+      kind: AnalyticsChartKind.bars,
+      icon: AnalyticsIcon.stage,
+      headline: headline,
+      headlineCaption: caption,
+      bands: bands,
+      insight: insight,
+      footnote: 'Counted from the last menstrual period, or from the due date '
+          'when no LMP is recorded.',
+      prescription: pastTerm + dueSoon + undated > 0
           ? const AnalyticsPrescription(
               label: 'Open mother list',
               action: AnalyticsAction.viewMothers,
@@ -1489,6 +1675,270 @@ class MidwifeAnalyticsService {
     );
   }
 
+  /// The same schedule, read three ways. A child who has had nothing at all is
+  /// a different problem from one who started and fell behind: a zero-dose
+  /// child has never been reached, so the work is finding the family; a partly
+  /// vaccinated one has, so the work is bringing them back.
+  static AnalyticsMetric _vaccinationStatus(Map<int, _ChildDoses> childDoses) {
+    const title = 'Vaccination status';
+
+    if (childDoses.isEmpty) {
+      return const AnalyticsMetric.empty(
+        title: title,
+        kind: AnalyticsChartKind.donut,
+        icon: AnalyticsIcon.immunization,
+        message:
+            'Vaccination status needs children with recorded birthdates and a '
+            'vaccine schedule to compare against.',
+      );
+    }
+
+    int full = 0, partial = 0, zeroDose = 0;
+    for (final doses in childDoses.values) {
+      if (doses.pastDue.isEmpty) {
+        full++;
+      } else if (doses.dosesGiven == 0) {
+        zeroDose++;
+      } else {
+        partial++;
+      }
+    }
+    final total = childDoses.length;
+    final childWord = _plural(total, 'child', 'children');
+
+    String headline;
+    String caption;
+    AnalyticsInsight insight;
+    if (zeroDose > 0) {
+      headline = '$zeroDose';
+      caption = 'of $total $childWord with no vaccine at all';
+      insight = AnalyticsInsight(
+        '$zeroDose ${_plural(zeroDose, 'child has', 'children have')} not had '
+        'a single dose. Zero-dose children come first: a home visit reaches a '
+        'family that has never come in.',
+        tone: AnalyticsTone.alert,
+      );
+    } else if (partial > 0) {
+      headline = '$partial';
+      caption = 'of $total $childWord partially vaccinated';
+      insight = AnalyticsInsight(
+        '$partial ${_plural(partial, 'child has', 'children have')} started '
+        'the schedule and fallen behind. They have reached the centre before, '
+        'so a reminder usually brings them back.',
+        tone: AnalyticsTone.watch,
+      );
+    } else {
+      headline = '$full';
+      caption = '$childWord, all vaccinated for age';
+      insight = const AnalyticsInsight(
+        'Every child is fully vaccinated for their age.',
+        tone: AnalyticsTone.good,
+      );
+    }
+
+    return AnalyticsMetric(
+      title: title,
+      kind: AnalyticsChartKind.donut,
+      icon: AnalyticsIcon.immunization,
+      headline: headline,
+      headlineCaption: caption,
+      bands: [
+        AnalyticsBand(
+          label: 'Fully vaccinated for age',
+          count: full,
+          severity: AnalyticsSeverity.good,
+        ),
+        AnalyticsBand(
+          label: 'Partially vaccinated',
+          count: partial,
+          severity: AnalyticsSeverity.watch,
+        ),
+        AnalyticsBand(
+          label: 'Unvaccinated (zero-dose)',
+          count: zeroDose,
+          severity: AnalyticsSeverity.alert,
+        ),
+      ],
+      insight: insight,
+      footnote: 'Fully vaccinated for age: no dose on the DOH schedule is past '
+          'due. A newborn with nothing due yet counts here.',
+      prescription: zeroDose + partial > 0
+          ? const AnalyticsPrescription(
+              label: 'Open children list',
+              action: AnalyticsAction.viewChildren,
+            )
+          : null,
+    );
+  }
+
+  /// Drives run at this centre, and whether the people invited came. Turnout
+  /// is counted against invitations, not doses: a drive that vaccinated forty
+  /// walk-ins and none of the thirty children it invited still missed the
+  /// children it was organised for.
+  static AnalyticsMetric _vaccinationDrives(
+    List<Map<String, dynamic>>? drives,
+    DateTime now,
+  ) {
+    const title = 'Vaccination drives';
+    const window = 90;
+
+    if (drives == null) {
+      return const AnalyticsMetric.empty(
+        title: title,
+        kind: AnalyticsChartKind.rankedBars,
+        icon: AnalyticsIcon.drive,
+        message: 'Drive figures need the vaccination drive database update '
+            '(20260912). Ask your administrator to run it.',
+      );
+    }
+    if (drives.isEmpty) {
+      return const AnalyticsMetric.empty(
+        title: title,
+        kind: AnalyticsChartKind.rankedBars,
+        icon: AnalyticsIcon.drive,
+        message: 'No vaccination drives have been scheduled at this centre yet.',
+        prescription: AnalyticsPrescription(
+          label: 'Open schedules',
+          action: AnalyticsAction.viewSchedules,
+        ),
+      );
+    }
+
+    final today = _dayStart(now);
+    final since = today.subtract(const Duration(days: window));
+    final upcoming = drives
+        .where((d) => d['drive_status']?.toString() != 'completed')
+        .toList()
+      ..sort((a, b) => (_date(a['schedule_date']) ?? today)
+          .compareTo(_date(b['schedule_date']) ?? today));
+    final recent = drives.where((d) {
+      final when = _date(d['schedule_date']);
+      return d['drive_status']?.toString() == 'completed' &&
+          when != null &&
+          !when.isBefore(since);
+    }).toList();
+
+    int invited = 0, came = 0, walkIns = 0, noShows = 0, doses = 0;
+    for (final d in recent) {
+      invited += _int(d['invited_count']) ?? 0;
+      came += _int(d['invited_attended']) ?? 0;
+      walkIns += _int(d['walk_in_count']) ?? 0;
+      noShows += _int(d['no_show_count']) ?? 0;
+      doses += _int(d['doses_administered']) ?? 0;
+    }
+
+    String walkInText(int n) => '$n walk-in${n == 1 ? '' : 's'}';
+
+    final bands = <AnalyticsBand>[];
+    for (final d in recent.take(5)) {
+      final when = _date(d['schedule_date']);
+      final dInvited = _int(d['invited_count']) ?? 0;
+      final dCame = _int(d['invited_attended']) ?? 0;
+      final dWalkIns = _int(d['walk_in_count']) ?? 0;
+      final turnout = dInvited > 0 ? dCame / dInvited : null;
+      final dateText = when == null ? '' : ' · ${DateFormat('MMM d').format(when)}';
+      bands.add(AnalyticsBand(
+        label: '${d['vaccine_name'] ?? 'Drive'}$dateText',
+        count: _int(d['attended_count']) ?? 0,
+        fraction: turnout,
+        severity: turnout == null
+            ? AnalyticsSeverity.neutral
+            : (turnout >= 0.8
+                ? AnalyticsSeverity.good
+                : (turnout >= 0.5
+                    ? AnalyticsSeverity.watch
+                    : AnalyticsSeverity.alert)),
+        detail: dInvited > 0
+            ? '$dCame of $dInvited invited came'
+                '${dWalkIns > 0 ? ', ${walkInText(dWalkIns)}' : ''}'
+            : '${walkInText(dWalkIns)}, no invitations sent',
+      ));
+    }
+
+    String? nextLine;
+    if (upcoming.isNotEmpty) {
+      final next = upcoming.first;
+      final nextDate = _date(next['schedule_date']);
+      final on = nextDate == null ? '' : ' on ${DateFormat('MMM d').format(nextDate)}';
+      nextLine = 'Next: ${next['vaccine_name'] ?? 'drive'}$on, '
+          '${_int(next['invited_count']) ?? 0} invited.';
+    }
+
+    const openSchedules = AnalyticsPrescription(
+      label: 'Open schedules',
+      action: AnalyticsAction.viewSchedules,
+    );
+
+    if (recent.isEmpty) {
+      return AnalyticsMetric(
+        title: title,
+        kind: AnalyticsChartKind.rankedBars,
+        icon: AnalyticsIcon.drive,
+        periodLabel: 'Last $window days',
+        headline: '${upcoming.length}',
+        headlineCaption:
+            '${_plural(upcoming.length, 'drive', 'drives')} coming up, none held '
+            'in the last $window days',
+        insight: nextLine == null
+            ? const AnalyticsInsight(
+                'No drive has been held at this centre in the last three months.',
+                tone: AnalyticsTone.watch,
+              )
+            : AnalyticsInsight(nextLine),
+        prescription: openSchedules,
+      );
+    }
+
+    final turnout = invited > 0 ? came / invited : null;
+    AnalyticsInsight insight;
+    if (turnout != null && turnout < 0.6 && noShows > 0) {
+      insight = AnalyticsInsight(
+        '$noShows invited ${_plural(noShows, 'person', 'people')} did not come. '
+        'Their names are on each drive\'s roster, and a reminder text or home '
+        'visit brings most of them back.',
+        tone: AnalyticsTone.watch,
+        evidence: nextLine,
+      );
+    } else if (walkIns > came) {
+      insight = AnalyticsInsight(
+        'Most people vaccinated at drives came without an invitation, so the '
+        'invitation list may be missing families in the catchment.',
+        evidence: nextLine,
+      );
+    } else if (turnout != null && turnout >= 0.8) {
+      insight = AnalyticsInsight(
+        'Turnout is strong: $came of $invited invited came.',
+        tone: AnalyticsTone.good,
+        evidence: nextLine,
+      );
+    } else {
+      insight = AnalyticsInsight(
+        '$doses ${_plural(doses, 'dose', 'doses')} given across '
+        '${recent.length} ${_plural(recent.length, 'drive', 'drives')}.',
+        evidence: nextLine,
+      );
+    }
+
+    final driveWord = _plural(recent.length, 'drive', 'drives');
+    return AnalyticsMetric(
+      title: title,
+      kind: AnalyticsChartKind.rankedBars,
+      icon: AnalyticsIcon.drive,
+      periodLabel: 'Last $window days',
+      headline: invited > 0 ? '$came' : '$doses',
+      headlineCaption: invited > 0
+          ? 'of $invited invited came to ${recent.length} $driveWord'
+          : '${_plural(doses, 'dose', 'doses')} given at ${recent.length} $driveWord',
+      bands: bands,
+      insight: insight,
+      footnote: walkIns > 0
+          ? 'Bars show each drive\'s turnout of those invited. '
+              '${walkInText(walkIns)} came without an invitation.'
+          : 'Bars show each drive\'s turnout of those invited.',
+      prescription: openSchedules,
+    );
+  }
+
   // ==========================================================================
   // SUPPLIES
   // ==========================================================================
@@ -2006,6 +2456,7 @@ class MidwifeAnalyticsService {
         dueWithin30Days: dueSoon,
         givenPentaDoses: pentaGiven,
         completedByOneYear: completedByOneYear,
+        dosesGiven: givenDates.length,
         worstOverdueLabel: worstLateMonths <= 0
             ? 'past due'
             : ImmunizationSchedule.describeOverdue(
@@ -2433,6 +2884,7 @@ class _ChildDoses {
     required this.givenPentaDoses,
     required this.completedByOneYear,
     required this.worstOverdueLabel,
+    required this.dosesGiven,
   });
 
   final String childName;
@@ -2442,6 +2894,9 @@ class _ChildDoses {
   final Set<int> givenPentaDoses;
   final bool completedByOneYear;
   final String worstOverdueLabel;
+
+  /// Doses on record for this child, any vaccine.
+  final int dosesGiven;
 }
 
 class _StockItem {

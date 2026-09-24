@@ -155,6 +155,10 @@ class AnalyticsCard extends StatelessWidget {
         return Icons.event_busy_outlined;
       case AnalyticsIcon.demand:
         return Icons.trending_up_outlined;
+      case AnalyticsIcon.stage:
+        return Icons.calendar_month_outlined;
+      case AnalyticsIcon.drive:
+        return Icons.campaign_outlined;
     }
   }
 

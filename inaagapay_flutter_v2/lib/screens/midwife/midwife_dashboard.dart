@@ -8,6 +8,7 @@ import '../../theme/app_colors.dart';
 import '../../models/midwife_analytics.dart';
 import '../../services/auth_storage.dart';
 import '../../services/midwife_analytics_service.dart';
+import '../../services/pregnancy_stage.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/analytics/analytics_card.dart';
 import '../../widgets/midwife_statistics_card.dart';
@@ -428,7 +429,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
               }),
           SupabaseService.client
               .from('pregnancies')
-              .select('pregnancy_id, mother_id, last_menstrual_period, status')
+              .select('pregnancy_id, mother_id, last_menstrual_period, '
+                  'expected_date_of_delivery, status')
               .inFilter('mother_id', _motherIds)
               .timeout(const Duration(seconds: 8))
               .catchError((e) {
@@ -489,17 +491,22 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
         final now = DateTime.now();
         for (var pregnancy in pregnanciesResponse) {
-          final lmp =
-              DateTime.tryParse(pregnancy['last_menstrual_period'] ?? '');
-          if (lmp != null) {
-            final weeks = now.difference(lmp).inDays / 7;
-            if (weeks <= 13) {
+          final days = PregnancyStage.gestationalDays(
+            lmp: PregnancyStage.parse(pregnancy['last_menstrual_period']),
+            edd: PregnancyStage.parse(pregnancy['expected_date_of_delivery']),
+            now: now,
+          );
+          if (days == null) continue;
+          switch (PregnancyStage.trimesterOf(days)) {
+            case Trimester.first:
               _firstTrimester++;
-            } else if (weeks <= 27) {
+              break;
+            case Trimester.second:
               _secondTrimester++;
-            } else {
+              break;
+            case Trimester.third:
               _thirdTrimester++;
-            }
+              break;
           }
         }
 
