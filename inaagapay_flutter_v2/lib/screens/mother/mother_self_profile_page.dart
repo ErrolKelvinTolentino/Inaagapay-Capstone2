@@ -6,6 +6,7 @@ import '../../services/mother_profile_service.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/secondary_header.dart';
 import '../../widgets/profile_widgets.dart';
+import '../midwife/maternal_td_screen.dart';
 import 'mother_vitals_page.dart';
 
 import 'package:intl/intl.dart';
@@ -359,6 +360,43 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
                 const SizedBox(height: 14),
                 _buildChildrenSection(children),
                 const SizedBox(height: 16),
+
+                // Not gated on a current pregnancy, unlike vitals below. Td is
+                // a lifetime 5-dose series: a mother between pregnancies still
+                // has a protection status, and the doses she is owed carry
+                // over to the next one.
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MaternalTdScreen(
+                          motherId: widget.motherId,
+                          motherName: fullName.isNotEmpty ? fullName : null,
+                          assignedBhcId:
+                              (profile['assigned_bhc_id'] as num?)?.toInt(),
+                          readOnly: true,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.vaccines_rounded, size: 20),
+                    label: Text(
+                      _t('My Td Vaccine Record', 'Aking Td Bakuna'),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.brandPrimary,
+                      backgroundColor: Colors.white,
+                      side: const BorderSide(color: AppColors.brandPrimary),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
                 if (currentPregnancy != null) ...[
                   SizedBox(
                     width: double.infinity,
