@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class NotificationService {
@@ -77,6 +78,37 @@ class NotificationService {
       'type': type,
       'is_read': false,
     });
+  }
+
+  /// Tells a mother that a record was added to her chart.
+  ///
+  /// Screens hold a mother_id; notifications are addressed to an account_id.
+  /// This resolves one to the other and sends. It never throws: the record is
+  /// already saved by the time this runs, and a failed notice must not turn
+  /// that save into an error on the midwife's screen.
+  static Future<void> notifyMother({
+    required int motherId,
+    required String title,
+    required String message,
+    String type = 'general',
+  }) async {
+    try {
+      final row = await _client
+          .from('mothers')
+          .select('account_id')
+          .eq('mother_id', motherId)
+          .maybeSingle();
+      final accountId = (row?['account_id'] as num?)?.toInt();
+      if (accountId == null) return;
+      await createNotification(
+        accountId: accountId,
+        title: title,
+        message: message,
+        type: type,
+      );
+    } catch (e) {
+      debugPrint('Could not notify mother $motherId: $e');
+    }
   }
 
   static RealtimeChannel subscribeToNotifications(

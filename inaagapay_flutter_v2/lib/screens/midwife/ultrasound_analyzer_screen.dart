@@ -71,6 +71,10 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
   final Set<String> _expandedAspects = <String>{};
   String? _lastAiPrompt;
 
+  /// The provider and model that wrote [_combinedResponse], as reported by
+  /// GroqService; this is what the AI audit tables record.
+  String? _aiModelUsed;
+
   // Trimester-aware monitoring classification (computed by UltrasoundInterpretationEngine)
   // Reference: INTERGROWTH-21st (Papageorghiou et al., Lancet 2014);
   //            WHO Fetal Growth Charts (Kiserud et al., PLOS Medicine 2017)
@@ -1857,6 +1861,7 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
 
       setState(() {
         _combinedResponse = result;
+        _aiModelUsed = _groqService.lastModelUsed;
         _monitoringClassification = computed;
 
         // Auto-detect and update fetal count from scan text if detected
@@ -2081,7 +2086,7 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
               'response_type': 'ultrasound_analysis',
               'reference_table': 'ultrasounds',
               'reference_id': ultrasoundId,
-              'ai_model': 'Gemini 1.5 Flash',
+              'ai_model': _aiModelUsed ?? 'unrecorded',
               'confidence_score': null,
               'response': finalAiText,
               'response_category': 'analysis',
@@ -2100,7 +2105,7 @@ class _UltrasoundAnalyzerScreenState extends State<UltrasoundAnalyzerScreen> {
           await Supabase.instance.client.from('ai_prompt_logs').insert({
             'ai_response_id': aiResponseId,
             'prompt': _lastAiPrompt,
-            'model_used': 'Gemini 1.5 Flash',
+            'model_used': _aiModelUsed ?? 'unrecorded',
           });
         }
 

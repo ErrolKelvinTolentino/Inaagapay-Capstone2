@@ -1024,7 +1024,8 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
         bmiZ: bmiZ,
       );
 
-      final generated = await GroqService().generateTextInsight(
+      final groq = GroqService();
+      final generated = await groq.generateTextInsight(
         prompt: prompt,
         systemPrompt: GroqService.childGrowthSystemPrompt,
         temperature: 0.2,
@@ -1038,7 +1039,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
             .update({
               'response': responseText,
               'generated_by_ai': true,
-              'ai_model': 'groq',
+              'ai_model': groq.lastModelUsed ?? 'unrecorded',
               'updated_at': DateTime.now().toIso8601String(),
             })
             .eq('reference_table', 'child_growth_records')
@@ -1130,7 +1131,8 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
             GrowthCalculator.calculateBMIZScore(latestBMI, latestAgeWeeks, sex),
       );
 
-      final generated = await GroqService().generateTextInsight(
+      final groq = GroqService();
+      final generated = await groq.generateTextInsight(
         prompt: prompt,
         systemPrompt: GroqService.childGrowthSystemPrompt,
         temperature: 0.2,
@@ -1138,7 +1140,8 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
       );
 
       aiAnalysis = generated.trim();
-      await _saveProfileAiResponse(aiAnalysis!, latestRecordId);
+      await _saveProfileAiResponse(
+          aiAnalysis!, latestRecordId, groq.lastModelUsed);
     } catch (e) {
       aiError = 'AI insight could not be generated right now.';
       aiAnalysis = null;
@@ -1146,7 +1149,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
   }
 
   Future<void> _saveProfileAiResponse(
-      String responseText, int latestRecordId) async {
+      String responseText, int latestRecordId, String? aiModel) async {
     try {
       final existing = await Supabase.instance.client
           .from('ai_responses')
@@ -1162,7 +1165,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
         'response_type': 'growth_analysis',
         'response_category': aiAnalysisCategory ?? 'growth',
         'generated_by_ai': true,
-        'ai_model': 'groq',
+        'ai_model': aiModel ?? 'unrecorded',
         'status': 'generated',
         'response': responseText,
         'updated_at': DateTime.now().toIso8601String(),

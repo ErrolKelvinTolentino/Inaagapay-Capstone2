@@ -1815,6 +1815,7 @@ class SupabaseService {
   static Future<Map<String, dynamic>> updateExistingMotherAccount({
     required int motherId,
     required int assignedBhcId,
+    int? midwifeId,
     String? houseNumber,
     String? street,
     String? barangay,
@@ -1889,6 +1890,19 @@ class SupabaseService {
         'living_children': obScore.livingChildren,
         'status': 'active',
       }).eq('mother_id', motherId);
+
+      // A mother who signed herself up has no registering midwife, so her
+      // profile's "Registered by" stayed blank even after a midwife completed
+      // her record here. The midwife doing that is the one who registered her
+      // with the health center. Only a blank is filled: a midwife re-linking
+      // someone another midwife registered does not take the credit.
+      if (midwifeId != null) {
+        await client
+            .from('mothers')
+            .update({'registered_by_midwife_id': midwifeId})
+            .eq('mother_id', motherId)
+            .filter('registered_by_midwife_id', 'is', null);
+      }
 
       if (emergencyContacts.isNotEmpty) {
         await client.from('emergency_contacts').insert(

@@ -1321,7 +1321,7 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
           suggestedActions: draft.suggestedActions,
           aiAssessment: mergedText,
           aiGenerated: true,
-          aiModel: 'Groq',
+          aiModel: _groqService.lastModelUsed ?? 'unrecorded',
         );
         _syncEditableRiskState(_riskSnapshot!, mergedText);
         _lastRiskSignature = signature;
@@ -4395,14 +4395,16 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
       setState(() {
         _aiRemarks = tagalogText;
         _aiOriginalRemarks = tagalogText;
-        _aiRemarksModel = extracted.isNotEmpty ? 'Groq' : 'Rule Engine';
+        _aiRemarksModel = extracted.isNotEmpty
+            ? (_groqService.lastModelUsed ?? 'unrecorded')
+            : 'Rule Engine';
         _remarksSource = 'ai_generated_approved';
         _remarksCtrl.text = tagalogText;
         // Sync risk snapshot for persistence
         _riskSnapshot = draft.copyWith(
           aiAssessment: aiText,
           aiGenerated: true,
-          aiModel: 'Groq',
+          aiModel: _groqService.lastModelUsed ?? 'unrecorded',
         );
       });
     } catch (_) {

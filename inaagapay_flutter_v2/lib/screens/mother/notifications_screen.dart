@@ -3,11 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../services/notification_service.dart';
 import '../../services/auth_storage.dart';
+import '../../services/db_timestamp.dart';
 import '../../theme/app_colors.dart';
 import '../../services/language_service.dart';
+import '../../services/maternal_td_alert.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/app_input_field.dart';
 import '../../widgets/secondary_header.dart';
+import '../midwife/maternal_td_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -73,11 +76,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
 
       final notifications = await NotificationService.getNotifications(accountId);
+      final tdAlert =
+          motherId == null ? null : await MaternalTdAlert.loadFor(motherId);
       await _loadLocalReadIds();
       if (!mounted) return;
       setState(() {
         _isUnlinked = unlinked;
         _notifications = List<Map<String, dynamic>>.from(notifications);
+        // Built from her Td record on every load, like the two notices below.
+        // Its type carries the dose and level, which is what keeps its read
+        // state per dose (see MaternalTdAlert.noticeType).
+        if (tdAlert != null) {
+          _notifications.insert(0, {
+            'notification_id': -997,
+            'title': tdAlert.title,
+            'message': tdAlert.message,
+            'type': tdAlert.noticeType,
+            'is_read': false,
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+          });
+        }
         if (_isUnlinked) {
           _notifications.insert(0, {
             'notification_id': -999,
@@ -88,7 +106,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
             'type': 'unlinked_bhc',
             'is_read': false,
-            'created_at': DateTime.now().toIso8601String(),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
           });
         }
         if (vitalsIncomplete) {
@@ -101,7 +119,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
             'type': 'vitals_incomplete',
             'is_read': false,
-            'created_at': DateTime.now().toIso8601String(),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
           });
         }
         _loading = false;
@@ -198,7 +216,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  /// A notice built from her Td record (`td_due_Td2` and so on).
+  static bool _isTdNotice(String? type) => type?.startsWith('td_') ?? false;
+
   IconData _iconForType(String? type) {
+    if (_isTdNotice(type)) return Icons.vaccines_outlined;
     switch (type) {
       case 'checkup_reminder':
         return Icons.medical_services_outlined;
@@ -213,6 +235,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Color _colorForType(String? type) {
+    if (_isTdNotice(type)) {
+      if (type!.startsWith('td_urgent_')) return AppColors.error;
+      if (type.startsWith('td_due_')) return AppColors.warning;
+      return AppColors.brandAccent;
+    }
     switch (type) {
       case 'checkup_reminder':
         return AppColors.brandPrimary;
@@ -441,14 +468,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       final type = n['type'] as String?;
                       final isUnlinkedBhc = type == 'unlinked_bhc';
                       final isVitalsIncomplete = type == 'vitals_incomplete';
-                      // The two "do something" notices behave alike: they
-                      // carry no timestamp and are never marked read by
-                      // tapping, so they share one flag rather than repeating
-                      // the pair at every branch.
-                      final isAction = isUnlinkedBhc || isVitalsIncomplete;
-                      final createdAt = DateTime.tryParse(n['created_at'] ?? '');
+                      final isTd = _isTdNotice(type);
+                      // The "do something" notices behave alike: they are
+                      // built on every load, so they carry no timestamp of
+                      // their own, and they share one flag rather than
+                      // repeating the list at every branch.
+                      final isAction =
+                          isUnlinkedBhc || isVitalsIncomplete || isTd;
+                      final createdAt = parseDbTimestamp(n['created_at']);
                       final timeText = createdAt != null
-                          ? DateFormat('MMM d, h:mm a').format(createdAt.toLocal())
+                          ? DateFormat('MMM d, h:mm a').format(createdAt)
                           : '';
 
                       return GestureDetector(
@@ -470,6 +499,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 lmpDate: _lmpDate,
                               );
                             }
+                          } else if (isTd && _motherId != null) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => MaternalTdScreen(
+                                  motherId: _motherId!,
+                                  readOnly: true,
+                                ),
+                              ),
+                            );
                           }
                         },
                         child: Container(

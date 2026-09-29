@@ -32,8 +32,8 @@ void main() {
     const twoStep = GdmThresholds.twoStep();
 
     test('one raised sample alone does not meet the criteria', () {
-      const values =
-          GlucoseValues(fasting: 98, oneHour: 170, twoHour: 140, threeHour: 120);
+      const values = GlucoseValues(
+          fasting: 98, oneHour: 170, twoHour: 140, threeHour: 120);
       expect(
         GestationalDiabetesScreening.readValues(values, thresholds: twoStep),
         GdmResult.belowThreshold,
@@ -41,8 +41,8 @@ void main() {
     });
 
     test('two raised samples meet the criteria', () {
-      const values =
-          GlucoseValues(fasting: 98, oneHour: 190, twoHour: 140, threeHour: 120);
+      const values = GlucoseValues(
+          fasting: 98, oneHour: 190, twoHour: 140, threeHour: 120);
       expect(
         GestationalDiabetesScreening.readValues(values, thresholds: twoStep),
         GdmResult.meetsThreshold,
@@ -180,7 +180,8 @@ void main() {
     });
 
     test('unknown gestational age says so rather than guessing', () {
-      final result = GestationalDiabetesScreening.assess(gestationalWeeks: null);
+      final result =
+          GestationalDiabetesScreening.assess(gestationalWeeks: null);
       expect(result.finding, contains('unknown'));
       expect(result.action, GdmAction.none);
     });

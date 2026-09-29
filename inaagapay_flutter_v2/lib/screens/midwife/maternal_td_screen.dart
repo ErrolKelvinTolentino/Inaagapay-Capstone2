@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
 import '../../services/maternal_td_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/stock_deduction_outcome.dart';
 import '../../widgets/stock_indicators.dart';
 import '../../services/sms_service.dart';
@@ -406,6 +407,22 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       } catch (smsErr) {
         debugPrint('SMS notification non-fatal error: $smsErr');
       }
+
+      // The in-app copy. A Td dose only ever went out by SMS, so a mother
+      // without load on her phone — or who deleted the text — had nothing in
+      // the app telling her the dose was recorded or when the next one is due.
+      final nextDue = DateTime.tryParse(resMap['next_due_date']?.toString() ?? '');
+      await NotificationService.notifyMother(
+        motherId: widget.motherId,
+        title: '$doseKey Vaccine Recorded',
+        message: nextDue != null
+            ? 'Your $doseKey (tetanus-diphtheria) vaccine was recorded on '
+                '$formattedDate. Your next Td dose is due on '
+                '${_longDate.format(nextDue)}.'
+            : 'Your $doseKey (tetanus-diphtheria) vaccine was recorded on '
+                '$formattedDate.',
+        type: 'vaccine_reminder',
+      );
 
       if (mounted) {
         // The RPC answers success:true even when it found no batch to draw from

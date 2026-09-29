@@ -15,9 +15,13 @@ import '../../models/baby_growth_model.dart';
 import '../../models/weight_gain_models.dart';
 import '../../services/auth_storage.dart';
 import '../../services/language_service.dart';
+import '../../services/maternal_td_alert.dart';
+import '../../services/maternal_td_service.dart';
 import '../../services/mother_profile_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/weight_gain_engine.dart';
+import '../midwife/maternal_td_screen.dart';
+import 'hotlines_screen.dart';
 import 'mother_chatbot_page.dart';
 import 'mother_vitals_page.dart';
 import '../../widgets/branded_date_picker.dart';
@@ -74,6 +78,17 @@ class _MotherDashboardState extends State<MotherDashboard> {
   double? _prePregnancyWeight;
   double? _heightCm;
   DateTime? _nextScheduleDate;
+
+  int? _motherId;
+
+  /// Her Td series, read through [MaternalTdService] like every other screen
+  /// that shows it. Null until the first load finishes.
+  MaternalTdStatus? _tdStatus;
+
+  /// What the Td banner and card should tell her, from [MaternalTdAlert] —
+  /// the same answer her bell gives.
+  MaternalTdAlert? _tdAlert;
+  bool _isTdBannerDismissed = false;
 
   static const Map<int, Map<String, String>> _babySizeByWeek = {
     4: {'fruit': 'Poppy seed', 'image': 'poppy.png'},
@@ -246,6 +261,9 @@ class _MotherDashboardState extends State<MotherDashboard> {
     _prePregnancyWeight = null;
     _heightCm = null;
     _nextScheduleDate = null;
+    _tdStatus = null;
+    _tdAlert = null;
+    _isTdBannerDismissed = false;
   }
 
   bool _requiresDeliveryDetails(String outcome) {
@@ -285,6 +303,17 @@ class _MotherDashboardState extends State<MotherDashboard> {
         throw Exception(
             'Mother ID not found. Please log out and log in again.');
       }
+      _motherId = motherId;
+
+      // Started now and collected at the end, so the Td reads run alongside
+      // the rest of the page instead of after it. fetchStatus reports its own
+      // failures through readFailed; the onError is only a backstop so a stray
+      // throw cannot take the whole page down with it.
+      final tdFuture = MaternalTdService.fetchStatus(motherId)
+          .then<MaternalTdStatus?>((s) => s, onError: (Object e) {
+        debugPrint('Td status failed to load: $e');
+        return null;
+      });
 
       // Check if mother is linked to a BHC and fetch height
       final motherResponse = await SupabaseService.client
@@ -389,6 +418,16 @@ class _MotherDashboardState extends State<MotherDashboard> {
         }
       }
 
+      // After the pregnancy block: whether she is pregnant, and how far along,
+      // decides what the Td alert says.
+      final tdStatus = await tdFuture;
+      _tdStatus = tdStatus;
+      _tdAlert = tdStatus == null
+          ? null
+          : MaternalTdAlert.evaluate(tdStatus,
+              isPregnant: _hasPregnancy, week: _week);
+
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -1627,6 +1666,425 @@ class _MotherDashboardState extends State<MotherDashboard> {
     );
   }
 
+  void _openHotlines() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const HotlinesScreen()),
+    );
+  }
+
+  /// The way to her hotlines, now that they are not a tab.
+  ///
+  /// Directly under the greeting, where the bottom-bar tab used to keep them:
+  /// one tap from opening the app, without scrolling. A slim row rather than a
+  /// card, so it does not compete with her week and her baby below it, and
+  /// worded "numbers to call" rather than "emergency" for the same reason the
+  /// page it opens is.
+  ///
+  /// Also shown on the error view: these are fixed numbers, and the moment
+  /// the page cannot load — no signal, say — is not the moment to lose them.
+  Widget _buildHotlinesRow() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: _openHotlines,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: AppColors.cardColorOf(context),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.borderPrimary),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.phone_in_talk_rounded,
+                  size: 18,
+                  color: AppColors.error,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _t('Hotlines', 'Hotlines'),
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _t('Numbers to call and warning signs',
+                          'Mga numerong matatawagan at babalang senyales'),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 22,
+                color: AppColors.textSecondary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Her Td record, read-only — the same screen her profile opens.
+  void _openTdRecord() {
+    final motherId = _motherId;
+    if (motherId == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MaternalTdScreen(
+          motherId: motherId,
+          motherName: _firstName.isNotEmpty ? _firstName : null,
+          readOnly: true,
+        ),
+      ),
+    );
+  }
+
+  /// A Td dose that is due, at the top of the page.
+  ///
+  /// Only for due and urgent. A dose opening in a week or two is not
+  /// something to act on today, so that one lives on the Td card and in her
+  /// notifications instead of pushing her week down the page.
+  ///
+  /// Due can be put away for the session, like the vitals banner. Urgent —
+  /// late in pregnancy with her baby not yet protected at birth — cannot.
+  Widget _buildTdAlertBanner(MaternalTdAlert alert) {
+    final isUrgent = alert.level == TdAlertLevel.urgent;
+    final color = isUrgent ? AppColors.error : AppColors.warning;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: _openTdRecord,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.vaccines_rounded, color: color, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      alert.title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  if (!isUrgent)
+                    IconButton(
+                      icon: const Icon(Icons.close,
+                          size: 18, color: AppColors.textSecondary),
+                      onPressed: () =>
+                          setState(() => _isTdBannerDismissed = true),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: _t('Hide for now', 'Itago muna'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                alert.message,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text(
+                    _t('View my Td record', 'Tingnan ang aking Td record'),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isUrgent ? AppColors.error : AppColors.brandText,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 16,
+                    color: isUrgent ? AppColors.error : AppColors.brandText,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Her Td series at a glance, and the way into the full record.
+  ///
+  /// Shown whether or not she is pregnant or linked, like the button on her
+  /// profile: Td is a lifetime five-dose series, and the doses she is owed
+  /// carry over between pregnancies. If the record could not be read it says
+  /// so rather than showing zero doses — "no doses" is a clinical statement,
+  /// "not loaded" is not.
+  Widget _buildTdCard() {
+    // Null when not loaded or not readable, so a failed read can never be
+    // mistaken below for a record with no doses in it.
+    final loaded = _tdStatus;
+    final status = loaded != null && !loaded.readFailed ? loaded : null;
+    final dateFormat = DateFormat('MMM d, yyyy');
+    final today = DateTime.now();
+
+    // The status line: one fact, coloured by whether it is good news.
+    String statusText;
+    Color statusColor;
+    IconData statusIcon;
+    if (status == null) {
+      statusText = _t('Could not load your Td record. Tap to open it.',
+          'Hindi ma-load ang iyong Td record. I-tap para buksan.');
+      statusColor = AppColors.textSecondary;
+      statusIcon = Icons.cloud_off_rounded;
+    } else if (status.isFim) {
+      statusText = _t('Fully immunized — lifetime protection',
+          'Kumpleto ang bakuna — panghabambuhay na proteksyon');
+      statusColor = const Color(0xFF3A9E8B);
+      statusIcon = Icons.verified_rounded;
+    } else if (status.completedCount == 0) {
+      statusText = _t('No Td doses on record yet',
+          'Wala pang naitalang Td dose');
+      statusColor = AppColors.textSecondary;
+      statusIcon = Icons.info_outline_rounded;
+    } else if (status.isProtectedAtBirth) {
+      final until = status.protectionUntil;
+      final base = _hasPregnancy
+          ? _t('Baby protected at birth', 'Protektado ang sanggol pagkapanganak')
+          : _t('Protected against tetanus', 'Protektado laban sa tetano');
+      statusText = until == null
+          ? base
+          : '$base · ${_t('until', 'hanggang')} ${dateFormat.format(until)}';
+      statusColor = const Color(0xFF3A9E8B);
+      statusIcon = Icons.shield_rounded;
+    } else if (status.highestCompletedDose >= 2 &&
+        status.protectionUntil != null &&
+        status.protectionUntil!.isBefore(today)) {
+      statusText =
+          '${_t('Protection ended', 'Natapos ang proteksyon noong')} ${dateFormat.format(status.protectionUntil!)}';
+      statusColor = AppColors.warning;
+      statusIcon = Icons.shield_outlined;
+    } else {
+      statusText = _hasPregnancy
+          ? _t('Baby not yet protected at birth',
+              'Hindi pa protektado ang sanggol pagkapanganak')
+          : _t('Not yet protected', 'Hindi pa protektado');
+      statusColor = AppColors.warning;
+      statusIcon = Icons.shield_outlined;
+    }
+
+    // The next step, when there is one.
+    String? nextText;
+    Color nextColor = AppColors.textPrimary;
+    if (status != null && status.nextDoseKey != null) {
+      final next = 'Td ${status.nextDoseKey!.substring(2)}';
+      switch (status.nextAction) {
+        case TdNextAction.eligibleNow:
+          if (status.nextDoseKey == 'Td1' && !_hasPregnancy) {
+            nextText = _t('Next: $next — given during pregnancy',
+                'Susunod: $next — ibinibigay habang buntis');
+          } else {
+            nextText = _t('Next: $next — due now', 'Susunod: $next — takda na');
+            nextColor = _tdAlert?.level == TdAlertLevel.urgent
+                ? AppColors.error
+                : AppColors.brandText;
+          }
+          break;
+        case TdNextAction.waiting:
+          final on = status.nextEligibleDate;
+          final days = status.daysUntilEligible;
+          nextText = on == null
+              ? _t('Next: $next', 'Susunod: $next')
+              : _t(
+                  'Next: $next — from ${dateFormat.format(on)} (in $days ${days == 1 ? 'day' : 'days'})',
+                  'Susunod: $next — simula ${dateFormat.format(on)} (sa loob ng $days araw)');
+          break;
+        case TdNextAction.missingPrevious:
+          final blocking = status.blockingDoseKey;
+          final label = blocking == null ? '' : 'Td ${blocking.substring(2)} ';
+          nextText = _t(
+              'Ask your midwife to complete your ${label}record before $next',
+              'Ipakumpleto sa midwife ang iyong ${label}record bago ang $next');
+          nextColor = AppColors.textSecondary;
+          break;
+        case TdNextAction.complete:
+          break;
+      }
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: _openTdRecord,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.cardColorOf(context),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.brandPrimary.withValues(alpha: 0.15),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // The app's section label, as on the baby-size card.
+              Row(
+                children: [
+                  const Icon(Icons.vaccines_rounded,
+                      size: 14, color: AppColors.brandPrimary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _t('Td Vaccine (Tetanus)', 'Td Bakuna (Tetano)')
+                          .toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                        color: Color(0xFF5A5A5A),
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 22,
+                    color: AppColors.textSecondary,
+                  ),
+                ],
+              ),
+              if (status != null) ...[
+                const SizedBox(height: 10),
+                // Five dots for the five doses, filled by the dose actually on
+                // file — Td1 and Td3 recorded shows the gap where Td2 is.
+                Row(
+                  children: [
+                    for (final def in MaternalTdService.doseDefs) ...[
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: status.has(def.key)
+                              ? AppColors.brandPrimary
+                              : AppColors.brandPrimary.withValues(alpha: 0.12),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    const SizedBox(width: 4),
+                    Text(
+                      _t('${status.completedCount} of 5 doses',
+                          '${status.completedCount} sa 5 na dose'),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(statusIcon, size: 16, color: statusColor),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (nextText != null) ...[
+                const SizedBox(height: 6),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.event_rounded, size: 16, color: nextColor),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        nextText,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: nextColor,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Individual mode, stated once and quietly.
   ///
   /// This was a warning-coloured banner at the very top of the dashboard,
@@ -2644,14 +3102,26 @@ class _MotherDashboardState extends State<MotherDashboard> {
 
                             // The greeting had no gap after it at all, so the
                             // hero card sat directly under the stage line.
-                            // A banner, when one appears, adds its own 16 on
-                            // top of this — which is right: an exceptional
-                            // state should be set apart, not tucked in.
                             const SizedBox(height: 20),
 
-                            if (_isVitalsIncomplete && !_isVitalsBannerDismissed) ...[
+                            // Where the Hotlines tab used to be: one tap from
+                            // opening the app. See _buildHotlinesRow.
+                            _buildHotlinesRow(),
+                            const SizedBox(height: 16),
+
+                            // Banners carry their gap below them, so two in a
+                            // row are spaced like any other cards and the last
+                            // one does not sit flush on the hero.
+                            if (_tdAlert != null &&
+                                _tdAlert!.level != TdAlertLevel.soon &&
+                                !_isTdBannerDismissed) ...[
+                              _buildTdAlertBanner(_tdAlert!),
                               const SizedBox(height: 16),
+                            ],
+
+                            if (_isVitalsIncomplete && !_isVitalsBannerDismissed) ...[
                               _buildVitalsIncompleteBanner(),
+                              const SizedBox(height: 16),
                             ],
 
                             // Her news comes before the clinic's. Greeting,
@@ -2691,6 +3161,12 @@ class _MotherDashboardState extends State<MotherDashboard> {
                               const SizedBox(height: 16),
                               _buildNextScheduleCard(),
                             ],
+
+                            // Beside her next visit, since that is where a due
+                            // dose gets given. Not gated on a pregnancy or a
+                            // health centre; see _buildTdCard.
+                            const SizedBox(height: 16),
+                            _buildTdCard(),
 
                             // One card, not two. "My Vitals & Weight Gain"
                             // followed by "Weight Gain Analysis" read as the
@@ -3403,6 +3879,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
               ),
               child: Text(_t('Retry', 'Subukan Muli')),
             ),
+            const SizedBox(height: 32),
+            _buildHotlinesRow(),
           ],
         ),
       ),

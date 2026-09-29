@@ -3,9 +3,9 @@
 // Children and Records need a health centre behind them — everything on those
 // pages is entered by a midwife — so they are hidden until she is assigned to
 // one. Hiding a tab from a fixed list is where this goes wrong: the tabs, the
-// page stack and the header title were three parallel five-element lists all
-// indexed by the same integer, so removing Children silently turned index 3
-// from Records into Hotlines and index 4 into a range error.
+// page stack and the header title were parallel fixed-length lists all indexed
+// by the same integer, so removing Children silently shifted every tab after
+// it and turned the last index into a range error.
 //
 // The source is scanned rather than the widget rendered because the shell
 // needs a signed-in mother and a live database to build at all.
@@ -15,6 +15,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 const _shell = 'lib/screens/mother/mother_dashboard_shell.dart';
+const _home = 'lib/screens/mother/mother_dashboard.dart';
 
 String _codeOf(String path) {
   final file = File(path);
@@ -69,17 +70,25 @@ void main() {
     });
 
     test('emergency hotlines are never taken away', () {
-      final source = _codeOf(_shell);
-
       // A mother with no health centre is the one with no midwife to call.
       // Whatever else gets gated, this must not.
-      final hotlinesBlock = source.substring(
-        source.indexOf('hotlines('),
-        source.indexOf('hotlines(') + 220,
-      );
-      expect(hotlinesBlock.contains('requiresBhc'), isFalse,
-          reason: 'hotlines is emergency contact information and must stay '
-              'reachable without a health centre');
+      //
+      // Hotlines is not a tab: it opens from Home, which is never gated (see
+      // the next test). So the guard is that Home really opens it, from the
+      // page and from the error view both — a failed load is no reason to
+      // lose a list of fixed phone numbers.
+      final home = _codeOf(_home);
+      expect(home, contains('HotlinesScreen()'),
+          reason: 'Home must open the Hotlines page');
+      // Calls end in a comma; the definition ends in a brace.
+      expect('_buildHotlinesRow(),'.allMatches(home).length,
+          greaterThanOrEqualTo(2),
+          reason: 'the hotlines row must be on the page and the error view');
+
+      // And it has not come back as a tab, where it could be gated again.
+      final shell = _codeOf(_shell);
+      expect(shell.contains('hotlines('), isFalse,
+          reason: 'Hotlines opens from Home, not from the bottom bar');
     });
 
     test('home and journal stay reachable too', () {

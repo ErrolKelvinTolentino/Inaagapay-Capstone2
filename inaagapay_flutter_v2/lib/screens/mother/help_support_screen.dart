@@ -4,7 +4,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
 import '../../services/language_service.dart';
 import '../../services/auth_storage.dart';
-import '../../widgets/main_button.dart';
 import '../../widgets/secondary_header.dart';
 
 class HelpSupportScreen extends StatefulWidget {
@@ -98,13 +97,6 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   Future<void> _sendSms(String phone) async {
     if (phone.isEmpty) return;
     final Uri uri = Uri(scheme: 'sms', path: phone);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
-  }
-
-  Future<void> _sendEmail(String email) async {
-    final Uri uri = Uri(scheme: 'mailto', path: email, query: 'subject=Inaagapay App Support');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     }
@@ -591,19 +583,16 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             ),
           ),
           const SizedBox(height: 6),
+          // No "Email App Support" button: the address it opened was never a
+          // real inbox. Her midwife is the one who can reset a password or fix
+          // her record, and is already one tap away at the top of this page.
           Text(
             _t(
-              'If you are experiencing issues with the app, passwords, or offline synchronization, contact our technical support team.',
-              'Kung nakararanas ng problema sa app, password, o synchronization, makipag-ugnayan sa aming technical support team.',
+              'If you are having trouble with the app or your password, call or text your midwife from the top of this page, or visit your Barangay Health Center.',
+              'Kung may problema sa app o sa iyong password, tawagan o i-text ang iyong midwife mula sa itaas ng pahinang ito, o pumunta sa inyong Barangay Health Center.',
             ),
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary, height: 1.4),
-          ),
-          const SizedBox(height: 20),
-          MainButton(
-            onPressed: () => _sendEmail('support@inaagapay.gov.ph'),
-            leftIcon: Icons.email_outlined,
-            label: _t('Email App Support', 'I-email ang App Support'),
           ),
           const SizedBox(height: 16),
           const Text(

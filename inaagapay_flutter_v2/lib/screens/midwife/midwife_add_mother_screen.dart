@@ -1754,6 +1754,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         result = await SupabaseService.updateExistingMotherAccount(
           motherId: _existingMotherId!,
           assignedBhcId: _assignedBhcId!,
+          midwifeId: _midwifeId,
           houseNumber: _houseCtrl.text.trim(),
           street: _streetCtrl.text.trim(),
           barangay: _selectedBarangay,

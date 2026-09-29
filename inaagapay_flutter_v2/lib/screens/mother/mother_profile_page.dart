@@ -29,6 +29,7 @@ import '../../services/lab_test_reference.dart';
 import '../../services/fetal_heart_rate_reference.dart';
 import '../../services/maternal_td_service.dart';
 import '../../widgets/branded_date_picker.dart';
+import '../../widgets/dispose_on_unmount.dart';
 import '../../widgets/transfer_mother_sheet.dart';
 
 // Blood type is no longer chosen on this screen, so the option list that used
@@ -2578,7 +2579,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     // still on screen playing its exit animation and still rebuilding its text
     // fields — which then threw "A TextEditingController was used after being
     // disposed", followed by a `_dependents.isEmpty` assertion as the tree came
-    // down. _DisposeOnUnmount hands the job to the framework instead, which
+    // down. DisposeOnUnmount hands the job to the framework instead, which
     // runs it once the sheet has actually left the tree.
     void disposeControllers() {
       for (final pc in placeControllers) {
@@ -2594,7 +2595,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return _DisposeOnUnmount(
+        return DisposeOnUnmount(
           onDispose: disposeControllers,
           child: StatefulBuilder(
           builder: (ctx, setModal) {
@@ -3596,7 +3597,13 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        return Dialog(
+        return DisposeOnUnmount(
+          onDispose: () {
+            nameCtrl.dispose();
+            remarksCtrl.dispose();
+            diagDateCtrl.dispose();
+          },
+          child: Dialog(
           backgroundColor: Colors.white,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
@@ -3611,7 +3618,7 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 final alreadyAdded = _currentMedicalConditions
                     .where((c) =>
                         prefill == null ||
-                        c['medical_condition_id'] != prefill['medical_condition_id'])
+                        c['med_condition_id'] != prefill['med_condition_id'])
                     .map((c) => c['condition_name']?.toString().toLowerCase())
                     .toSet();
                 
@@ -3836,29 +3843,34 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               },
             ),
           ),
+          ),
         );
       },
     );
 
-    nameCtrl.dispose();
-    remarksCtrl.dispose();
-    diagDateCtrl.dispose();
+    // Read now, while the dialog is still animating out. DisposeOnUnmount
+    // frees the controllers once it has actually gone.
+    final savedName = nameCtrl.text.trim();
+    final savedRemarks = remarksCtrl.text.trim();
 
     if (result == true) {
       try {
         final Map<String, dynamic> data = {
-          'condition_name': nameCtrl.text.trim(),
+          'condition_name': savedName,
           'status': status,
           'diagnosis_date': diagDate?.toIso8601String().split('T')[0],
-          'remarks': remarksCtrl.text.trim().isEmpty ? null : remarksCtrl.text.trim(),
+          'remarks': savedRemarks.isEmpty ? null : savedRemarks,
         };
 
         if (prefill != null) {
-          final condId = prefill['medical_condition_id'];
+          // med_condition_id is the column's real name. The longer spelling
+          // used here before read back null, and passing null to .eq() threw
+          // "type 'Null' is not a subtype of type 'Object'".
+          final condId = prefill['med_condition_id'];
           await SupabaseService.client
               .from('medical_conditions')
               .update(data)
-              .eq('medical_condition_id', condId);
+              .eq('med_condition_id', condId);
         } else {
           data['mother_id'] = widget.motherId;
           await SupabaseService.client
@@ -3912,10 +3924,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
     );
     if (confirmed == true) {
       try {
-        final conditionId = condition['medical_condition_id'];
+        final conditionId = condition['med_condition_id'];
         if (conditionId != null) {
           await SupabaseService.client.from('medical_conditions').update(
-              {'status': 'resolved'}).eq('medical_condition_id', conditionId);
+              {'status': 'resolved'}).eq('med_condition_id', conditionId);
           _refresh();
         }
       } catch (e) {
@@ -3943,7 +3955,14 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        return Dialog(
+        return DisposeOnUnmount(
+          onDispose: () {
+            allergenCtrl.dispose();
+            treatmentCtrl.dispose();
+            remarksCtrl.dispose();
+            diagDateCtrl.dispose();
+          },
+          child: Dialog(
           backgroundColor: Colors.white,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
@@ -4185,23 +4204,25 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               },
             ),
           ),
+          ),
         );
       },
     );
 
-    allergenCtrl.dispose();
-    treatmentCtrl.dispose();
-    remarksCtrl.dispose();
-    diagDateCtrl.dispose();
+    // Read now, while the dialog is still animating out. DisposeOnUnmount
+    // frees the controllers once it has actually gone.
+    final savedAllergen = allergenCtrl.text.trim();
+    final savedTreatment = treatmentCtrl.text.trim();
+    final savedRemarks = remarksCtrl.text.trim();
 
     if (result == true) {
       try {
         final Map<String, dynamic> data = {
-          'allergen': allergenCtrl.text.trim(),
+          'allergen': savedAllergen,
           'status': status,
           'diagnosis_date': diagDate?.toIso8601String().split('T')[0],
-          'treatment': treatmentCtrl.text.trim().isEmpty ? null : treatmentCtrl.text.trim(),
-          'remarks': remarksCtrl.text.trim().isEmpty ? null : remarksCtrl.text.trim(),
+          'treatment': savedTreatment.isEmpty ? null : savedTreatment,
+          'remarks': savedRemarks.isEmpty ? null : savedRemarks,
         };
 
         if (prefill != null) {
@@ -4313,7 +4334,15 @@ class _MotherProfilePageState extends State<MotherProfilePage>
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        return Dialog(
+        return DisposeOnUnmount(
+          onDispose: () {
+            firstNameCtrl.dispose();
+            lastNameCtrl.dispose();
+            phoneCtrl.dispose();
+            relationshipCtrl.dispose();
+            customRelationshipCtrl.dispose();
+          },
+          child: Dialog(
           backgroundColor: Colors.white,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
@@ -4490,26 +4519,26 @@ class _MotherProfilePageState extends State<MotherProfilePage>
               },
             ),
           ),
+          ),
         );
       },
     );
 
-    firstNameCtrl.dispose();
-    lastNameCtrl.dispose();
-    phoneCtrl.dispose();
-    relationshipCtrl.dispose();
-    customRelationshipCtrl.dispose();
+    // Read now, while the dialog is still animating out. DisposeOnUnmount
+    // frees the controllers once it has actually gone.
+    final savedFirstName = firstNameCtrl.text.trim();
+    final savedLastName = lastNameCtrl.text.trim();
+    final savedPhone = phoneCtrl.text.trim();
+    final finalRel = relationshipCtrl.text == 'Other'
+        ? customRelationshipCtrl.text.trim()
+        : relationshipCtrl.text.trim();
 
     if (result == true) {
-      final finalRel = relationshipCtrl.text == 'Other'
-          ? customRelationshipCtrl.text.trim()
-          : relationshipCtrl.text.trim();
-
       try {
         final Map<String, dynamic> data = {
-          'first_name': firstNameCtrl.text.trim(),
-          'last_name': lastNameCtrl.text.trim(),
-          'phone_number': phoneCtrl.text.trim(),
+          'first_name': savedFirstName,
+          'last_name': savedLastName,
+          'phone_number': savedPhone,
           'affiliation': finalRel,
         };
 
@@ -5237,16 +5266,17 @@ class _MotherProfilePageState extends State<MotherProfilePage>
         ProfileInfoRow(
           icon: Icons.person_outline,
           label: 'Registered by',
+          // "Not recorded" rather than a dash, matching the child profile: a
+          // mother who signed herself up and has not been linked yet has no
+          // registering midwife, and a bare dash read as a loading failure.
           value: () {
-            String rbName = '—';
-            if (profile['registered_by'] != null) {
-              final rb = profile['registered_by'] as Map<String, dynamic>;
-              final account = rb['account'] as Map<String, dynamic>?;
-              if (account != null) {
-                rbName = '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'.trim();
-              }
-            }
-            return rbName;
+            final rb = profile['registered_by'];
+            final account = rb is Map ? rb['account'] : null;
+            if (account is! Map) return 'Not recorded';
+            final name =
+                '${account['first_name'] ?? ''} ${account['last_name'] ?? ''}'
+                    .trim();
+            return name.isEmpty ? 'Not recorded' : name;
           }(),
         ),
       ],
@@ -7587,34 +7617,24 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                 ),
                 const SizedBox(width: 14),
               ],
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: () {},
-                icon: const Icon(Icons.notifications_none_rounded,
-                    size: 24, color: AppColors.textPrimary),
-              ),
-              const SizedBox(width: 14),
+              // The midwife's account menu, as on every other midwife screen —
+              // so it wears the same plain avatar rather than the mother's
+              // photo, which made "View Profile" look like it belonged to her.
+              // Her photo is already on the profile card below.
+              //
+              // No notification bell here: it had no handler, and this page is
+              // one mother's chart, not the midwife's inbox.
               GestureDetector(
                 onTap: () => _showProfileMenu(context),
                 child: Container(
                   width: 36,
                   height: 36,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     color: AppColors.brandPrimary,
-                    image: _profilePictureUrl != null &&
-                            _profilePictureUrl!.isNotEmpty
-                        ? DecorationImage(
-                            image: NetworkImage(_profilePictureUrl!),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
                   ),
-                  child: _profilePictureUrl == null ||
-                          _profilePictureUrl!.isEmpty
-                      ? const Icon(Icons.person, size: 20, color: Colors.white)
-                      : null,
+                  child:
+                      const Icon(Icons.person, size: 20, color: Colors.white),
                 ),
               ),
             ],
@@ -7656,7 +7676,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                     _MenuItem(
                         icon: Icons.person_outline,
                         label: 'View Profile',
-                        onTap: () => entry.remove()),
+                        onTap: () {
+                          entry.remove();
+                          Navigator.pushNamed(context, '/profile');
+                        }),
                     _MenuItem(
                         icon: Icons.settings_outlined,
                         label: 'Settings',
@@ -8180,33 +8203,4 @@ class _MenuItem extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Runs [onDispose] when this subtree leaves the widget tree.
-///
-/// The point is timing. A modal sheet's future completes when the route is
-/// popped, not when the sheet is gone — its text fields keep rebuilding through
-/// the exit animation. Anything the sheet's fields still point at has to
-/// outlive that, and the framework already knows exactly when the tree is torn
-/// down, so the cleanup is hung off a State's dispose rather than guessed at
-/// with a delay.
-class _DisposeOnUnmount extends StatefulWidget {
-  const _DisposeOnUnmount({required this.onDispose, required this.child});
-
-  final VoidCallback onDispose;
-  final Widget child;
-
-  @override
-  State<_DisposeOnUnmount> createState() => _DisposeOnUnmountState();
-}
-
-class _DisposeOnUnmountState extends State<_DisposeOnUnmount> {
-  @override
-  void dispose() {
-    widget.onDispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.child;
 }

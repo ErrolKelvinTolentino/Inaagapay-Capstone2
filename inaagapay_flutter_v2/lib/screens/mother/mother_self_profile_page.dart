@@ -17,6 +17,7 @@ import '../../widgets/app_input_field.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/branded_date_picker.dart';
 import '../../widgets/contact_change_sheet.dart';
+import '../../widgets/dispose_on_unmount.dart';
 import '../../services/auth_storage.dart';
 import '../../services/contact_change_service.dart';
 
@@ -1060,7 +1061,13 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        return Dialog(
+        return DisposeOnUnmount(
+          onDispose: () {
+            nameCtrl.dispose();
+            remarksCtrl.dispose();
+            diagDateCtrl.dispose();
+          },
+          child: Dialog(
           backgroundColor: Colors.white,
           insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
@@ -1074,7 +1081,7 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
                 final alreadyAdded = medicalConditions
                     .where((c) =>
                         prefill == null ||
-                        c['medical_condition_id'] != prefill['medical_condition_id'])
+                        c['med_condition_id'] != prefill['med_condition_id'])
                     .map((c) => c['condition_name']?.toString().toLowerCase())
                     .toSet();
 
@@ -1295,15 +1302,15 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
               },
             ),
           ),
+          ),
         );
       },
     );
 
+    // Read now, while the dialog is still animating out. DisposeOnUnmount
+    // frees the controllers once it has actually gone.
     final savedName = nameCtrl.text.trim();
     final savedRemarks = remarksCtrl.text.trim();
-    nameCtrl.dispose();
-    remarksCtrl.dispose();
-    diagDateCtrl.dispose();
 
     if (result == true) {
       try {
@@ -1315,11 +1322,13 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
         };
 
         if (prefill != null) {
-          final condId = prefill['medical_condition_id'];
+          // med_condition_id is the column's real name; the longer spelling
+          // read back null and .eq() threw on it.
+          final condId = prefill['med_condition_id'];
           await SupabaseService.client
               .from('medical_conditions')
               .update(data)
-              .eq('medical_condition_id', condId);
+              .eq('med_condition_id', condId);
         } else {
           data['mother_id'] = widget.motherId;
           await SupabaseService.client
@@ -1366,12 +1375,12 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
     );
     if (confirmed == true) {
       try {
-        final conditionId = condition['medical_condition_id'];
+        final conditionId = condition['med_condition_id'];
         if (conditionId != null) {
           await SupabaseService.client
               .from('medical_conditions')
               .update({'status': 'resolved'})
-              .eq('medical_condition_id', conditionId);
+              .eq('med_condition_id', conditionId);
           _refresh();
         }
       } catch (e) {
@@ -1544,7 +1553,14 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        return Dialog(
+        return DisposeOnUnmount(
+          onDispose: () {
+            allergenCtrl.dispose();
+            treatmentCtrl.dispose();
+            remarksCtrl.dispose();
+            diagDateCtrl.dispose();
+          },
+          child: Dialog(
           backgroundColor: Colors.white,
           insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
@@ -1781,17 +1797,16 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
               },
             ),
           ),
+          ),
         );
       },
     );
 
+    // Read now, while the dialog is still animating out. DisposeOnUnmount
+    // frees the controllers once it has actually gone.
     final savedAllergen = allergenCtrl.text.trim();
     final savedTreatment = treatmentCtrl.text.trim();
     final savedRemarks = remarksCtrl.text.trim();
-    allergenCtrl.dispose();
-    treatmentCtrl.dispose();
-    remarksCtrl.dispose();
-    diagDateCtrl.dispose();
 
     if (result == true) {
       try {
@@ -2050,7 +2065,15 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        return Dialog(
+        return DisposeOnUnmount(
+          onDispose: () {
+            firstNameCtrl.dispose();
+            lastNameCtrl.dispose();
+            phoneCtrl.dispose();
+            relationshipCtrl.dispose();
+            customRelationshipCtrl.dispose();
+          },
+          child: Dialog(
           backgroundColor: Colors.white,
           insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
@@ -2226,22 +2249,19 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
               },
             ),
           ),
+          ),
         );
       },
     );
 
+    // Read now, while the dialog is still animating out. DisposeOnUnmount
+    // frees the controllers once it has actually gone.
     final savedFirstName = firstNameCtrl.text.trim();
     final savedLastName = lastNameCtrl.text.trim();
     final savedPhone = phoneCtrl.text.trim();
     final savedRel = relationshipCtrl.text == 'Other'
         ? customRelationshipCtrl.text.trim()
         : relationshipCtrl.text.trim();
-
-    firstNameCtrl.dispose();
-    lastNameCtrl.dispose();
-    phoneCtrl.dispose();
-    relationshipCtrl.dispose();
-    customRelationshipCtrl.dispose();
 
     if (result == true) {
       try {

@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/auth_storage.dart';
 import '../../services/groq_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_snackbar.dart';
@@ -929,6 +930,17 @@ class _AddUltrasoundPageState extends State<AddUltrasoundPage> {
           });
         } catch (_) {}
       }
+
+      // The checkup screen told her about a new checkup; this one never did,
+      // so an ultrasound only turned up if she happened to open her records.
+      await NotificationService.notifyMother(
+        motherId: widget.motherId,
+        title: 'Ultrasound Recorded',
+        message: 'Your ultrasound from '
+            '${DateFormat('MMMM d, yyyy').format(_date!)} has been added to '
+            'your records.',
+        type: 'checkup_reminder',
+      );
 
       if (!mounted) return;
       _showMessage('Ultrasound record saved successfully.', type: AppSnackType.success);

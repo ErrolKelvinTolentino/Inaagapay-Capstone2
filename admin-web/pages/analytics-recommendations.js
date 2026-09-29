@@ -296,7 +296,7 @@
 
         if (ready.length === 0 && short.length === 0) {
           // Nothing recognisable in the catalogue at all.
-          action = "Schedule an immunisation catch-up session at " + place +
+          action = "Schedule an immunization catch-up session at " + place +
                    " and confirm dose availability with the pharmacy before inviting families.";
           feasibility = {
             state: "unknown",
@@ -332,10 +332,10 @@
         out.push({
           id: "coverage:" + facilityId,
           severity: severity,
-          domain: "Immunisation",
+          domain: "Immunization",
           icon: "fa-syringe",
           place: place,
-          headline: place + " is at " + rate + "% fully immunised",
+          headline: place + " is at " + rate + "% fully immunized",
           finding:
             bucket.fic + " of " + bucket.eligible + " children who have passed their first birthday " +
             "completed the schedule, against the " + T.FIC_TARGET + "% national target. " +
@@ -346,7 +346,7 @@
           action: action,
           feasibility: feasibility,
           evidence: [
-            { label: "Fully immunised", value: rate + "%", tone: severity },
+            { label: "Fully immunized", value: rate + "%", tone: severity },
             { label: "Children behind", value: String(behind) },
             { label: "Most-missed antigen", value: antigens.length ? antigens[0].label : "—" },
           ],
@@ -361,7 +361,7 @@
         out.push({
           id: "overdue:" + facilityId,
           severity: "warning",
-          domain: "Immunisation",
+          domain: "Immunization",
           icon: "fa-user-clock",
           place: place,
           headline: behind + " " + plural(behind, "child", "children") + " overdue in " + place,
@@ -372,7 +372,7 @@
             (antigens.length ? ", most often " + antigens[0].label : "") + ".",
           action:
             "Give the list to the barangay health workers for home visits, and book the catch-up doses " +
-            "into the next immunisation day at " + place + ".",
+            "into the next immunization day at " + place + ".",
           evidence: [
             { label: "Overdue children", value: String(behind), tone: "warning" },
             { label: "Coverage", value: rate === null ? "—" : rate + "%" },

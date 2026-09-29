@@ -2,13 +2,11 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/danger_signs_card.dart';
 import '../../services/auth_storage.dart';
 import '../../services/language_service.dart';
+import '../../services/maternal_td_alert.dart';
 import '../../services/supabase_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/push_notification_service.dart';
@@ -30,9 +28,9 @@ import '../../widgets/main_button.dart';
 /// empty pages, and it makes the reason she cannot see them a single fact
 /// rather than five separate empty states.
 ///
-/// Hotlines is deliberately *not* gated. It is emergency contact information,
-/// and an unregistered mother is precisely the one with no midwife to call —
-/// she needs it more than a registered mother, not less.
+/// Hotlines is no longer a tab: it opens from a card on Home. Home is never
+/// gated, so the numbers stay reachable for an unregistered mother, who is
+/// precisely the one with no midwife to call.
 enum _MotherTab {
   home(
     icon: Icons.home_outlined,
@@ -59,12 +57,6 @@ enum _MotherTab {
     labelEnglish: 'Records',
     labelFilipino: 'Mga Tala',
     requiresBhc: true,
-  ),
-  hotlines(
-    icon: Icons.phone_outlined,
-    activeIcon: Icons.phone,
-    labelEnglish: 'Hotlines',
-    labelFilipino: 'Hotlines',
   );
 
   const _MotherTab({
@@ -108,9 +100,9 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
   /// The tabs she can currently reach, in order.
   ///
   /// `_currentIndex` indexes into *this*, not into [_MotherTab.values] — which
-  /// is the whole reason the tabs are modelled rather than written out five
-  /// times. With hardcoded positions, hiding Children would silently turn
-  /// index 3 from Records into Hotlines and index 4 into a range error.
+  /// is the whole reason the tabs are modelled rather than written out one by
+  /// one. With hardcoded positions, hiding Children would silently turn
+  /// index 2 from Children into Records and index 3 into a range error.
   List<_MotherTab> get _visibleTabs => _MotherTab.values
       .where((tab) => !tab.requiresBhc || _isBhcRegistered)
       .toList();
@@ -125,8 +117,6 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
         return const MotherChildrenScreen();
       case _MotherTab.records:
         return const RecordsScreen();
-      case _MotherTab.hotlines:
-        return const _HotlinesScreen();
     }
   }
 
@@ -210,14 +200,28 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
     // This added 1 unconditionally, so an unlinked mother's bell carried a
     // badge she could never clear — she could open the page, read the notice,
     // and come back to the same red dot for the rest of her pregnancy.
+    //
+    // The Td notice follows the same rule, keyed per dose and level (see
+    // MaternalTdAlert.noticeType), so reading "Td 2 is due" does not silence
+    // the Td 3 notice that comes later.
+    final motherId = await AuthStorage.getMotherId();
+    final tdAlert =
+        motherId == null ? null : await MaternalTdAlert.loadFor(motherId);
     var localUnread = 0;
-    if (unlinked) {
+    if (unlinked || tdAlert != null) {
+      Set<String> readIds;
       try {
-        final readIds = await AuthStorage.getReadAlertIds(accountId);
-        if (!readIds.contains('mother_notice_unlinked_bhc')) localUnread = 1;
+        readIds = (await AuthStorage.getReadAlertIds(accountId)).toSet();
       } catch (e) {
         debugPrint('Could not read notice state: $e');
-        localUnread = 1;
+        readIds = <String>{};
+      }
+      if (unlinked && !readIds.contains('mother_notice_unlinked_bhc')) {
+        localUnread++;
+      }
+      if (tdAlert != null &&
+          !readIds.contains('mother_notice_${tdAlert.noticeType}')) {
+        localUnread++;
       }
     }
 
@@ -689,10 +693,10 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
     return ValueListenableBuilder<AppLanguage>(
       valueListenable: LanguageService.selectedLanguage,
       builder: (context, language, _) {
-        // Driven off the same list as the tabs. As a fixed five-element array
-        // indexed by _currentIndex, this would have captioned Hotlines
-        // "CHILDREN" the moment a tab was hidden — the header and the page
-        // disagreeing with no error to notice.
+        // Driven off the same list as the tabs. As a fixed array indexed by
+        // _currentIndex, this would have captioned Records "CHILDREN" the
+        // moment a tab was hidden — the header and the page disagreeing with
+        // no error to notice.
         final tabs = _visibleTabs;
         final titles = tabs
             .map((tab) => LanguageService.translate(
@@ -999,235 +1003,6 @@ class _MenuItem extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HotlinesScreen extends StatelessWidget {
-  const _HotlinesScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppLanguage>(
-      valueListenable: LanguageService.selectedLanguage,
-      builder: (context, _, __) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                LanguageService.translate(
-                  'Numbers to call',
-                  'Mga numerong matatawagan',
-                ),
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  // Brand pink, like every other page heading on her side.
-                  // "EMERGENCY HOTLINES" in near-black w800 greeted her with
-                  // the word emergency before she had asked anything.
-                  color: AppColors.brandText,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                LanguageService.translate(
-                  'Tap a number to call it. Hold it down to copy.',
-                  'I-tap ang numero para tumawag. Pindutin nang matagal para kopyahin.',
-                ),
-                style: const TextStyle(
-                  fontSize: 13.5,
-                  height: 1.4,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Placed above the numbers on purpose. Someone who opens this
-              // tab is already worried but may not know whether what she is
-              // feeling warrants a call. Answering that comes before giving
-              // her a number to dial.
-              const DangerSignsCard(),
-              const SizedBox(height: 16),
-
-              _HotlineButton(
-                label: LanguageService.translate(
-                    'National Emergency Hotline', 'Pambansang Emergency Hotline'),
-                number: '911',
-                icon: Icons.local_hospital,
-                color: AppColors.error,
-              ),
-              const SizedBox(height: 12),
-              _HotlineButton(
-                label: LanguageService.translate(
-                    'DOH Health Hotline', 'DOH Health Hotline'),
-                number: '1555',
-                icon: Icons.phone,
-                color: AppColors.brandPrimary,
-              ),
-              const SizedBox(height: 12),
-              _HotlineButton(
-                label: LanguageService.translate(
-                    'Philippine Red Cross', 'Philippine Red Cross'),
-                number: '143',
-                icon: Icons.health_and_safety,
-                color: const Color(0xFFD32F2F),
-              ),
-              const SizedBox(height: 12),
-              _HotlineButton(
-                label: LanguageService.translate('PNP Emergency', 'PNP Emergency'),
-                number: '117',
-                icon: Icons.shield,
-                color: const Color(0xFF1565C0),
-              ),
-              const SizedBox(height: 12),
-              _HotlineButton(
-                label: LanguageService.translate(
-                    'Bureau of Fire Protection', 'Bureau of Fire Protection'),
-                number: '160',
-                icon: Icons.local_fire_department,
-                color: const Color(0xFFE65100),
-              ),
-              const SizedBox(height: 12),
-              _HotlineButton(
-                label: LanguageService.translate(
-                    'Mental Health Crisis Line', 'Mental Health Crisis Line'),
-                number: '1553',
-                icon: Icons.psychology,
-                color: const Color(0xFF7B1FA2),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _HotlineButton extends StatelessWidget {
-  final String label;
-  final String number;
-  final IconData icon;
-  final Color color;
-
-  const _HotlineButton({
-    required this.label,
-    required this.number,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // A white row with a tinted icon, not a tinted pill.
-    //
-    // Six differently-coloured pills stacked down the page — red, pink, red,
-    // blue, orange, purple — read as a colour chart, and none of those colours
-    // was the app's. The service colour now lives only in the small icon disc,
-    // which is enough to tell them apart, and the rest matches every other
-    // list a mother sees.
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () async {
-          final uri = Uri.parse('tel:$number');
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri);
-          } else {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(LanguageService.translate(
-                      'Could not launch $number',
-                      'Hindi mabuksan ang $number')),
-                  backgroundColor: AppColors.error,
-                ),
-              );
-            }
-          }
-        },
-        onLongPress: () {
-          Clipboard.setData(ClipboardData(text: number));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                LanguageService.translate(
-                  '$number copied to clipboard',
-                  '$number kinopya sa clipboard',
-                ),
-              ),
-              duration: const Duration(seconds: 2),
-              backgroundColor: color,
-            ),
-          );
-        },
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.borderPrimary),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 19, color: color),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.inputText,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    // The number itself, shown rather than hidden behind a
-                    // tap. She could not see what she was about to dial, and
-                    // a number she can read is one she can also write down or
-                    // give to someone else.
-                    Text(
-                      number,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.4,
-                        color: AppColors.brandText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.brandPrimary.withValues(alpha: 0.10),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.call_rounded,
-                    size: 18, color: AppColors.brandPrimary),
-              ),
-            ],
-          ),
         ),
       ),
     );

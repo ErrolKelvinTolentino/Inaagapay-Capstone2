@@ -59,7 +59,7 @@ class MaternalTdService {
       title: 'Td 5 (Lifetime Protection / FIM)',
       timing: 'At least 1 year after Td4',
       minIntervalLabel: '1 year (365 days) after Td4',
-      protection: 'Lifetime protection (Fully Immunised Mother / FIM)',
+      protection: 'Lifetime protection (Fully Immunized Mother / FIM)',
       minIntervalDays: 365,
     ),
   ];

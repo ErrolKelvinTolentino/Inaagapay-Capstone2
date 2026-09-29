@@ -772,7 +772,7 @@ $recordsSummary
             .update({
               'response': responseText,
               'generated_by_ai': true,
-              'ai_model': 'groq',
+              'ai_model': _groqService.lastModelUsed ?? 'unrecorded',
               'updated_at': DateTime.now().toIso8601String(),
             })
             .eq('reference_table', 'child_growth_records')

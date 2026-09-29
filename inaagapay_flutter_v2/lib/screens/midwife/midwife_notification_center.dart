@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/auth_storage.dart';
+import '../../services/db_timestamp.dart';
 import '../../services/midwife_alert_badge.dart';
 import '../../services/notification_service.dart';
 import '../../theme/app_colors.dart';
@@ -549,10 +550,10 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
           final msg = n['message']?.toString() ?? '';
           final type = n['type']?.toString() ?? 'general';
           final isRead = n['is_read'] == true;
-          final dtStr = n['created_at']?.toString();
-          final dt = dtStr != null
-              ? DateTime.tryParse(dtStr) ?? DateTime.now()
-              : DateTime.now();
+          // UTC stored without a zone; see parseDbTimestamp. The inventory
+          // alerts above already convert theirs, so a raw row parsed as local
+          // time also sorted eight hours behind them.
+          final dt = parseDbTimestamp(n['created_at']) ?? DateTime.now();
 
           MidwifeAlertCategory cat = MidwifeAlertCategory.clinical;
           MidwifeAlertSeverity sev = MidwifeAlertSeverity.info;

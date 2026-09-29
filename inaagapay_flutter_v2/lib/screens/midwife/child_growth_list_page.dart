@@ -246,7 +246,8 @@ class _ChildGrowthListPageState extends State<ChildGrowthListPage> {
       if (mounted) {
         setState(() => aiAnalysis = analysis);
       }
-      await _saveAIResponse(analysis, latestRecordId);
+      await _saveAIResponse(
+          analysis, latestRecordId, _groqService.lastModelUsed);
     } catch (e) {
       debugPrint('Error generating AI analysis: $e');
       if (mounted) {
@@ -318,7 +319,8 @@ $recordsSummary
     return GrowthCalculator.bandLabel(z);
   }
 
-  Future<void> _saveAIResponse(String responseText, int childDetailsId) async {
+  Future<void> _saveAIResponse(
+      String responseText, int childDetailsId, String? aiModel) async {
     try {
       final existing = await Supabase.instance.client
           .from('ai_responses')
@@ -334,7 +336,7 @@ $recordsSummary
         'response_type': 'growth_analysis',
         'response_category': 'growth',
         'generated_by_ai': true,
-        'ai_model': 'groq',
+        'ai_model': aiModel ?? 'unrecorded',
         'status': 'generated',
         'response': responseText,
         'updated_at': DateTime.now().toIso8601String(),

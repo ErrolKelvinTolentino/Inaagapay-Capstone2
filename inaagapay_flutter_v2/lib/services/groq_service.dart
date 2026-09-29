@@ -9,6 +9,7 @@ import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart';
 import '../models/groq_response.dart';
 import '../models/ocr_result.dart';
+import 'ai_model_trail.dart';
 
 class GroqService {
   // ── Model Configuration ─────────────────────────────────────────────────
@@ -111,6 +112,18 @@ class GroqService {
     }
   }
 
+  // ── Model provenance ────────────────────────────────────────────────────
+
+  final AiModelTrail _modelTrail = AiModelTrail();
+
+  /// The provider and model that produced this instance's most recent result,
+  /// as "provider/model" (for example "groq/qwen/qwen3.8-27b"); a call that
+  /// chains models joins them with " + ". Null when no AI answered.
+  ///
+  /// Read it right after awaiting the call being recorded, and store it in
+  /// ai_responses.ai_model and ai_prompt_logs.model_used — never a literal.
+  String? get lastModelUsed => _modelTrail.summary;
+
   // ── API Key ─────────────────────────────────────────────────────────────
 
   String _getApiKey() {
@@ -140,6 +153,7 @@ class GroqService {
     String? trimesterLabel,
     String? relevantCategories,
   }) async {
+    _modelTrail.start();
     _validateImageInput(imageFiles);
 
     final apiKey = _getApiKey();
@@ -197,6 +211,7 @@ class GroqService {
   /// Fast, targeted OCR summary extraction for ultrasound records
   Future<Map<String, dynamic>> extractUltrasoundSummaryOCR(
       List<XFile> imageFiles) async {
+    _modelTrail.start();
     if (imageFiles.isEmpty) return {};
     try {
       final apiKey = _getApiKey();
@@ -391,6 +406,7 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
   /// Fast, targeted OCR summary extraction for lab test reports
   Future<Map<String, dynamic>> extractLabTestSummaryOCR(
       List<XFile> imageFiles) async {
+    _modelTrail.start();
     if (imageFiles.isEmpty) return {};
     try {
       final apiKey = _getApiKey();
@@ -719,6 +735,7 @@ RETURN ONLY THE RAW JSON OBJECT. DO NOT INCLUDE ANY THINKING OR REASONING PROCES
     String? sonologistRemarks,
     int fetalCount = 1,
   }) async {
+    _modelTrail.start();
     try {
       final apiKey = _getApiKey();
       final regWeeks = registeredAogWeeksOnScanDate.floor();
@@ -757,6 +774,7 @@ CRITICAL RULES:
     String? notes,
     String? clinicalContext,
   }) async {
+    _modelTrail.start();
     _validateImageInput(imageFiles);
 
     final apiKey = _getApiKey();
@@ -810,6 +828,7 @@ CRITICAL RULES:
     double temperature = 0.2,
     int maxOutputTokens = 2048,
   }) async {
+    _modelTrail.start();
     final apiKey = _getApiKey();
     _log('💬 Generating text insight...');
 
@@ -1072,6 +1091,7 @@ CRITICAL RULES:
     double temperature = 0.5,
     int maxOutputTokens = 2048,
   }) async {
+    _modelTrail.start();
     final apiKey = _getApiKey();
     _log('💬 Generating chat response...');
 
@@ -1085,6 +1105,7 @@ CRITICAL RULES:
   }
 
   Future<OcrResult> extractMotherRegistrationData(XFile imageFile) async {
+    _modelTrail.start();
     final apiKey = _getApiKey();
     _log('📄 Extracting registration data...');
 
@@ -1174,6 +1195,7 @@ Rules:
 
   Future<Map<String, dynamic>> extractImmunizationCardData(
       XFile imageFile) async {
+    _modelTrail.start();
     final apiKey = _getApiKey();
     _log('💉 Extracting immunization card data...');
 
@@ -2096,7 +2118,9 @@ Rules:
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return _extractChatCompletionText(data);
+      final text = _extractChatCompletionText(data);
+      _modelTrail.record(providerLabel, model);
+      return text;
     } on http.ClientException {
       throw Exception(
           'Network error: Unable to reach $providerLabel API. Please check your connection.');
@@ -2306,7 +2330,10 @@ Rules:
               .map((part) => (part as Map)['text']?.toString() ?? '')
               .join()
               .trim();
-          if (text.isNotEmpty) return text;
+          if (text.isNotEmpty) {
+            _modelTrail.record('gemini', model);
+            return text;
+          }
           _log('⚠️ Gemini ($model) returned no text');
           continue;
         }

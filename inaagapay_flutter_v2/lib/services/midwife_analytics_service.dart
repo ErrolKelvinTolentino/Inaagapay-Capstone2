@@ -1391,7 +1391,7 @@ class MidwifeAnalyticsService {
               tone: AnalyticsTone.neutral,
             )
           : AnalyticsInsight(
-              'No child is under one year old. Immunisation work here is '
+              'No child is under one year old. Immunization work here is '
               'catch-up and boosters rather than the primary series.',
               tone: AnalyticsTone.neutral,
             ),
@@ -1573,7 +1573,7 @@ class MidwifeAnalyticsService {
     List<Map<String, dynamic>> immunizations,
     DateTime now,
   ) {
-    const title = 'Childhood immunisation';
+    const title = 'Childhood immunization';
 
     if (childDoses.isEmpty) {
       return const AnalyticsMetric.empty(
@@ -1581,7 +1581,7 @@ class MidwifeAnalyticsService {
         kind: AnalyticsChartKind.coverage,
         icon: AnalyticsIcon.immunization,
         message:
-            'Immunisation coverage needs children with recorded birthdates and '
+            'Immunization coverage needs children with recorded birthdates and '
             'a vaccine schedule to compare against.',
       );
     }
@@ -1663,7 +1663,7 @@ class MidwifeAnalyticsService {
       insight: insight,
       footnote: eligibleForFic.isEmpty
           ? 'Judged against the DOH childhood schedule.'
-          : 'Fully immunised by one year: $fic of ${eligibleForFic.length} '
+          : 'Fully immunized by one year: $fic of ${eligibleForFic.length} '
               '${_plural(eligibleForFic.length, 'child', 'children')} old enough to have finished.',
       prescription: behind > 0
           ? AnalyticsPrescription(

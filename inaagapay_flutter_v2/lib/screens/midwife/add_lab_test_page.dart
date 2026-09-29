@@ -12,6 +12,7 @@ import '../../models/blood_type.dart';
 import '../../services/auth_storage.dart';
 import '../../services/gestational_diabetes_screening.dart';
 import '../../services/groq_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_snackbar.dart';
@@ -1010,6 +1011,17 @@ class _AddLabTestPageState extends State<AddLabTestPage> {
           if (kDebugMode) debugPrint('[AddLabTest] Blood type update failed: $e');
         }
       }
+
+      // Same notice the checkup screen sends. Lab results never had one, so
+      // she only found them by opening her records.
+      await NotificationService.notifyMother(
+        motherId: widget.motherId,
+        title: 'Lab Test Recorded',
+        message: 'Your $effectiveLabType result from '
+            '${DateFormat('MMMM d, yyyy').format(_date!)} has been added to '
+            'your records.',
+        type: 'checkup_reminder',
+      );
 
       if (mounted) {
         AppSnackbar.show(

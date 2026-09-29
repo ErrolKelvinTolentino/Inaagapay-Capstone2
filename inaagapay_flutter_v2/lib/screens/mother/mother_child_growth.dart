@@ -1153,7 +1153,8 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
         bmiZ: GrowthCalculator.calculateBMIZScore(latestBMI, ageWeeks, sex),
       );
 
-      final generated = await GroqService().generateTextInsight(
+      final groq = GroqService();
+      final generated = await groq.generateTextInsight(
         prompt: prompt,
         systemPrompt: GroqService.childGrowthSystemPrompt,
         temperature: 0.2,
@@ -1165,13 +1166,15 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
       });
       
       // Save it to Supabase so it's cached!
-      await _saveProfileAiResponse(aiAnalysis!, latestRecordId);
+      await _saveProfileAiResponse(
+          aiAnalysis!, latestRecordId, groq.lastModelUsed);
     } catch (e) {
       debugPrint('Error generating AI growth insight: $e');
     }
   }
 
-  Future<void> _saveProfileAiResponse(String responseText, int latestRecordId) async {
+  Future<void> _saveProfileAiResponse(
+      String responseText, int latestRecordId, String? aiModel) async {
     try {
       final existing = await Supabase.instance.client
           .from('ai_responses')
@@ -1187,7 +1190,7 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
         'response_type': 'growth_analysis',
         'response_category': 'growth',
         'generated_by_ai': true,
-        'ai_model': 'groq',
+        'ai_model': aiModel ?? 'unrecorded',
         'status': 'generated',
         'response': responseText,
         'updated_at': DateTime.now().toIso8601String(),

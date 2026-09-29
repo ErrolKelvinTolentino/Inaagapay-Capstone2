@@ -9,7 +9,8 @@ import '../services/language_service.dart';
 /// blocks and reachable only by tapping a button labelled "More Info". That is
 /// the most time-critical content in the app sitting behind the vaguest label
 /// in it — a woman bleeding at 2am does not go exploring. Lifting them here
-/// lets Home and the Hotlines tab show the same list without copying it.
+/// lets the Hotlines page and the warning-signs page show the same list
+/// without copying it.
 ///
 /// Deliberately **not** trimester-specific. A mother in trouble should not
 /// have to work out which trimester she is in before she learns what to do,
