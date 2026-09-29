@@ -1,18 +1,54 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "node prepare-download.mjs",
   "redirects": [
-    {
-      "source": "/apk",
-      "destination": "https://github.com/ErrolKelvinTolentino/Inaagapay-Capstone2/releases/latest/download/inaagapay.apk",
-      "permanent": false
-    },
     {
       "source": "/app",
       "destination": "/download.html?auto=1",
       "permanent": false
     }
   ],
+  "rewrites": [
+    {
+      "source": "/apk",
+      "destination": "/downloads/inaagapay.apk"
+    }
+  ],
   "headers": [
+    {
+      "source": "/downloads/inaagapay.apk",
+      "headers": [
+        {
+          "key": "Content-Disposition",
+          "value": "attachment; filename=\"inaagapay.apk\""
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/vnd.android.package-archive"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/apk",
+      "headers": [
+        {
+          "key": "Content-Disposition",
+          "value": "attachment; filename=\"inaagapay.apk\""
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/vnd.android.package-archive"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [

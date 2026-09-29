@@ -12,6 +12,7 @@ class MainHeader extends StatelessWidget {
   final VoidCallback? onSettings;
   final VoidCallback? onHelp;
   final VoidCallback? onReports;
+  final VoidCallback? onDownloadApk;
   final VoidCallback? onLogout;
   final bool showBackButton;
   final VoidCallback? onBack;
@@ -26,6 +27,7 @@ class MainHeader extends StatelessWidget {
     this.onSettings,
     this.onHelp,
     this.onReports,
+    this.onDownloadApk,
     this.onLogout,
     this.showBackButton = false,
     this.onBack,
@@ -57,6 +59,7 @@ class MainHeader extends StatelessWidget {
               onSettings: onSettings,
               onHelp: onHelp,
               onReports: onReports,
+              onDownloadApk: onDownloadApk,
               onLogout: () {
                 entry.remove();
                 _confirmLogout(context);
@@ -126,8 +129,10 @@ class MainHeader extends StatelessWidget {
               Image.asset(
                 'assets/images/logo.png',
                 height: 40,
-                errorBuilder: (context, error, stackTrace) => 
-                  const Icon(Icons.favorite, color: AppColors.brandPrimary, size: 30),
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.favorite,
+                    color: AppColors.brandPrimary,
+                    size: 30),
               ),
               const SizedBox(width: 12),
             ],
@@ -153,7 +158,8 @@ class MainHeader extends StatelessWidget {
               children: [
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  constraints:
+                      const BoxConstraints(minWidth: 36, minHeight: 36),
                   onPressed: onNotificationTap,
                   icon: Icon(
                     notificationCount > 0
@@ -171,7 +177,8 @@ class MainHeader extends StatelessWidget {
                     right: 2,
                     child: IgnorePointer(
                       child: Container(
-                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                        constraints:
+                            const BoxConstraints(minWidth: 16, minHeight: 16),
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFEF4444),
@@ -238,6 +245,7 @@ class _ProfileMenu extends StatelessWidget {
   final VoidCallback? onSettings;
   final VoidCallback? onHelp;
   final VoidCallback? onReports;
+  final VoidCallback? onDownloadApk;
   final VoidCallback? onLogout;
 
   const _ProfileMenu({
@@ -246,6 +254,7 @@ class _ProfileMenu extends StatelessWidget {
     this.onSettings,
     this.onHelp,
     this.onReports,
+    this.onDownloadApk,
     this.onLogout,
   });
 
@@ -254,7 +263,11 @@ class _ProfileMenu extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: Container(
-        width: 200,
+        width: onDownloadApk == null ? 200 : 248,
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width - 32,
+          maxHeight: MediaQuery.sizeOf(context).height - 96,
+        ),
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -267,51 +280,63 @@ class _ProfileMenu extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          children: [
-            _MenuItem(
-              icon: Icons.person_outline,
-              label: 'View Profile',
-              onTap: () {
-                onClose();
-                onViewProfile?.call();
-              },
-            ),
-            if (onReports != null)
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               _MenuItem(
-                icon: Icons.summarize_outlined,
-                label: 'Reports & Export',
+                icon: Icons.person_outline,
+                label: 'View Profile',
                 onTap: () {
                   onClose();
-                  onReports?.call();
+                  onViewProfile?.call();
                 },
               ),
-            _MenuItem(
-              icon: Icons.settings_outlined,
-              label: 'Settings',
-              onTap: () {
-                onClose();
-                onSettings?.call();
-              },
-            ),
-            _MenuItem(
-              icon: Icons.help_outline,
-              label: 'Help',
-              onTap: () {
-                onClose();
-                onHelp?.call();
-              },
-            ),
-            const Divider(height: 8, color: AppColors.borderPrimary),
-            _MenuItem(
-              icon: Icons.logout_rounded,
-              label: 'Log out',
-              isDanger: true,
-              onTap: () {
-                onLogout?.call();
-              },
-            ),
-          ],
+              if (onReports != null)
+                _MenuItem(
+                  icon: Icons.summarize_outlined,
+                  label: 'Reports & Export',
+                  onTap: () {
+                    onClose();
+                    onReports?.call();
+                  },
+                ),
+              if (onDownloadApk != null)
+                _MenuItem(
+                  icon: Icons.qr_code_rounded,
+                  label: 'Download APK QR code',
+                  onTap: () {
+                    onClose();
+                    onDownloadApk?.call();
+                  },
+                ),
+              _MenuItem(
+                icon: Icons.settings_outlined,
+                label: 'Settings',
+                onTap: () {
+                  onClose();
+                  onSettings?.call();
+                },
+              ),
+              _MenuItem(
+                icon: Icons.help_outline,
+                label: 'Help',
+                onTap: () {
+                  onClose();
+                  onHelp?.call();
+                },
+              ),
+              const Divider(height: 8, color: AppColors.borderPrimary),
+              _MenuItem(
+                icon: Icons.logout_rounded,
+                label: 'Log out',
+                isDanger: true,
+                onTap: () {
+                  onLogout?.call();
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -343,12 +368,14 @@ class _MenuItem extends StatelessWidget {
           children: [
             Icon(icon, size: 20, color: color),
             const SizedBox(width: 12),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: color,
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                ),
               ),
             ),
           ],

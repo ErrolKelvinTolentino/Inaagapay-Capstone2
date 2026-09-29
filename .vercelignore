@@ -24,6 +24,12 @@
 # Node test files, run with `node admin-web/tests/<file>.test.js` during
 # development. No business being served to a browser.
 admin-web/tests
+admin-web/downloads/README.md
+
+# Fetch the verified APK during the hosted build instead of uploading the large
+# generated binary as CLI source. Partial downloads never belong in source.
+admin-web/downloads/*.apk
+admin-web/downloads/*.partial
 
 # Redundant while the Root Directory is unset: at this level it is an ordinary
 # file that would be served over HTTP rather than read as configuration.

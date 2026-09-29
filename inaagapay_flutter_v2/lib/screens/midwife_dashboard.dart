@@ -5,6 +5,7 @@ import '../services/auth_storage.dart';
 
 // layout
 import '../widgets/main_header.dart';
+import 'midwife/midwife_download_apk_screen.dart';
 
 // reusable widgets
 import '../widgets/hero_card.dart';
@@ -51,6 +52,10 @@ class MidwifeDashboard extends StatelessWidget {
             onViewProfile: () => Navigator.pushNamed(context, '/profile'),
             onSettings: () => Navigator.pushNamed(context, '/settings'),
             onHelp: () => Navigator.pushNamed(context, '/help'),
+            onDownloadApk: () => Navigator.pushNamed(
+              context,
+              MidwifeDownloadApkScreen.routeName,
+            ),
             onLogout: () async {
               await AuthStorage.clearAll();
               if (context.mounted) {

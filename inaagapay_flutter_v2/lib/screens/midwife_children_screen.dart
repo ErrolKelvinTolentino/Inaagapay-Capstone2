@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../services/auth_storage.dart';
 import '../widgets/main_header.dart';
+import 'midwife/midwife_download_apk_screen.dart';
 
 class MidwifeChildrenScreen extends StatelessWidget {
   const MidwifeChildrenScreen({super.key});
@@ -17,6 +18,10 @@ class MidwifeChildrenScreen extends StatelessWidget {
             onViewProfile: () => Navigator.pushNamed(context, '/profile'),
             onSettings: () => Navigator.pushNamed(context, '/settings'),
             onHelp: () => Navigator.pushNamed(context, '/help'),
+            onDownloadApk: () => Navigator.pushNamed(
+              context,
+              MidwifeDownloadApkScreen.routeName,
+            ),
             onLogout: () async {
               await AuthStorage.clearAll();
               if (context.mounted) {

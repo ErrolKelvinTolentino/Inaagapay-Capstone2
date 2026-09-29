@@ -11,6 +11,7 @@ import 'midwife_mothers_screen.dart';
 import 'midwife_children_screen.dart';
 import 'midwife_schedules_screen.dart';
 import 'midwife_notification_center.dart';
+import 'midwife_download_apk_screen.dart';
 import '../../widgets/main_header.dart';
 
 class MidwifeShell extends StatefulWidget {
@@ -131,6 +132,10 @@ class _MidwifeShellState extends State<MidwifeShell> {
               onSettings: () => Navigator.pushNamed(context, '/settings'),
               onHelp: () => Navigator.pushNamed(context, '/help'),
               onReports: () => Navigator.pushNamed(context, '/midwife-reports'),
+              onDownloadApk: () => Navigator.pushNamed(
+                context,
+                MidwifeDownloadApkScreen.routeName,
+              ),
               onLogout: _logout,
             ),
             // Screen content

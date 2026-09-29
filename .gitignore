@@ -21,6 +21,9 @@ d# Miscellaneous
 .pub-cache/
 .pub-preload-cache/
 build/
+# Generated website APK; prepare and include it in the hosting output.
+admin-web/downloads/*.apk
+admin-web/downloads/*.partial
 pubspec.lock
 
 # Generated Flutter files
@@ -33,6 +36,7 @@ pubspec.lock
 **/android/local.properties
 .gradle/
 **/android/.gradle/
+**/android/.kotlin/
 **/android/app/*.jks
 **/android/key.properties
 *.jks

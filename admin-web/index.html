@@ -401,6 +401,34 @@
         flex-shrink: 0;
       }
 
+      .app-download-link {
+        width: 100%;
+        min-height: 52px;
+        margin-top: 12px;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        border: 1px solid var(--brand-primary-40);
+        border-radius: 13px;
+        background: var(--bg-secondary);
+        color: var(--brand-text);
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1.4;
+        text-align: center;
+        text-decoration: none;
+        transition: background 0.2s, border-color 0.2s;
+      }
+      .app-download-link:hover {
+        background: var(--brand-primary-10);
+        border-color: var(--brand-primary);
+      }
+      .app-download-link i {
+        flex-shrink: 0;
+      }
+
       .login-footer-note {
         margin-top: 14px;
         font-size: 12px;
@@ -550,6 +578,12 @@
           <i class="fa-solid fa-mobile-screen-button"></i>
           <span>Midwives and mothers sign in through the InaAgapay mobile app, not this portal. <a href="download.html" style="font-weight:600;">Get the app</a></span>
         </p>
+
+        <a class="app-download-link" href="download.html">
+          <i class="fa-brands fa-android" aria-hidden="true"></i>
+          <span>Download InaAgapay App</span>
+          <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+        </a>
 
         <p class="login-footer-note">
           For authorized MHO and RHU personnel only.<br />

@@ -20,6 +20,7 @@ import '../../widgets/secondary_header.dart';
 import '../../widgets/tab_button.dart';
 import '../../widgets/vial_dose_status.dart';
 import '../midwife/midwife_notification_center.dart';
+import '../midwife/midwife_download_apk_screen.dart';
 import 'inventory_models.dart' as live;
 import 'inventory_repository.dart';
 import 'midwife_inventory_report_service.dart';
@@ -776,6 +777,10 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
       },
       notificationCount: _unreadNotificationCount,
       onSettings: () => Navigator.pushNamed(context, '/settings'),
+      onDownloadApk: () => Navigator.pushNamed(
+        context,
+        MidwifeDownloadApkScreen.routeName,
+      ),
       onLogout: _logout,
     );
   }
