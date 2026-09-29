@@ -81,3 +81,11 @@ supabase/.temp/
 # Point-in-time data dumps from database/backups/backup.js.
 # The script is tracked; the captures it produces are not.
 database/backups/*/
+
+# Moving to a new Supabase project (database/new-project/README.md).
+# The export holds every patient record and the new secret key; the two
+# settings files hold connection details and provider keys. None of it is
+# ever committed.
+database/new-project/export/
+database/new-project/settings.env
+database/new-project/functions.secrets.env

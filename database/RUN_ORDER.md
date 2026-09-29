@@ -336,3 +336,38 @@ Used by the Transfer action on Account Management (portal) and the transfer
 icon on a mother's profile (midwife app). Both say the update is needed when
 the function is missing. Requires `20260821_mho_tier.sql` and
 `20260909_notification_reference_ids.sql`. Idempotent.
+
+---
+
+# Profile photos and file storage (2026-09-29)
+
+## `migrations/20260929_profile_photo_storage.sql`
+
+Makes profile photo upload work: the midwife's My Profile photo, and a mother's
+photo from her own profile. Both failed every time, for two reasons stacked on
+each other:
+
+- **No bucket.** The app uploads to a Storage bucket named `files`, which does
+  not exist on the live project as a public bucket ("Bucket not found").
+- **`public.files` closed to the app.** Row level security on, with policies
+  granted only to Supabase Auth users. The mobile app connects as `anon`, so it
+  could neither record an upload nor delete an old photo.
+
+The migration creates the public `files` bucket, lets `anon` and
+`authenticated` read, add, replace and remove objects in it, and turns
+`public.files` into an ordinary app table: row level security off, grants to
+`anon` and `authenticated`. That is the same shape as every other table the
+app uses; see `20260924_maternal_td_records_readable.sql` for the last table
+that needed the same fix.
+
+**It also unblocks other uploads that use the same bucket.** Baby book photos
+start saving. New ultrasound and lab attachments go to storage instead of
+being stored inline as base64 in the row. Old records keep their inline
+images, and the viewer reads both.
+
+The preflight stops if a *private* `files` bucket already exists and already
+holds objects, rather than making them public without anyone looking.
+
+No app change is needed, and none of this depends on another migration.
+Idempotent. Verify with the queries at the bottom of the file, then change a
+photo on the midwife app's My Profile: it should say "Profile photo updated."

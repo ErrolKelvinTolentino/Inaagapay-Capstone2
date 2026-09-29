@@ -5,7 +5,26 @@ import { encode as base64url } from 'https://deno.land/std@0.168.0/encoding/base
 // FCM v1 API — uses service account JWT auth (no Legacy server key needed)
 const FCM_PROJECT_ID = 'inaagapay'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+
+// The server key for reading device_tokens and accounts. Projects created
+// after November 2025 have no service_role JWT; their `sb_secret_...` keys
+// arrive as a JSON dictionary in SUPABASE_SECRET_KEYS. Older projects still
+// have SUPABASE_SERVICE_ROLE_KEY. Either works with createClient.
+function serverKey(): string {
+  try {
+    const raw = Deno.env.get('SUPABASE_SECRET_KEYS')
+    if (raw) {
+      const first = Object.values(JSON.parse(raw)).find(
+        (v) => typeof v === 'string' && v !== '',
+      )
+      if (typeof first === 'string') return first
+    }
+  } catch {
+    // Malformed: fall through to the legacy key.
+  }
+  return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+}
+const SUPABASE_SERVICE_ROLE_KEY = serverKey()
 
 // Semaphore SMS Gateway Configuration
 const SEMAPHORE_API_KEY = Deno.env.get('SEMAPHORE_API_KEY') || ''

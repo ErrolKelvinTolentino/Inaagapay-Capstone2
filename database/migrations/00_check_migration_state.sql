@@ -858,7 +858,14 @@ checks(sort_order, migration, requirement, present) AS (
     (8203, '20260927_account_provisioning.sql', 'function create_portal_account()',
           EXISTS (SELECT 1 FROM procs WHERE proname = 'create_portal_account')),
     (8300, '20260928_mother_transfer.sql', 'function transfer_mother()',
-          EXISTS (SELECT 1 FROM procs WHERE proname = 'transfer_mother'))
+          EXISTS (SELECT 1 FROM procs WHERE proname = 'transfer_mother')),
+    (8400, '20260929_profile_photo_storage.sql', 'public storage bucket "files"',
+          CASE WHEN to_regclass('storage.buckets') IS NULL THEN false ELSE (xpath('/row/b/text()', query_to_xml(
+              $q$SELECT (EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'files' AND public)) AS b$q$, false, true, '')))[1]::text = 'true' END),
+    (8401, '20260929_profile_photo_storage.sql', 'app upload policy on storage.objects',
+          EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'InaAgapay app uploads to the files bucket')),
+    (8402, '20260929_profile_photo_storage.sql', 'files writable by the app (row level security off)',
+          COALESCE((SELECT NOT relrowsecurity FROM pg_class WHERE oid = to_regclass('public.files')), false))
 ),
 per_file AS (
   SELECT migration,

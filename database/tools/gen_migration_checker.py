@@ -181,6 +181,15 @@ DATA = {
     '20260924_maternal_td_records_readable.sql': [
         ('maternal_td_records readable (row level security off)',
          "COALESCE((SELECT NOT relrowsecurity FROM pg_class WHERE oid = to_regclass('public.maternal_td_records')), false)")],
+    '20260929_profile_photo_storage.sql': [
+        ('public storage bucket "files"',
+         guarded(['storage.buckets'],
+                 "EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'files' AND public)")),
+        ('app upload policy on storage.objects',
+         "EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' "
+         "AND policyname = 'InaAgapay app uploads to the files bucket')"),
+        ('files writable by the app (row level security off)',
+         "COALESCE((SELECT NOT relrowsecurity FROM pg_class WHERE oid = to_regclass('public.files')), false)")],
 }
 
 

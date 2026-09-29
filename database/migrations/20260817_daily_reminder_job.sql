@@ -67,7 +67,8 @@ CREATE TABLE IF NOT EXISTS public.job_settings (
 
 -- REPLACE BOTH VALUES BEFORE RUNNING.
 --   project_url       https://<your-project-ref>.supabase.co
---   service_role_key  Settings -> API -> service_role (secret)
+--   service_role_key  Settings -> API Keys -> a secret key (sb_secret_...), or
+--                     on an older project the legacy service_role key
 INSERT INTO public.job_settings (key, value) VALUES
     ('project_url',      'https://REPLACE-ME.supabase.co'),
     ('service_role_key', 'REPLACE-ME')
@@ -90,10 +91,15 @@ BEGIN
         RETURN;
     END IF;
 
+    -- apikey as well as the bearer. A project created after November 2025 has
+    -- only sb_secret_... keys, which are not JWTs; Supabase accepts one in
+    -- Authorization only when apikey carries the same value. A legacy
+    -- service_role JWT is accepted either way, so this works on both.
     PERFORM net.http_post(
         url     := v_url || '/functions/v1/send-reminders',
         headers := jsonb_build_object(
             'Content-Type',  'application/json',
+            'apikey',        v_key,
             'Authorization', 'Bearer ' || v_key
         ),
         body    := '{}'::jsonb
@@ -121,6 +127,7 @@ BEGIN
         url     := v_url || '/functions/v1/send-reminders',
         headers := jsonb_build_object(
             'Content-Type',  'application/json',
+            'apikey',        v_key,
             'Authorization', 'Bearer ' || v_key
         ),
         body    := jsonb_strip_nulls(jsonb_build_object(

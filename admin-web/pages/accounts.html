@@ -422,8 +422,8 @@
     <script src="notification-center.js"></script>
     <script>
         (function() {
-            const SUPABASE_URL = window.SUPABASE_URL || "https://krooorixhjwygcsdoomg.supabase.co";
-            const SUPABASE_ANON = window.SUPABASE_ANON || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
+            const SUPABASE_URL = window.SUPABASE_URL || "https://ctpyzeauiwgccsopbjpz.supabase.co";
+            const SUPABASE_ANON = window.SUPABASE_ANON || "sb_publishable_NzKIr8xr6JwYemrrTIEQag_RDCVi3S_";
             const db = window.db || supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
             window.AdminNotifications?.attach(db);
             const SESSION_KEY = "inaagapay_admin_session";
@@ -1132,7 +1132,7 @@
                     bits.push(`it holds ${deps.active_assignments} active facility ${deps.active_assignments === 1 ? "posting" : "postings"}`);
                 }
                 if (deps.doses_administered > 0) {
-                    bits.push(`${deps.doses_administered} immunisation ${deps.doses_administered === 1 ? "record names" : "records name"} this midwife as the one who gave the dose`);
+                    bits.push(`${deps.doses_administered} immunization ${deps.doses_administered === 1 ? "record names" : "records name"} this midwife as the one who gave the dose`);
                 }
                 if (deps.pregnancies > 0) {
                     bits.push(`${deps.pregnancies} ${deps.pregnancies === 1 ? "pregnancy is" : "pregnancies are"} recorded against it`);
@@ -1619,7 +1619,7 @@
                 if (deps.pregnancies > 0)  lines.push(`${deps.pregnancies} ${deps.pregnancies === 1 ? "pregnancy" : "pregnancies"}`);
                 if (deps.encounters > 0)   lines.push(`${deps.encounters} prenatal ${deps.encounters === 1 ? "encounter" : "encounters"}`);
                 if (deps.children > 0)     lines.push(`${deps.children} ${deps.children === 1 ? "child record" : "child records"}`);
-                if (deps.immunizations > 0) lines.push(`${deps.immunizations} immunisation ${deps.immunizations === 1 ? "record" : "records"}`);
+                if (deps.immunizations > 0) lines.push(`${deps.immunizations} immunization ${deps.immunizations === 1 ? "record" : "records"}`);
                 if (deps.growth_records > 0) lines.push(`${deps.growth_records} growth ${deps.growth_records === 1 ? "measurement" : "measurements"}`);
                 if (deps.doses_administered > 0) lines.push(`${deps.doses_administered} ${deps.doses_administered === 1 ? "dose" : "doses"} recorded as given by this midwife`);
 

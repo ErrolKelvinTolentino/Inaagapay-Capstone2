@@ -86,24 +86,33 @@ function firstName(full: string | null | undefined): string {
   return name.split(/\s+/)[0];
 }
 
-/// The `role` claim of the caller's token, or null if there isn't one.
+/// Every server-side key this project accepts, newest style first.
 ///
-/// The signature is not checked here and does not need to be: Supabase's
-/// gateway rejects an unsigned or forged token before this function runs. This
-/// only reads what the verified token says about who is calling.
-function callerRole(authHeader: string): string | null {
-  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-
+/// Projects created after November 2025 have no `service_role` JWT. They have
+/// `sb_secret_...` keys, which the runtime hands over as a JSON dictionary in
+/// SUPABASE_SECRET_KEYS. Older projects still have the JWT in
+/// SUPABASE_SERVICE_ROLE_KEY. Both are read so the same code runs on either.
+function projectSecretKeys(): string[] {
+  const keys: string[] = [];
   try {
-    const payload = JSON.parse(
-      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
-    );
-    return typeof payload.role === "string" ? payload.role : null;
+    const raw = Deno.env.get("SUPABASE_SECRET_KEYS");
+    if (raw) {
+      for (const value of Object.values(JSON.parse(raw))) {
+        if (typeof value === "string" && value) keys.push(value);
+      }
+    }
   } catch {
-    return null;
+    // Malformed: fall through to the legacy key.
   }
+  const legacy = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (legacy) keys.push(legacy);
+  return keys;
+}
+
+/// The key this function uses for its own database calls.
+function serverKey(): string | null {
+  const keys = projectSecretKeys();
+  return keys.length ? keys[0] : null;
 }
 
 interface Env {
@@ -449,36 +458,34 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceKey = serverKey();
   if (!supabaseUrl || !serviceKey) {
     return json({ ok: false, error: "Function is not configured" }, 503);
   }
 
   // This endpoint spends SMS credits, so it is not open to anonymous callers.
   //
-  // Supabase's gateway has already verified the JWT's signature before the
-  // request reaches here, so the claims inside it can be trusted. What is
-  // checked is the role: `service_role` for the scheduled job, `postgres` for
-  // a run from the dashboard's Test panel. `anon` — the key shipped inside the
-  // mobile app, readable by anyone who unpacks it — is refused.
+  // The caller must present one of this project's own server keys, in either
+  // header: an `sb_secret_...` key on a project created after November 2025,
+  // the legacy service_role JWT on an older one. The publishable (or anon)
+  // key — shipped inside the mobile app, readable by anyone who unpacks it —
+  // is refused.
   //
-  // The first version of this compared the whole token against
-  // SUPABASE_SERVICE_ROLE_KEY. That looked stricter and was merely brittle:
-  // it rejected the dashboard, and it assumes the platform injects that
-  // variable in exactly the form the caller presents, which stopped being
-  // reliable once Supabase introduced its second style of API key.
+  // It is an exact match, and it has to be. This function is deployed with
+  // JWT verification off, because the gateway rejects a non-JWT key as an
+  // "Invalid JWT" before the function runs. With verification off nothing
+  // checks a JWT's signature, so the role claim inside one proves nothing:
+  // anyone can write "role": "service_role" into a token. An earlier version
+  // trusted that claim, which was only safe while the gateway verified it.
   const auth = req.headers.get("Authorization") ?? "";
-  const role = callerRole(auth);
-  const allowed = role === "service_role" ||
-    role === "postgres" ||
-    auth === `Bearer ${serviceKey}`;
+  const apikey = req.headers.get("apikey") ?? "";
+  const presented = auth.replace(/^Bearer\s+/i, "").trim();
+  const secrets = projectSecretKeys();
+  const allowed = (presented !== "" && secrets.includes(presented)) ||
+    (apikey !== "" && secrets.includes(apikey));
 
   if (!allowed) {
-    return json({
-      ok: false,
-      error: "Not authorised",
-      caller_role: role ?? "unreadable token",
-    }, 401);
+    return json({ ok: false, error: "Not authorised" }, 401);
   }
 
   const env: Env = {

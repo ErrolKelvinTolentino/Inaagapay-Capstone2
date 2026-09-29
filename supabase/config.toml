@@ -4,16 +4,31 @@
 # dashboard:
 #
 #   supabase login
-#   supabase link --project-ref krooorixhjwygcsdoomg
+#   supabase link --project-ref ctpyzeauiwgccsopbjpz
 #   supabase functions deploy send-sms
 #
 # Secrets are set separately and are never stored in this repo:
 #
 #   supabase secrets set SEMAPHORE_API_KEY=... SEMAPHORE_SENDER_NAME=AGAPAY
+#
+# To move to a new project, see database/new-project/README.md.
 
-project_id = "krooorixhjwygcsdoomg"
+project_id = "ctpyzeauiwgccsopbjpz"
+
+# JWT verification is off for every function.
+#
+# Projects created after November 2025 have no anon or service_role JWT, only
+# sb_publishable_... and sb_secret_... keys, which are not JWTs. With
+# verification on, the gateway rejects them as "Invalid JWT" before the
+# function runs. send-reminders checks its caller itself; the others were only
+# ever guarded by the public anon key, which ships inside the app and the
+# portal anyway.
 
 [functions.send-sms]
-# The admin portal calls this with the public anon key as a bearer token, which
-# is a valid JWT, so the default verification is left on.
-verify_jwt = true
+verify_jwt = false
+
+[functions.send-reminders]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false

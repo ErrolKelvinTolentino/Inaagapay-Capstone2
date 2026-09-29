@@ -20,9 +20,9 @@
 const fs = require("fs");
 const path = require("path");
 
-const SUPABASE_URL = "https://krooorixhjwygcsdoomg.supabase.co/rest/v1";
+const SUPABASE_URL = "https://ctpyzeauiwgccsopbjpz.supabase.co/rest/v1";
 const ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
+  "sb_publishable_NzKIr8xr6JwYemrrTIEQag_RDCVi3S_";
 const HEADERS = { apikey: ANON_KEY, Authorization: "Bearer " + ANON_KEY };
 
 // Wiped outright by the seed — every column is needed to restore them.
@@ -136,7 +136,7 @@ function relinkStatements(spec, rows) {
   restore += `\nCOMMIT;\n`;
 
   fs.writeFileSync(path.join(dir, "restore.sql"), restore);
-  fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ captured_at: new Date().toISOString(), project: "krooorixhjwygcsdoomg", report }, null, 2));
+  fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ captured_at: new Date().toISOString(), project: "ctpyzeauiwgccsopbjpz", report }, null, 2));
 
   console.log(`backup written to database/backups/${stamp}\n`);
   const pad = (s, n) => String(s).padEnd(n);

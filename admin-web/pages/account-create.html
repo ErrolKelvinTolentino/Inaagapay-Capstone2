@@ -535,9 +535,9 @@
     <script src="notification-center.js"></script>
     <script>
       (function () {
-        const SUPABASE_URL = window.SUPABASE_URL || "https://krooorixhjwygcsdoomg.supabase.co";
+        const SUPABASE_URL = window.SUPABASE_URL || "https://ctpyzeauiwgccsopbjpz.supabase.co";
         const SUPABASE_ANON = window.SUPABASE_ANON ||
-          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyb29vcml4aGp3eWdjc2Rvb21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NjI5NDIsImV4cCI6MjEwMDAzODk0Mn0.iVIxsgZhd_k0c-rDOjRK5J9xBiL0z-bH2l1LXH9IksU";
+          "sb_publishable_NzKIr8xr6JwYemrrTIEQag_RDCVi3S_";
         const db = window.db || supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
         window.AdminNotifications?.attach(db);
         const SESSION_KEY = "inaagapay_admin_session";
@@ -1350,10 +1350,14 @@
 
             // 3. Secondary: the send-email Edge Function, if it is deployed.
             try {
+              // apikey as well as the bearer: a new-style publishable key is not
+              // a JWT, and Supabase only accepts one in Authorization when the
+              // apikey header carries the same value.
               const response = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
+                  "apikey": SUPABASE_ANON,
                   "Authorization": `Bearer ${SUPABASE_ANON}`
                 },
                 body: JSON.stringify({
@@ -1400,6 +1404,7 @@
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
+                "apikey": SUPABASE_ANON,
                 "Authorization": `Bearer ${SUPABASE_ANON}`
               },
               body: JSON.stringify({ number: formatted, message })
