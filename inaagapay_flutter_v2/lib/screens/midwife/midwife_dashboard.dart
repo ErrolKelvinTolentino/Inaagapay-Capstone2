@@ -19,6 +19,7 @@ import '../../widgets/app_input_field.dart';
 import '../../widgets/app_snackbar.dart';
 import '../shared/record_detail_screen.dart';
 import '../../services/mother_profile_service.dart';
+import '../../services/network_status.dart';
 import 'midwife_shell.dart';
 import 'midwife_notification_center.dart';
 
@@ -1092,7 +1093,11 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         );
       } catch (e) {
         _closeLoadingOverlay();
-        _showMessage('Failed to load checkup details',
+        _showMessage(
+            NetworkStatus.isNetworkError(e)
+                ? 'Failed to load checkup details. Check your internet '
+                    'connection and try again.'
+                : 'Failed to load checkup details',
             type: AppSnackType.error);
       }
     } else if (result['type'] == 'ultrasound') {
@@ -1497,7 +1502,11 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         'calciumQuantity': calciumQuantity,
         'symptomSummary': symptomSummaryStr,
       };
-    } catch (_) {
+    } catch (e) {
+      // A lost connection is not "no details". Swallowed, it opened the
+      // record anyway with "None" and "Not given" where the medications and
+      // symptoms should have been, which reads as a fact about the visit.
+      if (NetworkStatus.isNetworkError(e)) rethrow;
       return null;
     }
   }
@@ -1852,12 +1861,18 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                                   color: AppColors.brandPrimary,
                                                 ),
                                                 const SizedBox(width: 4),
-                                                Text(
-                                                  _bhcName,
-                                                  style: const TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: AppColors.brandPrimary,
+                                                // Flexible, so a full name like
+                                                // "Tarcan Barangay Health Center"
+                                                // wraps instead of running past
+                                                // the edge at large text sizes.
+                                                Flexible(
+                                                  child: Text(
+                                                    _bhcName,
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: AppColors.brandPrimary,
+                                                    ),
                                                   ),
                                                 ),
                                               ],

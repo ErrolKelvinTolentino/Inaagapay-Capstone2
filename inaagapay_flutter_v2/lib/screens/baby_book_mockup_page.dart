@@ -11,6 +11,7 @@ import '../models/milestone_template.dart';
 import '../models/pregnancy_growth_stage.dart';
 import '../services/asset_pdf_download_service.dart';
 import '../services/baby_book_repository.dart';
+import '../services/language_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/baby_memory_photo.dart';
 import '../widgets/baby_book/baby_growth_milestones_section.dart';
@@ -20,7 +21,10 @@ import '../widgets/secondary_header.dart';
 import '../widgets/pregnancy_growth_journey.dart';
 import 'baby_book_memory_gallery_page.dart';
 
-String _t(String english, String _) => english;
+// Was `=> english`, left over from the stand-alone mockup this page was
+// built from: the Filipino strings below were written and never shown.
+String _t(String english, String filipino) =>
+    LanguageService.translate(english, filipino);
 
 class BabyBookMockupPage extends StatefulWidget {
   /// The mother whose Baby Book this is.
@@ -280,8 +284,9 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
           );
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Preview only — this photo is not saved.'),
+          SnackBar(
+            content: Text(_t('Preview only — this photo is not saved.',
+                'Preview lamang — hindi nai-save ang larawang ito.')),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -302,8 +307,9 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
       // and the photo was gone.
       if (saved == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('The photo could not be saved. Please try again.'),
+          SnackBar(
+            content: Text(_t('The photo could not be saved. Please try again.',
+                'Hindi nai-save ang larawan. Pakisubukan muli.')),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -312,16 +318,18 @@ class _BabyBookMockupPageState extends State<BabyBookMockupPage> {
 
       setState(() => _memories.insert(0, saved));
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Photo saved to your Memory Gallery.'),
+        SnackBar(
+          content: Text(_t('Photo saved to your Memory Gallery.',
+              'Nai-save ang larawan sa iyong Memory Gallery.')),
           behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('The photo could not be added. Please try again.'),
+        SnackBar(
+          content: Text(_t('The photo could not be added. Please try again.',
+              'Hindi naidagdag ang larawan. Pakisubukan muli.')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -673,9 +681,9 @@ class _MemoryCardState extends State<_MemoryCard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionHeading(
-          eyebrow: 'PRECIOUS MEMORIES',
-          title: 'Our favorite moment',
-          actionLabel: 'Add photo',
+          eyebrow: _t('PRECIOUS MEMORIES', 'MAHAHALAGANG ALAALA'),
+          title: _t('Our favorite moment', 'Ang paborito naming sandali'),
+          actionLabel: _t('Add photo', 'Magdagdag ng larawan'),
           onAction: widget.onAddMemory,
         ),
         const SizedBox(height: 12),
@@ -729,7 +737,7 @@ class _MemoryCardState extends State<_MemoryCard> {
                             top: 0,
                             bottom: 0,
                             child: _MemoryArrowButton(
-                              tooltip: 'Previous memory',
+                              tooltip: _t('Previous memory', 'Nakaraang alaala'),
                               icon: Icons.chevron_left_rounded,
                               onTap: widget.memories.length < 2
                                   ? null
@@ -741,7 +749,7 @@ class _MemoryCardState extends State<_MemoryCard> {
                             top: 0,
                             bottom: 0,
                             child: _MemoryArrowButton(
-                              tooltip: 'Next memory',
+                              tooltip: _t('Next memory', 'Susunod na alaala'),
                               icon: Icons.chevron_right_rounded,
                               onTap: widget.memories.length < 2
                                   ? null
@@ -780,7 +788,8 @@ class _MemoryCardState extends State<_MemoryCard> {
                                         // "1 of 2" says where she is in her
                                         // own photos, which is the only part
                                         // of it she needs.
-                                        '${_currentIndex + 1} of ${widget.memories.length}',
+                                        _t('${_currentIndex + 1} of ${widget.memories.length}',
+                                            '${_currentIndex + 1} sa ${widget.memories.length}'),
                                         style: const TextStyle(
                                           color: AppColors.brandText,
                                           fontSize: 12,
@@ -895,7 +904,8 @@ class _MemoryCardState extends State<_MemoryCard> {
                           size: 18,
                         ),
                         label: Text(
-                          'View gallery • ${widget.memories.length} photos',
+                          _t('View gallery • ${widget.memories.length} photos',
+                              'Tingnan ang gallery • ${widget.memories.length} larawan'),
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
@@ -959,9 +969,10 @@ class _EmptyMemoryCard extends StatelessWidget {
               size: 44,
             ),
             const SizedBox(height: 10),
-            const Text(
-              'Add Baby’s first memory',
-              style: TextStyle(
+            Text(
+              _t('Add Baby’s first memory',
+                  'Idagdag ang unang alaala ni Baby'),
+              style: const TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
@@ -975,7 +986,7 @@ class _EmptyMemoryCard extends StatelessWidget {
                 foregroundColor: Colors.white,
               ),
               icon: const Icon(Icons.add_a_photo_rounded),
-              label: const Text('Choose photo'),
+              label: Text(_t('Choose photo', 'Pumili ng larawan')),
             ),
           ],
         ),

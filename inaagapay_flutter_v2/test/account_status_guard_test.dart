@@ -24,6 +24,14 @@ void main() {
       );
     });
 
+    test('an archived account is told it no longer exists', () {
+      // Archiving sets status to inactive, but it is the portal's "remove".
+      expect(
+        AccountStatusGuard.signOutNotice(status: 'inactive', archived: true),
+        startsWith('This account no longer exists, so you were signed out.'),
+      );
+    });
+
     test('carries the administrator\'s reason when one was given', () {
       expect(
         AccountStatusGuard.signOutNotice(

@@ -7,6 +7,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../theme/app_colors.dart';
 import '../../services/supabase_service.dart';
 import '../../services/language_service.dart';
+import '../../services/network_status.dart';
 import '../../services/weight_gain_engine.dart';
 import '../../models/weight_gain_models.dart';
 import '../../widgets/app_input_field.dart';
@@ -48,6 +49,9 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
   String _t(String english, String filipino) {
     return LanguageService.translate(english, filipino);
   }
+
+  String _notANumber() =>
+      _t('Enter a valid number', 'Maglagay ng wastong numero');
 
   double? _toDouble(dynamic value) {
     if (value == null) return null;
@@ -308,6 +312,11 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
     bool isSaving = false;
     String? weightErrorText;
     String? heightErrorText;
+    // Set when a keystroke was refused and nothing valid has been typed since,
+    // so Save repeats "Enter a valid number" instead of "is required" for a
+    // field left empty only because her letters were not accepted.
+    bool weightRejected = false;
+    bool heightRejected = false;
 
     showModalBottomSheet(
       context: context,
@@ -329,14 +338,22 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
               heightErrorText = null;
 
               if (weightStr.isEmpty) {
-                weightErrorText = _t('Weight is required', 'Kailangan ang timbang');
-              } else if (weight == null || weight < 20 || weight > 200) {
+                weightErrorText = weightRejected
+                    ? _notANumber()
+                    : _t('Weight is required', 'Kailangan ang timbang');
+              } else if (weight == null) {
+                weightErrorText = _notANumber();
+              } else if (weight < 20 || weight > 200) {
                 weightErrorText = _t('Enter a valid weight (20-200 kg)', 'Magpasok ng wastong timbang (20-200 kg)');
               }
 
               if (heightStr.isEmpty) {
-                heightErrorText = _t('Height is required', 'Kailangan ang taas');
-              } else if (height == null || height < 50 || height > 250) {
+                heightErrorText = heightRejected
+                    ? _notANumber()
+                    : _t('Height is required', 'Kailangan ang taas');
+              } else if (height == null) {
+                heightErrorText = _notANumber();
+              } else if (height < 50 || height > 250) {
                 heightErrorText = _t('Enter a valid height (50-250 cm)', 'Magpasok ng wastong taas (50-250 cm)');
               }
             });
@@ -384,10 +401,16 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                 _loadData();
               }
             } catch (e) {
+              debugPrint('Could not save weight: $e');
               setModalState(() => isSaving = false);
               ScaffoldMessenger.of(ctx).showSnackBar(
                 SnackBar(
-                  content: Text('Error: $e'),
+                  // Was 'Error: $e' -- the raw exception, in English, in
+                  // front of a mother.
+                  content: Text(NetworkStatus.isNetworkError(e)
+                      ? NetworkStatus.offlineMessage()
+                      : _t('Your weight could not be saved. Please try again.',
+                          'Hindi na-save ang timbang mo. Pakisubukan muli.')),
                   backgroundColor: AppColors.error,
                   behavior: SnackBarBehavior.floating,
                 ),
@@ -456,8 +479,17 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                       readOnly: !_isUnlinked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,1}')),
+                        _MeasurementFormatter(() => setModalState(() {
+                              heightErrorText = _notANumber();
+                              heightRejected = true;
+                            })),
                       ],
+                      onChanged: (_) {
+                        heightRejected = false;
+                        if (heightErrorText != null) {
+                          setModalState(() => heightErrorText = null);
+                        }
+                      },
                       leadingIcon: Icons.height,
                       errorText: heightErrorText,
                     ),
@@ -491,8 +523,17 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
                       isRequired: true,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,1}')),
+                        _MeasurementFormatter(() => setModalState(() {
+                              weightErrorText = _notANumber();
+                              weightRejected = true;
+                            })),
                       ],
+                      onChanged: (_) {
+                        weightRejected = false;
+                        if (weightErrorText != null) {
+                          setModalState(() => weightErrorText = null);
+                        }
+                      },
                       leadingIcon: Icons.monitor_weight_outlined,
                       errorText: weightErrorText,
                     ),
@@ -675,9 +716,11 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
               const Icon(Icons.show_chart,
                   size: 20, color: AppColors.brandPrimary),
               const SizedBox(width: 8),
-              Text(
-                _t('Your Weight Over Time', 'Timbang Mo sa Paglipas ng Panahon'),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              Expanded(
+                child: Text(
+                  _t('Your Weight Over Time', 'Timbang Mo sa Paglipas ng Panahon'),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
               ),
             ],
           ),
@@ -1319,10 +1362,13 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
           ),
+          const SizedBox(width: 12),
           Text(
             value,
             // Softened off near-black. A column of bold #2D2D2D figures on
@@ -1697,5 +1743,29 @@ class _MotherVitalsPageState extends State<MotherVitalsPage> {
         label: Text(_t('Add weight', 'Idagdag ang timbang')),
       ),
     );
+  }
+}
+
+/// Keeps a measurement to digits and one decimal place, and says so when a
+/// keystroke is refused.
+///
+/// The filter used to drop anything else without a word. A mother typing
+/// "sixty" saw the field stay empty, and pressing Save told her the weight
+/// was required -- as if she had typed nothing at all.
+class _MeasurementFormatter extends TextInputFormatter {
+  _MeasurementFormatter(this.onRejected);
+
+  final VoidCallback onRejected;
+
+  static final RegExp _allowed = RegExp(r'^\d*\.?\d{0,1}$');
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (_allowed.hasMatch(newValue.text)) return newValue;
+    onRejected();
+    return oldValue;
   }
 }

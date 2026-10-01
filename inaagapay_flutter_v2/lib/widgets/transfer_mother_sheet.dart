@@ -17,7 +17,12 @@ Future<bool> showTransferMotherSheet(
   final moved = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
+    // The sheet's own surface, so the checkbox row's ripple shows. A coloured
+    // box inside a transparent sheet painted over it.
+    backgroundColor: AppColors.bgPrimary,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
     builder: (_) => _TransferMotherSheet(
       motherId: motherId,
       motherName: motherName,
@@ -52,6 +57,13 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
   bool _busy = false;
   String? _error;
 
+  // Checked together and shown under their own fields. One message at a time
+  // at the foot of the sheet meant a blank reason went unmentioned until a
+  // destination had been picked, and the message itself sat under the
+  // keyboard.
+  String? _destinationError;
+  String? _reasonError;
+
   @override
   void dispose() {
     _reason.dispose();
@@ -60,17 +72,24 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
   }
 
   Future<void> _submit() async {
-    if (_to == null) {
-      setState(() => _error = 'Choose the health center she is moving to.');
-      return;
-    }
-    if (_reason.text.trim().length < 5) {
-      setState(() => _error = 'Say briefly why she is being transferred.');
+    final destinationError =
+        _to == null ? 'Choose the health center she is moving to.' : null;
+    final reasonError = _reason.text.trim().length < 5
+        ? 'Say briefly why she is being transferred.'
+        : null;
+    if (destinationError != null || reasonError != null) {
+      setState(() {
+        _destinationError = destinationError;
+        _reasonError = reasonError;
+        _error = null;
+      });
       return;
     }
     setState(() {
       _busy = true;
       _error = null;
+      _destinationError = null;
+      _reasonError = null;
     });
     final result = await MotherTransferService.transfer(
       motherId: widget.motherId,
@@ -92,9 +111,12 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
     });
   }
 
-  InputDecoration _field(String label, {String? hint}) => InputDecoration(
+  InputDecoration _field(String label, {String? hint, String? error}) =>
+      InputDecoration(
         labelText: label,
         hintText: hint,
+        errorText: error,
+        errorMaxLines: 2,
         filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -102,11 +124,7 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.bgPrimary,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+    return Padding(
       padding: EdgeInsets.fromLTRB(
           20, 12, 20, MediaQuery.of(context).viewInsets.bottom + 24),
       child: SingleChildScrollView(
@@ -129,12 +147,14 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
               children: [
                 Icon(Icons.swap_horiz_rounded, color: AppColors.brandText),
                 SizedBox(width: 10),
-                Text(
-                  'Transfer to another health center',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                Expanded(
+                  child: Text(
+                    'Transfer to another health center',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
               ],
@@ -161,7 +181,7 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
                 return DropdownButtonFormField<int>(
                   isExpanded: true,
                   initialValue: _to,
-                  decoration: _field('Move to'),
+                  decoration: _field('Move to', error: _destinationError),
                   items: [
                     for (final d in options)
                       DropdownMenuItem(
@@ -169,7 +189,12 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
                         child: Text(d.label, overflow: TextOverflow.ellipsis),
                       ),
                   ],
-                  onChanged: _busy ? null : (value) => setState(() => _to = value),
+                  onChanged: _busy
+                      ? null
+                      : (value) => setState(() {
+                            _to = value;
+                            _destinationError = null;
+                          }),
                 );
               },
             ),
@@ -197,8 +222,14 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
               enabled: !_busy,
               maxLines: 2,
               maxLength: 300,
+              onChanged: (value) {
+                if (_reasonError != null && value.trim().length >= 5) {
+                  setState(() => _reasonError = null);
+                }
+              },
               decoration: _field('Reason',
-                  hint: 'e.g. Moved to Sabang with her family'),
+                  hint: 'e.g. Moved to Sabang with her family',
+                  error: _reasonError),
             ),
             if (_error != null) ...[
               Text(_error!,

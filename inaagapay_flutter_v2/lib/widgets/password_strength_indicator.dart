@@ -1,6 +1,7 @@
 // lib/widgets/password_strength_indicator.dart
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../services/language_service.dart';
 import '../models/password_strength.dart';
 
 class PasswordStrengthIndicator extends StatelessWidget {
@@ -16,17 +17,17 @@ class PasswordStrengthIndicator extends StatelessWidget {
 
     switch (strength) {
       case PasswordStrength.weak:
-        text = 'Weak';
+        text = LanguageService.translate('Weak', 'Mahina');
         color = AppColors.error;
         value = 0.33;
         break;
       case PasswordStrength.medium:
-        text = 'Medium';
+        text = LanguageService.translate('Medium', 'Katamtaman');
         color = AppColors.warning;
         value = 0.66;
         break;
       case PasswordStrength.strong:
-        text = 'Strong';
+        text = LanguageService.translate('Strong', 'Matibay');
         color = AppColors.success;
         value = 1.0;
         break;

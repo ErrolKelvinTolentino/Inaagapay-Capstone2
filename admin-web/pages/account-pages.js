@@ -82,9 +82,18 @@
   const SUPABASE_ANON =
     "sb_publishable_NzKIr8xr6JwYemrrTIEQag_RDCVi3S_";
 
-  if (window.supabase?.createClient && window.AdminNotifications) {
-    window.AdminNotifications.attach(
-      window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON),
-    );
+  const client = window.supabase?.createClient
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON)
+    : null;
+
+  if (client && window.AdminNotifications) {
+    window.AdminNotifications.attach(client);
+  }
+
+  // Every other page checks the account's status as it opens. These three
+  // did not, so an officer suspended while signed in could keep moving between
+  // Help, Profile and Settings as if nothing had happened.
+  if (client && window.verifyAdminSessionWithDB) {
+    window.verifyAdminSessionWithDB(client, { force: true });
   }
 })();

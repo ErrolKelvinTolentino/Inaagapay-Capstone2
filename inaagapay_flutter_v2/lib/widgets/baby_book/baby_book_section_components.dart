@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../services/language_service.dart';
 
 class BabyBookSectionHeader extends StatelessWidget {
   final String eyebrow;
@@ -187,7 +188,7 @@ class BabyBookTwinPregnancyBadge extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Text(
-            'Twin Pregnancy',
+            LanguageService.translate('Twin Pregnancy', 'Kambal na Pagbubuntis'),
             style: TextStyle(
               color: light ? Colors.white : const Color(0xFF8055A6),
               fontSize: 8,
@@ -346,6 +347,13 @@ class BabyBookPictureBanner extends StatelessWidget {
 }
 
 String babyBookFormatDate(DateTime date) {
+  if (LanguageService.isFilipino) {
+    const buwan = <String>[
+      'Ene', 'Peb', 'Mar', 'Abr', 'May', 'Hun',
+      'Hul', 'Ago', 'Set', 'Okt', 'Nob', 'Dis',
+    ];
+    return '${buwan[date.month - 1]} ${date.day}, ${date.year}';
+  }
   const months = <String>[
     'Jan',
     'Feb',

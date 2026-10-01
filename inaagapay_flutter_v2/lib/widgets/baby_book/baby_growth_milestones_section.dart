@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../models/baby_growth_milestone.dart';
 import '../../models/pregnancy_growth_stage.dart';
 import '../../theme/app_colors.dart';
+import '../../services/language_service.dart';
 import 'baby_book_section_components.dart';
 import '../../services/baby_book_repository.dart';
 import 'baby_growth_timeline.dart';
@@ -129,8 +130,10 @@ class _BabyGrowthMilestonesSectionState
       SnackBar(
         content: Text(
           markingDone
-              ? 'Could not save that “${previous.title}” is done. Please try again.'
-              : 'Could not remove the mark on “${previous.title}”. Please try again.',
+              ? LanguageService.translate('Could not save that “${previous.title}” is done. Please try again.',
+                  'Hindi nai-save na tapos na ang “${previous.title}”. Pakisubukan muli.')
+              : LanguageService.translate('Could not remove the mark on “${previous.title}”. Please try again.',
+                  'Hindi naalis ang marka sa “${previous.title}”. Pakisubukan muli.'),
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -208,28 +211,34 @@ class _BabyGrowthMilestonesSectionState
               ),
             ),
             const SizedBox(height: 18),
-            _DetailRow(label: 'Status', value: milestone.status.label),
+            _DetailRow(label: LanguageService.translate('Status', 'Katayuan'), value: milestone.status.label),
             if (milestone.expectedStartWeek != null)
               _DetailRow(
-                label: 'General timing',
+                label: LanguageService.translate('General timing', 'Karaniwang panahon'),
                 value: milestone.expectedStartWeek == milestone.expectedEndWeek
-                    ? 'Around week ${milestone.expectedStartWeek}'
-                    : 'Weeks ${milestone.expectedStartWeek}–${milestone.expectedEndWeek ?? 'onward'}',
+                    ? LanguageService.translate('Around week ${milestone.expectedStartWeek}',
+                        'Bandang linggo ${milestone.expectedStartWeek}')
+                    : LanguageService.translate(
+                        'Weeks ${milestone.expectedStartWeek}–${milestone.expectedEndWeek ?? 'onward'}',
+                        'Linggo ${milestone.expectedStartWeek}–${milestone.expectedEndWeek ?? 'pataas'}'),
               ),
             if (milestone.recordedPregnancyWeek != null)
               _DetailRow(
-                label: 'Recorded week',
-                value: 'Week ${milestone.recordedPregnancyWeek}',
+                label: LanguageService.translate('Recorded week', 'Linggong naitala'),
+                value: LanguageService.translate('Week ${milestone.recordedPregnancyWeek}',
+                    'Linggo ${milestone.recordedPregnancyWeek}'),
               ),
             if (milestone.completedDate != null)
               _DetailRow(
-                label: 'Recorded date',
+                label: LanguageService.translate('Recorded date', 'Petsang naitala'),
                 value: babyBookFormatDate(milestone.completedDate!),
               ),
             if (milestone.note?.isNotEmpty == true)
-              _DetailRow(label: 'Note', value: milestone.note!),
+              _DetailRow(label: LanguageService.translate('Note', 'Tala'), value: milestone.note!),
             if (milestone.recordedBy?.isNotEmpty == true)
-              _DetailRow(label: 'Recorded by', value: milestone.recordedBy!),
+              _DetailRow(
+                  label: LanguageService.translate('Recorded by', 'Itinala ni'),
+                  value: milestone.recordedBy!),
             const SizedBox(height: 18),
             FilledButton.icon(
               key: const ValueKey<String>('milestone-detail-toggle'),
@@ -255,8 +264,8 @@ class _BabyGrowthMilestonesSectionState
               ),
               label: Text(
                 milestone.status == BabyGrowthMilestoneStatus.completed
-                    ? 'Un-mark as completed'
-                    : 'Mark as completed',
+                    ? LanguageService.translate('Un-mark as completed', 'Alisin ang markang tapos na')
+                    : LanguageService.translate('Mark as completed', 'Markahang tapos na'),
               ),
             ),
           ],
@@ -302,9 +311,9 @@ class _BabyGrowthMilestonesSectionState
           //
           // What she still controls is whether each one has happened, which
           // is the mark, not the row.
-          const BabyBookSectionHeader(
-            eyebrow: 'CHECKUPS & SCANS',
-            title: 'Pregnancy Milestones',
+          BabyBookSectionHeader(
+            eyebrow: LanguageService.translate('CHECKUPS & SCANS', 'MGA CHECKUP AT SCAN'),
+            title: LanguageService.translate('Pregnancy Milestones', 'Mga Milestone ng Pagbubuntis'),
           ),
           if (_isTwin) ...[
             const SizedBox(height: 10),
@@ -314,15 +323,18 @@ class _BabyGrowthMilestonesSectionState
           // The banner used to promise a keepsake — "Small moments become
           // milestones", memories kept together as the journey grows. What
           // follows it is her checkup schedule, so the banner now says that.
-          const BabyBookPictureBanner(
-            key: ValueKey<String>('milestone-picture-card'),
+          BabyBookPictureBanner(
+            key: const ValueKey<String>('milestone-picture-card'),
             assetPath: 'assets/images/milestone_story_card.png',
-            semanticLabel:
+            semanticLabel: LanguageService.translate(
                 'Pregnant mother recording moments in her pregnancy journal',
-            eyebrow: 'YOUR PREGNANCY CARE',
-            title: 'Your checkups, in order.',
-            subtitle:
+                'Buntis na nagtatala ng mga sandali sa kanyang pregnancy journal'),
+            eyebrow: LanguageService.translate('YOUR PREGNANCY CARE', 'ANG IYONG PANGANGALAGA'),
+            title: LanguageService.translate('Your checkups, in order.',
+                'Ang iyong mga checkup, sunud-sunod.'),
+            subtitle: LanguageService.translate(
                 'The visits and scans usually done during pregnancy, and which ones you have had.',
+                'Ang mga pagbisita at scan na karaniwang ginagawa sa pagbubuntis, at kung alin na ang natapos mo.'),
           ),
           // "Your Current Growth Stage" stood here and said the week number,
           // then described the baby's development in the same terms as the
@@ -366,16 +378,20 @@ class _BabyGrowthMilestonesSectionState
                   child: const Icon(Icons.keyboard_arrow_down_rounded),
                 ),
                 label: Text(
-                  _showAllMilestones ? 'Show Less' : 'See All',
+                  _showAllMilestones
+                      ? LanguageService.translate('Show Less', 'Ipakita ang Mas Kaunti')
+                      : LanguageService.translate('See All', 'Tingnan Lahat'),
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
             ),
           ],
           const SizedBox(height: 12),
-          const Text(
-            'The weeks shown are the usual times, not fixed dates. Mark a checkup or scan as done only once it has really happened.',
-            style: TextStyle(
+          Text(
+            LanguageService.translate(
+                'The weeks shown are the usual times, not fixed dates. Mark a checkup or scan as done only once it has really happened.',
+                'Karaniwang panahon lamang ang mga linggong nakikita, hindi takdang petsa. Markahang tapos ang checkup o scan kapag talagang nangyari na ito.'),
+            style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 12.5,
               height: 1.45,

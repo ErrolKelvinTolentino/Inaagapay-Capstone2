@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
 import '../../services/language_service.dart';
+import '../../services/network_status.dart';
 import '../../models/child_model.dart';
 import 'child_baby_book_page.dart';
 import 'mother_child_stack.dart';
@@ -50,7 +51,11 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString();
+          _errorMessage = NetworkStatus.friendlyError(
+            e,
+            english: "Your children's records could not be loaded. Please try again.",
+            filipino: 'Hindi ma-load ang mga record ng iyong mga anak. Pakisubukan muli.',
+          );
           _loading = false;
         });
       }
@@ -112,7 +117,11 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString();
+          _errorMessage = NetworkStatus.friendlyError(
+            e,
+            english: "Your children's records could not be loaded. Please try again.",
+            filipino: 'Hindi ma-load ang mga record ng iyong mga anak. Pakisubukan muli.',
+          );
           _loading = false;
         });
       }
@@ -242,7 +251,11 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
               // in her app, and loud enough that it outweighed the children
               // listed beneath it. A banner naming a count should sit behind
               // the names, not in front of them.
-              height: 100,
+              //
+              // At least 100 high rather than exactly: in Filipino at the
+              // largest text size the subtitle takes three lines, and a fixed
+              // height cut the bottom of it off.
+              constraints: const BoxConstraints(minHeight: 100),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -273,13 +286,13 @@ class _MotherChildrenScreenState extends State<MotherChildrenScreen> {
                       ),
                     ),
                   ),
-                  Positioned(
-                    left: 24,
-                    top: 0,
-                    bottom: 0,
-                    right: 110,
+                  // Not positioned: the text sets the banner's height.
+                  Container(
+                    constraints: const BoxConstraints(minHeight: 97),
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.fromLTRB(24, 12, 110, 12),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
@@ -660,7 +673,8 @@ class _ChildCard extends StatelessWidget {
                   child: OutlinedButton.icon(
                     onPressed: onOpenBabyBook,
                     icon: const Icon(Icons.auto_stories_rounded, size: 17),
-                    label: const Text('Baby Book'),
+                    label: Text(
+                        LanguageService.translate('Baby Book', 'Baby Book')),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.brandPrimary,
                       side: BorderSide(
@@ -682,7 +696,8 @@ class _ChildCard extends StatelessWidget {
                   child: ElevatedButton.icon(
                     onPressed: onTap,
                     icon: const Icon(Icons.arrow_forward_rounded, size: 17),
-                    label: const Text('View Info'),
+                    label: Text(LanguageService.translate(
+                        'View Info', 'Tingnan ang Detalye')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.brandPrimary,
                       foregroundColor: Colors.white,

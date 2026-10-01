@@ -76,13 +76,18 @@ class PushNotificationService {
     if (kIsWeb) return;
 
     try {
-      final token = await FirebaseMessaging.instance.getToken();
+      // Bounded: getToken can wait indefinitely on a phone whose Play
+      // services cannot reach Firebase, and signing out waits on this.
+      final token = await FirebaseMessaging.instance
+          .getToken()
+          .timeout(const Duration(seconds: 10));
       if (token == null) return;
 
       await _client
           .from('device_tokens')
           .update({'is_active': false})
-          .eq('fcm_token', token);
+          .eq('fcm_token', token)
+          .timeout(const Duration(seconds: 10));
 
       if (kDebugMode) debugPrint('[Push] Token deactivated');
     } catch (e) {

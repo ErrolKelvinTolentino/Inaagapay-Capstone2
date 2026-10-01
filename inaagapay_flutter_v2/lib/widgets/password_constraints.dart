@@ -1,6 +1,7 @@
 // lib/widgets/password_constraints.dart
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../services/language_service.dart';
 
 class PasswordConstraints extends StatelessWidget {
   final String password;
@@ -21,12 +22,21 @@ class PasswordConstraints extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _ConstraintItem(
-            label: 'At least eight characters long', isValid: hasMinLength),
-        _ConstraintItem(label: 'At least one number', isValid: hasNumber),
+            label: LanguageService.translate('At least eight characters long',
+                'Hindi bababa sa walong character'),
+            isValid: hasMinLength),
         _ConstraintItem(
-            label: 'At least one uppercase letter', isValid: hasUppercase),
+            label: LanguageService.translate(
+                'At least one number', 'May kahit isang numero'),
+            isValid: hasNumber),
         _ConstraintItem(
-            label: 'At least one lowercase letter', isValid: hasLowercase),
+            label: LanguageService.translate('At least one uppercase letter',
+                'May kahit isang malaking titik'),
+            isValid: hasUppercase),
+        _ConstraintItem(
+            label: LanguageService.translate('At least one lowercase letter',
+                'May kahit isang maliit na titik'),
+            isValid: hasLowercase),
       ],
     );
   }

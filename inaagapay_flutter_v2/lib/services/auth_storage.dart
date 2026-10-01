@@ -220,7 +220,28 @@ class AuthStorage {
   }
 
   // Clear All
+  /// The app's language. A preference of the phone, not of the account, so it
+  /// survives signing out.
+  static const String _languageKey = 'app_language';
+
+  static Future<void> saveLanguage(String language) async {
+    await _storage.write(key: _languageKey, value: language);
+  }
+
+  static Future<String?> getLanguage() async {
+    return _storage.read(key: _languageKey);
+  }
+
   static Future<void> clearAll() async {
+    String? language;
+    try {
+      language = await _storage.read(key: _languageKey);
+    } catch (_) {}
     await _storage.deleteAll();
+    if (language != null) {
+      try {
+        await _storage.write(key: _languageKey, value: language);
+      } catch (_) {}
+    }
   }
 }

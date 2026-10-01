@@ -371,3 +371,67 @@ holds objects, rather than making them public without anyone looking.
 No app change is needed, and none of this depends on another migration.
 Idempotent. Verify with the queries at the bottom of the file, then change a
 photo on the midwife app's My Profile: it should say "Profile photo updated."
+
+---
+
+# BHC administrators and the account audit trail (2026-09-30)
+
+## `migrations/20260930_portal_admin_scope_and_audit_actor.sql`
+
+Found while working through the test cases left "In Progress" on 2026-09-30.
+
+- **BHC administrators get a facility.** `admin_assigned_facility_id()` looked
+  only at MHO and RHU postings, so an administrator the MHO posted to a
+  barangay health centre (possible since `20260927`) had none: it could not
+  create a single midwife, and its portal fell back to the first RHU and showed
+  that RHU's whole branch. BHC postings now count; an MHO or RHU posting still
+  wins, so existing RHU administrators are unaffected.
+- **Account changes name the officer.** Suspensions, archives, deletions and
+  officer-created accounts were filed under "System". The trigger now reads the
+  actor from the lifecycle functions, then `status_changed_by`, then
+  `created_by`. A deleted account's audit row says who deleted it.
+- **Hand-written audit rows name the right person.** `audit_trail_enrich()`
+  looked `audit_trail.account_id` up as a *midwife* id first. On the live data
+  administrators 1 and 5 share their number with a midwife, so their facility
+  edits and transfers were recorded under that midwife's name. It now uses the
+  new `audit_account_actor()`, which reads the id as what it is.
+- **Deleting an account named on stock records** now returns "Archive it
+  instead" rather than Postgres's foreign-key message.
+
+No portal or app change depends on it and no signature changes. Requires
+`20260826`, `20260925` and `20260927`. Idempotent.
+
+**Re-run hazard:** it redefines `admin_assigned_facility_id` (also in
+`20260821`), `audit_trail_enrich` (`20260826`), `audit_account_change`
+(`20260826`, `20260913`, `20260923`), `admin_delete_account` and
+`admin_archive_account` (`20260925`). Re-running any of those reverts this
+file's version; run this file again after it.
+
+Verify with `00_check_migration_state.sql` (six checks) and the queries at the
+bottom of the file.
+
+---
+
+# Mother transfers and patient numbers (2026-10-01)
+
+## `migrations/20261001_mother_transfer_patient_numbers.sql`
+
+**Transferring a mother failed for about half the mothers on the live data.**
+`transfer_mother()` moved the mother row first, which fires
+`trg_sync_mother_facility`; that trigger moved her active posting to the new
+centre *with the patient number the old centre had issued*. Every centre
+numbers from 1, so the number was usually taken there and the unique
+constraint `(facility_id, patient_number)` rolled the whole transfer back with
+Postgres's "duplicate key" message. Tested on a copy of the live data: 10 of 19
+transfers failed before, 19 of 19 succeed after.
+
+- `sync_mother_facility_assignment()`: a change of centre now ends the old
+  posting and opens a new one, numbered at the new centre. The old posting is
+  kept, so her history still shows the old number.
+- `transfer_mother()`: posts her to the new centre before moving the mother
+  row.
+
+No portal or app change needed. Requires `20260928_mother_transfer.sql`.
+Idempotent. **Re-run hazard:** `20260928_mother_transfer.sql` and
+`database/seed_redesigned_accounts.sql` define the old versions; run this file
+again after either.

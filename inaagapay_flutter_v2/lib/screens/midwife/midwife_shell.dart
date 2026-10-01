@@ -37,6 +37,8 @@ class _MidwifeShellState extends State<MidwifeShell> {
   int _currentIndex = 0;
   int _unreadAlertCount = 0;
   final ValueNotifier<int> _refreshNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<int> _mothersRefresh = ValueNotifier<int>(0);
+  final ValueNotifier<int> _childrenRefresh = ValueNotifier<int>(0);
   final List<bool> _visitedTabs = [true, false, false, false];
 
   final List<String> _titles = [
@@ -85,8 +87,14 @@ class _MidwifeShellState extends State<MidwifeShell> {
       _visitedTabs[index] = true;
     });
     _loadUnreadCount();
+    // Each tab is kept alive in the IndexedStack, so reopening one is the
+    // moment to check that what it shows is still true.
     if (index == 0) {
       _refreshNotifier.value++;
+    } else if (index == MidwifeShell.mothersTab) {
+      _mothersRefresh.value++;
+    } else if (index == MidwifeShell.childrenTab) {
+      _childrenRefresh.value++;
     }
   }
 
@@ -110,6 +118,8 @@ class _MidwifeShellState extends State<MidwifeShell> {
   void dispose() {
     MidwifeAlertBadge.count.removeListener(_onBadgeChanged);
     _refreshNotifier.dispose();
+    _mothersRefresh.dispose();
+    _childrenRefresh.dispose();
     super.dispose();
   }
 
@@ -148,10 +158,10 @@ class _MidwifeShellState extends State<MidwifeShell> {
                     onNavigateToTab: _onTabSelected,
                   ),
                   _visitedTabs[1]
-                      ? const MidwifeMothersScreen()
+                      ? MidwifeMothersScreen(refreshSignal: _mothersRefresh)
                       : const SizedBox.shrink(),
                   _visitedTabs[2]
-                      ? const MidwifeChildrenScreen()
+                      ? MidwifeChildrenScreen(refreshSignal: _childrenRefresh)
                       : const SizedBox.shrink(),
                   _visitedTabs[3]
                       ? const MidwifeSchedulesScreen()

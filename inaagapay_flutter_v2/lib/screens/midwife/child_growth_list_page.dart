@@ -525,6 +525,7 @@ $recordsSummary
           isFilipino: _showAiInFilipino,
           // AI narrative is written for a parent, so it stays on the mother app.
           // The midwife sees the rule-based summary instead.
+          showClinicalTerms: true,
         ),
         const SizedBox(height: 24),
         _buildHistorySection(),

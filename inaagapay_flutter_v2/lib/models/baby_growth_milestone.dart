@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import '../services/language_service.dart';
+
 enum BabyGrowthMilestoneCategory {
   development,
   movement,
@@ -29,10 +31,11 @@ enum BabyGrowthMilestoneStatus {
 
 extension BabyGrowthMilestoneStatusLabel on BabyGrowthMilestoneStatus {
   String get label => switch (this) {
-        BabyGrowthMilestoneStatus.upcoming => 'Upcoming',
-        BabyGrowthMilestoneStatus.current => 'Current',
-        BabyGrowthMilestoneStatus.completed => 'Completed',
-        BabyGrowthMilestoneStatus.notRecorded => 'Not yet recorded',
+        BabyGrowthMilestoneStatus.upcoming => LanguageService.translate('Upcoming', 'Paparating'),
+        BabyGrowthMilestoneStatus.current => LanguageService.translate('Current', 'Kasalukuyan'),
+        BabyGrowthMilestoneStatus.completed => LanguageService.translate('Completed', 'Tapos na'),
+        BabyGrowthMilestoneStatus.notRecorded =>
+          LanguageService.translate('Not yet recorded', 'Hindi pa naitatala'),
       };
 }
 

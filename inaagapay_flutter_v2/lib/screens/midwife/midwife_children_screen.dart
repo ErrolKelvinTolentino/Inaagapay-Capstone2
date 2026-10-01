@@ -1,5 +1,6 @@
 // lib/screens/midwife/midwife_children_screen.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
@@ -10,7 +11,11 @@ import 'child_profile_page.dart';
 import 'add_child_choice.dart';
 
 class MidwifeChildrenScreen extends StatefulWidget {
-  const MidwifeChildrenScreen({super.key});
+  const MidwifeChildrenScreen({super.key, this.refreshSignal});
+
+  /// Bumped by the shell each time this tab is opened again. See the same
+  /// field on MidwifeMothersScreen: children move with a transferred mother.
+  final ValueListenable<int>? refreshSignal;
 
   @override
   State<MidwifeChildrenScreen> createState() => _MidwifeChildrenScreenState();
@@ -32,26 +37,37 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
   int _currentPage = 1;
   static const int _pageSize = 5;
 
+  /// Owned by one midwife account, for the reason given on the mothers list.
   static List<Map<String, dynamic>>? _childrenCache;
+  static int? _childrenCacheOwner;
+  int? _accountId;
 
   @override
   void initState() {
     super.initState();
     _loadMidwifeContext();
     _searchController.addListener(_onSearchChanged);
+    widget.refreshSignal?.addListener(_onTabReopened);
   }
 
   @override
   void dispose() {
+    widget.refreshSignal?.removeListener(_onTabReopened);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onTabReopened() {
+    if (_assignedBhcId != null) _revalidateChildren();
   }
 
   Future<void> _loadMidwifeContext() async {
     try {
       final accountId = await AuthStorage.getUserId();
       if (accountId == null) throw Exception('Not authenticated');
-      
+      _accountId = accountId;
+      if (_childrenCacheOwner != accountId) _childrenCache = null;
+
       final ctx = await SupabaseService.getMidwifeContext(accountId);
       if (ctx['success'] != true) {
         throw Exception(
@@ -214,7 +230,8 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
     });
 
     _childrenCache = childrenList;
-    
+    _childrenCacheOwner = _accountId;
+
     if (mounted) {
       setState(() {
         _children = childrenList;
@@ -335,12 +352,15 @@ class _MidwifeChildrenScreenState extends State<MidwifeChildrenScreen> {
         }
       }
 
-      if (hasChanges && mounted) {
+      if (hasChanges) {
         _childrenCache = childrenList;
-        setState(() {
-          _children = childrenList;
-        });
-        _applyFilters();
+        _childrenCacheOwner = _accountId;
+        if (mounted) {
+          setState(() {
+            _children = childrenList;
+          });
+          _applyFilters();
+        }
       }
     } catch (e) {
       debugPrint('Error revalidating children: $e');

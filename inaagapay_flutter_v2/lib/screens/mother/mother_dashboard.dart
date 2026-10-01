@@ -15,6 +15,7 @@ import '../../models/baby_growth_model.dart';
 import '../../models/weight_gain_models.dart';
 import '../../services/auth_storage.dart';
 import '../../services/language_service.dart';
+import '../../services/network_status.dart';
 import '../../services/maternal_td_alert.dart';
 import '../../services/maternal_td_service.dart';
 import '../../services/mother_profile_service.dart';
@@ -435,7 +436,11 @@ class _MotherDashboardState extends State<MotherDashboard> {
       debugPrint('Error loading dashboard: $e');
       setState(() {
         _isLoading = false;
-        _errorMessage = e.toString();
+        _errorMessage = NetworkStatus.friendlyError(
+          e,
+          english: 'Your home page could not be loaded. Please try again.',
+          filipino: 'Hindi ma-load ang iyong home page. Pakisubukan muli.',
+        );
       });
     }
   }
@@ -2498,7 +2503,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
                 heightError = _t('Height is required', 'Kailangan ang taas');
                 heightWarning = null;
               } else if (height == null) {
-                heightError = _t('Enter a valid number', 'Maglayag ng wastong numero');
+                heightError = _t('Enter a valid number', 'Maglagay ng wastong numero');
                 heightWarning = null;
               } else if (height < 50 || height > 250) {
                 heightError = _t('Must be 50-250 cm', 'Dapat ay 50-250 cm');
@@ -2520,7 +2525,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
                 weightError = _t('Weight is required', 'Kailangan ang timbang');
                 weightWarning = null;
               } else if (weight == null) {
-                weightError = _t('Enter a valid number', 'Maglayag ng wastong numero');
+                weightError = _t('Enter a valid number', 'Maglagay ng wastong numero');
                 weightWarning = null;
               } else if (weight < 10 || weight > 350) {
                 weightError = _t('Must be 10-350 kg', 'Dapat ay 10-350 kg');
@@ -2542,7 +2547,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
                 ppwError = _t('Pre-pregnancy weight is required', 'Kailangan ang timbang bago mabuntis');
                 ppwWarning = null;
               } else if (ppw == null) {
-                ppwError = _t('Enter a valid number', 'Maglayag ng wastong numero');
+                ppwError = _t('Enter a valid number', 'Maglagay ng wastong numero');
                 ppwWarning = null;
               } else if (ppw < 10 || ppw > 350) {
                 ppwError = _t('Must be 10-350 kg', 'Dapat ay 10-350 kg');
@@ -2623,7 +2628,11 @@ class _MotherDashboardState extends State<MotherDashboard> {
               if (ctx.mounted) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   SnackBar(
-                    content: Text(_t('Error saving vitals: ', 'Kamalian sa pag-save ng vitals: ') + e.toString()),
+                    content: Text(NetworkStatus.friendlyError(
+                      e,
+                      english: 'Your vitals could not be saved. Please try again.',
+                      filipino: 'Hindi na-save ang iyong vitals. Pakisubukan muli.',
+                    )),
                     backgroundColor: AppColors.error,
                     behavior: SnackBarBehavior.floating,
                   ),
@@ -2985,12 +2994,14 @@ class _MotherDashboardState extends State<MotherDashboard> {
                   color: AppColors.brandPrimary,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  '${_t('EDD', 'Takdang Araw')}: $_dueDate',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textPrimary,
+                Expanded(
+                  child: Text(
+                    '${_t('EDD', 'Takdang Araw')}: $_dueDate',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
               ],
@@ -3423,11 +3434,15 @@ class _MotherDashboardState extends State<MotherDashboard> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              '${_t('on', 'noong')} ${DateFormat('MMM d, yyyy').format(_latestVitalsDate!)}',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondary,
+                            // Flexible: beside the source badge, the date ran
+                            // off the card at the largest text size.
+                            Flexible(
+                              child: Text(
+                                '${_t('on', 'noong')} ${DateFormat('MMM d, yyyy').format(_latestVitalsDate!)}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
                             ),
                           ],
@@ -3728,15 +3743,19 @@ class _MotherDashboardState extends State<MotherDashboard> {
       children: [
         Row(
           children: [
-            Text(
-              _t('Weight gained so far', 'Nadagdag na timbang'),
-              style: const TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
-                color: AppColors.inputText,
+            // Expanded rather than a Spacer after it: in Filipino at the
+            // largest text size the heading and the status did not fit.
+            Expanded(
+              child: Text(
+                _t('Weight gained so far', 'Nadagdag na timbang'),
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.inputText,
+                ),
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 8),
             // Word plus colour, so the status survives a colour-blind reader.
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),

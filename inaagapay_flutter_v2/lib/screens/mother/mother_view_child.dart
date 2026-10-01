@@ -12,6 +12,7 @@ import '../../services/groq_service.dart';
 import '../../widgets/growth_summary_card.dart';
 import '../../services/growth_calculator.dart';
 import '../../services/language_service.dart';
+import '../../services/network_status.dart';
 
 class MotherViewChildPage extends StatefulWidget {
   final VoidCallback onBackToChildren;
@@ -141,7 +142,11 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
         setState(() => loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error loading profile: $e'),
+            content: Text(NetworkStatus.friendlyError(
+              e,
+              english: "Your child's profile could not be loaded. Please try again.",
+              filipino: 'Hindi ma-load ang profile ng iyong anak. Pakisubukan muli.',
+            )),
             backgroundColor: AppColors.error,
           ),
         );
@@ -364,8 +369,8 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.brandPrimary,
                 ),
-                child:
-                    const Text('Retry', style: TextStyle(color: Colors.white)),
+                child: Text(_t('Retry', 'Subukan Muli'),
+                    style: const TextStyle(color: Colors.white)),
               ),
             ],
           ),
@@ -861,7 +866,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                                 } catch (e) {
                                   setStateSheet(() => isSavingLocal = false);
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                                    SnackBar(content: Text(NetworkStatus.friendlyError(e, english: 'The measurement could not be saved. Please try again.', filipino: 'Hindi na-save ang sukat. Pakisubukan muli.')), backgroundColor: AppColors.error),
                                   );
                                 }
                               },

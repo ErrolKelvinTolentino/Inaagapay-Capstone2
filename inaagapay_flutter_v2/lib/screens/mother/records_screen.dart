@@ -1,5 +1,7 @@
 // lib/screens/mother/records_screen.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../widgets/record_image.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +11,7 @@ import '../../services/language_service.dart';
 import '../../services/maternal_td_service.dart';
 import '../../services/baby_book_repository.dart';
 import '../../services/mother_profile_service.dart';
+import '../../services/network_status.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/headline.dart';
 import '../../widgets/main_button.dart';
@@ -30,6 +33,15 @@ class _RecordsScreenState extends State<RecordsScreen>
   bool _isLoading = true;
   bool _isOpeningRecord = false;
   String? _errorMessage;
+
+  /// Offline handling. The raw exception used to be printed on the error
+  /// screen ("ClientException with SocketException: Failed host lookup..."),
+  /// a refresh made offline replaced records she had already loaded with that
+  /// error, and nothing brought them back until she found the Retry button.
+  bool _errorIsOffline = false;
+  bool _hasLoadedOnce = false;
+  bool _showingOfflineCopy = false;
+  Timer? _reconnectTimer;
   int? _motherId;
   bool _isUnlinked = false;
   bool _isUnlinkedBannerDismissed = false;
@@ -78,9 +90,26 @@ class _RecordsScreenState extends State<RecordsScreen>
 
   @override
   void dispose() {
+    _reconnectTimer?.cancel();
     _searchController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Reloads by itself once the connection is back, so she is not left
+  /// looking at an error she has to know to dismiss.
+  void _reloadWhenOnline() {
+    if (_reconnectTimer?.isActive ?? false) return;
+    _reconnectTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (await NetworkStatus.isOnline()) {
+        timer.cancel();
+        if (mounted) _loadMotherData();
+      }
+    });
   }
 
   String _t(String english, String filipino) {
@@ -104,8 +133,10 @@ class _RecordsScreenState extends State<RecordsScreen>
 
   Future<void> _loadMotherData() async {
     setState(() {
-      _isLoading = true;
+      // A refresh keeps what is on screen; only the first load blanks it.
+      _isLoading = !_hasLoadedOnce;
       _errorMessage = null;
+      _errorIsOffline = false;
     });
 
     try {
@@ -202,15 +233,34 @@ class _RecordsScreenState extends State<RecordsScreen>
 
         await _loadRecordsForPregnancies(pregnancyIds);
       }
+      _hasLoadedOnce = true;
+      _showingOfflineCopy = false;
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString();
-      });
+      debugPrint('Could not load records: $e');
+      final offline = NetworkStatus.isNetworkError(e);
+      if (mounted) {
+        setState(() {
+          if (offline && _hasLoadedOnce) {
+            // What she already has is still right; say it may be out of date
+            // rather than take it away.
+            _showingOfflineCopy = true;
+          } else {
+            _errorIsOffline = offline;
+            _errorMessage = offline
+                ? NetworkStatus.offlineMessage()
+                : _t('Your records could not be loaded. Please try again.',
+                    'Hindi ma-load ang iyong records. Pakisubukan muli.');
+          }
+        });
+      }
+      if (offline) _reloadWhenOnline();
     } finally {
-      setState(() {
-        _isLoading = false;
-        _displayCount = _pageSize; // Reset pagination on reload
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _displayCount = _pageSize; // Reset pagination on reload
+        });
+      }
     }
   }
 
@@ -1461,16 +1511,19 @@ class _RecordsScreenState extends State<RecordsScreen>
                       color: AppColors.error.withValues(alpha: 0.08),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.error_outline,
+                    child: Icon(
+                      _errorIsOffline ? Icons.wifi_off_rounded : Icons.error_outline,
                       size: 48,
                       color: AppColors.error,
                     ),
                   ),
                   const SizedBox(height: 16),
                   Headline(
-                      text: _t('Failed to Load Records',
-                          'Hindi Na-load ang Records')),
+                      text: _errorIsOffline
+                          ? _t('No Internet Connection',
+                              'Walang Koneksyon sa Internet')
+                          : _t('Failed to Load Records',
+                              'Hindi Na-load ang Records')),
                   const SizedBox(height: 8),
                   Text(
                     _errorMessage!,
@@ -1495,6 +1548,35 @@ class _RecordsScreenState extends State<RecordsScreen>
 
         return Column(
           children: [
+            if (_showingOfflineCopy)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.wifi_off_rounded,
+                        size: 18, color: AppColors.warning),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _t('You are offline. These are the records last loaded; they will update when you are back online.',
+                            'Offline ka. Ito ang mga record na huling na-load; mag-a-update ito kapag may koneksyon na.'),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          height: 1.35,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             TabBar(
               controller: _tabController,
               dividerColor: Colors.transparent,

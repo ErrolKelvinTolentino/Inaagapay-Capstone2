@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../services/auth_storage.dart';
 import '../../services/language_service.dart';
 import '../../services/maternal_td_alert.dart';
+import '../../services/network_status.dart';
 import '../../services/supabase_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/push_notification_service.dart';
@@ -178,11 +179,17 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
     super.dispose();
   }
 
+  /// Drives the offline banner under the header.
+  ///
+  /// This was a stub that always answered "online", so the banner was drawn
+  /// by code that could never show it: a mother with no signal opened her
+  /// records and was told nothing. It is a name lookup, not a request, so
+  /// repeating it costs no database egress.
   Future<void> _checkConnectivity() async {
-    // Skip connectivity check on web (dart:io not available)
-    // On mobile, this would use InternetAddress.lookup
-    // For now, assume online — Supabase client handles errors gracefully
-    if (mounted && _isOffline) setState(() => _isOffline = false);
+    final online = await NetworkStatus.isOnline();
+    if (mounted && online == _isOffline) {
+      setState(() => _isOffline = !online);
+    }
   }
 
   Future<void> _setupNotifications() async {
@@ -843,13 +850,16 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
                         const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                     color: AppColors.error,
                     child: Row(
-                      children: const [
-                        Icon(Icons.wifi_off, size: 16, color: Colors.white),
-                        SizedBox(width: 8),
+                      children: [
+                        const Icon(Icons.wifi_off, size: 16, color: Colors.white),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'No internet connection — some features may not work.',
-                            style: TextStyle(
+                            LanguageService.translate(
+                              'No internet connection — some features may not work.',
+                              'Walang koneksyon sa internet — maaaring hindi gumana ang ilang bahagi.',
+                            ),
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -896,7 +906,12 @@ class _MotherDashboardShellState extends State<MotherDashboardShell> {
                     label: LanguageService.translate(
                         tab.labelEnglish, tab.labelFilipino),
                     isActive: safeIndex == index,
-                    onTap: () => setState(() => _currentIndex = index),
+                    onTap: () {
+                      setState(() => _currentIndex = index);
+                      // Opening a tab is when she needs to know, not up to
+                      // thirty seconds later on the next timer tick.
+                      _checkConnectivity();
+                    },
                   ),
               ],
             ),

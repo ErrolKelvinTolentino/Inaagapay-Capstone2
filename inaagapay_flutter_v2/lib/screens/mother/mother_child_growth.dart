@@ -324,13 +324,14 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
-          children: const [
-            Icon(Icons.info_outline, color: AppColors.brandPrimary),
-            SizedBox(width: 8),
+          children: [
+            const Icon(Icons.info_outline, color: AppColors.brandPrimary),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'What the colours mean',
-                style: TextStyle(
+                LanguageService.translate(
+                    'What the colours mean', 'Ano ang ibig sabihin ng mga kulay'),
+                style: const TextStyle(
                   fontSize: 16.5,
                   fontWeight: FontWeight.w700,
                   color: AppColors.inputText,
@@ -351,27 +352,35 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'We compare your child with the sizes expected for other children of the same age and sex.',
-                style: TextStyle(
+              Text(
+                LanguageService.translate(
+                  'We compare your child with the sizes expected for other children of the same age and sex.',
+                  'Inihahambing namin ang iyong anak sa inaasahang laki ng ibang batang kapareho niya ng edad at kasarian.',
+                ),
+                style: const TextStyle(
                     fontSize: 13.5, height: 1.5, color: AppColors.inputText),
               ),
               const SizedBox(height: 14),
               _colourMeaningRow(
                 colour: AppColors.success,
-                label: 'Green',
-                meaning: 'The usual size for this age.',
+                label: LanguageService.translate('Green', 'Berde'),
+                meaning: LanguageService.translate('The usual size for this age.',
+                    'Karaniwang laki para sa edad na ito.'),
               ),
               const SizedBox(height: 10),
               _colourMeaningRow(
                 colour: AppColors.warning,
-                label: 'Yellow',
-                meaning:
+                label: LanguageService.translate('Yellow', 'Dilaw'),
+                meaning: LanguageService.translate(
                     'Smaller or bigger than usual. Worth showing your midwife — it does not mean something is wrong.',
+                    'Mas maliit o mas malaki kaysa karaniwan. Mainam na ipakita sa iyong midwife — hindi ito nangangahulugang may problema.'),
               ),
               const SizedBox(height: 14),
               Text(
-                'Based on the World Health Organization Child Growth Standards. This is a guide for following your child\'s growth, not a diagnosis.',
+                LanguageService.translate(
+                  "Based on the World Health Organization Child Growth Standards. This is a guide for following your child's growth, not a diagnosis.",
+                  'Batay sa Child Growth Standards ng World Health Organization. Gabay ito sa pagsubaybay sa paglaki ng iyong anak, hindi diagnosis.',
+                ),
                 style: TextStyle(
                     fontSize: 11, height: 1.45, color: Colors.grey.shade600),
               ),
@@ -387,7 +396,7 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
               textStyle:
                   const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
             ),
-            child: const Text('Got it'),
+            child: Text(LanguageService.translate('Got it', 'Sige')),
           ),
         ],
       ),
@@ -552,7 +561,7 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
 
     if (medianSpots.length >= 2) {
       curves.add(ReferenceCurve(
-        label: 'Median',
+        label: LanguageService.translate('Median', 'Karaniwang sukat'),
         spots: medianSpots,
         color: Colors.green.withValues(alpha: 0.4),
         strokeWidth: 1.2,
@@ -748,7 +757,7 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
           show: activeTab == 0,
         ),
         _buildMetricCard(
-          label: 'Weight',
+          label: LanguageService.translate('Weight', 'Timbang'),
           value: latestWeight > 0
               ? '${latestWeight.toStringAsFixed(1)} kg'
               : 'n/a',
@@ -758,7 +767,7 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
           show: activeTab == 1,
         ),
         _buildMetricCard(
-          label: 'Height',
+          label: LanguageService.translate('Height', 'Tangkad'),
           value: latestHeight > 0
               ? '${latestHeight.toStringAsFixed(1)} cm'
               : 'n/a',

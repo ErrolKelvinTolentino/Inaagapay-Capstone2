@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/pregnancy_growth_stage.dart';
 import '../theme/app_colors.dart';
+import '../services/language_service.dart';
 import 'baby_book/baby_book_section_components.dart';
 
 class PregnancyGrowthJourney extends StatefulWidget {
@@ -100,8 +101,10 @@ class _PregnancyGrowthJourneyState extends State<PregnancyGrowthJourney> {
             Expanded(
               child: Text(
                 plural
-                    ? 'Your Babies’ Growth Journey'
-                    : 'Your Baby’s Growth Journey',
+                    ? LanguageService.translate('Your Babies’ Growth Journey',
+                        'Ang Paglaki ng Iyong mga Sanggol')
+                    : LanguageService.translate('Your Baby’s Growth Journey',
+                        'Ang Paglaki ng Iyong Sanggol'),
                 style: const TextStyle(
                   color: AppColors.headingSoft,
                   fontSize: 22,
@@ -171,6 +174,12 @@ const String pregnancyGuideDisclaimer =
     'of your doctor or midwife — they know your record and can answer for '
     'your pregnancy.';
 
+const String pregnancyGuideDisclaimerFilipino =
+    'Magkakaiba ang bawat pagbubuntis. Ang mababasa mo rito ay pangkalahatang '
+    'gabay para sa karamihan ng pagbubuntis, hindi paglalarawan ng sa iyo. '
+    'Hindi nito pinapalitan ang iyong doktor o midwife — sila ang nakakaalam '
+    'ng iyong record at makasasagot tungkol sa iyong pagbubuntis.';
+
 /// Opens the guide disclaimer as a bottom sheet.
 Future<void> showPregnancyGuideDisclaimer(BuildContext context) {
   return showModalBottomSheet<void>(
@@ -213,10 +222,10 @@ Future<void> showPregnancyGuideDisclaimer(BuildContext context) {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'About this guide',
-                  style: TextStyle(
+                  LanguageService.translate('About this guide', 'Tungkol sa gabay na ito'),
+                  style: const TextStyle(
                     color: AppColors.headingSoft,
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
@@ -227,9 +236,9 @@ Future<void> showPregnancyGuideDisclaimer(BuildContext context) {
             ],
           ),
           const SizedBox(height: 14),
-          const Text(
-            pregnancyGuideDisclaimer,
-            style: TextStyle(
+          Text(
+            LanguageService.translate(pregnancyGuideDisclaimer, pregnancyGuideDisclaimerFilipino),
+            style: const TextStyle(
               color: AppColors.inputText,
               fontSize: 15,
               height: 1.55,
@@ -248,9 +257,9 @@ Future<void> showPregnancyGuideDisclaimer(BuildContext context) {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              child: const Text(
-                'Got it',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+              child: Text(
+                LanguageService.translate('Got it', 'Sige'),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
               ),
             ),
           ),
@@ -283,7 +292,8 @@ class PregnancyCoverCard extends StatelessWidget {
     return BabyBookPictureCardShell(
       key: const ValueKey<String>('current-pregnancy-picture-card'),
       assetPath: 'assets/images/current_pregnancy_card.png',
-      semanticLabel: 'Pregnant mother holding her growing belly',
+      semanticLabel: LanguageService.translate('Pregnant mother holding her growing belly',
+          'Buntis na hawak ang lumalaking tiyan'),
       height: 262 + contentTopInset,
       imageKey: const ValueKey('current-pregnancy-card-artwork'),
       child: Padding(
@@ -314,8 +324,9 @@ class PregnancyCoverCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               pregnancy.currentWeek <= 0
-                  ? 'Your pregnancy'
-                  : '${pregnancy.currentWeek} Weeks Pregnant',
+                  ? LanguageService.translate('Your pregnancy', 'Ang iyong pagbubuntis')
+                  : LanguageService.translate('${pregnancy.currentWeek} Weeks Pregnant',
+                      '${pregnancy.currentWeek} Linggong Buntis'),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 27.5,
@@ -326,7 +337,8 @@ class PregnancyCoverCard extends StatelessWidget {
             ),
             const SizedBox(height: 3),
             Text(
-              'Month ${pregnancy.currentMonth} • ${pregnancy.trimester}',
+              LanguageService.translate('Month ${pregnancy.currentMonth} • ${pregnancy.trimester}',
+                  'Buwan ${pregnancy.currentMonth} • ${pregnancy.trimester}'),
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.92),
                 fontSize: 15,
@@ -337,7 +349,7 @@ class PregnancyCoverCard extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  'Pregnancy progress',
+                  LanguageService.translate('Pregnancy progress', 'Progreso ng pagbubuntis'),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 12,
@@ -376,7 +388,8 @@ class PregnancyCoverCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'Estimated due date: ${babyBookFormatDate(pregnancy.estimatedDueDate)}',
+                    LanguageService.translate('Estimated due date: ${babyBookFormatDate(pregnancy.estimatedDueDate)}',
+                        'Tinatayang petsa ng panganganak: ${babyBookFormatDate(pregnancy.estimatedDueDate)}'),
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.95),
                       fontSize: 13.5,
@@ -458,8 +471,10 @@ class _PregnancyStageCard extends StatelessWidget {
                         // screen reader nor a colourblind mother, so the
                         // spoken label still carries it.
                         label: isCurrentStage
-                            ? '${stage.weekRange}, ${stage.trimester}, your current month'
-                            : '${stage.weekRange}, ${stage.trimester}, previewing this month',
+                            ? LanguageService.translate('${stage.weekRange}, ${stage.trimester}, your current month',
+                                '${stage.weekRange}, ${stage.trimester}, ang kasalukuyan mong buwan')
+                            : LanguageService.translate('${stage.weekRange}, ${stage.trimester}, previewing this month',
+                                '${stage.weekRange}, ${stage.trimester}, sinisilip ang buwang ito'),
                         child: Text(
                           stage.weekRange.toUpperCase(),
                           key:
@@ -493,10 +508,10 @@ class _PregnancyStageCard extends StatelessWidget {
                 ),
               Semantics(
                 button: true,
-                label: 'About this guide',
+                label: LanguageService.translate('About this guide', 'Tungkol sa gabay na ito'),
                 child: IconButton(
                   key: const ValueKey('pregnancy-guide-disclaimer'),
-                  tooltip: 'About this guide',
+                  tooltip: LanguageService.translate('About this guide', 'Tungkol sa gabay na ito'),
                   visualDensity: VisualDensity.compact,
                   onPressed: () => showPregnancyGuideDisclaimer(context),
                   icon: const Icon(
@@ -522,7 +537,9 @@ class _PregnancyStageCard extends StatelessWidget {
           const SizedBox(height: 17),
           _GrowthTextSection(
             icon: plural ? Icons.groups_2_outlined : Icons.favorite_outline,
-            title: plural ? 'Your Babies This Month' : 'Your Baby This Month',
+            title: plural
+                ? LanguageService.translate('Your Babies This Month', 'Ang Iyong mga Sanggol Ngayong Buwan')
+                : LanguageService.translate('Your Baby This Month', 'Ang Iyong Sanggol Ngayong Buwan'),
             child: Text(
               stage.developmentFor(pregnancy.numberOfBabies),
               style: const TextStyle(
@@ -535,13 +552,13 @@ class _PregnancyStageCard extends StatelessWidget {
           const SizedBox(height: 12),
           _GrowthTextSection(
             icon: Icons.auto_awesome_rounded,
-            title: 'Development Highlights',
+            title: LanguageService.translate('Development Highlights', 'Mahahalagang Pag-unlad'),
             child: _DotList(items: stage.developmentHighlights),
           ),
           const SizedBox(height: 12),
           _GrowthTextSection(
             icon: Icons.self_improvement_rounded,
-            title: 'What Mom May Experience',
+            title: LanguageService.translate('What Mom May Experience', 'Maaaring Maranasan ni Nanay'),
             child: _DotList(items: stage.motherChanges),
           ),
           const SizedBox(height: 12),
@@ -639,7 +656,8 @@ class _FetalGrowthVisual extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  'Month ${stage.month} illustration',
+                  LanguageService.translate('Month ${stage.month} illustration',
+                      'Larawan ng buwan ${stage.month}'),
                   style: const TextStyle(
                     color: AppColors.brandText,
                     fontSize: 12,
@@ -856,7 +874,7 @@ class _MonthNavigation extends StatelessWidget {
         children: [
           IconButton(
             key: const ValueKey('pregnancy-previous'),
-            tooltip: 'Previous pregnancy month',
+            tooltip: LanguageService.translate('Previous pregnancy month', 'Nakaraang buwan ng pagbubuntis'),
             onPressed: onPrevious,
             style: IconButton.styleFrom(
               backgroundColor: const Color(0xFFFFEDF4),
@@ -869,8 +887,9 @@ class _MonthNavigation extends StatelessWidget {
             child: Semantics(
               // The visible "Month 3 of 9" is gone, so the position it carried
               // is handed to the screen reader here instead of being lost.
-              label:
+              label: LanguageService.translate(
                   'Month ${currentIndex + 1} of $totalMonths, showing three months',
+                  'Buwan ${currentIndex + 1} sa $totalMonths, ipinapakita ang tatlong buwan'),
               container: true,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -892,7 +911,7 @@ class _MonthNavigation extends StatelessWidget {
           ),
           IconButton(
             key: const ValueKey('pregnancy-next'),
-            tooltip: 'Next pregnancy month',
+            tooltip: LanguageService.translate('Next pregnancy month', 'Susunod na buwan ng pagbubuntis'),
             onPressed: onNext,
             style: IconButton.styleFrom(
               backgroundColor: AppColors.brandPrimary,
@@ -944,7 +963,8 @@ class _MonthCircle extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: 'View pregnancy month $month',
+      label: LanguageService.translate('View pregnancy month $month',
+          'Tingnan ang buwan $month ng pagbubuntis'),
       child: InkWell(
         key: ValueKey<String>('pregnancy-month-dot-$month'),
         onTap: onTap,

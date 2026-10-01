@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../theme/app_colors.dart';
 import '../../services/language_service.dart';
+import '../../services/network_status.dart';
 import '../../services/mother_profile_service.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/secondary_header.dart';
@@ -243,7 +244,7 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+        SnackBar(content: Text(NetworkStatus.friendlyError(e, english: 'The change could not be saved. Please try again.', filipino: 'Hindi na-save ang pagbabago. Pakisubukan muli.')), backgroundColor: AppColors.error),
       );
     }
   }
@@ -883,7 +884,7 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
                                       setModalState(() => saving = false);
                                       if (mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                                          SnackBar(content: Text(NetworkStatus.friendlyError(e, english: 'The change could not be saved. Please try again.', filipino: 'Hindi na-save ang pagbabago. Pakisubukan muli.')), backgroundColor: AppColors.error),
                                         );
                                       }
                                     }
@@ -1339,7 +1340,7 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+            SnackBar(content: Text(NetworkStatus.friendlyError(e, english: 'The change could not be saved. Please try again.', filipino: 'Hindi na-save ang pagbabago. Pakisubukan muli.')), backgroundColor: AppColors.error),
           );
         }
       }
@@ -1386,7 +1387,7 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+            SnackBar(content: Text(NetworkStatus.friendlyError(e, english: 'The change could not be saved. Please try again.', filipino: 'Hindi na-save ang pagbabago. Pakisubukan muli.')), backgroundColor: AppColors.error),
           );
         }
       }
@@ -1834,7 +1835,7 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+            SnackBar(content: Text(NetworkStatus.friendlyError(e, english: 'The change could not be saved. Please try again.', filipino: 'Hindi na-save ang pagbabago. Pakisubukan muli.')), backgroundColor: AppColors.error),
           );
         }
       }
@@ -1881,7 +1882,7 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+            SnackBar(content: Text(NetworkStatus.friendlyError(e, english: 'The change could not be saved. Please try again.', filipino: 'Hindi na-save ang pagbabago. Pakisubukan muli.')), backgroundColor: AppColors.error),
           );
         }
       }
@@ -2289,7 +2290,7 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+            SnackBar(content: Text(NetworkStatus.friendlyError(e, english: 'The change could not be saved. Please try again.', filipino: 'Hindi na-save ang pagbabago. Pakisubukan muli.')), backgroundColor: AppColors.error),
           );
         }
       }
@@ -2336,7 +2337,7 @@ class _MotherSelfProfilePageState extends State<MotherSelfProfilePage> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+            SnackBar(content: Text(NetworkStatus.friendlyError(e, english: 'The change could not be saved. Please try again.', filipino: 'Hindi na-save ang pagbabago. Pakisubukan muli.')), backgroundColor: AppColors.error),
           );
         }
       }

@@ -11,7 +11,15 @@ import 'midwife_add_mother_screen.dart';
 import '../../services/auth_storage.dart';
 
 class MidwifeMothersScreen extends StatefulWidget {
-  const MidwifeMothersScreen({super.key});
+  const MidwifeMothersScreen({super.key, this.refreshSignal});
+
+  /// Bumped by the shell each time this tab is opened again.
+  ///
+  /// The tab is kept alive in an IndexedStack, so without this it showed the
+  /// list as it was the first time it was opened: a mother transferred to
+  /// another health center in the meantime was still listed, and still came
+  /// up in search, until someone thought to pull down to refresh.
+  final ValueListenable<int>? refreshSignal;
 
   @override
   State<MidwifeMothersScreen> createState() => _MidwifeMothersScreenState();
@@ -26,7 +34,15 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
   final bool _hasMoreData = false; // Always false to disable pagination loaders
   String? _error;
 
+  /// Kept across visits so the list paints at once, then revalidated.
+  ///
+  /// Owned by one midwife account. It is static, so it outlives a sign-out:
+  /// without an owner, the next midwife to sign in on the same phone was
+  /// shown the previous midwife's mothers -- another health center's
+  /// patients -- until the background refresh replaced them.
   static List<Map<String, dynamic>>? _mothersCache;
+  static int? _mothersCacheOwner;
+  int? _accountId;
   int? _assignedBhcId;
 
   // Search and Filter
@@ -87,10 +103,12 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
     _loadMothers();
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
+    widget.refreshSignal?.addListener(_revalidateMothers);
   }
 
   @override
   void dispose() {
+    widget.refreshSignal?.removeListener(_revalidateMothers);
     _searchDebounceTimer?.cancel();
     _searchController.dispose();
     _scrollController.dispose();
@@ -210,9 +228,10 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
   void _onScroll() {}
 
   Future<void> _loadMothers({bool reset = false}) async {
+    _accountId ??= await AuthStorage.getUserId();
     if (!mounted) return;
 
-    if (reset) {
+    if (reset || _mothersCacheOwner != _accountId) {
       _mothersCache = null;
     }
 
@@ -397,6 +416,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
     }
 
     _mothersCache = parsedMothers;
+    _mothersCacheOwner = _accountId;
 
     if (mounted) {
       setState(() {
@@ -545,12 +565,17 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         }
       }
 
-      if (hasChanges && mounted) {
+      // The cache is corrected even when this screen has gone, so the next
+      // visit does not open on a list already known to be out of date.
+      if (hasChanges) {
         _mothersCache = parsedMothers;
-        setState(() {
-          _allMothers = List<Map<String, dynamic>>.from(parsedMothers);
-          _applyFilters();
-        });
+        _mothersCacheOwner = _accountId;
+        if (mounted) {
+          setState(() {
+            _allMothers = List<Map<String, dynamic>>.from(parsedMothers);
+            _applyFilters();
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error revalidating mothers: $e');

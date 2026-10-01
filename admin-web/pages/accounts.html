@@ -295,11 +295,20 @@
                     </label>
                     <textarea class="form-control" id="status-reason" rows="2"
                               maxlength="300"
+                              aria-describedby="status-reason-error"
                               placeholder="e.g. Resigned effective 30 September; account held pending clearance"></textarea>
+                    <!-- Said inside the modal, next to the empty box. A toast
+                         alone is easy to miss while a dialog has the focus. -->
+                    <div id="status-reason-error" role="alert" style="display:none; margin-top:6px; color:var(--error); font-size:12.5px; font-weight:600;"></div>
                     <small style="color:var(--text-secondary); font-size:11.5px;">
                         Recorded against the account and written to the audit trail.
                     </small>
                 </div>
+
+                <!-- A refusal from the database — the last administrator, an
+                     account outside this office. Kept in the dialog: the
+                     officer is looking here, and a toast times out. -->
+                <div id="status-refusal" role="alert" style="display:none; margin-top:12px; padding:10px 12px; border-radius:var(--radius-card-sm); background:var(--error-10); color:#991b1b; font-size:12.5px; line-height:1.55;"></div>
 
                 <!-- Shown when reactivating, so the reason is not lost silently. -->
                 <div id="status-previous-reason" style="display:none; margin-top:12px; padding:10px 12px; border-radius:var(--radius-card-sm); background:var(--bg-secondary); border:1px solid var(--border-primary); font-size:12.5px; color:var(--text-secondary); line-height:1.6;"></div>
@@ -484,11 +493,14 @@
                 return true;
             }
 
+            // The database's own sentences (admin_set_account_status,
+            // admin_delete_account), so the lock reads the same whether the
+            // page or the database is the one refusing.
             function whyNotManageable(account) {
                 if (account.account_id === session.account_id) {
-                    return "You cannot change your own account.";
+                    return "An account cannot change its own status or delete itself.";
                 }
-                return "Only the Municipal Health Office can manage portal accounts.";
+                return "Only the Municipal Health Office can change the status of a portal account.";
             }
 
             let allAccounts = [], filtered = [], page = 1, PAGE_SIZE = 15, editTarget = null, deleteTarget = null;
@@ -925,8 +937,8 @@
                     const manageable = canManage(a);
 
                     const lockNote = isSelf
-                        ? `<span class="badge badge-admin" title="You cannot modify your own account"><i class="fa-solid fa-user-lock"></i> You</span>`
-                        : `<span class="badge badge-inactive" title="Only the Municipal Health Office can manage portal accounts"><i class="fa-solid fa-lock"></i> MHO only</span>`;
+                        ? `<span class="badge badge-admin" title="${esc(whyNotManageable(a))}"><i class="fa-solid fa-user-lock"></i> You</span>`
+                        : `<span class="badge badge-inactive" title="${esc(whyNotManageable(a))}"><i class="fa-solid fa-lock"></i> MHO only</span>`;
 
                     // An archived account is inactive, but it is retired rather
                     // than away, and conflating the two is how a retired midwife
@@ -1250,6 +1262,25 @@
             ["transfer-modal-close", "transfer-cancel"].forEach(id =>
                 document.getElementById(id)?.addEventListener("click", closeTransfer));
 
+            function showReasonError(message) {
+                const box = document.getElementById("status-reason-error");
+                const input = document.getElementById("status-reason");
+                if (!box || !input) return;
+                box.textContent = message || "";
+                box.style.display = message ? "" : "none";
+                input.style.borderColor = message ? "var(--error)" : "";
+                input.setAttribute("aria-invalid", message ? "true" : "false");
+            }
+            function showStatusRefusal(message) {
+                const box = document.getElementById("status-refusal");
+                if (!box) return;
+                box.textContent = message || "";
+                box.style.display = message ? "" : "none";
+            }
+            document.getElementById("status-reason")?.addEventListener("input", (e) => {
+                if (e.target.value.trim()) showReasonError(null);
+            });
+
             window.changeStatus = async (accountId, newStatus) => {
                 const account = allAccounts.find(a => a.account_id === accountId);
                 if (!account) return;
@@ -1278,6 +1309,8 @@
                 const reasonLabel = document.querySelector('label[for="status-reason"]');
                 const requiredMark = document.getElementById("status-reason-required");
                 reasonInput.value = "";
+                showReasonError(null);
+                showStatusRefusal(null);
                 reasonInput.placeholder = config.placeholder;
                 if (reasonLabel) {
                     reasonLabel.childNodes[0].nodeValue = config.reasonLabel + " ";
@@ -1331,6 +1364,7 @@
                 const btn = document.getElementById("status-confirm");
 
                 if (config.reasonRequired && !reason) {
+                    showReasonError("A suspension needs a recorded reason.");
                     showToast("A suspension needs a recorded reason.", "warning");
                     document.getElementById("status-reason").focus();
                     return;
@@ -1357,7 +1391,9 @@
                             // A refusal is the rule working, not a fault. Show
                             // the sentence the database returned: it is the one
                             // that knows this was the last active administrator.
-                            showToast(res.data?.error || "That change was refused.", "error");
+                            const refusal = res.data?.error || "That change was refused.";
+                            showStatusRefusal(refusal);
+                            showToast(refusal, "error");
                             return;
                         }
                         applied = true;
@@ -1722,6 +1758,18 @@
                         showToast(data?.error || "That account could not be deleted.", "error");
                         if (data?.code === "has_clinical_records") {
                             window.openDelete(deleteTarget.account_id);
+                        } else if (data?.code === "has_records") {
+                            // Named on stock requests or transfers. The dependent
+                            // count only looks at clinical records, so reopening
+                            // would offer the same delete again; switch this
+                            // dialog to archive instead.
+                            const impact = document.getElementById("delete-impact");
+                            impact.style.display = "";
+                            impact.style.background = "var(--error-10)";
+                            impact.style.color = "#991b1b";
+                            impact.textContent = data.error;
+                            document.getElementById("delete-confirm").style.display = "none";
+                            document.getElementById("delete-archive").style.display = "";
                         }
                         return;
                     }

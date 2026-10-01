@@ -71,6 +71,11 @@ class GrowthSummaryCard extends StatefulWidget {
 
   final VoidCallback? onViewHistory;
 
+  /// Adds the clinical name of a below-range reading -- underweight, stunting,
+  /// thinness -- beside the verdict. For the midwife's screens only: a mother
+  /// is given the plain-language insight instead of a diagnosis-shaped word.
+  final bool showClinicalTerms;
+
   const GrowthSummaryCard({
     super.key,
     required this.childFirstName,
@@ -80,6 +85,7 @@ class GrowthSummaryCard extends StatefulWidget {
     this.aiInsight,
     this.approvedBy,
     this.onViewHistory,
+    this.showClinicalTerms = false,
   });
 
   @override
@@ -214,10 +220,12 @@ class _GrowthSummaryCardState extends State<GrowthSummaryCard> {
     return Column(
       children: [
         for (final metric in GrowthMetric.values) ...[
-          _VerdictChip(
+          GrowthVerdictChip(
             label: widget.isFilipino ? metric.labelFilipino : metric.label,
             band: GrowthCalculator.bandForZScore(_zFor(metric)),
             isFilipino: widget.isFilipino,
+            clinicalTerm:
+                widget.showClinicalTerms ? metric.belowRangeTerm : null,
             isSelected: _selected == metric,
             onTap: () => setState(() => _selected = metric),
           ),
@@ -993,19 +1001,27 @@ class _GrowthSummaryCardState extends State<GrowthSummaryCard> {
 
 /// One indicator's verdict. Tapping it also selects that metric in the chart,
 /// so the chip and the chart stay in step.
-class _VerdictChip extends StatelessWidget {
+///
+/// Public so the Add Growth form shows a measurement's verdict in exactly the
+/// words and colours the child's growth card will show once it is saved.
+class GrowthVerdictChip extends StatelessWidget {
   final String label;
   final GrowthBand band;
   final bool isFilipino;
   final bool isSelected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
-  const _VerdictChip({
+  /// Named after the verdict when the reading is below range, e.g. stunting.
+  final String? clinicalTerm;
+
+  const GrowthVerdictChip({
+    super.key,
     required this.label,
     required this.band,
     required this.isFilipino,
-    required this.isSelected,
-    required this.onTap,
+    this.isSelected = false,
+    this.onTap,
+    this.clinicalTerm,
   });
 
   @override
@@ -1013,7 +1029,11 @@ class _VerdictChip extends StatelessWidget {
     // Amber, not red: a value outside ±2 SD warrants a closer look, not alarm.
     // Reserving red keeps it meaningful for genuine emergencies elsewhere.
     final color = band.isWithin ? AppColors.success : AppColors.warning;
-    final statusText = isFilipino ? band.labelFilipino : band.label;
+    final term = band == GrowthBand.below ? clinicalTerm : null;
+    final statusText = [
+      isFilipino ? band.labelFilipino : band.label,
+      if (term != null) term,
+    ].join(' · ');
 
     return GestureDetector(
       onTap: onTap,
@@ -1049,12 +1069,18 @@ class _VerdictChip extends StatelessWidget {
                 ),
               ),
             ),
-            Text(
-              statusText,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: color,
+            const SizedBox(width: 8),
+            // Flexible: with a clinical term and a large system font the
+            // verdict is long enough to push the row past the screen edge.
+            Flexible(
+              child: Text(
+                statusText,
+                textAlign: TextAlign.end,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
               ),
             ),
           ],

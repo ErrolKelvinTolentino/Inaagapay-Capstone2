@@ -371,9 +371,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 32),
 
-              // Register link
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              // Register link. A Wrap: at the largest text size the two
+              // halves do not fit on one line of a 360dp phone.
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(
                     'No account yet? ',

@@ -69,7 +69,8 @@ class WelcomeScreen extends StatelessWidget {
                           children: [
                             _buildInfoRow(
                               icon: Icons.calendar_today,
-                              title: 'What\'s Next?',
+                              title: LanguageService.translate(
+                                  "What's Next?", 'Ano ang Susunod?'),
                               description: LanguageService.translate(
                                   'Track your pregnancy journey, get weekly updates, and access health resources.',
                                   'Subaybayan ang iyong pagbubuntis, makatanggap ng lingguhang balita, at magbasa ng gabay sa kalusugan.'),

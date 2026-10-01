@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/baby_memory.dart';
 import '../theme/app_colors.dart';
+import '../services/language_service.dart';
 import '../widgets/baby_memory_photo.dart';
 import '../widgets/secondary_header.dart';
 
@@ -49,7 +50,7 @@ class _BabyBookMemoryGalleryPageState extends State<BabyBookMemoryGalleryPage> {
           // a bespoke AppBar with an all-caps title. One back arrow, one
           // title treatment, in the same place on every screen.
           SecondaryHeader(
-            title: 'Memory Gallery',
+            title: LanguageService.translate('Memory Gallery', 'Memory Gallery'),
             onBack: () => Navigator.of(context).pop(),
           ),
           Expanded(
@@ -97,9 +98,10 @@ class _BabyBookMemoryGalleryPageState extends State<BabyBookMemoryGalleryPage> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
-                                      'Little moments, lovingly kept',
-                                      style: TextStyle(
+                                    Text(
+                                      LanguageService.translate('Little moments, lovingly kept',
+                                          'Maliliit na sandali, buong-pusong iniingatan'),
+                                      style: const TextStyle(
                                         color: AppColors.headingSoft,
                                         fontSize: 20,
                                         height: 1.2,
@@ -157,11 +159,12 @@ class _BabyBookMemoryGalleryPageState extends State<BabyBookMemoryGalleryPage> {
       // label carry the wording the pill was spelling out.
       floatingActionButton: Semantics(
         button: true,
-        label: 'Add photo to the memory gallery',
+        label: LanguageService.translate('Add photo to the memory gallery',
+            'Magdagdag ng larawan sa memory gallery'),
         child: FloatingActionButton(
           key: const ValueKey('gallery-add-photo'),
           onPressed: _addMemory,
-          tooltip: 'Add photo',
+          tooltip: LanguageService.translate('Add photo', 'Magdagdag ng larawan'),
           backgroundColor: AppColors.brandPrimary,
           foregroundColor: Colors.white,
           elevation: 5,
@@ -265,20 +268,22 @@ class _EmptyGallery extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Your memory gallery is ready',
+            Text(
+              LanguageService.translate('Your memory gallery is ready',
+                  'Handa na ang iyong memory gallery'),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Add the first photo you want to remember in Baby’s story.',
+            Text(
+              LanguageService.translate('Add the first photo you want to remember in Baby’s story.',
+                  'Idagdag ang unang larawang gusto mong maalala sa kuwento ni Baby.'),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 12,
                 height: 1.5,
@@ -292,7 +297,7 @@ class _EmptyGallery extends StatelessWidget {
                 foregroundColor: Colors.white,
               ),
               icon: const Icon(Icons.add_a_photo_rounded),
-              label: const Text('Add a photo'),
+              label: Text(LanguageService.translate('Add a photo', 'Magdagdag ng larawan')),
             ),
           ],
         ),
@@ -342,7 +347,8 @@ class _MemoryViewerPageState extends State<_MemoryViewerPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          '${_currentIndex + 1} of ${widget.memories.length}',
+          LanguageService.translate('${_currentIndex + 1} of ${widget.memories.length}',
+              '${_currentIndex + 1} sa ${widget.memories.length}'),
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ),

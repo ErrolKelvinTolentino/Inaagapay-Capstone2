@@ -18,6 +18,8 @@
 // an account that was deleted — ends the session. Same rule as
 // verifyAdminSessionWithDB in the portal's common-security.js.
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -80,6 +82,7 @@ class AccountStatusGuard {
         accountId: accountId,
         status: status,
         reason: account?['status_reason']?.toString(),
+        archived: account?['archived_at'] != null,
       );
       return true;
     } catch (e) {
@@ -93,69 +96,86 @@ class AccountStatusGuard {
   /// Sentinel for "the read failed", kept apart from null ("no such account").
   static const Map<String, dynamic> _unreadable = {'_unreadable': true};
 
+  /// Newest schema first. archived_at and status_reason both arrived in
+  /// 20260925; a database without them answers 42703 and the next, narrower
+  /// read is tried instead.
+  static const List<String> _accountColumns = [
+    'status, status_reason, archived_at',
+    'status, status_reason',
+    'status',
+  ];
+
   static Future<Map<String, dynamic>?> _readAccount(int accountId) async {
-    try {
-      return await SupabaseService.client
-          .from('accounts')
-          .select('status, status_reason')
-          .eq('account_id', accountId)
-          .maybeSingle();
-    } on PostgrestException catch (e) {
-      // Pre-20260925 database: no status_reason column. Retry without it.
-      if (e.code == '42703' || e.message.contains('status_reason')) {
-        try {
-          return await SupabaseService.client
-              .from('accounts')
-              .select('status')
-              .eq('account_id', accountId)
-              .maybeSingle();
-        } catch (_) {
-          return _unreadable;
-        }
+    for (final columns in _accountColumns) {
+      try {
+        return await SupabaseService.client
+            .from('accounts')
+            .select(columns)
+            .eq('account_id', accountId)
+            .maybeSingle();
+      } on PostgrestException catch (e) {
+        final missingColumn = e.code == '42703' ||
+            e.message.contains('status_reason') ||
+            e.message.contains('archived_at');
+        if (!missingColumn) return _unreadable;
+      } catch (_) {
+        return _unreadable;
       }
-      return _unreadable;
-    } catch (_) {
-      return _unreadable;
     }
+    return _unreadable;
   }
 
   static Future<void> _endSession({
     required int accountId,
     required String? status,
     required String? reason,
+    bool archived = false,
   }) async {
-    _pendingNotice = signOutNotice(status: status, reason: reason);
+    _pendingNotice =
+        signOutNotice(status: status, reason: reason, archived: archived);
 
-    await SupabaseService.recordAuthEvent(
-      accountId,
-      'session_expired',
-      detail: status == null
-          ? 'Signed out: the account no longer exists.'
-          : 'Signed out: the account status is "$status".',
-    );
-
-    try {
-      await PushNotificationService.removeToken();
-    } catch (_) {}
+    // The person is signed out first and the bookkeeping follows. Both of
+    // those calls go over the network, and removeToken asks Firebase for the
+    // device token -- which on some phones never answers. Awaited ahead of
+    // clearAll(), either one could hold the session open indefinitely, and
+    // with _checking stuck on true no later check would run either.
     await AuthStorage.clearAll();
     SupabaseService.clearMidwifeContextCache();
 
     navigatorKey.currentState
         ?.pushNamedAndRemoveUntil('/login', (route) => false);
+
+    unawaited(SupabaseService.recordAuthEvent(
+      accountId,
+      'session_expired',
+      detail: status == null
+          ? 'Signed out: the account no longer exists.'
+          : archived
+              ? 'Signed out: the account was archived.'
+              : 'Signed out: the account status is "$status".',
+    ).timeout(const Duration(seconds: 15), onTimeout: () {}).catchError((_) {}));
+    unawaited(PushNotificationService.removeToken()
+        .timeout(const Duration(seconds: 15), onTimeout: () {})
+        .catchError((_) {}));
   }
 
   /// The sentence the login screen shows. Public for testing.
-  static String signOutNotice({String? status, String? reason}) {
+  ///
+  /// An archived account is told the same as a deleted one: archiving is what
+  /// the portal's "Remove account" does when clinical records must be kept,
+  /// so to the person holding it the account is gone, not paused.
+  static String signOutNotice({
+    String? status,
+    String? reason,
+    bool archived = false,
+  }) {
     final String wording;
-    switch (status) {
-      case 'suspended':
-        wording = 'Your account has been suspended, so you were signed out.';
-        break;
-      case null:
-        wording = 'This account no longer exists, so you were signed out.';
-        break;
-      default:
-        wording = 'Your account has been deactivated, so you were signed out.';
+    if (status == null || archived) {
+      wording = 'This account no longer exists, so you were signed out.';
+    } else if (status == 'suspended') {
+      wording = 'Your account has been suspended, so you were signed out.';
+    } else {
+      wording = 'Your account has been deactivated, so you were signed out.';
     }
     final trimmed = reason?.trim() ?? '';
     return trimmed.isNotEmpty

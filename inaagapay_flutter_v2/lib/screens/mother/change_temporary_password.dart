@@ -9,6 +9,8 @@ import '../../widgets/password_constraints.dart';
 import '../../widgets/password_strength_indicator.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_storage.dart';
+import '../../services/language_service.dart';
+import '../../services/network_status.dart';
 import '../../models/password_strength.dart';
 
 class ChangeTemporaryPasswordScreen extends StatefulWidget {
@@ -91,8 +93,10 @@ class _ChangeTemporaryPasswordScreenState
         if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password changed successfully!'),
+          SnackBar(
+            content: Text(LanguageService.translate(
+                'Password changed successfully!',
+                'Matagumpay na napalitan ang password!')),
             backgroundColor: AppColors.success,
           ),
         );
@@ -112,7 +116,13 @@ class _ChangeTemporaryPasswordScreenState
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: ${e.toString()}'),
+          // The exception text was shown here, in English, with its
+          // "Exception:" prefix.
+          content: Text(NetworkStatus.friendlyError(
+            e,
+            english: 'Your password could not be changed. Please try again.',
+            filipino: 'Hindi napalitan ang password. Pakisubukan muli.',
+          )),
           backgroundColor: AppColors.error,
         ),
       );
@@ -171,17 +181,21 @@ class _ChangeTemporaryPasswordScreenState
               
               const SizedBox(height: 24),
               
-              const PageTitle(
-                title: 'Change Temporary Password',
+              PageTitle(
+                title: LanguageService.translate('Change Temporary Password',
+                    'Palitan ang Pansamantalang Password'),
                 leadingIcon: Icons.lock,
               ),
               
               const SizedBox(height: 16),
               
-              const Text(
-                'For security reasons, please change your temporary password.',
+              Text(
+                LanguageService.translate(
+                  'For security reasons, please change your temporary password.',
+                  'Para sa iyong seguridad, palitan ang iyong pansamantalang password.',
+                ),
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
                 ),
@@ -190,7 +204,8 @@ class _ChangeTemporaryPasswordScreenState
               const SizedBox(height: 32),
               
               AppInputField(
-                hintText: 'New Password',
+                hintText: LanguageService.translate(
+                    'New Password', 'Bagong Password'),
                 controller: _newPasswordController,
                 obscureText: _obscureNewPassword,
                 leadingIcon: Icons.lock_outline,
@@ -217,7 +232,8 @@ class _ChangeTemporaryPasswordScreenState
               const SizedBox(height: 20),
               
               AppInputField(
-                hintText: 'Confirm Password',
+                hintText: LanguageService.translate(
+                    'Confirm Password', 'Kumpirmahin ang Password'),
                 controller: _confirmPasswordController,
                 obscureText: _obscureConfirmPassword,
                 leadingIcon: Icons.lock_outline,
@@ -233,11 +249,12 @@ class _ChangeTemporaryPasswordScreenState
               if (_confirmPasswordController.text.isNotEmpty &&
                   !_passwordsMatch) ...[
                 const SizedBox(height: 8),
-                const Padding(
-                  padding: EdgeInsets.only(left: 16),
+                Padding(
+                  padding: const EdgeInsets.only(left: 16),
                   child: Text(
-                    'Passwords do not match',
-                    style: TextStyle(fontSize: 12, color: AppColors.error),
+                    LanguageService.translate('Passwords do not match',
+                        'Hindi magkatugma ang mga password'),
+                    style: const TextStyle(fontSize: 12, color: AppColors.error),
                   ),
                 ),
               ],
@@ -245,7 +262,11 @@ class _ChangeTemporaryPasswordScreenState
               const SizedBox(height: 32),
               
               MainButton(
-                label: _isLoading ? 'Changing Password...' : 'Change Password',
+                label: _isLoading
+                    ? LanguageService.translate(
+                        'Changing Password...', 'Pinapalitan ang password...')
+                    : LanguageService.translate(
+                        'Change Password', 'Palitan ang Password'),
                 onPressed: _canSubmit ? _handleChangePassword : null,
                 leftIcon: Icons.save,
               ),

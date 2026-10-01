@@ -10,6 +10,7 @@ import 'package:printing/printing.dart';
 
 import '../../services/export_file_saver.dart';
 import '../../services/midwife_report_service.dart';
+import '../../services/network_status.dart';
 import '../../services/report_export_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_snackbar.dart';
@@ -163,9 +164,13 @@ class _MidwifeReportsScreenState extends State<MidwifeReportsScreen> {
   Future<void> _export(_ReportDef report, _Format format) async {
     if (_busy != null) return;
     setState(() => _busy = '${report.id}:${format.name}');
+    // Past this point the data is in hand and only the file remains to be
+    // made, so a failure is about the file: storage full, or the save refused.
+    var reportBuilt = false;
     try {
       final scope = await _scope;
       final doc = await report.build(scope, _range);
+      reportBuilt = true;
 
       switch (format) {
         case _Format.print:
@@ -195,9 +200,22 @@ class _MidwifeReportsScreenState extends State<MidwifeReportsScreen> {
           return;
       }
     } catch (e) {
+      debugPrint('Report export failed: $e');
       if (!mounted) return;
-      final message = e.toString().replaceFirst('Exception: ', '');
-      AppSnackbar.error(context, 'Could not create the report. $message');
+      if (reportBuilt) {
+        // The platform's own wording ("PlatformException(Error while saving
+        // file, ENOSPC ...)") was appended here, which says nothing a midwife
+        // can act on. Same sentence as the single-record export uses.
+        AppSnackbar.error(context, 'Could not create the file. Please try again.');
+        return;
+      }
+      if (NetworkStatus.isNetworkError(e)) {
+        AppSnackbar.error(context,
+            'Could not load the report data. Check your internet connection and try again.');
+      } else {
+        final message = e.toString().replaceFirst('Exception: ', '');
+        AppSnackbar.error(context, 'Could not create the report. $message');
+      }
       // A failed scope lookup is retried on the next tap rather than cached.
       _scope = MidwifeReportService.resolveScope();
     } finally {

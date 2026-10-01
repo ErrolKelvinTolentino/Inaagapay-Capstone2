@@ -130,17 +130,64 @@
     }
   }
 
-  // 2. Idle Timeout Handler
-  let idleTimer = null;
-  function resetIdleTimer() {
-    if (idleTimer) clearTimeout(idleTimer);
-    if (!isLoginPage && session) {
-      idleTimer = setTimeout(handleIdleTimeout, IDLE_TIMEOUT_MS);
+  // 2. Idle Timeout
+  //
+  // This used to be one setTimeout per page, restarted on every page load. It
+  // missed the three ways a portal is actually left idle:
+  //   * a laptop that sleeps -- the timer is paused with it, so the session
+  //     was still open when the lid came back up;
+  //   * a reload or a closed tab -- the timer started again from zero, and the
+  //     session in localStorage was restored as if nobody had walked away;
+  //   * two tabs -- an idle second tab signed the officer out of the first
+  //     while she was working in it.
+  // The last activity is now a timestamp shared by every tab of this portal,
+  // and the check compares clocks instead of counting down.
+  const ACTIVITY_KEY = "inaagapay_admin_last_activity";
+  const IDLE_CHECK_MS = 15 * 1000;
+  let lastActivityWrite = 0;
+  let signingOut = false;
+
+  function lastActivityAt() {
+    let stored = 0;
+    try {
+      stored = Number(localStorage.getItem(ACTIVITY_KEY)) || 0;
+    } catch (e) { /* storage blocked: fall back to the sign-in time */ }
+    // A timestamp older than this sign-in belongs to the previous session and
+    // must not expire a fresh one.
+    const signedIn = session && session.logged_in_at ? new Date(session.logged_in_at).getTime() : 0;
+    return Math.max(stored, Number.isFinite(signedIn) ? signedIn : 0);
+  }
+
+  function isIdleExpired() {
+    const last = lastActivityAt();
+    return last > 0 && Date.now() - last >= IDLE_TIMEOUT_MS;
+  }
+
+  function markActivity() {
+    if (isLoginPage || !session || signingOut) return;
+    const now = Date.now();
+    // mousemove fires constantly; one write every few seconds is plenty.
+    if (now - lastActivityWrite < 5000) return;
+    // Activity after the deadline does not revive the session. Without this a
+    // mouse nudge on waking the laptop would beat the check to the timestamp.
+    if (isIdleExpired()) {
+      handleIdleTimeout();
+      return;
     }
+    lastActivityWrite = now;
+    try {
+      localStorage.setItem(ACTIVITY_KEY, String(now));
+    } catch (e) { /* private browsing */ }
+  }
+
+  function checkIdle() {
+    if (isLoginPage || !session || signingOut) return;
+    if (isIdleExpired()) handleIdleTimeout();
   }
 
   function handleIdleTimeout() {
-    if (isLoginPage || !session) return;
+    if (isLoginPage || !session || signingOut) return;
+    signingOut = true;
     try {
       if (window.db) {
         window.db.from("audit_trail").insert({
@@ -152,20 +199,46 @@
       }
     } catch (e) {}
 
+    try {
+      // Told on the login page rather than in an alert(): a blocking dialog in
+      // a background tab waits for someone to click it before the page moves.
+      sessionStorage.setItem("inaagapay_signout_reason", JSON.stringify({ status: "idle" }));
+    } catch (e) { /* private browsing */ }
     localStorage.removeItem(SESSION_KEY);
-    alert("Session Expired: You have been logged out due to 15 minutes of inactivity for security compliance.");
-    if (window.navigateTo) {
-      window.navigateTo("../index.html");
-    } else {
-      window.location.href = "../index.html";
-    }
+    window.PortalScope?.clear();
+    window.location.href = "../index.html";
   }
 
-  // Bind Activity Listeners for Idle Timer
-  ["mousemove", "keydown", "click", "scroll", "touchstart"].forEach((evt) => {
-    window.addEventListener(evt, resetIdleTimer, { passive: true });
+  if (!isLoginPage && session) {
+    // Checked before this page counts as activity, so reopening a tab that was
+    // abandoned an hour ago lands on the login page, not on the dashboard.
+    if (isIdleExpired()) {
+      handleIdleTimeout();
+      return;
+    }
+    markActivity();
+  }
+
+  ["mousemove", "mousedown", "keydown", "wheel", "scroll", "touchstart"].forEach((evt) => {
+    window.addEventListener(evt, markActivity, { passive: true, capture: true });
   });
-  resetIdleTimer();
+  // Timers are throttled in background tabs and stop while the machine sleeps,
+  // so the clock is also compared whenever the page comes back into view.
+  setInterval(checkIdle, IDLE_CHECK_MS);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkIdle();
+  });
+  window.addEventListener("focus", checkIdle);
+  window.addEventListener("pageshow", checkIdle);
+
+  // Signed out in another tab (idle, suspended, or the Logout button): follow
+  // it here instead of carrying on with a session that no longer exists.
+  window.addEventListener("storage", (e) => {
+    if (e.key === SESSION_KEY && !e.newValue && !isLoginPage && !signingOut) {
+      signingOut = true;
+      window.location.href = "../index.html";
+    }
+  });
 
   // 3. Network Status Monitor (Online / Offline Banner)
   function initNetworkMonitor() {
@@ -218,8 +291,12 @@
   // browser next changes page.
   let lastSessionCheck = 0;
   const SESSION_RECHECK_MS = 60 * 1000;
+  // The client the page handed over, kept so a tab brought back into view can
+  // be re-checked without waiting for the page's next refresh tick.
+  let knownDb = null;
 
   window.verifyAdminSessionWithDB = async function (dbInstance, opts) {
+    if (dbInstance) knownDb = dbInstance;
     if (!session || !session.account_id || !dbInstance) return;
     // One extra single-row read per minute at most. Cheap next to what it
     // prevents, and far cheaper than what this portal was spending elsewhere.
@@ -260,6 +337,7 @@
     if (account.status === "active" && PORTAL_ACCOUNT_TYPES.includes(account.account_type)) return;
 
     console.warn("Session ended: account is " + account.status + ".");
+    signingOut = true;
     try {
       // Carried to the login screen so the person is told why they were signed
       // out, rather than being dropped at a login form with no explanation.
@@ -277,7 +355,16 @@
   // Every page announces its refreshes; this listens rather than keeping a
   // timer of its own.
   document.addEventListener("inaagapay:data-refreshed", () => {
-    if (window.db) window.verifyAdminSessionWithDB(window.db);
+    const client = window.db || knownDb;
+    if (client) window.verifyAdminSessionWithDB(client);
+  });
+
+  // Coming back to the tab is the moment a suspension made in the meantime
+  // should land -- not a minute later on the next refresh.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    const client = window.db || knownDb;
+    if (client) window.verifyAdminSessionWithDB(client, { force: true });
   });
 
   // 5. Shared Masking & Validation Helpers

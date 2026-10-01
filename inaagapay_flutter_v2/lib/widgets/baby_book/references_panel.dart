@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../services/language_service.dart';
 
 /// The sources behind the guidance on a page, folded away until asked for.
 ///
@@ -68,23 +69,24 @@ class _ReferencesPanelState extends State<ReferencesPanel> {
                     ),
                   ),
                   const SizedBox(width: 13),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'References',
-                          style: TextStyle(
+                          LanguageService.translate('References', 'Mga Sanggunian'),
+                          style: const TextStyle(
                             color: AppColors.headingSoft,
                             fontSize: 17,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.2,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
-                          'Where this guidance comes from',
-                          style: TextStyle(
+                          LanguageService.translate('Where this guidance comes from',
+                              'Pinagmulan ng gabay na ito'),
+                          style: const TextStyle(
                             color: AppColors.textSecondary,
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -146,10 +148,14 @@ class _ReferencesPanelState extends State<ReferencesPanel> {
                   // stopped being true once the page started reading a real
                   // pregnancy. A mother who read that had no reason to trust
                   // anything else on the screen.
-                  const Text(
-                    'This guidance is general. It does not replace advice from '
-                    'your doctor, midwife, or health worker.',
-                    style: TextStyle(
+                  Text(
+                    LanguageService.translate(
+                      'This guidance is general. It does not replace advice from '
+                          'your doctor, midwife, or health worker.',
+                      'Pangkalahatan ang gabay na ito. Hindi nito pinapalitan ang '
+                          'payo ng iyong doktor, midwife, o health worker.',
+                    ),
+                    style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 13,
                       height: 1.45,
@@ -246,10 +252,11 @@ class _ReferenceRow extends StatelessWidget {
           const SizedBox(width: 10),
           Semantics(
             button: true,
-            label: 'Download the $badge booklet as a PDF',
+            label: LanguageService.translate('Download the $badge booklet as a PDF',
+                'I-download ang $badge booklet bilang PDF'),
             child: IconButton(
               key: ValueKey<String>('reference-download-$badge'),
-              tooltip: 'Download PDF',
+              tooltip: LanguageService.translate('Download PDF', 'I-download ang PDF'),
               onPressed: isDownloading ? null : onDownload,
               style: IconButton.styleFrom(
                 backgroundColor: AppColors.brandPrimary,

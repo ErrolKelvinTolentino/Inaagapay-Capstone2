@@ -12,6 +12,7 @@ import '../../services/immunization_schedule.dart';
 import '../../widgets/status_indicator.dart';
 import '../../services/child_service.dart';
 import '../../services/language_service.dart';
+import '../../services/network_status.dart';
 import '../../models/child_model.dart';
 
 class MotherChildVaccinePage extends StatefulWidget {
@@ -94,7 +95,11 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString();
+          _errorMessage = NetworkStatus.friendlyError(
+            e,
+            english: "Your child's vaccine records could not be loaded. Please try again.",
+            filipino: 'Hindi ma-load ang record ng bakuna ng iyong anak. Pakisubukan muli.',
+          );
           _loading = false;
         });
       }

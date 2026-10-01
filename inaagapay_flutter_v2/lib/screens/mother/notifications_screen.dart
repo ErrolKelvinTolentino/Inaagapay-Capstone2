@@ -6,6 +6,7 @@ import '../../services/auth_storage.dart';
 import '../../services/db_timestamp.dart';
 import '../../theme/app_colors.dart';
 import '../../services/language_service.dart';
+import '../../services/network_status.dart';
 import '../../services/maternal_td_alert.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/app_input_field.dart';
@@ -740,7 +741,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 heightError = _t('Height is required', 'Kailangan ang taas');
                 heightWarning = null;
               } else if (height == null) {
-                heightError = _t('Enter a valid number', 'Maglayag ng wastong numero');
+                heightError = _t('Enter a valid number', 'Maglagay ng wastong numero');
                 heightWarning = null;
               } else if (height < 50 || height > 250) {
                 heightError = _t('Must be 50-250 cm', 'Dapat ay 50-250 cm');
@@ -762,7 +763,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 weightError = _t('Weight is required', 'Kailangan ang timbang');
                 weightWarning = null;
               } else if (weight == null) {
-                weightError = _t('Enter a valid number', 'Maglayag ng wastong numero');
+                weightError = _t('Enter a valid number', 'Maglagay ng wastong numero');
                 weightWarning = null;
               } else if (weight < 10 || weight > 350) {
                 weightError = _t('Must be 10-350 kg', 'Dapat ay 10-350 kg');
@@ -784,7 +785,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ppwError = _t('Pre-pregnancy weight is required', 'Kailangan ang timbang bago mabuntis');
                 ppwWarning = null;
               } else if (ppw == null) {
-                ppwError = _t('Enter a valid number', 'Maglayag ng wastong numero');
+                ppwError = _t('Enter a valid number', 'Maglagay ng wastong numero');
                 ppwWarning = null;
               } else if (ppw < 10 || ppw > 350) {
                 ppwError = _t('Must be 10-350 kg', 'Dapat ay 10-350 kg');
@@ -862,7 +863,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               if (ctx.mounted) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   SnackBar(
-                    content: Text(_t('Error saving vitals: ', 'Kamalian sa pag-save ng vitals: ') + e.toString()),
+                    content: Text(NetworkStatus.friendlyError(
+                      e,
+                      english: 'Your vitals could not be saved. Please try again.',
+                      filipino: 'Hindi na-save ang iyong vitals. Pakisubukan muli.',
+                    )),
                     backgroundColor: AppColors.error,
                     behavior: SnackBarBehavior.floating,
                   ),

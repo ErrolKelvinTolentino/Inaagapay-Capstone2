@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/baby_growth_milestone.dart';
 import '../../theme/app_colors.dart';
+import '../../services/language_service.dart';
 import 'baby_book_section_components.dart';
 
 class BabyGrowthMilestoneCard extends StatelessWidget {
@@ -38,12 +39,18 @@ class BabyGrowthMilestoneCard extends StatelessWidget {
     final timing =
         switch ((milestone.expectedStartWeek, milestone.expectedEndWeek)) {
       (final int start, final int end) when start <= 1 && end > 1 =>
-        'Recommended before week $end',
+        LanguageService.translate('Recommended before week $end',
+            'Inirerekomenda bago ang linggo $end'),
       (final int start, final int end) when start == end =>
-        'Recommended around week $start',
-      (final int start, final int end) => 'Recommended weeks $start–$end',
-      (final int start, null) => 'Recommended from week $start',
-      (null, final int end) => 'Recommended before week $end',
+        LanguageService.translate('Recommended around week $start',
+            'Inirerekomenda sa bandang linggo $start'),
+      (final int start, final int end) => LanguageService.translate(
+          'Recommended weeks $start–$end',
+          'Inirerekomenda sa linggo $start–$end'),
+      (final int start, null) => LanguageService.translate('Recommended from week $start',
+          'Inirerekomenda mula linggo $start'),
+      (null, final int end) => LanguageService.translate('Recommended before week $end',
+          'Inirerekomenda bago ang linggo $end'),
       _ => null,
     };
 
@@ -101,7 +108,7 @@ class BabyGrowthMilestoneCard extends StatelessWidget {
                 // default Material sheet, with a hard black divider.
                 PopupMenuButton<String>(
                   key: ValueKey<String>('milestone-menu-${milestone.id}'),
-                  tooltip: 'Milestone actions',
+                  tooltip: LanguageService.translate('Milestone actions', 'Mga aksyon sa milestone'),
                   color: Colors.white,
                   surfaceTintColor: Colors.white,
                   elevation: 8,
@@ -119,13 +126,13 @@ class BabyGrowthMilestoneCard extends StatelessWidget {
                     }
                   },
                   itemBuilder: (_) => <PopupMenuEntry<String>>[
-                    const PopupMenuItem<String>(
+                    PopupMenuItem<String>(
                       value: 'view',
                       padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: _MenuRow(
                         icon: Icons.article_outlined,
-                        label: 'View details',
+                        label: LanguageService.translate('View details', 'Tingnan ang detalye'),
                       ),
                     ),
                     PopupMenuItem<String>(
@@ -142,8 +149,9 @@ class BabyGrowthMilestoneCard extends StatelessWidget {
                             ? Icons.remove_done_rounded
                             : Icons.check_circle_outline_rounded,
                         label: isCompleted
-                            ? 'Un-mark as completed'
-                            : 'Mark as completed',
+                            ? LanguageService.translate('Un-mark as completed',
+                                'Alisin ang markang tapos na')
+                            : LanguageService.translate('Mark as completed', 'Markahang tapos na'),
                         emphasised: !isCompleted,
                       ),
                     ),
@@ -179,7 +187,8 @@ class BabyGrowthMilestoneCard extends StatelessWidget {
                   width: double.infinity,
                   height: 128,
                   fit: BoxFit.cover,
-                  semanticLabel: 'Photo attached to ${milestone.title}',
+                  semanticLabel: LanguageService.translate('Photo attached to ${milestone.title}',
+                      'Larawang kalakip ng ${milestone.title}'),
                 ),
               ),
             ],
@@ -208,7 +217,8 @@ class BabyGrowthMilestoneCard extends StatelessWidget {
                 [
                   if (milestone.note?.isNotEmpty == true) milestone.note!,
                   if (milestone.recordedBy?.isNotEmpty == true)
-                    'Recorded by ${milestone.recordedBy}',
+                    LanguageService.translate('Recorded by ${milestone.recordedBy}',
+                        'Itinala ni ${milestone.recordedBy}'),
                 ].join(' • '),
                 style: const TextStyle(
                   color: AppColors.textSecondary,

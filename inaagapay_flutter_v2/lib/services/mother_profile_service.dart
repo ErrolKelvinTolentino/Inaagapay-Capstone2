@@ -818,19 +818,53 @@ class MotherProfileService {
   }
 
   // Start new pregnancy
-  static Future<bool> startNewPregnancy(
+  /// Opens a pregnancy and returns its id, or null when the insert failed.
+  ///
+  /// The pregnancy is not complete until its initial prenatal checkup is
+  /// saved; the caller goes straight on to that checkup, and calls
+  /// [discardEmptyPregnancy] if the midwife leaves without saving it.
+  static Future<int?> startNewPregnancy(
       int motherId, DateTime lmp, DateTime edd) async {
     try {
-      await client.from('pregnancies').insert({
-        'mother_id': motherId,
-        'last_menstrual_period': lmp.toIso8601String().split('T')[0],
-        'expected_date_of_delivery': edd.toIso8601String().split('T')[0],
-        'status': 'ongoing',
-      });
-      return true;
+      final row = await client
+          .from('pregnancies')
+          .insert({
+            'mother_id': motherId,
+            'last_menstrual_period': lmp.toIso8601String().split('T')[0],
+            'expected_date_of_delivery': edd.toIso8601String().split('T')[0],
+            'status': 'ongoing',
+          })
+          .select('pregnancy_id')
+          .single();
+      return (row['pregnancy_id'] as num?)?.toInt();
     } catch (e) {
       if (kDebugMode) {
         print('Error starting pregnancy: $e');
+      }
+      return null;
+    }
+  }
+
+  /// Removes a pregnancy that was started but never given its initial
+  /// checkup. Returns true when it is gone.
+  ///
+  /// Refuses if anything has been recorded against it. Deleting a pregnancy
+  /// cascades to clinical_encounters, so this must only ever take back a
+  /// record opened moments ago in the same flow, never one with history.
+  static Future<bool> discardEmptyPregnancy(int pregnancyId) async {
+    try {
+      final encounters = await client
+          .from('clinical_encounters')
+          .select('encounter_id')
+          .eq('pregnancy_id', pregnancyId)
+          .limit(1);
+      if ((encounters as List).isNotEmpty) return false;
+
+      await client.from('pregnancies').delete().eq('pregnancy_id', pregnancyId);
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error discarding pregnancy $pregnancyId: $e');
       }
       return false;
     }

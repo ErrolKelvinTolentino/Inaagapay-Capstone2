@@ -193,8 +193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: _ChoicePill(
                       label: LanguageService.displayName(option),
                       selected: language == option,
-                      onTap: () =>
-                          LanguageService.selectedLanguage.value = option,
+                      onTap: () => LanguageService.setLanguage(option),
                     ),
                   ),
                   if (option != AppLanguage.values.last)
@@ -293,8 +292,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           label: LanguageService.translate('App version', 'Bersyon ng app'),
           value: kAppVersion,
         ),
-        const ProfileInfoRow(
-          label: 'Clinical standards',
+        ProfileInfoRow(
+          label: LanguageService.translate(
+              'Clinical standards', 'Pamantayang pangkalusugan'),
           value: 'DOH · WHO',
         ),
         const SizedBox(height: 8),

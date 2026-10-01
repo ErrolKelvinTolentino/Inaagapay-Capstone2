@@ -10,6 +10,8 @@ import 'theme/app_theme.dart';
 import 'theme/app_colors.dart';
 import 'services/account_status_guard.dart';
 import 'services/auth_storage.dart';
+import 'services/language_service.dart';
+import 'services/network_status.dart';
 import 'services/supabase_service.dart';
 import 'screens/auth/login.dart';
 import 'screens/auth/mother_registration.dart';
@@ -84,6 +86,9 @@ void main() async {
     await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseAnonKey,
+      // A bounded connection attempt. Without it, a phone on Wi-Fi with no
+      // internet behind it waited minutes on every request. See NetworkStatus.
+      httpClient: NetworkStatus.httpClient(),
     );
     if (kDebugMode) print('✅ Supabase initialized successfully');
   } catch (e) {
@@ -98,6 +103,9 @@ void main() async {
     if (kDebugMode) print('⚠️ Push notification init error: $e');
   }
 
+  // Before the first screen, so it opens in the language she chose.
+  await LanguageService.restore();
+
   runApp(const InaagapayApp());
 }
 
@@ -110,6 +118,24 @@ class InaagapayApp extends StatefulWidget {
 
 /// Call from anywhere to refresh the app theme after dark mode toggle.
 void refreshAppTheme() {}
+
+/// The largest text size the app lays out for.
+///
+/// Android's biggest font setting is 2x (1.3x on older phones). At 2x the
+/// fixed-height headers, tab bars and cards clipped their own labels, which
+/// hid exactly the words a person with low vision turned the setting up to
+/// read. Text still grows with the phone's setting, up to this point.
+const double maxTextScale = 1.3;
+
+Widget _withBoundedTextScale(BuildContext context, Widget? child) {
+  final media = MediaQuery.of(context);
+  return MediaQuery(
+    data: media.copyWith(
+      textScaler: media.textScaler.clamp(maxScaleFactor: maxTextScale),
+    ),
+    child: child ?? const SizedBox.shrink(),
+  );
+}
 
 class _InaagapayAppState extends State<InaagapayApp>
     with WidgetsBindingObserver {
@@ -259,6 +285,7 @@ class _InaagapayAppState extends State<InaagapayApp>
         if (snapshot.connectionState != ConnectionState.done) {
           return const MaterialApp(
             debugShowCheckedModeBanner: false,
+            builder: _withBoundedTextScale,
             home: Scaffold(
               body: Center(
                 child: CircularProgressIndicator(
@@ -272,6 +299,7 @@ class _InaagapayAppState extends State<InaagapayApp>
         return MaterialApp(
           navigatorKey: AccountStatusGuard.navigatorKey,
           debugShowCheckedModeBanner: false,
+          builder: _withBoundedTextScale,
           title: 'Inaagapay',
           theme: AppTheme.lightTheme.copyWith(
             appBarTheme: const AppBarTheme(elevation: 0, centerTitle: true),

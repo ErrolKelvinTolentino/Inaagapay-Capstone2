@@ -14,6 +14,7 @@ import '../../widgets/secondary_header.dart';
 import '../../services/weight_gain_engine.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_storage.dart';
+import '../../services/language_service.dart';
 import '../../services/push_notification_service.dart';
 import '../../models/due_date_basis.dart';
 import 'welcome_screen.dart';
@@ -27,6 +28,9 @@ class CompleteProfileScreen extends StatefulWidget {
 
 class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   int _currentStep = 0;
+
+  String _t(String english, String filipino) =>
+      LanguageService.translate(english, filipino);
 
   // Controllers - Personal Info
   final _firstName = TextEditingController();
@@ -199,7 +203,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     }
 
     if (_selectedBirthdate!.isAfter(DateTime.now())) {
-      setState(() => _birthdateError = 'Birthdate cannot be in the future');
+      setState(() => _birthdateError = _t('Birthdate cannot be in the future',
+          'Hindi maaaring nasa hinaharap ang kaarawan'));
       return;
     }
 
@@ -207,8 +212,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         .floor();
 
     if (age < 5) {
-      setState(() => _birthdateError =
-          'Maternal age ($age years) is too young for registration.');
+      setState(() => _birthdateError = _t(
+          'Maternal age ($age years) is too young for registration.',
+          'Masyadong bata ang edad ($age taon) para magparehistro.'));
     } else {
       setState(() => _birthdateError = null);
     }
@@ -220,7 +226,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     final valid = RegExp(r'^(\+?63|0)9\d{9}$').hasMatch(normalized);
     setState(() => _phoneError = _contactNumber.text.trim().isEmpty
         ? null
-        : (valid ? null : 'Enter a valid PH number'));
+        : (valid
+            ? null
+            : _t('Enter a valid PH number', 'Maglagay ng wastong numero sa PH')));
   }
 
   void _onEmailChanged(String v) {
@@ -234,7 +242,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       return;
     }
     final valid = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value);
-    setState(() => _emailError = valid ? null : 'Enter a valid email');
+    setState(() => _emailError = valid
+        ? null
+        : _t('Enter a valid email', 'Maglagay ng wastong email'));
     if (!valid) {
       _emailTimer?.cancel();
       _emailChecking = false;
@@ -275,7 +285,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     if (_lastEmailChecked != email || !mounted) return;
     setState(() {
       _emailChecking = false;
-      _emailError = available ? null : 'Email already in use';
+      _emailError = available
+          ? null
+          : _t('Email already in use', 'Ginagamit na ang email na ito');
     });
   }
 
@@ -283,11 +295,13 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     final now = DateTime.now();
     final twoWeeksAgo = now.subtract(const Duration(days: 2 * 7));
     if (lmp.isAfter(twoWeeksAgo)) {
-      return 'LMP must be at least 2 weeks ago.';
+      return _t('LMP must be at least 2 weeks ago.',
+          'Dapat ay hindi bababa sa 2 linggo na ang nakalipas ang LMP.');
     }
     final daysSinceLmp = now.difference(lmp).inDays;
     if (daysSinceLmp > 42 * 7) {
-      return 'LMP is more than 42 weeks ago. Please verify the date.';
+      return _t('LMP is more than 42 weeks ago. Please verify the date.',
+          'Mahigit 42 linggo na ang nakalipas ang LMP. Pakisuri ang petsa.');
     }
     return _validatePregnancyInterval(lmp);
   }
@@ -304,9 +318,13 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     for (final ended in _pastPregnancyEndDates) {
       final gap = newLmp.difference(ended).inDays;
       if (gap > 0 && gap < minGapDays) {
-        return 'Pregnancy interval too short ($gap days). Minimum interval is '
-            '$minGapDays days after a previous pregnancy. Please see your '
-            'midwife.';
+        return _t(
+            'Pregnancy interval too short ($gap days). Minimum interval is '
+                '$minGapDays days after a previous pregnancy. Please see your '
+                'midwife.',
+            'Masyadong maikli ang pagitan ng pagbubuntis ($gap araw). Ang '
+                'pinakamaikling pagitan ay $minGapDays araw mula sa nakaraang '
+                'pagbubuntis. Makipag-usap sa iyong midwife.');
       }
     }
     return null;
@@ -356,11 +374,15 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       context: context,
       builder: (_) => DialogBox(
         type: DialogType.warning,
-        title: 'Early Pregnancy Notice',
-        content: 'Your last menstrual period is less than 4 weeks ago. At this '
-            'early stage, a pregnancy test with your midwife is recommended '
-            'before your due date is set from this.',
-        buttonText: 'Understood',
+        title: _t('Early Pregnancy Notice', 'Paalala sa Maagang Pagbubuntis'),
+        content: _t(
+            'Your last menstrual period is less than 4 weeks ago. At this '
+                'early stage, a pregnancy test with your midwife is recommended '
+                'before your due date is set from this.',
+            'Wala pang 4 na linggo mula sa iyong huling regla. Sa ganitong '
+                'kaagang yugto, mainam na magpa-pregnancy test muna sa iyong '
+                'midwife bago itakda ang iyong due date mula rito.'),
+        buttonText: _t('Understood', 'Naiintindihan ko'),
         onPressed: () => Navigator.pop(context),
       ),
     );
@@ -371,11 +393,13 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     final today = DateTime(now.year, now.month, now.day);
     final eddDate = DateTime(edd.year, edd.month, edd.day);
     if (eddDate.isBefore(today)) {
-      return 'EDD cannot be in the past.';
+      return _t('EDD cannot be in the past.',
+          'Hindi maaaring nasa nakaraan ang EDD.');
     }
     final maxEdd = today.add(const Duration(days: 43 * 7));
     if (eddDate.isAfter(maxEdd)) {
-      return 'EDD cannot be more than 43 weeks from today.';
+      return _t('EDD cannot be more than 43 weeks from today.',
+          'Hindi maaaring lumampas sa 43 linggo mula ngayon ang EDD.');
     }
     return null;
   }
@@ -453,22 +477,24 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     String? dErr;
 
     if (w == null && wStr.isNotEmpty) {
-      wErr = 'Enter a valid number';
+      wErr = _t('Enter a valid number', 'Maglagay ng wastong numero');
     } else if (w != null && (w < 2 || w > 42)) {
-      wErr = 'Must be 2-42';
+      wErr = _t('Must be 2-42', 'Dapat ay 2-42');
     }
 
     if (d == null && dStr.isNotEmpty) {
-      dErr = 'Enter a valid number';
+      dErr = _t('Enter a valid number', 'Maglagay ng wastong numero');
     } else if (d != null && (d < 0 || d > 6)) {
-      dErr = 'Must be 0-6';
+      dErr = _t('Must be 0-6', 'Dapat ay 0-6');
     }
 
     setState(() {
       _weeksError = wErr;
       _daysError = dErr;
       _gestationError =
-          (wErr != null || dErr != null) ? 'Invalid AOG weeks or days' : null;
+          (wErr != null || dErr != null)
+              ? _t('Invalid AOG weeks or days', 'Maling linggo o araw ng AOG')
+              : null;
     });
 
     if (wErr == null && dErr == null && w != null && d != null) {
@@ -489,7 +515,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     if (days < 0) return '';
     final weeks = days ~/ 7;
     final remainingDays = days % 7;
-    return '$weeks weeks, $remainingDays days';
+    return _t('$weeks weeks, $remainingDays days',
+        '$weeks linggo, $remainingDays araw');
   }
 
   Future<void> _handlePrimaryAction() async {
@@ -506,7 +533,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     if (userId == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Session expired. Please login again.')),
+        SnackBar(
+            content: Text(_t('Session expired. Please login again.',
+                'Nag-expire ang session. Mag-login muli.'))),
       );
       Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       return;
@@ -515,8 +544,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     // Validate required fields
     if (_firstName.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please enter your first name'),
+        SnackBar(
+            content: Text(_t('Please enter your first name',
+                'Ilagay ang iyong pangalan')),
             backgroundColor: AppColors.error),
       );
       return;
@@ -524,8 +554,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
     if (_lastName.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please enter your last name'),
+        SnackBar(
+            content: Text(_t('Please enter your last name',
+                'Ilagay ang iyong apelyido')),
             backgroundColor: AppColors.error),
       );
       return;
@@ -534,7 +565,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     if (_birthDate.text.trim().isEmpty || _birthdateError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(_birthdateError ?? 'Please enter your birth date'),
+            content: Text(_birthdateError ??
+                _t('Please enter your birth date', 'Ilagay ang iyong kaarawan')),
             backgroundColor: AppColors.error),
       );
       return;
@@ -544,7 +576,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       if (_contactNumber.text.trim().isEmpty || _phoneError != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(_phoneError ?? 'Please enter your contact number'),
+              content: Text(_phoneError ??
+                  _t('Please enter your contact number',
+                      'Ilagay ang iyong contact number')),
               backgroundColor: AppColors.error),
         );
         return;
@@ -556,7 +590,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content:
-                  Text(_emailError ?? 'Please enter a valid email address'),
+                  Text(_emailError ??
+                      _t('Please enter a valid email address',
+                          'Maglagay ng wastong email address')),
               backgroundColor: AppColors.error),
         );
         return;
@@ -575,14 +611,15 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     if (hasHeight || hasWeight || hasPpw) {
       if (_heightError != null || _weightError != null || _prePregnancyWeightError != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please correct measurement errors before saving'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(_t('Please correct measurement errors before saving', 'Itama muna ang mga maling sukat bago i-save')), backgroundColor: AppColors.error),
         );
         return;
       }
       if (!hasHeight || !hasWeight || (_knowsPrePregnancyWeight && !hasPpw)) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Please enter your height and current weight.'),
+          SnackBar(
+              content: Text(_t('Please enter your height and current weight.',
+                  'Ilagay ang iyong taas at kasalukuyang timbang.')),
               backgroundColor: AppColors.error),
         );
         return;
@@ -646,19 +683,22 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     final shouldExit = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Exit Profile Setup'),
-        content: const Text(
+        title: Text(_t('Exit Profile Setup', 'Lumabas sa Pag-setup ng Profile')),
+        content: Text(_t(
           'Are you sure you want to exit?\n\n'
-          'Your profile information will NOT be saved.\n'
-          'You will be logged out and need to log in again.',
-        ),
+              'Your profile information will NOT be saved.\n'
+              'You will be logged out and need to log in again.',
+          'Sigurado ka bang gusto mong lumabas?\n\n'
+              'HINDI mase-save ang impormasyon ng iyong profile.\n'
+              'Mala-logout ka at kailangang mag-login muli.',
+        )),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(_t('Cancel', 'Kanselahin')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -666,7 +706,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Exit'),
+            child: Text(_t('Exit', 'Lumabas')),
           ),
         ],
       ),
@@ -746,7 +786,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         child: Column(
           children: [
             SecondaryHeader(
-              title: 'Complete Profile',
+              title: _t('Complete Profile', 'Kumpletuhin ang Profile'),
               onBack: _currentStep == 0 ? _emergencyExit : _previousStep,
             ),
             LinearProgressIndicator(
@@ -765,7 +805,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   // is the screen standing between a mother and the app she
                   // just signed up for.
                   Text(
-                    'Step ${_currentStep + 1} of $_totalSteps',
+                    _t('Step ${_currentStep + 1} of $_totalSteps',
+                        'Hakbang ${_currentStep + 1} sa $_totalSteps'),
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -830,7 +871,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                     if (_currentStep > 0) ...[
                       Expanded(
                         child: MainButton(
-                          label: 'Back',
+                          label: _t('Back', 'Bumalik'),
                           leftIcon: Icons.arrow_back_ios_new_rounded,
                           isWhiteVariant: true,
                           onPressed: _previousStep,
@@ -841,7 +882,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                     Expanded(
                       child: _currentStep < _totalSteps - 1
                           ? MainButton(
-                              label: 'Next',
+                              label: _t('Next', 'Susunod'),
                               rightIcon: Icons.arrow_forward_ios_rounded,
                               onPressed: _currentStep == 0
                                   ? (_canProceedFromStep0
@@ -858,7 +899,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                           // without them starts a pregnancy record that cannot
                           // be assessed at all.
                           : MainButton(
-                              label: 'Complete Setup',
+                              label: _t('Complete Setup', 'Tapusin ang Setup'),
                               rightIcon: Icons.check_rounded,
                               onPressed: _canProceedFromStep2
                                   ? _handlePrimaryAction
@@ -877,17 +918,20 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
   static const int _totalSteps = 3;
 
-  static const List<String> _stepTitles = [
-    'Personal Information',
-    'Pregnancy Details',
-    'Vital Statistics',
-  ];
+  List<String> get _stepTitles => [
+        _t('Personal Information', 'Personal na Impormasyon'),
+        _t('Pregnancy Details', 'Detalye ng Pagbubuntis'),
+        _t('Vital Statistics', 'Mga Sukat ng Katawan'),
+      ];
 
-  static const List<String> _stepSubtitles = [
-    'Your name, birthdate and how we can reach you',
-    'How your due date should be worked out',
-    'Height and weight, used to follow your weight gain',
-  ];
+  List<String> get _stepSubtitles => [
+        _t('Your name, birthdate and how we can reach you',
+            'Ang iyong pangalan, kaarawan at kung paano ka makokontak'),
+        _t('How your due date should be worked out',
+            'Kung paano kukuwentahin ang iyong due date'),
+        _t('Height and weight, used to follow your weight gain',
+            'Taas at timbang, para masubaybayan ang pagdagdag ng iyong timbang'),
+      ];
 
   /// The same dropdown the midwife forms use.
   ///
@@ -897,7 +941,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   /// and is what "Extension" already looks like on Add Mother.
   Widget _buildExtensionDropdown() {
     return AppDropdownField<String>(
-      hintText: 'Extension',
+      hintText: _t('Extension', 'Ekstensyon'),
       value: _selectedExtension.isEmpty ? _noExtension : _selectedExtension,
       options: _extensionOptions
           .map((e) => e.isEmpty ? _noExtension : e)
@@ -919,21 +963,21 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       child: Column(
         children: [
           AppInputField(
-            hintText: 'First Name',
+            hintText: _t('First Name', 'Pangalan'),
             controller: _firstName,
             isRequired: true,
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
           AppInputField(
-            hintText: 'Last Name',
+            hintText: _t('Last Name', 'Apelyido'),
             controller: _lastName,
             isRequired: true,
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
           AppInputField(
-            hintText: 'Middle Name',
+            hintText: _t('Middle Name', 'Gitnang Pangalan'),
             controller: _middleName,
             onChanged: (_) => setState(() {}),
           ),
@@ -961,7 +1005,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
             },
             child: AbsorbPointer(
               child: AppInputField(
-                hintText: 'Birthdate',
+                hintText: _t('Birthdate', 'Kaarawan'),
                 controller: _birthDate,
                 isRequired: true,
                 leadingIcon: Icons.calendar_today,
@@ -973,7 +1017,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           if (_registeredWithEmail) ...[
             const SizedBox(height: 12),
             AppInputField(
-              hintText: 'Contact Number',
+              hintText: _t('Contact Number', 'Contact Number'),
               controller: _contactNumber,
               isRequired: true,
               keyboardType: TextInputType.phone,
@@ -984,7 +1028,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           ] else ...[
             const SizedBox(height: 12),
             AppInputField(
-              hintText: 'Email Address*',
+              hintText: _t('Email Address*', 'Email Address*'),
               controller: _emailAddress,
               isRequired: true,
               keyboardType: TextInputType.emailAddress,
@@ -1021,33 +1065,40 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'How would you like to calculate your due date?',
-                  style: TextStyle(
+                Text(
+                  _t('How would you like to calculate your due date?',
+                      'Paano mo gustong kuwentahin ang iyong due date?'),
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 12),
                 _buildBasisOption(
-                  title: 'Last Menstrual Period (LMP)',
-                  subtitle: 'Based on the first day of your last period',
+                  title: _t('Last Menstrual Period (LMP)',
+                      'Huling Regla (LMP)'),
+                  subtitle: _t('Based on the first day of your last period',
+                      'Batay sa unang araw ng iyong huling regla'),
                   basis: DueDateBasis.lmp,
                   selected: _dueDateBasis == DueDateBasis.lmp,
                   onTap: () => setState(() => _dueDateBasis = DueDateBasis.lmp),
                 ),
                 const SizedBox(height: 8),
                 _buildBasisOption(
-                  title: 'Estimated Delivery Date (EDD)',
-                  subtitle: 'If you already know your due date',
+                  title: _t('Estimated Delivery Date (EDD)',
+                      'Tinatayang Petsa ng Panganganak (EDD)'),
+                  subtitle: _t('If you already know your due date',
+                      'Kung alam mo na ang iyong due date'),
                   basis: DueDateBasis.edd,
                   selected: _dueDateBasis == DueDateBasis.edd,
                   onTap: () => setState(() => _dueDateBasis = DueDateBasis.edd),
                 ),
                 const SizedBox(height: 8),
                 _buildBasisOption(
-                  title: 'Age of Gestation (AOG)',
-                  subtitle: 'Enter how many weeks and days pregnant you are',
+                  title: _t('Age of Gestation (AOG)',
+                      'Edad ng Pagbubuntis (AOG)'),
+                  subtitle: _t('Enter how many weeks and days pregnant you are',
+                      'Ilagay kung ilang linggo at araw ka nang buntis'),
                   basis: DueDateBasis.aog,
                   selected: _dueDateBasis == DueDateBasis.aog,
                   onTap: () => setState(() => _dueDateBasis = DueDateBasis.aog),
@@ -1075,9 +1126,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (_dueDateBasis == DueDateBasis.lmp) ...[
-                  const Text(
-                    'Last Menstrual Period',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  Text(
+                    _t('Last Menstrual Period', 'Huling Regla'),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   GestureDetector(
@@ -1107,7 +1158,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                     },
                     child: AbsorbPointer(
                       child: AppInputField(
-                        hintText: 'Select LMP date',
+                        hintText: _t('Select LMP date', 'Piliin ang petsa ng LMP'),
                         controller: _lmpDate,
                         isRequired: true,
                         leadingIcon: Icons.calendar_today,
@@ -1117,9 +1168,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                     ),
                   ),
                 ] else if (_dueDateBasis == DueDateBasis.edd) ...[
-                  const Text(
-                    'Estimated Delivery Date',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  Text(
+                    _t('Estimated Delivery Date', 'Tinatayang Petsa ng Panganganak'),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   GestureDetector(
@@ -1140,7 +1191,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                     },
                     child: AbsorbPointer(
                       child: AppInputField(
-                        hintText: 'Select EDD date',
+                        hintText: _t('Select EDD date', 'Piliin ang petsa ng EDD'),
                         controller: _eddDate,
                         isRequired: true,
                         leadingIcon: Icons.event_available,
@@ -1150,9 +1201,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                     ),
                   ),
                 ] else ...[
-                  const Text(
-                    'Age of Gestation',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  Text(
+                    _t('Age of Gestation', 'Edad ng Pagbubuntis'),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -1160,7 +1211,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                     children: [
                       Expanded(
                         child: AppInputField(
-                          hintText: 'Weeks',
+                          hintText: _t('Weeks', 'Linggo'),
                           controller: _aogWeeks,
                           keyboardType: TextInputType.number,
                           errorText: _weeksError,
@@ -1170,7 +1221,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: AppInputField(
-                          hintText: 'Days',
+                          hintText: _t('Days', 'Araw'),
                           controller: _aogDays,
                           keyboardType: TextInputType.number,
                           errorText: _daysError,
@@ -1199,20 +1250,20 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                 _infoRow(
                   Icons.calendar_today,
                   'LMP',
-                  _lmpDate.text.isEmpty ? 'Not set' : _lmpDate.text,
+                  _lmpDate.text.isEmpty ? _t('Not set', 'Wala pa') : _lmpDate.text,
                 ),
                 const SizedBox(height: 8),
                 _infoRow(
                   Icons.event_available,
                   'EDD',
-                  _eddDate.text.isEmpty ? 'Not set' : _eddDate.text,
+                  _eddDate.text.isEmpty ? _t('Not set', 'Wala pa') : _eddDate.text,
                 ),
                 const SizedBox(height: 8),
                 _infoRow(
                   Icons.timer,
-                  'Current AOG',
+                  _t('Current AOG', 'Kasalukuyang AOG'),
                   _getFormattedAog().isEmpty
-                      ? 'Not calculated'
+                      ? _t('Not calculated', 'Hindi pa nakuwenta')
                       : _getFormattedAog(),
                 ),
               ],
@@ -1301,7 +1352,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     if (height != null) {
       if (height < 50 || height > 250) {
         setState(() {
-          _heightError = 'Must be 50-250 cm';
+          _heightError = _t('Must be 50-250 cm', 'Dapat ay 50-250 cm');
           _heightWarning = null;
         });
       } else {
@@ -1309,7 +1360,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           _heightError = null;
           if (height < 120) {
             _heightWarning =
-                'Entered measurement is outside expected maternal ranges. Please verify.';
+                _t('Entered measurement is outside expected maternal ranges. Please verify.',
+                'Labas sa inaasahang sukat para sa ina ang inilagay. Pakisuri.');
           } else {
             _heightWarning = null;
           }
@@ -1318,7 +1370,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     } else {
       setState(() {
         _heightError =
-            _heightCtrl.text.trim().isEmpty ? null : 'Enter a valid number';
+            _heightCtrl.text.trim().isEmpty
+                ? null
+                : _t('Enter a valid number', 'Maglagay ng wastong numero');
         _heightWarning = null;
       });
     }
@@ -1326,7 +1380,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     if (weight != null) {
       if (weight < 10 || weight > 350) {
         setState(() {
-          _weightError = 'Must be 10-350 kg';
+          _weightError = _t('Must be 10-350 kg', 'Dapat ay 10-350 kg');
           _weightWarning = null;
         });
       } else {
@@ -1334,7 +1388,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           _weightError = null;
           if (weight < 35) {
             _weightWarning =
-                'Entered measurement is outside expected maternal ranges. Please verify.';
+                _t('Entered measurement is outside expected maternal ranges. Please verify.',
+                'Labas sa inaasahang sukat para sa ina ang inilagay. Pakisuri.');
           } else {
             _weightWarning = null;
           }
@@ -1343,7 +1398,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     } else {
       setState(() {
         _weightError =
-            _weightCtrl.text.trim().isEmpty ? null : 'Enter a valid number';
+            _weightCtrl.text.trim().isEmpty
+                ? null
+                : _t('Enter a valid number', 'Maglagay ng wastong numero');
         _weightWarning = null;
       });
     }
@@ -1360,19 +1417,21 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       });
     } else if (ppw == null) {
       setState(() {
-        _prePregnancyWeightError = 'Enter a valid number';
+        _prePregnancyWeightError =
+            _t('Enter a valid number', 'Maglagay ng wastong numero');
         _prePregnancyWeightWarning = null;
       });
     } else if (ppw < 10 || ppw > 350) {
       setState(() {
-        _prePregnancyWeightError = 'Must be 10-350 kg';
+        _prePregnancyWeightError = _t('Must be 10-350 kg', 'Dapat ay 10-350 kg');
         _prePregnancyWeightWarning = null;
       });
     } else if (ppw < 35) {
       setState(() {
         _prePregnancyWeightError = null;
         _prePregnancyWeightWarning =
-            'Entered measurement is outside expected maternal ranges. Please verify.';
+            _t('Entered measurement is outside expected maternal ranges. Please verify.',
+                'Labas sa inaasahang sukat para sa ina ang inilagay. Pakisuri.');
       });
     } else {
       setState(() {
@@ -1498,10 +1557,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               const Icon(Icons.monitor_weight_outlined,
                   size: 16, color: AppColors.brandPrimary),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'PRE-PREGNANCY BMI',
-                  style: TextStyle(
+                  _t('PRE-PREGNANCY BMI', 'BMI BAGO MAGBUNTIS'),
+                  style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.5,
@@ -1520,9 +1579,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(color: const Color(0xFFFDE68A)),
                   ),
-                  child: const Text(
-                    'ESTIMATED',
-                    style: TextStyle(
+                  child: Text(
+                    _t('ESTIMATED', 'TINANTYA'),
+                    style: const TextStyle(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.3,
@@ -1581,7 +1640,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
             const Divider(height: 1, color: AppColors.borderPrimary),
             const SizedBox(height: 14),
             Text(
-              'EXPECTED BY WEEK $_aogWeeksValue',
+              _t('EXPECTED BY WEEK $_aogWeeksValue',
+                  'INAASAHAN SA LINGGO $_aogWeeksValue'),
               style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
@@ -1598,7 +1658,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               children: [
                 Expanded(
                   child: _gainStat(
-                    label: 'Expected range',
+                    label: _t('Expected range', 'Inaasahang saklaw'),
                     value: '${_expectedGainMin!.toStringAsFixed(1)}–'
                         '${_expectedGainMax!.toStringAsFixed(1)} kg',
                   ),
@@ -1607,7 +1667,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _gainStat(
-                      label: 'Gained so far',
+                      label: _t('Gained so far', 'Nadagdag hanggang ngayon'),
                       value: '${_actualGain! >= 0 ? '+' : ''}'
                           '${_actualGain!.toStringAsFixed(1)} kg',
                     ),
@@ -1617,8 +1677,11 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Based on a ${_bmiClassification!.toLowerCase()} pre-pregnancy '
-              'BMI. Your midwife will review this at your check-up.',
+              _t(
+                  'Based on a ${_bmiClassification!.toLowerCase()} pre-pregnancy '
+                      'BMI. Your midwife will review this at your check-up.',
+                  'Batay sa ${_bmiClassification!.toLowerCase()} na BMI bago '
+                      'magbuntis. Susuriin ito ng iyong midwife sa iyong check-up.'),
               style: TextStyle(
                   fontSize: 11.5, height: 1.4, color: Colors.grey.shade600),
             ),
@@ -1631,9 +1694,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               // background instead of under it.
               type: MaterialType.transparency,
               child: ExpansionTile(
-              title: const Text(
-                'Clinical Disclaimer & References',
-                style: TextStyle(
+              title: Text(
+                _t('Clinical Disclaimer & References',
+                    'Paalala at mga Sanggunian'),
+                style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: AppColors.brandPrimary,
@@ -1644,17 +1708,23 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               dense: true,
               children: [
                 Text(
-                  'Disclaimer: This compares your weight against published '
-                  'weight gain ranges for your pre-pregnancy BMI category and '
-                  'shows where it sits. It is a guide for monitoring, not a '
-                  'diagnosis, and it does not replace your midwife\'s '
-                  'assessment.',
+                  _t(
+                      'Disclaimer: This compares your weight against published '
+                          'weight gain ranges for your pre-pregnancy BMI category and '
+                          'shows where it sits. It is a guide for monitoring, not a '
+                          'diagnosis, and it does not replace your midwife\'s '
+                          'assessment.',
+                      'Paalala: Inihahambing nito ang iyong timbang sa mga '
+                          'nailathalang saklaw ng pagdagdag ng timbang para sa '
+                          'iyong BMI bago magbuntis. Gabay ito sa pagsubaybay, '
+                          'hindi diagnosis, at hindi nito pinapalitan ang '
+                          'pagsusuri ng iyong midwife.'),
                   style: TextStyle(
                       fontSize: 10, height: 1.4, color: Colors.grey.shade600),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'References:\n'
+                  '${_t('References', 'Mga Sanggunian')}:\n'
                   '• Institute of Medicine (IOM) & National Research Council '
                   '(NRC). (2009). Weight Gain During Pregnancy: Reexamining '
                   'the Guidelines. Washington, DC: The National Academies '
@@ -1739,16 +1809,27 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   String get _estimationExplanation {
     switch (_bmiEstimationMethod) {
       case 'current_weight_early':
-        return 'Worked out from your current weight. Before 14 weeks, weight '
-            'usually changes very little, so this is close to your '
-            'pre-pregnancy weight.';
+        return _t(
+            'Worked out from your current weight. Before 14 weeks, weight '
+                'usually changes very little, so this is close to your '
+                'pre-pregnancy weight.',
+            'Kinuwenta mula sa iyong kasalukuyang timbang. Bago ang 14 na '
+                'linggo, kadalasang kaunti lang ang pagbabago ng timbang, kaya '
+                'malapit ito sa iyong timbang bago magbuntis.');
       case 'backtracked':
-        return 'Worked back from your current weight and how far along you '
-            'are. Your midwife can correct it if you find your actual '
-            'pre-pregnancy weight.';
+        return _t(
+            'Worked back from your current weight and how far along you '
+                'are. Your midwife can correct it if you find your actual '
+                'pre-pregnancy weight.',
+            'Kinuwenta pabalik mula sa iyong kasalukuyang timbang at kung '
+                'ilang linggo ka nang buntis. Maitatama ito ng iyong midwife '
+                'kapag nalaman mo ang iyong timbang bago magbuntis.');
       default:
-        return 'Worked out from the measurements you entered. Your midwife can '
-            'correct it later.';
+        return _t(
+            'Worked out from the measurements you entered. Your midwife can '
+                'correct it later.',
+            'Kinuwenta mula sa mga sukat na inilagay mo. Maitatama ito ng '
+                'iyong midwife mamaya.');
     }
   }
 
@@ -1759,10 +1840,15 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'These are the starting point your weight gain is measured from '
-            'for the rest of your pregnancy. If you do not know your '
-            'pre-pregnancy weight, untick the box below and we will work it '
-            'out from what you enter.',
+            _t(
+                'These are the starting point your weight gain is measured from '
+                    'for the rest of your pregnancy. If you do not know your '
+                    'pre-pregnancy weight, untick the box below and we will work it '
+                    'out from what you enter.',
+                'Ito ang simulang batayan ng pagsukat sa pagdagdag ng iyong '
+                    'timbang sa buong pagbubuntis. Kung hindi mo alam ang iyong '
+                    'timbang bago magbuntis, alisin ang tsek sa kahon sa ibaba at '
+                    'kukuwentahin namin ito mula sa ilalagay mo.'),
             style: TextStyle(
               fontSize: 13,
               color: Colors.grey.shade600,
@@ -1771,12 +1857,12 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Height (cm)',
+            _t('Height (cm)', 'Taas (cm)'),
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade700),
           ),
           const SizedBox(height: 8),
           AppInputField(
-            hintText: 'e.g. 156.0',
+            hintText: _t('e.g. 156.0', 'hal. 156.0'),
             controller: _heightCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             leadingIcon: Icons.height,
@@ -1789,12 +1875,12 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           ],
           const SizedBox(height: 16),
           Text(
-            'Current Weight (kg)',
+            _t('Current Weight (kg)', 'Kasalukuyang Timbang (kg)'),
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade700),
           ),
           const SizedBox(height: 8),
           AppInputField(
-            hintText: 'e.g. 62.5',
+            hintText: _t('e.g. 62.5', 'hal. 62.5'),
             controller: _weightCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             leadingIcon: Icons.monitor_weight_outlined,
@@ -1823,10 +1909,11 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   });
                 },
               ),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'I know my pre-pregnancy weight',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  _t('I know my pre-pregnancy weight',
+                      'Alam ko ang aking timbang bago magbuntis'),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
               ),
             ],
@@ -1834,12 +1921,12 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           const SizedBox(height: 8),
           if (_knowsPrePregnancyWeight) ...[
             Text(
-              'Pre-pregnancy Weight (kg)',
+              _t('Pre-pregnancy Weight (kg)', 'Timbang Bago Magbuntis (kg)'),
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade700),
             ),
             const SizedBox(height: 8),
             AppInputField(
-              hintText: 'e.g. 58.0',
+              hintText: _t('e.g. 58.0', 'hal. 58.0'),
               controller: _prePregnancyWeightCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               leadingIcon: Icons.monitor_weight_outlined,

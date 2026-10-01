@@ -251,8 +251,12 @@ class _ContactChangeSheetState extends State<_ContactChangeSheet> {
                 onChanged: (value) => setState(() => _code = value),
               ),
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // A Wrap, not a Row: "Use a different email address" and
+              // "Resend in 60s" do not fit side by side on a 360dp phone, and
+              // the Row pushed the second one off the edge.
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   TextButton(
                     onPressed: _busy

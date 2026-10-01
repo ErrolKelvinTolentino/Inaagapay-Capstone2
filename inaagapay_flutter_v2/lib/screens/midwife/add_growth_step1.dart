@@ -11,7 +11,7 @@ import '../../widgets/app_input_field.dart';
 import '../../widgets/main_button.dart';
 import '../../widgets/dialog_box.dart';
 import '../../widgets/confirmation_dialog_box.dart';
-import '../../widgets/validation_message.dart';
+import '../../widgets/growth_summary_card.dart';
 import '../../services/growth_calculator.dart';
 import '../../services/groq_service.dart';
 import '../../widgets/profile_helpers.dart';
@@ -72,8 +72,8 @@ class _AddGrowthStep1State extends State<AddGrowthStep1> {
   Color _bmiCategoryColor = AppColors.textPrimary;
 
   bool _isFormValid = false;
-  String? _validationMessage;
-  ValidationType _validationMessageType = ValidationType.error;
+  String? _heightError;
+  String? _weightError;
   bool _isSaving = false;
 
   /// Database error from the most recent save attempt, shown to the midwife so
@@ -277,58 +277,48 @@ class _AddGrowthStep1State extends State<AddGrowthStep1> {
     }
   }
 
-  void _validateForm() {
-    if (_heightController.text.isEmpty || _weightController.text.isEmpty) {
-      setState(() {
-        _isFormValid = false;
-        _validationMessage = null;
-      });
-      return;
-    }
-
-    final height = double.tryParse(_heightController.text);
-    final weight = double.tryParse(_weightController.text);
-
-    if (height == null || weight == null) {
-      setState(() {
-        _isFormValid = false;
-        _validationMessageType = ValidationType.error;
-        _validationMessage = 'Please enter valid numbers for height and weight.';
-      });
-      return;
-    }
-
-    if (height <= 0 || weight <= 0) {
-      setState(() {
-        _isFormValid = false;
-        _validationMessageType = ValidationType.error;
-        _validationMessage = 'Height and weight must be greater than zero.';
-      });
-      return;
-    }
-
+  /// Each field is checked on its own and its message shown under it.
+  ///
+  /// Validation used to wait until both fields held something, so a weight of
+  /// 0.4 kg typed before the height drew no message at all. When both were
+  /// filled the message went to the foot of the form, below the remarks box,
+  /// where the keyboard covered it; and height was checked first, so a bad
+  /// weight stayed unmentioned while the height was also wrong.
+  static String? _heightErrorFor(String text) {
+    if (text.isEmpty) return null;
+    final height = double.tryParse(text);
+    if (height == null) return 'Enter a valid number.';
     if (height < 20 || height > 200) {
-      setState(() {
-        _isFormValid = false;
-        _validationMessageType = ValidationType.error;
-        _validationMessage = 'Height must be between 20 cm and 200 cm.';
-      });
-      return;
+      return 'Height must be between 20 cm and 200 cm.';
     }
+    return null;
+  }
 
+  static String? _weightErrorFor(String text) {
+    if (text.isEmpty) return null;
+    final weight = double.tryParse(text);
+    if (weight == null) return 'Enter a valid number.';
     if (weight < 0.5 || weight > 120) {
-      setState(() {
-        _isFormValid = false;
-        _validationMessageType = ValidationType.error;
-        _validationMessage = 'Weight must be between 0.5 kg and 120 kg.';
-      });
-      return;
+      return 'Weight must be between 0.5 kg and 120 kg.';
     }
+    return null;
+  }
+
+  void _validateForm() {
+    final heightText = _heightController.text.trim();
+    final weightText = _weightController.text.trim();
+    final heightError = _heightErrorFor(heightText);
+    final weightError = _weightErrorFor(weightText);
+    final isValid = heightText.isNotEmpty &&
+        weightText.isNotEmpty &&
+        heightError == null &&
+        weightError == null;
 
     setState(() {
-      _isFormValid = true;
-      _validationMessage = null;
-      _calculateZScores();
+      _heightError = heightError;
+      _weightError = weightError;
+      _isFormValid = isValid;
+      if (isValid) _calculateZScores();
     });
   }
 
@@ -710,6 +700,34 @@ $recordsSummary
     }
   }
 
+  /// The verdict for each age indicator as the measurement is typed.
+  ///
+  /// Both z-scores were already computed here but never shown: the form led
+  /// with BMI alone. A six-month-old boy measuring 60 cm is below -3 SD for
+  /// length, yet his BMI can sit comfortably inside the band, so the form read
+  /// "Within standard range" and stunting went unflagged. DOH growth
+  /// monitoring is built on weight-for-age and height-for-age; they come first.
+  List<Widget> _buildAgeIndicatorVerdicts() {
+    if (!_hasBirthdate || _gender.isEmpty) return const [];
+    final verdicts = <Widget>[];
+
+    void add(GrowthMetric metric, double? zScore, String? fieldError) {
+      if (zScore == null || zScore.isNaN || fieldError != null) return;
+      if (verdicts.isNotEmpty) verdicts.add(const SizedBox(height: 8));
+      verdicts.add(GrowthVerdictChip(
+        label: metric.label,
+        band: GrowthCalculator.bandForZScore(zScore),
+        isFilipino: false,
+        clinicalTerm: metric.belowRangeTerm,
+      ));
+    }
+
+    add(GrowthMetric.weightForAge, _weightZScore, _weightError);
+    add(GrowthMetric.heightForAge, _heightZScore, _heightError);
+    if (verdicts.isEmpty) return const [];
+    return [...verdicts, const SizedBox(height: 12)];
+  }
+
   String _describeZScore(double? zScore) {
     if (zScore == null) return 'Within standard range';
     return _bandForZScore(zScore);
@@ -1062,6 +1080,7 @@ $recordsSummary
           ],
           onChanged: (_) => _onMeasurementChanged(),
           isRequired: true,
+          errorText: _heightError,
         ),
 
         if (_previousGrowth != null) ...[
@@ -1069,7 +1088,7 @@ $recordsSummary
           Padding(
             padding: const EdgeInsets.only(left: 16),
             child: Text(
-              'Previous height: ${(_previousGrowth!['child_height'] as num?)?.toStringAsFixed(1) ?? 'n/a'} cm • ${_formatDate(_previousGrowth!['created_at']?.toString() ?? '')}',
+              'Previous height:${(_previousGrowth!['child_height'] as num?)?.toStringAsFixed(1) ?? 'n/a'} cm • ${_formatDate(_previousGrowth!['created_at']?.toString() ?? '')}',
               style: const TextStyle(
                 fontSize: 12,
                 color: AppColors.textSecondary,
@@ -1092,6 +1111,7 @@ $recordsSummary
           ],
           onChanged: (_) => _onMeasurementChanged(),
           isRequired: true,
+          errorText: _weightError,
         ),
 
         if (_previousGrowth != null) ...[
@@ -1099,7 +1119,7 @@ $recordsSummary
           Padding(
             padding: const EdgeInsets.only(left: 16),
             child: Text(
-              'Previous weight: ${(_previousGrowth!['child_weight'] as num?)?.toStringAsFixed(1) ?? 'n/a'} kg • ${_formatDate(_previousGrowth!['created_at']?.toString() ?? '')}',
+              'Previous weight:${(_previousGrowth!['child_weight'] as num?)?.toStringAsFixed(1) ?? 'n/a'} kg • ${_formatDate(_previousGrowth!['created_at']?.toString() ?? '')}',
               style: const TextStyle(
                 fontSize: 12,
                 color: AppColors.textSecondary,
@@ -1109,6 +1129,9 @@ $recordsSummary
         ],
 
         const SizedBox(height: 16),
+
+        // Weight-for-age and height-for-age, ahead of BMI.
+        ..._buildAgeIndicatorVerdicts(),
 
         // BMI Display
         Container(
@@ -1269,13 +1292,6 @@ $recordsSummary
           ),
         ),
 
-        if (_validationMessage != null) ...[
-          const SizedBox(height: 12),
-          ValidationMessage(
-            message: _validationMessage!,
-            type: _validationMessageType,
-          ),
-        ],
         const SizedBox(height: 24),
       ],
     );

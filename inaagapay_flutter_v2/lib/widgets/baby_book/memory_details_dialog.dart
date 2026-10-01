@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../services/language_service.dart';
 import '../app_input_field.dart';
 import '../main_button.dart';
 
@@ -76,10 +77,11 @@ class _MemoryDetailsDialogState extends State<MemoryDetailsDialog> {
     Navigator.of(context).pop(
       MemoryDetails(
         title: _titleController.text.trim().isEmpty
-            ? 'A beautiful memory'
+            ? LanguageService.translate('A beautiful memory', 'Isang magandang alaala')
             : _titleController.text.trim(),
         caption: _captionController.text.trim().isEmpty
-            ? 'A special moment in Baby’s growing story.'
+            ? LanguageService.translate('A special moment in Baby’s growing story.',
+                'Isang espesyal na sandali sa kuwento ng paglaki ni Baby.')
             : _captionController.text.trim(),
       ),
     );
@@ -127,10 +129,10 @@ class _MemoryDetailsDialogState extends State<MemoryDetailsDialog> {
             ),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Add this memory',
-              style: TextStyle(
+              LanguageService.translate('Add this memory', 'Idagdag ang alaalang ito'),
+              style: const TextStyle(
                 color: AppColors.headingSoft,
                 fontSize: 19,
                 fontWeight: FontWeight.w800,
@@ -177,7 +179,7 @@ class _MemoryDetailsDialogState extends State<MemoryDetailsDialog> {
             const SizedBox(height: 18),
             AppInputField(
               key: const ValueKey<String>('memory-title-field'),
-              hintText: 'Name this photo',
+              hintText: LanguageService.translate('Name this photo', 'Pangalanan ang larawang ito'),
               controller: _titleController,
               leadingIcon: Icons.favorite_outline_rounded,
             ),
@@ -191,7 +193,7 @@ class _MemoryDetailsDialogState extends State<MemoryDetailsDialog> {
           children: [
             MainButton(
               key: const ValueKey<String>('memory-save'),
-              label: 'Save memory',
+              label: LanguageService.translate('Save memory', 'I-save ang alaala'),
               showIcons: false,
               onPressed: _save,
             ),
@@ -202,9 +204,9 @@ class _MemoryDetailsDialogState extends State<MemoryDetailsDialog> {
                 foregroundColor: AppColors.textSecondary,
                 minimumSize: const Size.fromHeight(44),
               ),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              child: Text(
+                LanguageService.translate('Cancel', 'Kanselahin'),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
               ),
             ),
           ],
@@ -282,11 +284,12 @@ class _StoryFieldState extends State<_StoryField> {
                     fontSize: 14,
                     height: 1.4,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
-                    hintText: 'What made this moment special?',
-                    hintStyle: TextStyle(
+                    hintText: LanguageService.translate('What made this moment special?',
+                        'Ano ang nagpaespesyal sa sandaling ito?'),
+                    hintStyle: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
                     ),

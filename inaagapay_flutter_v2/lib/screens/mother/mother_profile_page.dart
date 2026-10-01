@@ -3296,7 +3296,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                         final picked = await _showBrandedDatePicker(
                           context: modalCtx,
                           initialDate: DateTime.now().subtract(const Duration(days: 14)),
-                          firstDate: DateTime.now().subtract(const Duration(days: 42 * 7)),
+                          // A year back, so validateLmp can say "more than 42
+                          // weeks ago, please verify" instead of the calendar
+                          // silently stopping at the limit. Same as Add Mother.
+                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
                           lastDate: DateTime.now(),
                         );
                         if (picked != null) {
@@ -3407,21 +3410,50 @@ class _MotherProfilePageState extends State<MotherProfilePage>
                           onPressed: (lmp == null || gestationError != null)
                               ? null
                               : () async {
-                                  final success = await MotherProfileService
+                                  final startedLmp = lmp!;
+                                  final pregnancyId = await MotherProfileService
                                       .startNewPregnancy(
                                     widget.motherId,
-                                    lmp!,
+                                    startedLmp,
                                     edd!,
                                   );
                                   if (!mounted) return;
-                                  if (success) {
-                                    Navigator.pop(modalCtx);
+                                  if (pregnancyId == null) {
                                     ScaffoldMessenger.of(context)
                                         .showSnackBar(const SnackBar(
-                                      content: Text('New pregnancy started'),
+                                      content: Text(
+                                          'The pregnancy could not be started. '
+                                          'Check the connection and try again.'),
                                     ));
-                                    _refresh();
+                                    return;
                                   }
+                                  Navigator.pop(modalCtx);
+                                  // The initial prenatal checkup completes the
+                                  // pregnancy record, so it follows at once.
+                                  // Leaving it unsaved offers to discard the
+                                  // pregnancy rather than keep one without it.
+                                  final saved = await Navigator.push<bool>(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => AddPrenatalCheckupScreen(
+                                        motherId: widget.motherId,
+                                        pregnancyId: pregnancyId,
+                                        lmp: startedLmp,
+                                        motherWeight: _toDouble(
+                                            _cachedProfile?['weight']),
+                                        completesNewPregnancy: true,
+                                      ),
+                                    ),
+                                  );
+                                  if (!mounted) return;
+                                  if (saved == true) {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(const SnackBar(
+                                      content: Text(
+                                          'New pregnancy started with its initial checkup'),
+                                    ));
+                                  }
+                                  _refresh();
                                 },
                         ),
                       ),

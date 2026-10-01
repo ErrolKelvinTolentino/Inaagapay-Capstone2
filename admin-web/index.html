@@ -654,6 +654,20 @@
           return Date.now() - issued > MAX_SESSION_AGE_MS;
         }
 
+        // Inactivity, shared with common-security.js. A session nobody has
+        // touched for 15 minutes is not restored just because the login page
+        // was opened again.
+        const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+        const ACTIVITY_KEY = "inaagapay_admin_last_activity";
+
+        function isIdleExpired(s) {
+          let last = 0;
+          try { last = Number(localStorage.getItem(ACTIVITY_KEY)) || 0; } catch (_) {}
+          const signedIn = new Date(s.logged_in_at).getTime();
+          last = Math.max(last, Number.isFinite(signedIn) ? signedIn : 0);
+          return last > 0 && Date.now() - last >= IDLE_TIMEOUT_MS;
+        }
+
         // If already logged in and the session is still valid, redirect
         const existing = localStorage.getItem(SESSION_KEY);
         if (existing) {
@@ -662,6 +676,11 @@
             if (s && (s.account_type === "admin" || s.account_type === "mho")) {
               if (isSessionExpired(s)) {
                 localStorage.removeItem(SESSION_KEY);
+              } else if (isIdleExpired(s)) {
+                localStorage.removeItem(SESSION_KEY);
+                try {
+                  sessionStorage.setItem("inaagapay_signout_reason", JSON.stringify({ status: "idle" }));
+                } catch (_) {}
               } else if (s.is_temporary_password === true) {
                 navigateTo("pages/change-password.html");
               } else {
@@ -717,6 +736,13 @@
             sessionStorage.removeItem("inaagapay_signout_reason");
           } catch (e) { return; }
           if (!note || !note.status) return;
+
+          if (note.status === "idle") {
+            alertMsgSpan.textContent =
+              "You were signed out after 15 minutes of inactivity. Sign in again to continue.";
+            alertBox.classList.remove("hidden");
+            return;
+          }
 
           const wording = note.status === "suspended"
             ? "Your account has been suspended, so you were signed out."

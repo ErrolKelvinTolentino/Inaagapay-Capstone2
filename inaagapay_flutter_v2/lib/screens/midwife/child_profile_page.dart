@@ -1059,6 +1059,7 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
       approvedBy: _registeringMidwifeName == 'Not recorded'
           ? null
           : _registeringMidwifeName,
+      showClinicalTerms: true,
       onViewHistory: () {
         Navigator.push(
           context,

@@ -127,5 +127,16 @@ void main() {
       expect(z, isNotNull);
       expect(GrowthCalculator.bandForZScore(z), GrowthBand.within);
     });
+
+    test('a 60 cm six-month-old boy is below range, and it is called stunting',
+        () {
+      // TC-MON-GROW-005. WHO puts -3 SD at 61.2 cm for a boy of 6 months.
+      final z = GrowthCalculator.calculateHeightZScore(60, 26, 'male');
+      expect(z, isNotNull);
+      expect(z!, lessThan(-3));
+      expect(GrowthCalculator.bandForZScore(z), GrowthBand.below);
+      expect(GrowthCalculator.bandForZScore(z).label, 'Below standard range');
+      expect(GrowthMetric.heightForAge.belowRangeTerm, 'stunting');
+    });
   });
 }

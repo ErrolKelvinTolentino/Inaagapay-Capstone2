@@ -23,6 +23,7 @@ import '../../services/prenatal_schedule_engine.dart';
 import '../../services/blood_pressure_reference.dart';
 import '../../services/fetal_heart_rate_reference.dart';
 import '../../services/maternal_td_service.dart';
+import '../../services/mother_profile_service.dart';
 import '../../services/stock_deduction_outcome.dart';
 import '../../widgets/stock_indicators.dart';
 import 'maternal_td_screen.dart';
@@ -39,6 +40,7 @@ class AddPrenatalCheckupScreen extends StatefulWidget {
     this.generatedPassword,
     this.takenTdDoses = const [],
     this.isInitialRegistration = false,
+    this.completesNewPregnancy = false,
   });
 
   final int motherId;
@@ -49,6 +51,11 @@ class AddPrenatalCheckupScreen extends StatefulWidget {
   final String? generatedPassword;
   final List<String> takenTdDoses;
   final bool isInitialRegistration;
+
+  /// Set when the pregnancy was started a moment ago and this is its initial
+  /// checkup. Leaving without saving then does not leave a pregnancy behind:
+  /// the midwife either saves the checkup or discards the pregnancy.
+  final bool completesNewPregnancy;
 
   @override
   State<AddPrenatalCheckupScreen> createState() =>
@@ -5084,7 +5091,48 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
     return result ?? false;
   }
 
+  /// A pregnancy with no initial checkup is an incomplete record that looks
+  /// complete everywhere else -- it counts on the dashboard and in reports,
+  /// with no baseline weight, blood pressure or supplements behind it. So the
+  /// only ways out of this screen are to save the checkup or to take the
+  /// pregnancy back.
+  Future<void> _leaveNewPregnancy() async {
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (_) => ConfirmationDialogBox(
+        title: 'Initial Checkup Required',
+        subtitle: 'The initial prenatal checkup is required to complete the '
+            'pregnancy record.\n\nSave the checkup to finish, or discard this '
+            'pregnancy and start it again when the checkup can be done.',
+        cancelText: 'Continue Checkup',
+        confirmText: 'Discard Pregnancy',
+        onCancel: () => Navigator.pop(context, false),
+        onConfirm: () => Navigator.pop(context, true),
+      ),
+    );
+    if (discard != true || !mounted) return;
+
+    final removed =
+        await MotherProfileService.discardEmptyPregnancy(widget.pregnancyId);
+    if (!mounted) return;
+    if (!removed) {
+      _showMessage(
+        'The pregnancy could not be discarded. Check the connection and try '
+        'again, or save the initial checkup.',
+        type: AppSnackType.error,
+      );
+      return;
+    }
+    _showMessage('Pregnancy discarded. No record was kept.',
+        type: AppSnackType.warning);
+    Navigator.pop(context, false);
+  }
+
   void _backOrPop() async {
+    if (widget.completesNewPregnancy) {
+      await _leaveNewPregnancy();
+      return;
+    }
     if (widget.isInitialRegistration) {
       final shouldSkip = await _showSkipCheckupDialog();
       if (shouldSkip && mounted) Navigator.pop(context);

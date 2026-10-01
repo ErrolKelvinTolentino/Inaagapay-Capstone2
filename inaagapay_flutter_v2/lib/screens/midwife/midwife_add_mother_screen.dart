@@ -9,6 +9,7 @@ import '../../models/ocr_result.dart';
 import '../../models/obstetric_score.dart';
 import '../../services/auth_storage.dart';
 import '../../services/groq_service.dart';
+import '../../services/network_status.dart';
 import '../../services/supabase_service.dart';
 import '../../services/ph_address_service.dart' as ph_addr;
 import '../../theme/app_colors.dart';
@@ -1008,6 +1009,38 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         accentColor: AppColors.brandPrimary,
       ),
     );
+  }
+
+  Future<void> _pickLmp() async {
+    final lastLmpDate = DateTime.now().subtract(const Duration(days: 5 * 7));
+    final initialLmpDate =
+        (_lmp != null && !_lmp!.isAfter(lastLmpDate)) ? _lmp! : lastLmpDate;
+    final picked = await _showBrandedDatePicker(
+        context: context,
+        initialDate: initialLmpDate,
+        // A year back, not 42 weeks. The calendar used to stop at exactly the
+        // limit _validateLmp enforces, so a midwife given an older date by the
+        // mother found it simply missing, and "LMP is more than 42 weeks ago.
+        // Please verify the date." -- the prompt to recheck it with her --
+        // could never appear.
+        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+        lastDate: lastLmpDate);
+    if (picked != null && mounted) {
+      setState(() => _updateFromLmp(picked));
+      _validateStepInline(3);
+    }
+  }
+
+  Future<void> _pickEdd() async {
+    final picked = await _showBrandedDatePicker(
+        context: context,
+        initialDate: _edd ?? DateTime.now(),
+        firstDate: DateTime.now(),
+        lastDate: DateTime.now().add(const Duration(days: 43 * 7)));
+    if (picked != null && mounted) {
+      setState(() => _updateFromEdd(picked));
+      _validateStepInline(3);
+    }
   }
 
   /// Delegates to the shared picker so this wizard and the child forms cannot
@@ -3447,6 +3480,24 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     }
   }
 
+  /// What the scan dialog says when extraction fails.
+  ///
+  /// The provider's own text used to be shown as-is: with no connection that
+  /// was "ClientException with SocketException: Failed host lookup ...", and
+  /// with a revoked key the raw JSON of an HTTP 401. Neither tells a midwife
+  /// that she can simply type the form in.
+  static String _readableOcrError(Object e) {
+    const manual = 'You can still fill in the form by hand.';
+    if (NetworkStatus.isNetworkError(e)) {
+      return 'Network error. Please check your internet connection.\n$manual';
+    }
+    final text = e.toString().replaceFirst('Exception: ', '');
+    if (RegExp(r'API Error \((401|403|429|5\d\d)\)').hasMatch(text)) {
+      return 'The scanning service is not available right now.\n$manual';
+    }
+    return text;
+  }
+
   // OCR Methods - Using GroqService
   Future<void> _startOcrFlow() async {
     final source = await _showOcrSourcePicker();
@@ -3527,7 +3578,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         });
       }).catchError((dynamic e) {
         setS?.call(() {
-          ocrError = e.toString().replaceFirst('Exception: ', '');
+          ocrError = _readableOcrError(e);
           dialogState = _OcrDialogState.error;
         });
       });
@@ -5691,52 +5742,31 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         ],
         const SizedBox(height: 20),
         _sectionLabel('Date Entry'),
+        // The field's own onTap as well as the GestureDetector: a read-only
+        // TextField claims taps on its text, so the wrapper alone opened the
+        // calendar only from the icon or the edge -- tapping the middle of
+        // the field, where anyone would, did nothing.
         if (_gestationMethod == _GestationMethod.lmp)
           GestureDetector(
-              onTap: () async {
-                final lastLmpDate =
-                    DateTime.now().subtract(const Duration(days: 5 * 7));
-                final initialLmpDate =
-                    (_lmp != null && !_lmp!.isAfter(lastLmpDate))
-                        ? _lmp!
-                        : lastLmpDate;
-                final picked = await _showBrandedDatePicker(
-                    context: context,
-                    initialDate: initialLmpDate,
-                    firstDate:
-                        DateTime.now().subtract(const Duration(days: 42 * 7)),
-                    lastDate: lastLmpDate);
-                if (picked != null) {
-                  setState(() => _updateFromLmp(picked));
-                  _validateStepInline(3);
-                }
-              },
+              onTap: _pickLmp,
               child: AppInputField(
                   hintText: 'Last Menstrual Period',
                   controller: _lmpCtrl,
                   isRequired: true,
                   leadingIcon: Icons.calendar_today_outlined,
                   readOnly: true,
+                  onTap: _pickLmp,
                   errorText: _gestationError))
         else if (_gestationMethod == _GestationMethod.edd)
           GestureDetector(
-              onTap: () async {
-                final picked = await _showBrandedDatePicker(
-                    context: context,
-                    initialDate: _edd ?? DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 43 * 7)));
-                if (picked != null) {
-                  setState(() => _updateFromEdd(picked));
-                  _validateStepInline(3);
-                }
-              },
+              onTap: _pickEdd,
               child: AppInputField(
                   hintText: 'Estimated Delivery Date',
                   controller: _eddCtrl,
                   isRequired: true,
                   leadingIcon: Icons.event_available_outlined,
                   readOnly: true,
+                  onTap: _pickEdd,
                   errorText: _gestationError))
         else ...[
           Row(children: [
@@ -6301,6 +6331,18 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
             SecondaryHeader(
               title: 'Add Mother',
               onBack: () => Navigator.pop(context),
+              // Restored. It went in a UI clean-up on 2026-07-28, leaving the
+              // whole registration-form scan flow below with no way in, while
+              // the test plan (TC-MW-ADDM-016 to 020, TC-AI-OCR-004) still
+              // counts on it.
+              trailing: TextButton.icon(
+                onPressed: _startOcrFlow,
+                icon: const Icon(Icons.document_scanner_outlined, size: 18),
+                label: const Text('Scan'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.brandPrimary,
+                ),
+              ),
             ),
             LinearProgressIndicator(
               value: (_step + 1) / _totalSteps,
