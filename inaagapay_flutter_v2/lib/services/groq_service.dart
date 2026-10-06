@@ -10,6 +10,8 @@ import 'package:intl/intl.dart';
 import '../models/groq_response.dart';
 import '../models/ocr_result.dart';
 import 'ai_model_trail.dart';
+import 'speech_text.dart';
+import 'wav_audio.dart';
 
 class GroqService {
   // ── Model Configuration ─────────────────────────────────────────────────
@@ -866,7 +868,7 @@ CRITICAL RULES:
 
   // ── TTS API ─────────────────────────────────────────────────────────────
   /// Calls the Groq text-to-speech endpoint and returns concatenated WAV bytes.
-  /// Uses canopylabs/orpheus-v1-english with "diana" voice.
+  /// Uses canopylabs/orpheus-v1-english with the autumn voice.
   /// Handles the 200-char limit by splitting into sentence chunks automatically.
   /// Which Orpheus persona reads Ate's messages.
   ///
@@ -878,27 +880,20 @@ CRITICAL RULES:
   static const String _ttsVoice = 'autumn';
 
   static const int _ttsMaxChunkChars = 190; // safely under the 200-char limit
-  static const int _wavHeaderSize = 44; // standard WAV header bytes
 
   Future<List<int>> speakWithGroqTts(String text) async {
     final apiKey = _getApiKey();
 
     // 1. Sanitise markdown
-    final clean = text
-        .replaceAll(RegExp(r'\*{1,2}'), '')
-        .replaceAll(RegExp(r'#{1,6} ?'), '')
-        .replaceAll(RegExp(r'-{3,}'), '')
-        .replaceAll(RegExp(r'[_`]'), '')
-        .replaceAll(RegExp(r'\n{2,}'), '. ')
-        .replaceAll('\n', ' ')
-        .trim();
+    final clean = SpeechText.clean(text);
+    if (clean.isEmpty) throw ArgumentError('No spoken text in this message.');
 
     // 2. Split into ≤190-char chunks on sentence boundaries
     final chunks = _splitIntoTtsChunks(clean);
     _log('🔊 Groq TTS: ${clean.length} chars → ${chunks.length} chunk(s)');
 
     // 3. Fetch each chunk sequentially and combine the audio
-    List<int> combinedAudio = [];
+    final audioChunks = <List<int>>[];
 
     for (int i = 0; i < chunks.length; i++) {
       final chunk = chunks[i];
@@ -916,7 +911,7 @@ CRITICAL RULES:
             },
             body: jsonEncode({
               'model': 'canopylabs/orpheus-v1-english',
-              'input': '[cheerful] $chunk',
+              'input': chunk,
               'voice': _ttsVoice,
               'response_format': 'wav',
             }),
@@ -953,19 +948,10 @@ CRITICAL RULES:
       final bytes = response.bodyBytes;
       _log('   ✅ Chunk ${i + 1}: ${bytes.length} bytes received');
 
-      if (i == 0) {
-        // First chunk: keep the full WAV including header
-        combinedAudio.addAll(bytes);
-      } else {
-        // Subsequent chunks: skip the 44-byte WAV header to avoid duplicates
-        if (bytes.length > _wavHeaderSize) {
-          combinedAudio.addAll(bytes.sublist(_wavHeaderSize));
-        }
-      }
+      audioChunks.add(bytes);
     }
 
-    _log('✅ Groq TTS complete: ${combinedAudio.length} total bytes');
-    return combinedAudio;
+    return WavAudio.concatenate(audioChunks);
   }
 
   /// Splits text into chunks of at most [_ttsMaxChunkChars] characters,

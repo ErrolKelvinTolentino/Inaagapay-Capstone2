@@ -1,3 +1,6 @@
+import '../../services/child_record_export.dart';
+import '../../widgets/child_export_button.dart';
+import '../../widgets/growth_z_score_summary.dart';
 // lib/screens/mother/mother_child_growth.dart
 
 import 'package:flutter/material.dart';
@@ -80,7 +83,8 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
       ? _ageInWeeks(DateTime.parse(latestRecord!['created_at']))
       : 0;
 
-  String get childSex => (childData?['sex'] as String?) ?? widget.childGender.toLowerCase();
+  String get childSex =>
+      (childData?['sex'] as String?) ?? widget.childGender.toLowerCase();
 
   @override
   void initState() {
@@ -99,7 +103,8 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
       await _fetchBirthDetails();
       await _fetchGrowthRecords();
 
-      final realRecords = records.where((r) => r['child_details_id'] != -1).toList();
+      final realRecords =
+          records.where((r) => r['child_details_id'] != -1).toList();
       if (realRecords.isNotEmpty) {
         final latestRecordId = realRecords.last['child_details_id'];
         final aiRes = await Supabase.instance.client
@@ -109,8 +114,10 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
             .eq('reference_id', latestRecordId)
             .eq('response_type', 'growth_analysis')
             .maybeSingle();
-        
-        if (aiRes != null && aiRes['response'] != null && aiRes['response'].toString().trim().isNotEmpty) {
+
+        if (aiRes != null &&
+            aiRes['response'] != null &&
+            aiRes['response'].toString().trim().isNotEmpty) {
           final savedText = aiRes['response'].toString().trim();
           final isGeneratedByAi = aiRes['generated_by_ai'] == true;
           final lower = savedText.toLowerCase();
@@ -175,7 +182,11 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
 
     records = List<Map<String, dynamic>>.from(response);
 
-    if (birthdate != null && birthWeight != null && birthWeight! > 0 && birthHeight != null && birthHeight! > 0) {
+    if (birthdate != null &&
+        birthWeight != null &&
+        birthWeight! > 0 &&
+        birthHeight != null &&
+        birthHeight! > 0) {
       final birthRecord = {
         'child_details_id': -1, // Synthetic ID for chart purposes
         'child_id': widget.childId,
@@ -213,7 +224,8 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
     }
 
     if (years > 0) {
-      final monthPart = months > 0 ? ', $months month${months != 1 ? 's' : ''}' : '';
+      final monthPart =
+          months > 0 ? ', $months month${months != 1 ? 's' : ''}' : '';
       return '$years year${years != 1 ? 's' : ''}$monthPart old';
     } else if (months > 0) {
       final weeks = days ~/ 7;
@@ -223,7 +235,9 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
       if (days >= 7) {
         final weeks = days ~/ 7;
         final remainingDays = days % 7;
-        final dayPart = remainingDays > 0 ? ', $remainingDays day${remainingDays != 1 ? 's' : ''}' : '';
+        final dayPart = remainingDays > 0
+            ? ', $remainingDays day${remainingDays != 1 ? 's' : ''}'
+            : '';
         return '$weeks week${weeks != 1 ? 's' : ''}$dayPart old';
       } else if (days > 0) {
         return '$days day${days != 1 ? 's' : ''} old';
@@ -329,8 +343,8 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                LanguageService.translate(
-                    'What the colours mean', 'Ano ang ibig sabihin ng mga kulay'),
+                LanguageService.translate('What the colours mean',
+                    'Ano ang ibig sabihin ng mga kulay'),
                 style: const TextStyle(
                   fontSize: 16.5,
                   fontWeight: FontWeight.w700,
@@ -364,7 +378,8 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
               _colourMeaningRow(
                 colour: AppColors.success,
                 label: LanguageService.translate('Green', 'Berde'),
-                meaning: LanguageService.translate('The usual size for this age.',
+                meaning: LanguageService.translate(
+                    'The usual size for this age.',
                     'Karaniwang laki para sa edad na ito.'),
               ),
               const SizedBox(height: 10),
@@ -412,7 +427,8 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
 
   Color _zScoreColor(double? zScore) {
     if (zScore == null) return AppColors.textSecondary;
-    if (!GrowthCalculator.bandForZScore(zScore).isWithin) return Colors.orange; // Yellow/Orange
+    if (!GrowthCalculator.bandForZScore(zScore).isWithin)
+      return Colors.orange; // Yellow/Orange
     return AppColors.success; // Green
   }
 
@@ -640,7 +656,10 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(64),
         child: SecondaryHeader(
-          title: LanguageService.translate('How they are growing', 'Pagsusuri sa Paglaki'),
+          title: LanguageService.translate(
+              'How they are growing', 'Pagsusuri sa Paglaki'),
+          trailing: ChildExportButton(
+              childId: widget.childId, kind: ChildExportKind.growth),
           onBack: widget.onBack,
         ),
       ),
@@ -781,8 +800,8 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
             bmiLabels.length >= 2 &&
             bmiValues.length == bmiLabels.length)
           ChartCard(
-            title: LanguageService.translate(
-                'Body size over time', 'Sukat ng katawan sa paglipas ng panahon'),
+            title: LanguageService.translate('Body size over time',
+                'Sukat ng katawan sa paglipas ng panahon'),
             lineColor: AppColors.brandPrimary,
             values: bmiValues,
             labels: bmiLabels,
@@ -795,7 +814,6 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
           ),
         if (activeTab == 0 && bmiValues.length < 2)
           _buildInsufficientDataMessage('body size'),
-
         if (activeTab == 1 &&
             weightValues.length >= 2 &&
             weightLabels.length >= 2 &&
@@ -817,7 +835,6 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
           ),
         if (activeTab == 1 && weightValues.length < 2)
           _buildInsufficientDataMessage('Weight'),
-
         if (activeTab == 2 &&
             heightValues.length >= 2 &&
             heightLabels.length >= 2 &&
@@ -1104,7 +1121,7 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
       r'(?:===|##)\s*English\s*(?:===)?\s*([\s\S]*?)(?=(?:===|##)\s*Filipino\s*(?:===)?|$)',
       caseSensitive: false,
     ).firstMatch(normalized);
-    
+
     final filipinoMatch = RegExp(
       r'(?:===|##)\s*Filipino\s*(?:===)?\s*([\s\S]*?)(?=(?:===|##)\s*English\s*(?:===)?|$)',
       caseSensitive: false,
@@ -1124,10 +1141,16 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
 
   String _getSectionForTab(String langText, int tabIndex) {
     final normalized = langText.replaceAll('\r\n', '\n');
-    final sectionHeader = tabIndex == 0 ? 'BMI' : tabIndex == 1 ? 'Weight' : 'Height';
+    final sectionHeader = tabIndex == 0
+        ? 'BMI'
+        : tabIndex == 1
+            ? 'Weight'
+            : 'Height';
 
     final regex = RegExp(
-      r'(?:^|\n)(?:#+\s*|\*+|\[)?' + RegExp.escape(sectionHeader) + r'(?:#+\s*|\*+|\])?:?\s*\n([\s\S]*?)(?=(?:^|\n)(?:#+\s*|\*+|\[)?(?:BMI|Weight|Height)(?:#+\s*|\*+|\])?:?|$)',
+      r'(?:^|\n)(?:#+\s*|\*+|\[)?' +
+          RegExp.escape(sectionHeader) +
+          r'(?:#+\s*|\*+|\])?:?\s*\n([\s\S]*?)(?=(?:^|\n)(?:#+\s*|\*+|\[)?(?:BMI|Weight|Height)(?:#+\s*|\*+|\])?:?|$)',
       caseSensitive: false,
     );
 
@@ -1141,12 +1164,15 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
 
   Future<void> _generateAndSaveProfileAiInsight(int latestRecordId) async {
     if (records.isEmpty || childData == null) return;
-    
+
     try {
       final latestGrowth = records.last;
-      final latestHeight = (latestGrowth['child_height'] as num?)?.toDouble() ?? 0;
-      final latestWeight = (latestGrowth['child_weight'] as num?)?.toDouble() ?? 0;
-      final latestBMI = latestWeight / ((latestHeight / 100) * (latestHeight / 100));
+      final latestHeight =
+          (latestGrowth['child_height'] as num?)?.toDouble() ?? 0;
+      final latestWeight =
+          (latestGrowth['child_weight'] as num?)?.toDouble() ?? 0;
+      final latestBMI =
+          latestWeight / ((latestHeight / 100) * (latestHeight / 100));
       final ageWeeks = _ageInWeeks(DateTime.parse(latestGrowth['created_at']));
       final sex = (childData!['sex'] as String?) ?? 'female';
 
@@ -1157,8 +1183,10 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
         height: latestHeight,
         weight: latestWeight,
         bmi: latestBMI,
-        heightZ: GrowthCalculator.calculateHeightZScore(latestHeight, ageWeeks, sex),
-        weightZ: GrowthCalculator.calculateWeightZScore(latestWeight, ageWeeks, sex),
+        heightZ:
+            GrowthCalculator.calculateHeightZScore(latestHeight, ageWeeks, sex),
+        weightZ:
+            GrowthCalculator.calculateWeightZScore(latestWeight, ageWeeks, sex),
         bmiZ: GrowthCalculator.calculateBMIZScore(latestBMI, ageWeeks, sex),
       );
 
@@ -1173,7 +1201,7 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
       setState(() {
         aiAnalysis = generated.trim();
       });
-      
+
       // Save it to Supabase so it's cached!
       await _saveProfileAiResponse(
           aiAnalysis!, latestRecordId, groq.lastModelUsed);
@@ -1345,7 +1373,7 @@ $recordsSummary
     required double? bmiZ,
   }) {
     final isFilipino = LanguageService.isFilipino;
-    
+
     // Choose styling color based on tab
     final activeColor = activeTab == 0
         ? AppColors.brandText
@@ -1362,7 +1390,7 @@ $recordsSummary
     // Get the display text: if AI analysis is loaded and valid, use it; otherwise fall back to local rule-based text
     String displayText = '';
     bool hasAi = aiAnalysis != null && aiAnalysis!.trim().isNotEmpty;
-    
+
     if (hasAi) {
       final langText = _getAiTextForLanguage(aiAnalysis);
       displayText = _getSectionForTab(langText, activeTab);
@@ -1477,7 +1505,8 @@ $recordsSummary
                   if (hasAi) ...[
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: activeColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
@@ -1485,7 +1514,8 @@ $recordsSummary
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.auto_awesome, size: 10, color: activeColor),
+                          Icon(Icons.auto_awesome,
+                              size: 10, color: activeColor),
                           const SizedBox(width: 3),
                           Text(
                             'AI',
@@ -1528,7 +1558,9 @@ $recordsSummary
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  isFilipino ? 'Ginagawa ang AI insight...' : 'Generating AI insight...',
+                  isFilipino
+                      ? 'Ginagawa ang AI insight...'
+                      : 'Generating AI insight...',
                   style: TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
@@ -1609,14 +1641,13 @@ $recordsSummary
             final date = record['created_at']?.toString() ?? '';
             final weeks = _ageInWeeks(DateTime.parse(date));
             final isLatest = record == records.last;
-            final bmi = _calculateBMI(height, weight);
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _buildHistoryRecordCard(
                 height: height,
                 weight: weight,
-                bmi: bmi,
+                measuredAt: date,
                 date: formatDate(date),
                 weekNumber: weeks,
                 isLatest: isLatest,
@@ -1630,7 +1661,7 @@ $recordsSummary
   Widget _buildHistoryRecordCard({
     required double height,
     required double weight,
-    required double bmi,
+    required String measuredAt,
     required String date,
     required int weekNumber,
     required bool isLatest,
@@ -1727,42 +1758,6 @@ $recordsSummary
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: AppColors.brandText.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.brandText.withValues(alpha: 0.15),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.straighten, size: 18, color: AppColors.brandText),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Body size',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.brandText,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    bmi > 0 ? bmi.toStringAsFixed(1) : 'n/a',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ] else if (activeTab == 1) ...[
             _buildMeasurementItem(
               'Weight',
@@ -1778,6 +1773,12 @@ $recordsSummary
               AppColors.brandPrimary,
             ),
           ],
+          const SizedBox(height: 12),
+          GrowthZScoreSummary(record: {
+            'child_height': height,
+            'child_weight': weight,
+            'created_at': measuredAt
+          }, birthdate: birthdate, sex: childData?['sex']?.toString()),
         ],
       ),
     );

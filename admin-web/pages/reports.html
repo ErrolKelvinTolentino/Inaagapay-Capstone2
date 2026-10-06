@@ -631,6 +631,32 @@
           font-size: 9pt !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
+          width: auto !important;
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          animation: none !important;
+          transform: none !important;
+        }
+
+        /* Remove the screen's sidebar grid before paginating the ledger. */
+        .app-layout, .app-layout.sidebar-collapsed {
+          display: block !important;
+          width: 100% !important;
+          min-height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          animation: none !important;
+          transform: none !important;
+        }
+
+        .app-main, .card, .chart-card, .kpi-card, .verdict {
+          min-width: 0 !important;
+          max-width: 100% !important;
+          animation: none !important;
+          transform: none !important;
+          letter-spacing: normal !important;
+          overflow-wrap: break-word;
         }
 
         .app-sidebar,
@@ -660,6 +686,7 @@
           padding: 0 !important;
           margin: 0 !important;
           width: 100% !important;
+          overflow: visible !important;
         }
 
         .print-only-header,
@@ -707,6 +734,9 @@
         th, td {
           border: 1px solid #cbd5e1 !important;
           padding: 4px 6px !important;
+          white-space: normal !important;
+          overflow-wrap: anywhere;
+          line-height: 1.35 !important;
         }
 
         th {

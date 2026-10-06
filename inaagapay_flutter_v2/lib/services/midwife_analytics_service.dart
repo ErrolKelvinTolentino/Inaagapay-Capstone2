@@ -32,6 +32,8 @@ import 'gestational_diabetes_screening.dart';
 import 'immunization_schedule.dart';
 import 'pregnancy_stage.dart';
 import 'supabase_service.dart';
+import 'auth_storage.dart';
+import 'timed_async_cache.dart';
 
 class MidwifeAnalyticsService {
   const MidwifeAnalyticsService._();
@@ -46,7 +48,19 @@ class MidwifeAnalyticsService {
   /// out; she is not "covered".
   static const int _supplementWindowDays = 30;
 
+  static final _cache =
+      TimedAsyncCache<MidwifeAnalytics>(const Duration(minutes: 2));
+  static void invalidate() => _cache.clear();
+
   static Future<MidwifeAnalytics> load({required int bhcId}) async {
+    final owner = await AuthStorage.getUserId();
+    final token = await AuthStorage.getToken();
+    if (owner == null || token == null) return _load(bhcId: bhcId);
+    final day = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    return _cache.get('$owner:$token:$bhcId:$day', () => _load(bhcId: bhcId));
+  }
+
+  static Future<MidwifeAnalytics> _load({required int bhcId}) async {
     final now = DateTime.now();
 
     final mothers = await _rows(
@@ -63,10 +77,8 @@ class MidwifeAnalyticsService {
 
     if (mothers.isEmpty) return const MidwifeAnalytics.empty();
 
-    final motherIds = mothers
-        .map((row) => _int(row['mother_id']))
-        .whereType<int>()
-        .toList();
+    final motherIds =
+        mothers.map((row) => _int(row['mother_id'])).whereType<int>().toList();
 
     final stage1 = await Future.wait([
       _rows(
@@ -269,7 +281,8 @@ class MidwifeAnalyticsService {
         .toList();
 
     final stock = _resolveStock(inventoryItems, inventoryBatches);
-    final childDoses = _childDoseStatuses(children, vaccines, immunizations, now);
+    final childDoses =
+        _childDoseStatuses(children, vaccines, immunizations, now);
     final gdm = glucoseRows == null
         ? const <int, GdmAssessment>{}
         : _gdmAssessments(
@@ -535,7 +548,8 @@ class MidwifeAnalyticsService {
 
     final bands = [
       AnalyticsBand(label: 'First trimester', shortLabel: '1st', count: first),
-      AnalyticsBand(label: 'Second trimester', shortLabel: '2nd', count: second),
+      AnalyticsBand(
+          label: 'Second trimester', shortLabel: '2nd', count: second),
       AnalyticsBand(
         label: 'Third trimester',
         shortLabel: '3rd',
@@ -597,7 +611,8 @@ class MidwifeAnalyticsService {
       );
     } else {
       headline = '${ongoing.length}';
-      caption = 'ongoing ${_plural(ongoing.length, 'pregnancy', 'pregnancies')}';
+      caption =
+          'ongoing ${_plural(ongoing.length, 'pregnancy', 'pregnancies')}';
       insight = const AnalyticsInsight(
         'No mother is due within the next four weeks, and every pregnancy is '
         'dated.',
@@ -654,8 +669,7 @@ class MidwifeAnalyticsService {
     }
 
     final assessed = low + medium + high;
-    final pregnancyWord =
-        _plural(ongoing.length, 'pregnancy', 'pregnancies');
+    final pregnancyWord = _plural(ongoing.length, 'pregnancy', 'pregnancies');
 
     // Headline and insight follow one order of urgency: a high-risk pregnancy
     // first, then an unassessed one — unknown outranks medium, because an
@@ -795,8 +809,7 @@ class MidwifeAnalyticsService {
         title: title,
         kind: AnalyticsChartKind.rankedBars,
         icon: AnalyticsIcon.riskFactors,
-        message:
-            'No risk factors recorded yet. They appear here as soon as a '
+        message: 'No risk factors recorded yet. They appear here as soon as a '
             'checkup produces a risk assessment.',
       );
     }
@@ -887,7 +900,8 @@ class MidwifeAnalyticsService {
     }
 
     final protected = ongoing
-        .where((row) => (highestDose[_int(row['pregnancy_id']) ?? -1] ?? 0) >= 2)
+        .where(
+            (row) => (highestDose[_int(row['pregnancy_id']) ?? -1] ?? 0) >= 2)
         .length;
     final outstanding = ongoing.length - protected;
 
@@ -1002,15 +1016,15 @@ class MidwifeAnalyticsService {
             a.status != GdmScreeningStatus.notYetDue &&
             a.status != GdmScreeningStatus.dueEarly)
         .toList();
-    final screened = eligible
-        .where((a) => a.status == GdmScreeningStatus.screened)
-        .length;
+    final screened =
+        eligible.where((a) => a.status == GdmScreeningStatus.screened).length;
 
     final overdue = assessments.values
         .where((a) => a.status == GdmScreeningStatus.overdue)
         .length;
-    final dueNow =
-        assessments.values.where((a) => a.status == GdmScreeningStatus.due).length;
+    final dueNow = assessments.values
+        .where((a) => a.status == GdmScreeningStatus.due)
+        .length;
     final dueEarly = assessments.values
         .where((a) => a.status == GdmScreeningStatus.dueEarly)
         .length;
@@ -1092,12 +1106,11 @@ class MidwifeAnalyticsService {
       );
     }
 
-    final pregnantMotherIds = ongoing
-        .map((row) => _int(row['mother_id']))
-        .whereType<int>()
-        .toSet();
+    final pregnantMotherIds =
+        ongoing.map((row) => _int(row['mother_id'])).whereType<int>().toSet();
 
-    final windowStart = now.subtract(const Duration(days: _supplementWindowDays));
+    final windowStart =
+        now.subtract(const Duration(days: _supplementWindowDays));
     final thisMonthStart = DateTime(now.year, now.month, 1);
     final lastMonthStart = DateTime(now.year, now.month - 1, 1);
 
@@ -1151,8 +1164,7 @@ class MidwifeAnalyticsService {
       icon: AnalyticsIcon.supplement,
       periodLabel: 'Last 30 days',
       headline: '$covered',
-      headlineCaption:
-          'of ${pregnantMotherIds.length} pregnant '
+      headlineCaption: 'of ${pregnantMotherIds.length} pregnant '
           '${_plural(pregnantMotherIds.length, 'mother', 'mothers')} received iron',
       covered: covered,
       eligible: pregnantMotherIds.length,
@@ -1366,8 +1378,7 @@ class MidwifeAnalyticsService {
       }
     }
 
-    final known =
-        infantEarly + infantLate + oneYear + preschool + older;
+    final known = infantEarly + infantLate + oneYear + preschool + older;
     final underOne = infantEarly + infantLate;
 
     return AnalyticsMetric(
@@ -1377,8 +1388,10 @@ class MidwifeAnalyticsService {
       headline: '${children.length}',
       headlineCaption: 'children registered at this centre',
       bands: [
-        AnalyticsBand(label: '0–5 months', shortLabel: '0–5m', count: infantEarly),
-        AnalyticsBand(label: '6–11 months', shortLabel: '6–11m', count: infantLate),
+        AnalyticsBand(
+            label: '0–5 months', shortLabel: '0–5m', count: infantEarly),
+        AnalyticsBand(
+            label: '6–11 months', shortLabel: '6–11m', count: infantLate),
         AnalyticsBand(label: '1 year', shortLabel: '1y', count: oneYear),
         AnalyticsBand(label: '2–4 years', shortLabel: '2–4y', count: preschool),
         AnalyticsBand(label: '5 and over', shortLabel: '5y+', count: older),
@@ -1478,8 +1491,7 @@ class MidwifeAnalyticsService {
       if (anyFlag) flagged++;
 
       final when = _date(row['measurement_date']);
-      if (when != null &&
-          now.difference(when).inDays <= _growthStaleDays) {
+      if (when != null && now.difference(when).inDays <= _growthStaleDays) {
         recent++;
       }
     }
@@ -1611,14 +1623,16 @@ class MidwifeAnalyticsService {
       if (doses.givenPentaDoses.contains(1)) penta1++;
       if (doses.givenPentaDoses.contains(3)) penta3++;
     }
-    final dropout = penta1 > 0 ? ((penta1 - penta3) / penta1 * 100).round() : null;
+    final dropout =
+        penta1 > 0 ? ((penta1 - penta3) / penta1 * 100).round() : null;
 
     // Fully immunised child, in the sense the DOH card uses: every dose
     // scheduled on or before the first birthday, in children old enough to
     // have finished.
     final eligibleForFic =
         childDoses.values.where((doses) => doses.ageMonths >= 12).toList();
-    final fic = eligibleForFic.where((doses) => doses.completedByOneYear).length;
+    final fic =
+        eligibleForFic.where((doses) => doses.completedByOneYear).length;
 
     AnalyticsInsight insight;
     if (dropout != null && dropout > 10 && penta1 > 2) {
@@ -1796,7 +1810,8 @@ class MidwifeAnalyticsService {
         title: title,
         kind: AnalyticsChartKind.rankedBars,
         icon: AnalyticsIcon.drive,
-        message: 'No vaccination drives have been scheduled at this centre yet.',
+        message:
+            'No vaccination drives have been scheduled at this centre yet.',
         prescription: AnalyticsPrescription(
           label: 'Open schedules',
           action: AnalyticsAction.viewSchedules,
@@ -1836,7 +1851,8 @@ class MidwifeAnalyticsService {
       final dCame = _int(d['invited_attended']) ?? 0;
       final dWalkIns = _int(d['walk_in_count']) ?? 0;
       final turnout = dInvited > 0 ? dCame / dInvited : null;
-      final dateText = when == null ? '' : ' · ${DateFormat('MMM d').format(when)}';
+      final dateText =
+          when == null ? '' : ' · ${DateFormat('MMM d').format(when)}';
       bands.add(AnalyticsBand(
         label: '${d['vaccine_name'] ?? 'Drive'}$dateText',
         count: _int(d['attended_count']) ?? 0,
@@ -1859,7 +1875,8 @@ class MidwifeAnalyticsService {
     if (upcoming.isNotEmpty) {
       final next = upcoming.first;
       final nextDate = _date(next['schedule_date']);
-      final on = nextDate == null ? '' : ' on ${DateFormat('MMM d').format(nextDate)}';
+      final on =
+          nextDate == null ? '' : ' on ${DateFormat('MMM d').format(nextDate)}';
       nextLine = 'Next: ${next['vaccine_name'] ?? 'drive'}$on, '
           '${_int(next['invited_count']) ?? 0} invited.';
     }
@@ -1969,8 +1986,7 @@ class MidwifeAnalyticsService {
       icon: AnalyticsIcon.stock,
       periodLabel: stock.isSample ? 'Sample data' : 'Live',
       headline: '${short.length}',
-      headlineCaption:
-          'of ${items.length} items are below their reorder level',
+      headlineCaption: 'of ${items.length} items are below their reorder level',
       bands: [
         for (final item in items.take(6))
           AnalyticsBand(
@@ -2124,9 +2140,7 @@ class MidwifeAnalyticsService {
           label: entry.key,
           count: entry.value,
           severity: short ? AnalyticsSeverity.alert : AnalyticsSeverity.neutral,
-          detail: onHand == null
-              ? 'no matching stock item'
-              : '$onHand on hand',
+          detail: onHand == null ? 'no matching stock item' : '$onHand on hand',
         ),
       );
     }
@@ -2207,7 +2221,9 @@ class MidwifeAnalyticsService {
                   '${_plural(days, 'day', 'days')}',
           severity: days == 0
               ? AnalyticsSeverity.alert
-              : (days <= 2 ? AnalyticsSeverity.watch : AnalyticsSeverity.neutral),
+              : (days <= 2
+                  ? AnalyticsSeverity.watch
+                  : AnalyticsSeverity.neutral),
           action: AnalyticsAction.viewSchedules,
           sortKey: days,
         ),
@@ -2407,8 +2423,7 @@ class MidwifeAnalyticsService {
           final vaccineId = _int(vaccine['vaccine_id']);
           final name = vaccine['vaccine_name']?.toString() ?? 'Vaccine';
           final doseNumber = _int(vaccine['dose_number']) ?? 1;
-          final scheduledAt =
-              _double(vaccine['recommended_age_months']) ?? 0;
+          final scheduledAt = _double(vaccine['recommended_age_months']) ?? 0;
           final alreadyGiven =
               vaccineId != null && givenDates.containsKey(vaccineId);
 
@@ -2430,8 +2445,7 @@ class MidwifeAnalyticsService {
             previousDoseGivenOn: previousGivenOn,
           );
 
-          final label =
-              doseNumber > 1 ? '$name dose $doseNumber' : name;
+          final label = doseNumber > 1 ? '$name dose $doseNumber' : name;
 
           if (status == DoseStatus.pastDue) {
             pastDue.add(label);
@@ -2546,8 +2560,7 @@ class MidwifeAnalyticsService {
       if (pregnancyId == null) continue;
 
       final lmp = _date(pregnancy['last_menstrual_period']);
-      final weeks =
-          lmp == null ? null : now.difference(lmp).inDays / 7.0;
+      final weeks = lmp == null ? null : now.difference(lmp).inDays / 7.0;
 
       final risk = GestationalDiabetesScreening.assessRisk(
         maternalAge: ageByMother[motherId ?? -1],
@@ -2614,8 +2627,9 @@ class MidwifeAnalyticsService {
             itemName: name,
             batchNumber: batch['batch_number']?.toString() ?? '—',
             quantity: _int(batch['quantity_remaining']) ?? 0,
-            expiresIn:
-                expiry == null ? null : _dayStart(expiry).difference(_dayStart(now)).inDays,
+            expiresIn: expiry == null
+                ? null
+                : _dayStart(expiry).difference(_dayStart(now)).inDays,
           ),
         );
       }
@@ -2965,12 +2979,32 @@ class _Stock {
     return _Stock(
       isSample: true,
       items: const [
-        _StockItem(name: 'Pentavalent (DPT-HepB-Hib)', quantity: 18, threshold: 40, unit: 'vials'),
-        _StockItem(name: 'Tetanus-diphtheria (TD)', quantity: 26, threshold: 30, unit: 'vials'),
-        _StockItem(name: 'Ferrous sulfate + folic acid', quantity: 640, threshold: 500, unit: 'tablets'),
+        _StockItem(
+            name: 'Pentavalent (DPT-HepB-Hib)',
+            quantity: 18,
+            threshold: 40,
+            unit: 'vials'),
+        _StockItem(
+            name: 'Tetanus-diphtheria (TD)',
+            quantity: 26,
+            threshold: 30,
+            unit: 'vials'),
+        _StockItem(
+            name: 'Ferrous sulfate + folic acid',
+            quantity: 640,
+            threshold: 500,
+            unit: 'tablets'),
         _StockItem(name: 'BCG', quantity: 42, threshold: 30, unit: 'vials'),
-        _StockItem(name: 'Oral polio (OPV)', quantity: 55, threshold: 40, unit: 'vials'),
-        _StockItem(name: 'Measles-containing (MCV)', quantity: 31, threshold: 25, unit: 'vials'),
+        _StockItem(
+            name: 'Oral polio (OPV)',
+            quantity: 55,
+            threshold: 40,
+            unit: 'vials'),
+        _StockItem(
+            name: 'Measles-containing (MCV)',
+            quantity: 31,
+            threshold: 25,
+            unit: 'vials'),
       ],
       batches: [
         _StockBatch(

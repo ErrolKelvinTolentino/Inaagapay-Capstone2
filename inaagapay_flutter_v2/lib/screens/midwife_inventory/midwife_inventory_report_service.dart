@@ -1,3 +1,4 @@
+import '../../services/pdf_fonts.dart';
 import 'dart:typed_data';
 import 'package:flutter/material.dart' show BuildContext, DateTimeRange;
 import 'package:intl/intl.dart';
@@ -14,7 +15,8 @@ class MidwifeInventoryReportService {
   static final DateFormat _timeFormat = DateFormat('hh:mm a');
 
   /// Resolves the concrete [DateTimeRange] for a given preset.
-  static DateTimeRange? resolveDateRange(String preset, {DateTimeRange? customRange, DateTime? now}) {
+  static DateTimeRange? resolveDateRange(String preset,
+      {DateTimeRange? customRange, DateTime? now}) {
     final current = now ?? DateTime.now();
     final today = DateTime(current.year, current.month, current.day);
 
@@ -22,22 +24,27 @@ class MidwifeInventoryReportService {
       case 'today':
         return DateTimeRange(
           start: today,
-          end: DateTime(current.year, current.month, current.day, 23, 59, 59, 999),
+          end: DateTime(
+              current.year, current.month, current.day, 23, 59, 59, 999),
         );
       case 'this_week':
         // Monday as first day of week
         final daysFromMonday = (today.weekday - DateTime.monday) % 7;
         final monday = today.subtract(Duration(days: daysFromMonday));
-        final sunday = monday.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59, milliseconds: 999));
+        final sunday = monday.add(const Duration(
+            days: 6, hours: 23, minutes: 59, seconds: 59, milliseconds: 999));
         return DateTimeRange(start: monday, end: sunday);
       case 'last_week':
         final daysFromMonday = (today.weekday - DateTime.monday) % 7;
         final lastMonday = today.subtract(Duration(days: daysFromMonday + 7));
-        final lastSunday = lastMonday.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59, milliseconds: 999));
+        final lastSunday = lastMonday.add(const Duration(
+            days: 6, hours: 23, minutes: 59, seconds: 59, milliseconds: 999));
         return DateTimeRange(start: lastMonday, end: lastSunday);
       case 'this_month':
         final startOfMonth = DateTime(current.year, current.month, 1);
-        final nextMonth = current.month == 12 ? DateTime(current.year + 1, 1, 1) : DateTime(current.year, current.month + 1, 1);
+        final nextMonth = current.month == 12
+            ? DateTime(current.year + 1, 1, 1)
+            : DateTime(current.year, current.month + 1, 1);
         final endOfMonth = nextMonth.subtract(const Duration(milliseconds: 1));
         return DateTimeRange(start: startOfMonth, end: endOfMonth);
       case 'last_month':
@@ -45,7 +52,8 @@ class MidwifeInventoryReportService {
         final prevMonth = current.month == 1 ? 12 : current.month - 1;
         final startOfLastMonth = DateTime(prevYear, prevMonth, 1);
         final startOfThisMonth = DateTime(current.year, current.month, 1);
-        final endOfLastMonth = startOfThisMonth.subtract(const Duration(milliseconds: 1));
+        final endOfLastMonth =
+            startOfThisMonth.subtract(const Duration(milliseconds: 1));
         return DateTimeRange(start: startOfLastMonth, end: endOfLastMonth);
       case 'custom':
         return customRange;
@@ -90,6 +98,7 @@ class MidwifeInventoryReportService {
     String categoryFilter = 'all',
   }) async {
     final pdf = pw.Document(
+      theme: await PdfFonts.theme(),
       title: 'InaAgapay Inventory Report - $facilityName',
       author: 'InaAgapay MCHIS',
     );
@@ -107,7 +116,8 @@ class MidwifeInventoryReportService {
       final type = t.transactionType.toLowerCase();
       if (type == 'dispense' || t.isAdministration) {
         dispensedDoses += t.dosesMoved;
-      } else if (type == 'receipt' || (type == 'transfer' && (t.doseQuantity ?? t.quantity) > 0)) {
+      } else if (type == 'receipt' ||
+          (type == 'transfer' && (t.doseQuantity ?? t.quantity) > 0)) {
         replenishedUnits += t.quantity.abs();
       } else if (type == 'expiry_disposal' || type == 'discard') {
         unusableLossDoses += t.dosesMoved;
@@ -170,7 +180,8 @@ class MidwifeInventoryReportService {
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
                       pw.Container(
-                        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: pw.BoxDecoration(
                           color: PdfColors.grey200,
                           borderRadius: pw.BorderRadius.circular(4),
@@ -187,7 +198,8 @@ class MidwifeInventoryReportService {
                       pw.SizedBox(height: 2),
                       pw.Text(
                         'Generated: $nowStr',
-                        style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                        style: const pw.TextStyle(
+                            fontSize: 8, color: PdfColors.grey700),
                       ),
                     ],
                   ),
@@ -209,11 +221,15 @@ class MidwifeInventoryReportService {
                 children: [
                   pw.Text(
                     'InaAgapay Maternal & Child Health Information System | Immutable Stock Traceability Ledger',
-                    style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+                    style: const pw.TextStyle(
+                        fontSize: 7, color: PdfColors.grey600),
                   ),
                   pw.Text(
                     'Page ${context.pageNumber} of ${context.pagesCount}',
-                    style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700),
+                    style: pw.TextStyle(
+                        fontSize: 8,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey700),
                   ),
                 ],
               ),
@@ -240,8 +256,10 @@ class MidwifeInventoryReportService {
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         _buildMetaRow('Reporting Period:', periodLabel),
-                        _buildMetaRow('Category Scope:', categoryFilter.toUpperCase()),
-                        _buildMetaRow('Prepared By:', '$midwifeName (Midwife-in-Charge)'),
+                        _buildMetaRow(
+                            'Category Scope:', categoryFilter.toUpperCase()),
+                        _buildMetaRow(
+                            'Prepared By:', '$midwifeName (Midwife-in-Charge)'),
                       ],
                     ),
                   ),
@@ -253,22 +271,45 @@ class MidwifeInventoryReportService {
                   child: pw.Row(
                     children: categoryFilter == 'transfer'
                         ? [
-                            _buildKpiCard('TOTAL TRANSFERS', '$totalTransfers', PdfColors.blueGrey800, PdfColors.grey100),
+                            _buildKpiCard('TOTAL TRANSFERS', '$totalTransfers',
+                                PdfColors.blueGrey800, PdfColors.grey100),
                             pw.SizedBox(width: 6),
-                            _buildKpiCard('INBOUND TRANSFERS', '$inboundTransfers', PdfColors.teal800, PdfColors.teal50),
+                            _buildKpiCard(
+                                'INBOUND TRANSFERS',
+                                '$inboundTransfers',
+                                PdfColors.teal800,
+                                PdfColors.teal50),
                             pw.SizedBox(width: 6),
-                            _buildKpiCard('OUTBOUND DISPATCH', '$outboundTransfers', PdfColors.pink800, PdfColors.pink50),
+                            _buildKpiCard(
+                                'OUTBOUND DISPATCH',
+                                '$outboundTransfers',
+                                PdfColors.pink800,
+                                PdfColors.pink50),
                             pw.SizedBox(width: 6),
-                            _buildKpiCard('RECEIVED UNITS', '+$replenishedUnits', PdfColors.green800, PdfColors.green50),
+                            _buildKpiCard(
+                                'RECEIVED UNITS',
+                                '+$replenishedUnits',
+                                PdfColors.green800,
+                                PdfColors.green50),
                           ]
                         : [
-                            _buildKpiCard('TOTAL MOVEMENTS', '$totalMovements', PdfColors.blueGrey800, PdfColors.grey100),
+                            _buildKpiCard('TOTAL MOVEMENTS', '$totalMovements',
+                                PdfColors.blueGrey800, PdfColors.grey100),
                             pw.SizedBox(width: 6),
-                            _buildKpiCard('DISPENSED DOSES', '$dispensedDoses', PdfColors.pink800, PdfColors.pink50),
+                            _buildKpiCard('DISPENSED DOSES', '$dispensedDoses',
+                                PdfColors.pink800, PdfColors.pink50),
                             pw.SizedBox(width: 6),
-                            _buildKpiCard('REPLENISHED UNITS', '+$replenishedUnits', PdfColors.green800, PdfColors.green50),
+                            _buildKpiCard(
+                                'REPLENISHED UNITS',
+                                '+$replenishedUnits',
+                                PdfColors.green800,
+                                PdfColors.green50),
                             pw.SizedBox(width: 6),
-                            _buildKpiCard('LOSS / EXPIRED', '-$unusableLossDoses', PdfColors.red800, PdfColors.red50),
+                            _buildKpiCard(
+                                'LOSS / EXPIRED',
+                                '-$unusableLossDoses',
+                                PdfColors.red800,
+                                PdfColors.red50),
                           ],
                   ),
                 ),
@@ -283,12 +324,16 @@ class MidwifeInventoryReportService {
                 padding: const pw.EdgeInsets.all(32),
                 child: pw.Text(
                   'No inventory movements recorded for the selected period and criteria.',
-                  style: pw.TextStyle(fontSize: 11, fontStyle: pw.FontStyle.italic, color: PdfColors.grey600),
+                  style: pw.TextStyle(
+                      fontSize: 11,
+                      fontStyle: pw.FontStyle.italic,
+                      color: PdfColors.grey600),
                 ),
               )
             else
               pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+                border:
+                    pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
                 columnWidths: {
                   0: const pw.FixedColumnWidth(85), // Timestamp
                   1: const pw.FlexColumnWidth(2.2), // Item & Batch
@@ -302,13 +347,15 @@ class MidwifeInventoryReportService {
                 children: [
                   // Table Header
                   pw.TableRow(
-                    decoration: const pw.BoxDecoration(color: PdfColors.blueGrey100),
+                    decoration:
+                        const pw.BoxDecoration(color: PdfColors.blueGrey100),
                     children: [
                       _buildTableHeaderCell('DATE & TIME'),
                       _buildTableHeaderCell('ITEM & BATCH'),
                       _buildTableHeaderCell('MOVEMENT TYPE'),
                       _buildTableHeaderCell('DELTA', align: pw.TextAlign.right),
-                      _buildTableHeaderCell('BALANCE AFTER', align: pw.TextAlign.right),
+                      _buildTableHeaderCell('BALANCE AFTER',
+                          align: pw.TextAlign.right),
                       _buildTableHeaderCell('PATIENT'),
                       _buildTableHeaderCell('PERFORMED BY'),
                       _buildTableHeaderCell('REFERENCE / NOTES'),
@@ -322,22 +369,36 @@ class MidwifeInventoryReportService {
 
                     return pw.TableRow(
                       decoration: pw.BoxDecoration(
-                        color: t.transactionId % 2 == 0 ? PdfColors.white : PdfColors.grey50,
+                        color: t.transactionId % 2 == 0
+                            ? PdfColors.white
+                            : PdfColors.grey50,
                       ),
                       children: [
-                        _buildTableCell('${_dateFormat.format(t.loggedAt)}\n${_timeFormat.format(t.loggedAt)}', fontSize: 7.5),
-                        _buildTableCell('${t.itemName}\nBatch: ${t.batchNumber}', isBold: true, fontSize: 8),
+                        _buildTableCell(
+                            '${_dateFormat.format(t.loggedAt)}\n${_timeFormat.format(t.loggedAt)}',
+                            fontSize: 7.5),
+                        _buildTableCell(
+                            '${t.itemName}\nBatch: ${t.batchNumber}',
+                            isBold: true,
+                            fontSize: 8),
                         _buildTableCell(formatMovementType(t), fontSize: 8),
                         _buildTableCell(
                           deltaStr,
                           align: pw.TextAlign.right,
-                          color: isPositive ? PdfColors.green800 : PdfColors.pink800,
+                          color: isPositive
+                              ? PdfColors.green800
+                              : PdfColors.pink800,
                           isBold: true,
                           fontSize: 8.5,
                         ),
-                        _buildTableCell(balanceStr, align: pw.TextAlign.right, fontSize: 8),
-                        _buildTableCell(t.hasPatient ? (t.patientLabel ?? '-') : '-', fontSize: 8),
-                        _buildTableCell('${t.performedByName ?? "Staff"}\n(${_formatRole(t.performedByRole)})', fontSize: 7.5),
+                        _buildTableCell(balanceStr,
+                            align: pw.TextAlign.right, fontSize: 8),
+                        _buildTableCell(
+                            t.hasPatient ? (t.patientLabel ?? '-') : '-',
+                            fontSize: 8),
+                        _buildTableCell(
+                            '${t.performedByName ?? "Staff"}\n(${_formatRole(t.performedByRole)})',
+                            fontSize: 7.5),
                         _buildTableCell(formatNotes(t), fontSize: 7.5),
                       ],
                     );
@@ -356,19 +417,29 @@ class MidwifeInventoryReportService {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Text('Prepared & Certified Correct:', style: pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800)),
+                        pw.Text('Prepared & Certified Correct:',
+                            style: pw.TextStyle(
+                                fontSize: 8.5, color: PdfColors.grey800)),
                         pw.SizedBox(height: 28),
                         pw.Container(
                           width: 200,
                           decoration: const pw.BoxDecoration(
-                            border: pw.Border(top: pw.BorderSide(color: PdfColors.black, width: 1)),
+                            border: pw.Border(
+                                top: pw.BorderSide(
+                                    color: PdfColors.black, width: 1)),
                           ),
                           child: pw.Column(
                             crossAxisAlignment: pw.CrossAxisAlignment.center,
                             children: [
                               pw.SizedBox(height: 3),
-                              pw.Text(midwifeName.toUpperCase(), style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                              pw.Text('Midwife-in-Charge / Health Center Officer', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                              pw.Text(midwifeName.toUpperCase(),
+                                  style: pw.TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: pw.FontWeight.bold)),
+                              pw.Text(
+                                  'Midwife-in-Charge / Health Center Officer',
+                                  style: const pw.TextStyle(
+                                      fontSize: 7.5, color: PdfColors.grey700)),
                             ],
                           ),
                         ),
@@ -379,19 +450,28 @@ class MidwifeInventoryReportService {
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Text('Verified & Received by:', style: pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800)),
+                        pw.Text('Verified & Received by:',
+                            style: pw.TextStyle(
+                                fontSize: 8.5, color: PdfColors.grey800)),
                         pw.SizedBox(height: 28),
                         pw.Container(
                           width: 220,
                           decoration: const pw.BoxDecoration(
-                            border: pw.Border(top: pw.BorderSide(color: PdfColors.black, width: 1)),
+                            border: pw.Border(
+                                top: pw.BorderSide(
+                                    color: PdfColors.black, width: 1)),
                           ),
                           child: pw.Column(
                             crossAxisAlignment: pw.CrossAxisAlignment.center,
                             children: [
                               pw.SizedBox(height: 3),
-                              pw.Text('MUNICIPAL HEALTH OFFICER / SUPERVISOR', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                              pw.Text('Rural Health Unit (RHU)', style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700)),
+                              pw.Text('MUNICIPAL HEALTH OFFICER / SUPERVISOR',
+                                  style: pw.TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: pw.FontWeight.bold)),
+                              pw.Text('Rural Health Unit (RHU)',
+                                  style: const pw.TextStyle(
+                                      fontSize: 7.5, color: PdfColors.grey700)),
                             ],
                           ),
                         ),
@@ -426,7 +506,8 @@ class MidwifeInventoryReportService {
       categoryFilter: categoryFilter,
     );
 
-    final cleanFileName = 'inaagapay_inventory_report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+    final cleanFileName =
+        'inaagapay_inventory_report_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
     await Printing.layoutPdf(
       name: cleanFileName,
@@ -445,7 +526,10 @@ class MidwifeInventoryReportService {
             width: 95,
             child: pw.Text(
               label,
-              style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800),
+              style: pw.TextStyle(
+                  fontSize: 8,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.grey800),
             ),
           ),
           pw.Expanded(
@@ -459,7 +543,8 @@ class MidwifeInventoryReportService {
     );
   }
 
-  static pw.Widget _buildKpiCard(String label, String value, PdfColor textColor, PdfColor bgColor) {
+  static pw.Widget _buildKpiCard(
+      String label, String value, PdfColor textColor, PdfColor bgColor) {
     return pw.Expanded(
       child: pw.Container(
         padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 4),
@@ -473,13 +558,19 @@ class MidwifeInventoryReportService {
           children: [
             pw.Text(
               value,
-              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: textColor),
+              style: pw.TextStyle(
+                  fontSize: 12,
+                  fontWeight: pw.FontWeight.bold,
+                  color: textColor),
             ),
             pw.SizedBox(height: 2),
             pw.Text(
               label,
               maxLines: 1,
-              style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey700),
+              style: pw.TextStyle(
+                  fontSize: 6.5,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.grey700),
             ),
           ],
         ),
@@ -487,13 +578,17 @@ class MidwifeInventoryReportService {
     );
   }
 
-  static pw.Widget _buildTableHeaderCell(String text, {pw.TextAlign align = pw.TextAlign.left}) {
+  static pw.Widget _buildTableHeaderCell(String text,
+      {pw.TextAlign align = pw.TextAlign.left}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
       child: pw.Text(
         text,
         textAlign: align,
-        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey900),
+        style: pw.TextStyle(
+            fontSize: 7.5,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.blueGrey900),
       ),
     );
   }
@@ -569,7 +664,9 @@ class MidwifeInventoryReportService {
               ? 'Peer Transfer Inward'
               : 'Peer Transfer Outward';
         }
-        return (t.doseQuantity ?? t.quantity) > 0 ? 'Inbound Transfer' : 'Outbound Transfer';
+        return (t.doseQuantity ?? t.quantity) > 0
+            ? 'Inbound Transfer'
+            : 'Outbound Transfer';
       case 'adjustment':
         return 'Stock Adjustment';
       default:
@@ -612,13 +709,17 @@ class MidwifeInventoryReportService {
         }
 
         cleanNotes = cleanNotes
-            .replaceAll(RegExp(r'Expected delivery:[^.]*\.?', caseSensitive: false), '')
-            .replaceAll(RegExp(r'Reason for move:[^.]*\.?', caseSensitive: false), '')
+            .replaceAll(
+                RegExp(r'Expected delivery:[^.]*\.?', caseSensitive: false), '')
+            .replaceAll(
+                RegExp(r'Reason for move:[^.]*\.?', caseSensitive: false), '')
             .trim();
       }
 
       final parts = <String>[];
-      if (t.referenceType.isNotEmpty && t.referenceType != '-' && t.referenceType != '—') {
+      if (t.referenceType.isNotEmpty &&
+          t.referenceType != '-' &&
+          t.referenceType != '—') {
         parts.add(t.referenceType);
       }
       if (moveReason != null && moveReason.isNotEmpty) {
@@ -635,7 +736,9 @@ class MidwifeInventoryReportService {
     }
 
     final parts = <String>[];
-    if (t.referenceType.isNotEmpty && t.referenceType != '-' && t.referenceType != '—') parts.add(t.referenceType);
+    if (t.referenceType.isNotEmpty &&
+        t.referenceType != '-' &&
+        t.referenceType != '—') parts.add(t.referenceType);
     if (t.notes.isNotEmpty) parts.add(t.notes);
     if (parts.isEmpty) return '-';
     return parts.join(' | ');

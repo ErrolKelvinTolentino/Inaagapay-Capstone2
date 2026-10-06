@@ -5,6 +5,7 @@ import '../../services/auth_storage.dart';
 import '../../services/db_timestamp.dart';
 import '../../services/midwife_alert_badge.dart';
 import '../../services/notification_service.dart';
+import '../../services/timed_async_cache.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/secondary_header.dart';
 import '../midwife_inventory/inventory_models.dart';
@@ -91,6 +92,14 @@ class MidwifeNotificationCenter extends StatefulWidget {
 
 class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
   final InventoryRepository _inventoryRepo = InventoryRepository();
+  static final _inventoryCache =
+      TimedAsyncCache<InventorySnapshot>(const Duration(seconds: 30));
+  bool _loadingRequest = false;
+  Future<void> _refreshAlerts() async {
+    _inventoryCache.clear();
+    await _loadAllAlerts();
+  }
+
   bool _loading = true;
   MidwifeAlertCategory _selectedCategory = MidwifeAlertCategory.all;
   final List<MidwifeAlertItem> _alerts = [];
@@ -237,17 +246,41 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
   }
 
   Future<void> _loadAllAlerts() async {
+    if (_loadingRequest) return;
+    _loadingRequest = true;
     setState(() => _loading = true);
     final alerts = <MidwifeAlertItem>[];
 
     try {
       final accountId = await AuthStorage.getUserId();
       _accountId = accountId;
+      // Independent reads start together; the notification list no longer
+      // waits for all stock, transfer and clinical queries before starting.
+      Object? notificationError;
+      final notificationsFuture = accountId == null
+          ? Future<List<Map<String, dynamic>>>.value([])
+          : NotificationService.getNotifications(accountId, limit: 30)
+              .catchError((Object error) {
+              notificationError = error;
+              return <Map<String, dynamic>>[];
+            });
+      final readIdsFuture = _loadReadIds();
 
       // 1. Load Real-time Inventory Snapshot for this Midwife's BHC
       try {
         final invContext = await _inventoryRepo.resolveContext();
-        final snapshot = await _inventoryRepo.loadSnapshot(invContext);
+        final token = await AuthStorage.getToken();
+        final key = '$accountId:$token:${invContext.facilityId}:${InventoryRepository.inventoryRevision}';
+        final clinicalFuture = Supabase.instance.client
+            .from('mothers')
+            .select(
+                'mother_id, account:account_id(first_name, last_name), pregnancies(status, pregnancy_risk_level)')
+            .eq('assigned_bhc_id', invContext.facilityId)
+            .eq('status', 'active')
+            .then((value) => value)
+            .catchError((Object error) => <Map<String, dynamic>>[]);
+        final snapshot = await _inventoryCache.get(
+            key, () => _inventoryRepo.loadSnapshot(invContext));
         final bhcId = invContext.facilityId;
 
         // (A) Low Stock & Out of Stock Alerts
@@ -462,7 +495,8 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
               notificationReferenceType: 'inventory_transfers',
               notificationReferenceId: trf.transferId,
             ));
-          } else if (trf.isOutboundFor(bhcId) && trf.status == 'pending_receipt') {
+          } else if (trf.isOutboundFor(bhcId) &&
+              trf.status == 'pending_receipt') {
             final item = snapshot.inventory
                 .where((i) => i.catalog.itemId == trf.itemId)
                 .firstOrNull;
@@ -494,20 +528,17 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
         // low / medium / high) -- so every load raised 42703, was caught here,
         // and the whole block did nothing. No high-risk alert has ever shown.
         try {
-          final highRiskMothers = await Supabase.instance.client
-              .from('mothers')
-              .select(
-                  'mother_id, account:account_id(first_name, last_name), pregnancies(status, pregnancy_risk_level)')
-              .eq('assigned_bhc_id', bhcId)
-              .eq('status', 'active');
+          final highRiskMothers = await clinicalFuture;
 
           for (final m in (highRiskMothers as List)) {
             final acc = m['account'] as Map<String, dynamic>?;
             final name =
                 '${acc?['first_name'] ?? ''} ${acc?['last_name'] ?? ''}'.trim();
             final pregnancies = m['pregnancies'] as List?;
-            final activePreg =
-                pregnancies?.where((p) => p['status'] == 'active').firstOrNull;
+            final activePreg = pregnancies
+                ?.where(
+                    (p) => p['status'] == 'ongoing' || p['status'] == 'active')
+                .firstOrNull;
 
             if (activePreg != null &&
                 activePreg['pregnancy_risk_level'] == 'high') {
@@ -543,8 +574,8 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
 
       // 2. Load Push & Account Notifications
       if (accountId != null) {
-        final notifications =
-            await NotificationService.getNotifications(accountId, limit: 30);
+        final notifications = await notificationsFuture;
+        if (notificationError != null) throw notificationError!;
         for (final n in notifications) {
           final title = n['title']?.toString() ?? 'Notification';
           final msg = n['message']?.toString() ?? '';
@@ -670,7 +701,7 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
         }
       }
 
-      await _loadReadIds();
+      await readIdsFuture;
       // Fold the database's own read flags in, so both kinds of alert answer
       // to the same set from here on.
       _readIds.addAll(alerts.where((a) => a.isRead).map((a) => a.id));
@@ -707,6 +738,8 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
     } catch (e) {
       debugPrint('Error loading midwife alerts: $e');
       if (mounted) setState(() => _loading = false);
+    } finally {
+      _loadingRequest = false;
     }
   }
 
@@ -772,7 +805,7 @@ class _MidwifeNotificationCenterState extends State<MidwifeNotificationCenter> {
               icon: const Icon(Icons.refresh_rounded),
               color: AppColors.brandPrimary,
               tooltip: 'Refresh',
-              onPressed: _loadAllAlerts,
+              onPressed: _refreshAlerts,
             ),
           ),
           Expanded(

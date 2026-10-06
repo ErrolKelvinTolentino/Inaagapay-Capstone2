@@ -1,3 +1,5 @@
+import '../../services/child_record_export.dart';
+import '../../widgets/child_export_button.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -144,8 +146,10 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
           SnackBar(
             content: Text(NetworkStatus.friendlyError(
               e,
-              english: "Your child's profile could not be loaded. Please try again.",
-              filipino: 'Hindi ma-load ang profile ng iyong anak. Pakisubukan muli.',
+              english:
+                  "Your child's profile could not be loaded. Please try again.",
+              filipino:
+                  'Hindi ma-load ang profile ng iyong anak. Pakisubukan muli.',
             )),
             backgroundColor: AppColors.error,
           ),
@@ -178,17 +182,21 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
       }
 
       if (years > 0) {
-        final monthPart = months > 0 ? ', $months month${months != 1 ? 's' : ''}' : '';
+        final monthPart =
+            months > 0 ? ', $months month${months != 1 ? 's' : ''}' : '';
         return '$years year${years != 1 ? 's' : ''}$monthPart old';
       } else if (months > 0) {
         final weeks = days ~/ 7;
-        final weekPart = weeks > 0 ? ', $weeks week${weeks != 1 ? 's' : ''}' : '';
+        final weekPart =
+            weeks > 0 ? ', $weeks week${weeks != 1 ? 's' : ''}' : '';
         return '$months month${months != 1 ? 's' : ''}$weekPart old';
       } else {
         if (days >= 7) {
           final weeks = days ~/ 7;
           final remainingDays = days % 7;
-          final dayPart = remainingDays > 0 ? ', $remainingDays day${remainingDays != 1 ? 's' : ''}' : '';
+          final dayPart = remainingDays > 0
+              ? ', $remainingDays day${remainingDays != 1 ? 's' : ''}'
+              : '';
           return '$weeks week${weeks != 1 ? 's' : ''}$dayPart old';
         } else if (days > 0) {
           return '$days day${days != 1 ? 's' : ''} old';
@@ -304,8 +312,11 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
       final barangay = mother['barangay']?.toString() ?? '';
       final city = mother['city_municipality']?.toString() ?? '';
       final province = mother['province']?.toString() ?? '';
-      final parts = [barangay, city, province].where((p) => p.trim().isNotEmpty).toList();
-      return parts.isNotEmpty ? parts.join(', ') : _t('Not recorded', 'Hindi naitala');
+      final parts =
+          [barangay, city, province].where((p) => p.trim().isNotEmpty).toList();
+      return parts.isNotEmpty
+          ? parts.join(', ')
+          : _t('Not recorded', 'Hindi naitala');
     }
     return _t('Not recorded', 'Hindi naitala');
   }
@@ -350,6 +361,8 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
           preferredSize: const Size.fromHeight(56),
           child: SecondaryHeader(
             title: _t('Child Information', 'Impormasyon ng Anak'),
+            trailing: ChildExportButton(
+                childId: widget.childId, kind: ChildExportKind.profile),
             onBack: widget.onBackToChildren,
           ),
         ),
@@ -400,6 +413,8 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
         preferredSize: const Size.fromHeight(56),
         child: SecondaryHeader(
           title: _t('Child Information', 'Impormasyon ng Anak'),
+          trailing: ChildExportButton(
+              childId: widget.childId, kind: ChildExportKind.profile),
           onBack: widget.onBackToChildren,
         ),
       ),
@@ -525,7 +540,9 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                           leadingIcon: Icons.vaccines,
                           label: vaccine?['vaccine_name'] ??
                               _t('Unknown Vaccine', 'Hindi Kilalang Bakuna'),
-                          subLabel: doseNum != null ? '${_t('Dose', 'Dose')} $doseNum' : null,
+                          subLabel: doseNum != null
+                              ? '${_t('Dose', 'Dose')} $doseNum'
+                              : null,
                           value: formatDate(imm['vaccination_date']),
                           trailingWidget: timeliness == null
                               ? null
@@ -634,15 +651,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
     );
   }
 
-
-
-
   /// One colour, one plain sentence about what it means for her child.
-
-
-
-
-
 
   String? aiAnalysisCategory;
 
@@ -671,8 +680,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
       prefixIcon: Icon(icon, color: AppColors.brandAccent),
       filled: true,
       fillColor: Colors.white,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       enabledBorder: border(Colors.transparent),
       border: border(Colors.transparent),
       focusedBorder: border(AppColors.brandPrimary),
@@ -730,7 +738,8 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      _t('Log Growth Measurements', 'Itala ang Sukat ng Paglaki'),
+                      _t('Log Growth Measurements',
+                          'Itala ang Sukat ng Paglaki'),
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
@@ -766,11 +775,16 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                         hint: _t('e.g. 58.5', 'hal. 58.5'),
                         icon: Icons.height_rounded,
                       ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       validator: (val) {
-                        if (val == null || val.isEmpty) return _t('Please enter height', 'Pakilagay ang taas');
+                        if (val == null || val.isEmpty)
+                          return _t(
+                              'Please enter height', 'Pakilagay ang taas');
                         final numVal = double.tryParse(val);
-                        if (numVal == null || numVal <= 0) return _t('Please enter a valid height', 'Pakilagay ang tamang taas');
+                        if (numVal == null || numVal <= 0)
+                          return _t('Please enter a valid height',
+                              'Pakilagay ang tamang taas');
                         return null;
                       },
                     ),
@@ -790,11 +804,16 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                         hint: _t('e.g. 5.4', 'hal. 5.4'),
                         icon: Icons.monitor_weight_outlined,
                       ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       validator: (val) {
-                        if (val == null || val.isEmpty) return _t('Please enter weight', 'Pakilagay ang timbang');
+                        if (val == null || val.isEmpty)
+                          return _t(
+                              'Please enter weight', 'Pakilagay ang timbang');
                         final numVal = double.tryParse(val);
-                        if (numVal == null || numVal <= 0) return _t('Please enter a valid weight', 'Pakilagay ang tamang timbang');
+                        if (numVal == null || numVal <= 0)
+                          return _t('Please enter a valid weight',
+                              'Pakilagay ang tamang timbang');
                         return null;
                       },
                     ),
@@ -812,39 +831,61 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                                 try {
                                   final height = double.parse(heightCtrl.text);
                                   final weight = double.parse(weightCtrl.text);
-                                  final bmi = weight / ((height / 100) * (height / 100));
+                                  final bmi = weight /
+                                      ((height / 100) * (height / 100));
 
                                   // Insert into child_growth_records
-                                  final insertResult = await Supabase.instance.client
-                                      .from('child_growth_records')
-                                      .insert({
-                                    'child_id': widget.childId,
-                                    'child_height': height,
-                                    'child_weight': weight,
-                                    'created_at': DateTime.now().toIso8601String(),
-                                  }).select('child_details_id').single();
+                                  final insertResult =
+                                      await Supabase.instance.client
+                                          .from('child_growth_records')
+                                          .insert({
+                                            'child_id': widget.childId,
+                                            'child_height': height,
+                                            'child_weight': weight,
+                                            'created_at': DateTime.now()
+                                                .toIso8601String(),
+                                          })
+                                          .select('child_details_id')
+                                          .single();
 
-                                  final childDetailsId = insertResult['child_details_id'] as int;
+                                  final childDetailsId =
+                                      insertResult['child_details_id'] as int;
 
                                   // Calculate local WHO classifications
-                                  final heightZ = GrowthCalculator.calculateHeightZScore(height, latestAgeWeeks, childSex);
-                                  final weightZ = GrowthCalculator.calculateWeightZScore(weight, latestAgeWeeks, childSex);
-                                  final bmiZ = GrowthCalculator.calculateBMIZScore(bmi, latestAgeWeeks, childSex);
+                                  final heightZ =
+                                      GrowthCalculator.calculateHeightZScore(
+                                          height, latestAgeWeeks, childSex);
+                                  final weightZ =
+                                      GrowthCalculator.calculateWeightZScore(
+                                          weight, latestAgeWeeks, childSex);
+                                  final bmiZ =
+                                      GrowthCalculator.calculateBMIZScore(
+                                          bmi, latestAgeWeeks, childSex);
 
                                   final bmiDesc = _describeZScoreLocal(bmiZ);
-                                  final weightDesc = _describeZScoreLocal(weightZ);
-                                  final heightDesc = _describeZScoreLocal(heightZ);
+                                  final weightDesc =
+                                      _describeZScoreLocal(weightZ);
+                                  final heightDesc =
+                                      _describeZScoreLocal(heightZ);
 
-                                  final bmiDescFil = _describeZScoreFilipinoLocal(bmiZ);
-                                  final weightDescFil = _describeZScoreFilipinoLocal(weightZ);
-                                  final heightDescFil = _describeZScoreFilipinoLocal(heightZ);
+                                  final bmiDescFil =
+                                      _describeZScoreFilipinoLocal(bmiZ);
+                                  final weightDescFil =
+                                      _describeZScoreFilipinoLocal(weightZ);
+                                  final heightDescFil =
+                                      _describeZScoreFilipinoLocal(heightZ);
 
-                                  final englishText = 'Full WHO-Based Evaluation at Week $latestAgeWeeks. The child\'s Weight is $weightDesc and BMI-for-Age is $bmiDesc. Height-for-Age is $heightDesc.';
-                                  final filipinoText = 'Buong Pagsusuri base sa WHO sa Ika-$latestAgeWeeks na Linggo. Ang Timbang ng bata ay $weightDescFil at ang BMI ay $bmiDescFil. Ang Haba ay $heightDescFil.';
-                                  final combinedText = '## English\n$englishText\n\n## Filipino\n$filipinoText';
+                                  final englishText =
+                                      'Full WHO-Based Evaluation at Week $latestAgeWeeks. The child\'s Weight is $weightDesc and BMI-for-Age is $bmiDesc. Height-for-Age is $heightDesc.';
+                                  final filipinoText =
+                                      'Buong Pagsusuri base sa WHO sa Ika-$latestAgeWeeks na Linggo. Ang Timbang ng bata ay $weightDescFil at ang BMI ay $bmiDescFil. Ang Haba ay $heightDescFil.';
+                                  final combinedText =
+                                      '## English\n$englishText\n\n## Filipino\n$filipinoText';
 
                                   // Insert into ai_responses
-                                  await Supabase.instance.client.from('ai_responses').insert({
+                                  await Supabase.instance.client
+                                      .from('ai_responses')
+                                      .insert({
                                     'reference_table': 'child_growth_records',
                                     'reference_id': childDetailsId,
                                     'response_type': 'growth_analysis',
@@ -853,12 +894,15 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                                     'ai_model': 'none',
                                     'status': 'generated',
                                     'response': combinedText,
-                                    'updated_at': DateTime.now().toIso8601String(),
-                                    'created_at': DateTime.now().toIso8601String(),
+                                    'updated_at':
+                                        DateTime.now().toIso8601String(),
+                                    'created_at':
+                                        DateTime.now().toIso8601String(),
                                   });
 
                                   // Asynchronous background AI summary generation
-                                  _runBackgroundAiAnalysis(childDetailsId, height, weight, bmi);
+                                  _runBackgroundAiAnalysis(
+                                      childDetailsId, height, weight, bmi);
 
                                   Navigator.pop(ctx);
                                   // Refresh profile data
@@ -866,7 +910,14 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                                 } catch (e) {
                                   setStateSheet(() => isSavingLocal = false);
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(NetworkStatus.friendlyError(e, english: 'The measurement could not be saved. Please try again.', filipino: 'Hindi na-save ang sukat. Pakisubukan muli.')), backgroundColor: AppColors.error),
+                                    SnackBar(
+                                        content: Text(NetworkStatus.friendlyError(
+                                            e,
+                                            english:
+                                                'The measurement could not be saved. Please try again.',
+                                            filipino:
+                                                'Hindi na-save ang sukat. Pakisubukan muli.')),
+                                        backgroundColor: AppColors.error),
                                   );
                                 }
                               },
@@ -893,8 +944,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                                 ),
                               )
                             : Text(
-                                _t('Save Measurements',
-                                    'I-save ang mga Sukat'),
+                                _t('Save Measurements', 'I-save ang mga Sukat'),
                                 style: const TextStyle(
                                     fontSize: 15.5,
                                     fontWeight: FontWeight.w800)),
@@ -1005,17 +1055,22 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
     return GrowthCalculator.bandForZScore(zScore).labelFilipino;
   }
 
-  void _runBackgroundAiAnalysis(int childDetailsId, double height, double weight, double bmi) async {
+  void _runBackgroundAiAnalysis(
+      int childDetailsId, double height, double weight, double bmi) async {
     try {
       final childName = widget.childName;
       final sex = (childData?['sex'] as String?) ?? 'female';
-      final latestAgeWeeks = birthData != null && birthData!['birthdate'] != null
-          ? _ageInWeeks(DateTime.now())
-          : 0;
+      final latestAgeWeeks =
+          birthData != null && birthData!['birthdate'] != null
+              ? _ageInWeeks(DateTime.now())
+              : 0;
 
-      final heightZ = GrowthCalculator.calculateHeightZScore(height, latestAgeWeeks, sex);
-      final weightZ = GrowthCalculator.calculateWeightZScore(weight, latestAgeWeeks, sex);
-      final bmiZ = GrowthCalculator.calculateBMIZScore(bmi, latestAgeWeeks, sex);
+      final heightZ =
+          GrowthCalculator.calculateHeightZScore(height, latestAgeWeeks, sex);
+      final weightZ =
+          GrowthCalculator.calculateWeightZScore(weight, latestAgeWeeks, sex);
+      final bmiZ =
+          GrowthCalculator.calculateBMIZScore(bmi, latestAgeWeeks, sex);
 
       final prompt = _buildGrowthAiPrompt(
         childName: childName,
@@ -1083,7 +1138,7 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
               !(lower.contains('filipino') || lower.contains('tagalog'));
           final isBulletFormat = savedText.contains('## Baby Growth Summary') ||
               savedText.contains('Buod ng Paglaki ng Bata');
-          
+
           if (!isGeneratedByAi || isOldOrSingleLang || isBulletFormat) {
             await _generateAndSaveProfileAiInsight(latestRecordId);
           } else {
@@ -1308,7 +1363,9 @@ $recordsSummary
                     ),
                   ),
                   Text(
-                    hasGuardian ? parentRelationship : _t('Primary Caregiver', 'Pangunahing Tagapag-alaga'),
+                    hasGuardian
+                        ? parentRelationship
+                        : _t('Primary Caregiver', 'Pangunahing Tagapag-alaga'),
                     style: TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
@@ -1336,7 +1393,6 @@ $recordsSummary
               ),
             ],
           ),
-
           if (phone != notRecordedText && phone.isNotEmpty) ...[
             const SizedBox(height: 12),
             Row(
@@ -1449,6 +1505,4 @@ $recordsSummary
       ),
     );
   }
-
-
 }

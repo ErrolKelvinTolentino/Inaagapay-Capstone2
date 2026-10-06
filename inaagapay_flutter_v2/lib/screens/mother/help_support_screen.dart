@@ -18,6 +18,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   String? _bhcName;
   int? _bhcId;
   List<Map<String, dynamic>> _midwives = [];
+  bool _contactLoadFailed = false;
 
   String _t(String english, String filipino) {
     return LanguageService.translate(english, filipino);
@@ -42,33 +43,37 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
       // 1. Fetch mother's assigned BHC
       final motherRes = await client
           .from('mothers')
-          .select('assigned_bhc_id, bhc:assigned_bhc_id (bhc_name)')
+          .select('assigned_bhc_id')
           .eq('mother_id', motherId)
           .maybeSingle();
 
       if (motherRes != null && motherRes['assigned_bhc_id'] != null) {
-        _bhcId = motherRes['assigned_bhc_id'] as int;
-        _bhcName = motherRes['bhc']?['bhc_name']?.toString() ?? 'Barangay Health Center';
+        _bhcId = (motherRes['assigned_bhc_id'] as num).toInt();
+        _bhcName = 'Barangay Health Center';
+        final facility = await client
+            .from('health_facilities')
+            .select('name')
+            .eq('facility_id', _bhcId!)
+            .maybeSingle();
+        _bhcName = facility?['name']?.toString() ?? _bhcName;
 
         // 2. Fetch midwives assigned to this BHC
-        final midwivesRes = await client
-            .from('midwives')
-            .select('''
+        final midwivesRes = await client.from('midwives').select('''
               midwife_id,
               account:account_id (
                 first_name,
                 last_name,
                 phone_number
               )
-            ''')
-            .eq('assigned_bhc_id', _bhcId!);
+            ''').eq('assigned_bhc_id', _bhcId!);
 
         final List<Map<String, dynamic>> loadedMidwives = [];
         for (var item in midwivesRes) {
           final acc = item['account'] as Map<String, dynamic>?;
           if (acc != null) {
             loadedMidwives.add({
-              'name': '${acc['first_name'] ?? ''} ${acc['last_name'] ?? ''}'.trim(),
+              'name':
+                  '${acc['first_name'] ?? ''} ${acc['last_name'] ?? ''}'.trim(),
               'phone': acc['phone_number']?.toString() ?? '',
             });
           }
@@ -76,6 +81,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
         _midwives = loadedMidwives;
       }
     } catch (e) {
+      _contactLoadFailed = true;
       debugPrint('Error loading Help & Support contact data: $e');
     } finally {
       if (mounted) {
@@ -149,14 +155,36 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // 1. Barangay Health Center & Midwife Section
-                      _buildBhcSupportCard(),
+                      if (_contactLoadFailed && _bhcId == null)
+                        Column(children: [
+                          Text(_t(
+                              'Could not load your health center. Please retry.',
+                              'Hindi na-load ang iyong health center. Subukan muli.')),
+                          TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  _isLoading = true;
+                                  _contactLoadFailed = false;
+                                });
+                                _loadBhcAndMidwives();
+                              },
+                              child: Text(_t('Retry', 'Subukan Muli'))),
+                        ])
+                      else
+                        _buildBhcSupportCard(),
 
                       // 2. Interactive App Guide
-                      _buildSectionHeader(_t('App Features Guide', 'Gabay sa mga Tampok ng App'), Icons.explore_outlined),
+                      _buildSectionHeader(
+                          _t('App Features Guide',
+                              'Gabay sa mga Tampok ng App'),
+                          Icons.explore_outlined),
                       _buildFeaturesGuide(),
 
                       // 3. App FAQs
-                      _buildSectionHeader(_t('Frequently Asked Questions', 'Mga Madalas Itanong'), Icons.help_outline_rounded),
+                      _buildSectionHeader(
+                          _t('Frequently Asked Questions',
+                              'Mga Madalas Itanong'),
+                          Icons.help_outline_rounded),
                       _buildFaqSection(),
                       const SizedBox(height: 12),
 
@@ -222,7 +250,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _t('Your Assigned Health Center', 'Iyong Barangay Health Center'),
+                      _t('Your Assigned Health Center',
+                          'Iyong Barangay Health Center'),
                       style: const TextStyle(
                         fontSize: 15,
                         height: 1.3,
@@ -232,10 +261,14 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      isLinked ? _bhcName! : _t('Not Linked', 'Hindi Nakakonekta'),
+                      isLinked
+                          ? _bhcName!
+                          : _t('Not Linked', 'Hindi Nakakonekta'),
                       style: TextStyle(
                         fontSize: 12.5,
-                        color: isLinked ? AppColors.brandPrimary : AppColors.textSecondary,
+                        color: isLinked
+                            ? AppColors.brandPrimary
+                            : AppColors.textSecondary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -248,15 +281,17 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
           // on this page drew a hard black line across the card.
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 14),
-            child: Divider(
-                height: 1, thickness: 1, color: Color(0xFFF5E4EC)),
+            child: Divider(height: 1, thickness: 1, color: Color(0xFFF5E4EC)),
           ),
           if (isLinked) ...[
             if (_midwives.isEmpty)
               Text(
                 _t('No midwives are registered at this center yet.',
                     'Wala pang rehistradong midwife sa health center na ito.'),
-                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+                style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    fontStyle: FontStyle.italic),
               )
             else ...[
               Text(
@@ -280,14 +315,17 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.bgSecondary,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.15)),
+                      border: Border.all(
+                          color:
+                              AppColors.brandPrimary.withValues(alpha: 0.15)),
                     ),
                     child: Row(
                       children: [
                         const CircleAvatar(
                           backgroundColor: AppColors.brandPrimary,
                           radius: 16,
-                          child: Icon(Icons.person, size: 18, color: Colors.white),
+                          child:
+                              Icon(Icons.person, size: 18, color: Colors.white),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -305,19 +343,23 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 midwife['phone'],
-                                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary),
                               ),
                             ],
                           ),
                         ),
                         if (midwife['phone'].isNotEmpty) ...[
                           IconButton(
-                            icon: const Icon(Icons.phone_in_talk_rounded, color: AppColors.brandPrimary, size: 20),
+                            icon: const Icon(Icons.phone_in_talk_rounded,
+                                color: AppColors.brandPrimary, size: 20),
                             onPressed: () => _makeCall(midwife['phone']),
                             tooltip: _t('Call Midwife', 'Tawagan'),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.sms_rounded, color: AppColors.brandPrimary, size: 20),
+                            icon: const Icon(Icons.sms_rounded,
+                                color: AppColors.brandPrimary, size: 20),
                             onPressed: () => _sendSms(midwife['phone']),
                             tooltip: _t('Send SMS', 'I-text'),
                           ),
@@ -419,36 +461,36 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               // background instead of under it.
               type: MaterialType.transparency,
               child: ExpansionTile(
-              shape: const RoundedRectangleBorder(
-                side: BorderSide.none,
-              ),
-              collapsedShape: const RoundedRectangleBorder(
-                side: BorderSide.none,
-              ),
-              leading: Icon(f['icon'], color: AppColors.brandPrimary),
-              title: Text(
-                f['title'],
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.headingSoft,
+                shape: const RoundedRectangleBorder(
+                  side: BorderSide.none,
                 ),
-              ),
-              iconColor: AppColors.brandPrimary,
-              collapsedIconColor: AppColors.textSecondary,
-              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              expandedAlignment: Alignment.topLeft,
-              children: [
-                Text(
-                  f['desc'],
+                collapsedShape: const RoundedRectangleBorder(
+                  side: BorderSide.none,
+                ),
+                leading: Icon(f['icon'], color: AppColors.brandPrimary),
+                title: Text(
+                  f['title'],
                   style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                    height: 1.4,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.headingSoft,
                   ),
                 ),
-              ],
-            ),
+                iconColor: AppColors.brandPrimary,
+                collapsedIconColor: AppColors.textSecondary,
+                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                expandedAlignment: Alignment.topLeft,
+                children: [
+                  Text(
+                    f['desc'],
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -459,25 +501,29 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   Widget _buildFaqSection() {
     final List<Map<String, String>> faqs = [
       {
-        'q': _t('How do I update my profile details?', 'Paano ko babaguhin ang aking profile?'),
+        'q': _t('How do I update my profile details?',
+            'Paano ko babaguhin ang aking profile?'),
         'a': _t(
             'Tap your Profile Picture avatar in the top-right corner of the Home screen, and select "View Profile". From there, you can view your personal details and change your avatar or passwords.',
             'I-tap ang iyong Profile Picture avatar sa kanang itaas ng Home screen at piliin ang "View Profile". Doon ay maaari mong makita ang personal na detalye at mapalitan ang iyong larawan o password.'),
       },
       {
-        'q': _t('Why is my health center status listed as "Not Linked"?', 'Bakit nakalagay na "Not Linked" ang aking health center?'),
+        'q': _t('Why is my health center status listed as "Not Linked"?',
+            'Bakit nakalagay na "Not Linked" ang aking health center?'),
         'a': _t(
             'This means you haven\'t been officially assigned to a Barangay Health Center in our database. Please ask your midwife during your next health checkup to link your account so you can view records, receive SMS reminders, and synchronize schedules.',
             'Ito ay dahil hindi pa naidudugtong ang iyong account sa Barangay Health Center sa database. Sabihan ang iyong midwife sa susunod mong checkup na i-link ang iyong profile para makita mo ang mga tala, makatanggap ng paalala, at makuha ang schedules.'),
       },
       {
-        'q': _t('What should I do if I notice a pregnancy danger sign?', 'Ano ang dapat kong gawin kung makaranas ng danger sign?'),
+        'q': _t('What should I do if I notice a pregnancy danger sign?',
+            'Ano ang dapat kong gawin kung makaranas ng danger sign?'),
         'a': _t(
             'If you experience vaginal bleeding, severe abdominal pain, high fever, blurred vision, severe headaches, or sudden reduction of baby movements, please seek immediate medical attention. Use the "Hotlines" tab to call emergency medical hotlines directly.',
             'Kung nakaranas ng pagdurugo, matinding sakit ng tiyan, mataas na lagnat, panlalabo ng paningin, matinding sakit ng ulo, o biglang pagbawas ng galaw ng baby, magpatingin agad sa ospital. Gamitin ang "Hotlines" tab para direktang makatawag sa emergency services.'),
       },
       {
-        'q': _t('How does the chatbot know my allergies?', 'Paano nalalaman ng chatbot ang aking allergies?'),
+        'q': _t('How does the chatbot know my allergies?',
+            'Paano nalalaman ng chatbot ang aking allergies?'),
         'a': _t(
             'The app retrieves your active allergies and medical conditions recorded by your midwife. The chatbot reads these details to customize diet or exercise suggestions. You can hide specific categories from the AI by clicking the Shield icon in the chatbot screen.',
             'Kinukuha ng app ang iyong allergies at medical conditions na itinala ng midwife. Binabasa ito ng chatbot para maging ligtas ang rekomendasyon. Maaari mong itago ang iba pang detalye sa AI sa pamamagitan ng pag-tap sa Shield icon sa chatbot page.'),
@@ -511,35 +557,35 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               // background instead of under it.
               type: MaterialType.transparency,
               child: ExpansionTile(
-              shape: const RoundedRectangleBorder(
-                side: BorderSide.none,
-              ),
-              collapsedShape: const RoundedRectangleBorder(
-                side: BorderSide.none,
-              ),
-              title: Text(
-                faq['q']!,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.headingSoft,
+                shape: const RoundedRectangleBorder(
+                  side: BorderSide.none,
                 ),
-              ),
-              iconColor: AppColors.brandPrimary,
-              collapsedIconColor: AppColors.textSecondary,
-              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              expandedAlignment: Alignment.topLeft,
-              children: [
-                Text(
-                  faq['a']!,
+                collapsedShape: const RoundedRectangleBorder(
+                  side: BorderSide.none,
+                ),
+                title: Text(
+                  faq['q']!,
                   style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                    height: 1.4,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.headingSoft,
                   ),
                 ),
-              ],
-            ),
+                iconColor: AppColors.brandPrimary,
+                collapsedIconColor: AppColors.textSecondary,
+                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                expandedAlignment: Alignment.topLeft,
+                children: [
+                  Text(
+                    faq['a']!,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -592,7 +638,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               'Kung may problema sa app o sa iyong password, tawagan o i-text ang iyong midwife mula sa itaas ng pahinang ito, o pumunta sa inyong Barangay Health Center.',
             ),
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary, height: 1.4),
+            style: const TextStyle(
+                fontSize: 12.5, color: AppColors.textSecondary, height: 1.4),
           ),
           const SizedBox(height: 16),
           const Text(

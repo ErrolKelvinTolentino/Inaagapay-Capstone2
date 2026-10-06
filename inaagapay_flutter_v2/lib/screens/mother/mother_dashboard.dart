@@ -324,9 +324,10 @@ class _MotherDashboardState extends State<MotherDashboard> {
           .maybeSingle();
       _isUnlinked =
           motherResponse == null || motherResponse['assigned_bhc_id'] == null;
-      final double? motherHeight = motherResponse != null && motherResponse['height'] != null
-          ? (motherResponse['height'] as num).toDouble()
-          : null;
+      final double? motherHeight =
+          motherResponse != null && motherResponse['height'] != null
+              ? (motherResponse['height'] as num).toDouble()
+              : null;
 
       // Get account info for name
       final accountId = await AuthStorage.getUserId();
@@ -367,7 +368,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
         final double? ppw = pregnancy['pre_pregnancy_weight'] != null
             ? (pregnancy['pre_pregnancy_weight'] as num).toDouble()
             : null;
-        
+
         _heightCm = motherHeight;
         _prePregnancyWeight = ppw;
         _isVitalsIncomplete = (motherHeight == null || ppw == null);
@@ -517,12 +518,14 @@ class _MotherDashboardState extends State<MotherDashboard> {
 
       Map<String, dynamic>? latestCheckup;
       if (latestEncounter != null) {
-        final innerCheckup = latestEncounter['checkup'] as Map<String, dynamic>?;
+        final innerCheckup =
+            latestEncounter['checkup'] as Map<String, dynamic>?;
         if (innerCheckup != null) {
           latestCheckup = {
             'checkup_weight': innerCheckup['checkup_weight'],
             'blood_pressure_systolic': innerCheckup['blood_pressure_systolic'],
-            'blood_pressure_diastolic': innerCheckup['blood_pressure_diastolic'],
+            'blood_pressure_diastolic':
+                innerCheckup['blood_pressure_diastolic'],
             'checkup_datetime': latestEncounter['encounter_datetime'],
           };
         }
@@ -550,7 +553,9 @@ class _MotherDashboardState extends State<MotherDashboard> {
         vitalTime = DateTime.tryParse(maternal['recorded_at'].toString());
       }
 
-      if (checkupTime != null && checkup != null && (vitalTime == null || checkupTime.isAfter(vitalTime))) {
+      if (checkupTime != null &&
+          checkup != null &&
+          (vitalTime == null || checkupTime.isAfter(vitalTime))) {
         // Use checkup vitals
         _latestWeight = checkup['checkup_weight'] != null
             ? (checkup['checkup_weight'] as num).toDouble()
@@ -571,18 +576,15 @@ class _MotherDashboardState extends State<MotherDashboard> {
       }
 
       // 3. Fetch checkups for weight gain engine via clinical_encounters
-      final checkupsRaw = await SupabaseService.client
-          .from('clinical_encounters')
-          .select('''
+      final checkupsRaw =
+          await SupabaseService.client.from('clinical_encounters').select('''
             checkup_datetime:encounter_datetime,
             age_of_gestation_weeks,
             age_of_gestation_days,
             checkup:prenatal_checkups (
               checkup_weight
             )
-          ''')
-          .eq('pregnancy_id', _pregnancyId)
-          .eq('encounter_type', 'checkup');
+          ''').eq('pregnancy_id', _pregnancyId).eq('encounter_type', 'checkup');
 
       // 4. Fetch maternal vitals for weight gain engine
       final vitalsRaw = await SupabaseService.client
@@ -606,8 +608,10 @@ class _MotherDashboardState extends State<MotherDashboard> {
       double? latestVitalHeight;
       final sortedVitals = List<Map<String, dynamic>>.from(vitalsList);
       sortedVitals.sort((a, b) {
-        final da = DateTime.tryParse(a['recorded_at']?.toString() ?? '') ?? DateTime.now();
-        final db = DateTime.tryParse(b['recorded_at']?.toString() ?? '') ?? DateTime.now();
+        final da = DateTime.tryParse(a['recorded_at']?.toString() ?? '') ??
+            DateTime.now();
+        final db = DateTime.tryParse(b['recorded_at']?.toString() ?? '') ??
+            DateTime.now();
         return db.compareTo(da);
       });
 
@@ -624,24 +628,33 @@ class _MotherDashboardState extends State<MotherDashboard> {
 
       final List<Map<String, dynamic>> weightReadings = [
         ...checkupsList.map((c) => {
-              'checkup_weight': c['checkup_weight'] != null ? (c['checkup_weight'] as num).toDouble() : null,
-              'age_of_gestation': c['age_of_gestation'] != null ? (c['age_of_gestation'] as num).toDouble() : null,
+              'checkup_weight': c['checkup_weight'] != null
+                  ? (c['checkup_weight'] as num).toDouble()
+                  : null,
+              'age_of_gestation': c['age_of_gestation'] != null
+                  ? (c['age_of_gestation'] as num).toDouble()
+                  : null,
               'checkup_datetime': c['checkup_datetime'],
             }),
         ...vitalsList.map((v) => {
-              'checkup_weight': v['weight_kg'] != null ? (v['weight_kg'] as num).toDouble() : null,
-              'age_of_gestation': v['age_of_gestation'] != null ? (v['age_of_gestation'] as num).toDouble() : null,
+              'checkup_weight': v['weight_kg'] != null
+                  ? (v['weight_kg'] as num).toDouble()
+                  : null,
+              'age_of_gestation': v['age_of_gestation'] != null
+                  ? (v['age_of_gestation'] as num).toDouble()
+                  : null,
               'checkup_datetime': v['recorded_at'],
             }),
       ];
 
-      final weightReadingsAsc = weightReadings
-          .where((v) => v['checkup_weight'] != null)
-          .toList();
+      final weightReadingsAsc =
+          weightReadings.where((v) => v['checkup_weight'] != null).toList();
 
       weightReadingsAsc.sort((a, b) {
-        final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '') ?? DateTime.now();
-        final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '') ?? DateTime.now();
+        final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '') ??
+            DateTime.now();
+        final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '') ??
+            DateTime.now();
         return da.compareTo(db);
       });
 
@@ -649,7 +662,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
         final latest = weightReadingsAsc.last;
         final currentWeight = (latest['checkup_weight'] as num).toDouble();
 
-        double effectiveAog = (latest['age_of_gestation'] as num?)?.toDouble() ?? 0;
+        double effectiveAog =
+            (latest['age_of_gestation'] as num?)?.toDouble() ?? 0;
         if (effectiveAog == 0 && _lmpDate != null) {
           effectiveAog = DateTime.now().difference(_lmpDate!).inDays / 7.0;
         }
@@ -704,7 +718,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
           .maybeSingle();
 
       if (nextCheckup != null && nextCheckup['next_schedule'] != null) {
-        _nextScheduleDate = DateTime.tryParse(nextCheckup['next_schedule'].toString());
+        _nextScheduleDate =
+            DateTime.tryParse(nextCheckup['next_schedule'].toString());
       } else {
         _nextScheduleDate = null;
       }
@@ -1002,7 +1017,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
                               onTap: isSubmitting
                                   ? null
                                   : () async {
-                                      final picked = await showBrandedDatePicker(
+                                      final picked =
+                                          await showBrandedDatePicker(
                                         context: ctx,
                                         initialDate: outcomeDates[i],
                                         firstDate: DateUtils.dateOnly(lmpDate),
@@ -1326,7 +1342,11 @@ class _MotherDashboardState extends State<MotherDashboard> {
   String _getEnglishAOrAn(String fruitName) {
     if (fruitName.isEmpty) return 'a';
     final firstChar = fruitName[0].toLowerCase();
-    if (firstChar == 'a' || firstChar == 'e' || firstChar == 'i' || firstChar == 'o' || firstChar == 'u') {
+    if (firstChar == 'a' ||
+        firstChar == 'e' ||
+        firstChar == 'i' ||
+        firstChar == 'o' ||
+        firstChar == 'u') {
       return 'an';
     }
     return 'a';
@@ -1374,8 +1394,6 @@ class _MotherDashboardState extends State<MotherDashboard> {
       ),
     );
   }
-
-
 
   /// Greeting and pregnancy stage, per the Figma wireframe.
   ///
@@ -1520,7 +1538,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
                   runSpacing: 6,
                   children: [
                     _babyMeasureChip(Icons.straighten, _babySize),
-                    _babyMeasureChip(Icons.monitor_weight_outlined, _babyWeight),
+                    _babyMeasureChip(
+                        Icons.monitor_weight_outlined, _babyWeight),
                   ],
                 ),
               ],
@@ -1596,7 +1615,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
       };
 
       final translatedDay = _t(dayName, dayEnToTl[dayName] ?? dayName);
-      final translatedMonth = _t(monthName, monthEnToTl[monthName] ?? monthName);
+      final translatedMonth =
+          _t(monthName, monthEnToTl[monthName] ?? monthName);
 
       return '$translatedDay, $translatedMonth $day, $year';
     }
@@ -1893,14 +1913,15 @@ class _MotherDashboardState extends State<MotherDashboard> {
       statusColor = const Color(0xFF3A9E8B);
       statusIcon = Icons.verified_rounded;
     } else if (status.completedCount == 0) {
-      statusText = _t('No Td doses on record yet',
-          'Wala pang naitalang Td dose');
+      statusText =
+          _t('No Td doses on record yet', 'Wala pang naitalang Td dose');
       statusColor = AppColors.textSecondary;
       statusIcon = Icons.info_outline_rounded;
     } else if (status.isProtectedAtBirth) {
       final until = status.protectionUntil;
       final base = _hasPregnancy
-          ? _t('Baby protected at birth', 'Protektado ang sanggol pagkapanganak')
+          ? _t(
+              'Baby protected at birth', 'Protektado ang sanggol pagkapanganak')
           : _t('Protected against tetanus', 'Protektado laban sa tetano');
       statusText = until == null
           ? base
@@ -2177,7 +2198,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
           Flexible(
             child: Text(
               text,
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style:
+                  const TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
           ),
         ],
@@ -2359,7 +2381,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+                icon: const Icon(Icons.close,
+                    size: 18, color: AppColors.textSecondary),
                 onPressed: () {
                   setState(() {
                     _isVitalsBannerDismissed = true;
@@ -2389,8 +2412,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  _t('Complete Vitals Setup',
-                      'Kumpletuhin ang Vitals Setup'),
+                  _t('Complete Vitals Setup', 'Kumpletuhin ang Vitals Setup'),
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -2503,7 +2525,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
                 heightError = _t('Height is required', 'Kailangan ang taas');
                 heightWarning = null;
               } else if (height == null) {
-                heightError = _t('Enter a valid number', 'Maglagay ng wastong numero');
+                heightError =
+                    _t('Enter a valid number', 'Maglagay ng wastong numero');
                 heightWarning = null;
               } else if (height < 50 || height > 250) {
                 heightError = _t('Must be 50-250 cm', 'Dapat ay 50-250 cm');
@@ -2525,7 +2548,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
                 weightError = _t('Weight is required', 'Kailangan ang timbang');
                 weightWarning = null;
               } else if (weight == null) {
-                weightError = _t('Enter a valid number', 'Maglagay ng wastong numero');
+                weightError =
+                    _t('Enter a valid number', 'Maglagay ng wastong numero');
                 weightWarning = null;
               } else if (weight < 10 || weight > 350) {
                 weightError = _t('Must be 10-350 kg', 'Dapat ay 10-350 kg');
@@ -2544,10 +2568,12 @@ class _MotherDashboardState extends State<MotherDashboard> {
 
               // Pre-pregnancy weight validation
               if (ppwCtrl.text.trim().isEmpty) {
-                ppwError = _t('Pre-pregnancy weight is required', 'Kailangan ang timbang bago mabuntis');
+                ppwError = _t('Pre-pregnancy weight is required',
+                    'Kailangan ang timbang bago mabuntis');
                 ppwWarning = null;
               } else if (ppw == null) {
-                ppwError = _t('Enter a valid number', 'Maglagay ng wastong numero');
+                ppwError =
+                    _t('Enter a valid number', 'Maglagay ng wastong numero');
                 ppwWarning = null;
               } else if (ppw < 10 || ppw > 350) {
                 ppwError = _t('Must be 10-350 kg', 'Dapat ay 10-350 kg');
@@ -2570,7 +2596,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
 
           Future<void> saveVitals() async {
             validateInputs();
-            if (heightError != null || weightError != null || ppwError != null) return;
+            if (heightError != null || weightError != null || ppwError != null)
+              return;
 
             final height = double.parse(heightCtrl.text.trim());
             final weight = double.parse(weightCtrl.text.trim());
@@ -2585,14 +2612,13 @@ class _MotherDashboardState extends State<MotherDashboard> {
               // Update mothers table
               await SupabaseService.client
                   .from('mothers')
-                  .update({'height': height})
-                  .eq('mother_id', motherId);
+                  .update({'height': height}).eq('mother_id', motherId);
 
               // Update pregnancies table
               await SupabaseService.client
                   .from('pregnancies')
-                  .update({'pre_pregnancy_weight': ppw})
-                  .eq('pregnancy_id', _pregnancyId);
+                  .update({'pre_pregnancy_weight': ppw}).eq(
+                      'pregnancy_id', _pregnancyId);
 
               // Insert into maternal_vitals table
               double? aogWeeks;
@@ -2604,8 +2630,11 @@ class _MotherDashboardState extends State<MotherDashboard> {
                 'mother_id': motherId,
                 'weight_kg': weight,
                 'height_cm': height,
-                'age_of_gestation': aogWeeks != null ? double.parse(aogWeeks.toStringAsFixed(1)) : null,
-                'notes': 'Vitals entered during dashboard profile completion alert',
+                'age_of_gestation': aogWeeks != null
+                    ? double.parse(aogWeeks.toStringAsFixed(1))
+                    : null,
+                'notes':
+                    'Vitals entered during dashboard profile completion alert',
                 'recorded_at': DateTime.now().toIso8601String(),
               });
 
@@ -2613,7 +2642,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   SnackBar(
-                    content: Text(_t('Vitals setup completed successfully!', 'Matagumpay na nakumpleto ang pag-setup ng vitals!')),
+                    content: Text(_t('Vitals setup completed successfully!',
+                        'Matagumpay na nakumpleto ang pag-setup ng vitals!')),
                     backgroundColor: AppColors.success,
                     behavior: SnackBarBehavior.floating,
                   ),
@@ -2630,8 +2660,10 @@ class _MotherDashboardState extends State<MotherDashboard> {
                   SnackBar(
                     content: Text(NetworkStatus.friendlyError(
                       e,
-                      english: 'Your vitals could not be saved. Please try again.',
-                      filipino: 'Hindi na-save ang iyong vitals. Pakisubukan muli.',
+                      english:
+                          'Your vitals could not be saved. Please try again.',
+                      filipino:
+                          'Hindi na-save ang iyong vitals. Pakisubukan muli.',
                     )),
                     backgroundColor: AppColors.error,
                     behavior: SnackBarBehavior.floating,
@@ -2655,7 +2687,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        _t('Complete Vitals Setup', 'Kumpletuhin ang Vitals Setup'),
+                        _t('Complete Vitals Setup',
+                            'Kumpletuhin ang Vitals Setup'),
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -2674,20 +2707,25 @@ class _MotherDashboardState extends State<MotherDashboard> {
                       'Please provide your measurements to unlock advanced weight gain tracking and insights.',
                       'Mangyaring ibigay ang iyong mga sukat upang ma-unlock ang advanced weight gain tracking at mga insight.',
                     ),
-                    style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                    style: const TextStyle(
+                        fontSize: 14, color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 20),
 
                   // Height Input
                   Text(
                     _t('Height (cm)', 'Taas (cm)'),
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 8),
                   AppInputField(
                     hintText: 'e.g. 156.0',
                     controller: heightCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
                     ],
@@ -2697,20 +2735,26 @@ class _MotherDashboardState extends State<MotherDashboard> {
                   ),
                   if (heightWarning != null) ...[
                     const SizedBox(height: 4),
-                    Text(heightWarning!, style: const TextStyle(color: Colors.orange, fontSize: 11)),
+                    Text(heightWarning!,
+                        style: const TextStyle(
+                            color: Colors.orange, fontSize: 11)),
                   ],
                   const SizedBox(height: 16),
 
                   // Current Weight Input
                   Text(
                     _t('Current Weight (kg)', 'Kasalukuyang Timbang (kg)'),
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 8),
                   AppInputField(
                     hintText: 'e.g. 62.5',
                     controller: weightCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
                     ],
@@ -2720,20 +2764,27 @@ class _MotherDashboardState extends State<MotherDashboard> {
                   ),
                   if (weightWarning != null) ...[
                     const SizedBox(height: 4),
-                    Text(weightWarning!, style: const TextStyle(color: Colors.orange, fontSize: 11)),
+                    Text(weightWarning!,
+                        style: const TextStyle(
+                            color: Colors.orange, fontSize: 11)),
                   ],
                   const SizedBox(height: 16),
 
                   // Pre-pregnancy Weight Input
                   Text(
-                    _t('Pre-pregnancy Weight (kg)', 'Timbang bago mabuntis (kg)'),
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    _t('Pre-pregnancy Weight (kg)',
+                        'Timbang bago mabuntis (kg)'),
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 8),
                   AppInputField(
                     hintText: 'e.g. 58.0',
                     controller: ppwCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
                     ],
@@ -2743,7 +2794,9 @@ class _MotherDashboardState extends State<MotherDashboard> {
                   ),
                   if (ppwWarning != null) ...[
                     const SizedBox(height: 4),
-                    Text(ppwWarning!, style: const TextStyle(color: Colors.orange, fontSize: 11)),
+                    Text(ppwWarning!,
+                        style: const TextStyle(
+                            color: Colors.orange, fontSize: 11)),
                   ],
                   const SizedBox(height: 20),
 
@@ -2754,7 +2807,9 @@ class _MotherDashboardState extends State<MotherDashboard> {
                       decoration: BoxDecoration(
                         color: AppColors.brandPrimary.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.brandPrimary.withValues(alpha: 0.2)),
+                        border: Border.all(
+                            color:
+                                AppColors.brandPrimary.withValues(alpha: 0.2)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2764,18 +2819,26 @@ class _MotherDashboardState extends State<MotherDashboard> {
                             children: [
                               Text(
                                 _t('Calculated BMI: ${calculatedBMI!.toStringAsFixed(1)}',
-                                   'Kinalkulang BMI: ${calculatedBMI!.toStringAsFixed(1)}'),
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                                    'Kinalkulang BMI: ${calculatedBMI!.toStringAsFixed(1)}'),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: AppColors.textPrimary),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                                  color: AppColors.brandPrimary
+                                      .withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
                                   bmiClassification!,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.brandPrimary),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: AppColors.brandPrimary),
                                 ),
                               ),
                             ],
@@ -2784,7 +2847,10 @@ class _MotherDashboardState extends State<MotherDashboard> {
                             const SizedBox(height: 10),
                             Text(
                               bmiWarning!,
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade700, height: 1.4),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade700,
+                                  height: 1.4),
                             ),
                           ],
                         ],
@@ -3115,11 +3181,6 @@ class _MotherDashboardState extends State<MotherDashboard> {
                             // hero card sat directly under the stage line.
                             const SizedBox(height: 20),
 
-                            // Where the Hotlines tab used to be: one tap from
-                            // opening the app. See _buildHotlinesRow.
-                            _buildHotlinesRow(),
-                            const SizedBox(height: 16),
-
                             // Banners carry their gap below them, so two in a
                             // row are spaced like any other cards and the last
                             // one does not sit flush on the hero.
@@ -3130,7 +3191,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
                               const SizedBox(height: 16),
                             ],
 
-                            if (_isVitalsIncomplete && !_isVitalsBannerDismissed) ...[
+                            if (_isVitalsIncomplete &&
+                                !_isVitalsBannerDismissed) ...[
                               _buildVitalsIncompleteBanner(),
                               const SizedBox(height: 16),
                             ],
@@ -3202,7 +3264,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
                               const SizedBox(height: 24),
                               _buildIndividualModeSection(),
                             ],
-
+                            const SizedBox(height: 24),
+                            _buildHotlinesRow(),
                             const SizedBox(height: 24),
                           ],
                         ),
@@ -3353,119 +3416,123 @@ class _MotherDashboardState extends State<MotherDashboard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.brandPrimary.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.favorite,
-                    color: AppColors.brandPrimary,
-                    size: 26,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _t('My Weight', 'Aking Timbang'),
-                        // Softened off near-black. #2D2D2D against white is a
-                        // harder contrast than this card needs, and on a cheap
-                        // screen in daylight it reads as heavier still.
-                        style: const TextStyle(
-                          fontSize: 16.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.inputText,
-                        ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(height: 6),
-                      if (hasVitals) ...[
-                        Row(
-                          children: [
-                            if (_latestWeight != null) ...[
-                              const Icon(Icons.monitor_weight_outlined, size: 14, color: AppColors.brandAccent),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${_latestWeight!.toStringAsFixed(1)} kg',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.inputText,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                            ],
-                            if (_latestBp != null) ...[
-                              const Icon(Icons.favorite_border, size: 14, color: AppColors.brandAccent),
-                              const SizedBox(width: 4),
-                              Text(
-                                _latestBp!,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.inputText,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: getSourceBg(_latestVitalsSource),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                getSourceLabel(_latestVitalsSource),
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w600,
-                                  color: getSourceColor(_latestVitalsSource),
-                                ),
-                              ),
+                      child: const Icon(
+                        Icons.favorite,
+                        color: AppColors.brandPrimary,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _t('My Weight', 'Aking Timbang'),
+                            // Softened off near-black. #2D2D2D against white is a
+                            // harder contrast than this card needs, and on a cheap
+                            // screen in daylight it reads as heavier still.
+                            style: const TextStyle(
+                              fontSize: 16.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.inputText,
                             ),
-                            const SizedBox(width: 8),
-                            // Flexible: beside the source badge, the date ran
-                            // off the card at the largest text size.
-                            Flexible(
-                              child: Text(
-                                '${_t('on', 'noong')} ${DateFormat('MMM d, yyyy').format(_latestVitalsDate!)}',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ] else ...[
-                        Text(
-                          _t('No vitals logged yet. Tap to start tracking!', 
-                             'Wala pang naitalang vitals. Tapikin upang magsimula!'),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
+                          const SizedBox(height: 6),
+                          if (hasVitals) ...[
+                            Row(
+                              children: [
+                                if (_latestWeight != null) ...[
+                                  const Icon(Icons.monitor_weight_outlined,
+                                      size: 14, color: AppColors.brandAccent),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${_latestWeight!.toStringAsFixed(1)} kg',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.inputText,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                ],
+                                if (_latestBp != null) ...[
+                                  const Icon(Icons.favorite_border,
+                                      size: 14, color: AppColors.brandAccent),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _latestBp!,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.inputText,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: getSourceBg(_latestVitalsSource),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    getSourceLabel(_latestVitalsSource),
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                      color:
+                                          getSourceColor(_latestVitalsSource),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Flexible: beside the source badge, the date ran
+                                // off the card at the largest text size.
+                                Flexible(
+                                  child: Text(
+                                    '${_t('on', 'noong')} ${DateFormat('MMM d, yyyy').format(_latestVitalsDate!)}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ] else ...[
+                            Text(
+                              _t('No vitals logged yet. Tap to start tracking!',
+                                  'Wala pang naitalang vitals. Tapikin upang magsimula!'),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: AppColors.textSecondary,
+                    ),
+                  ],
                 ),
-                const Icon(
-                  Icons.chevron_right,
-                  color: AppColors.textSecondary,
-                ),
-              ],
-            ),
 
                 // The weight-gain evaluation lives inside this card now.
                 // It was a second card immediately below, titled "Weight Gain
@@ -3498,8 +3565,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
                   child: ElevatedButton.icon(
                     onPressed: _openVitalsPage,
                     icon: const Icon(Icons.add_rounded, size: 20),
-                    label: Text(
-                        _t('Add my weight today', 'Idagdag ang timbang ngayon')),
+                    label: Text(_t(
+                        'Add my weight today', 'Idagdag ang timbang ngayon')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.brandPrimary,
                       foregroundColor: Colors.white,
@@ -3868,9 +3935,6 @@ class _MotherDashboardState extends State<MotherDashboard> {
       ],
     );
   }
-
-
-
 
   Widget _buildErrorView() {
     return Center(

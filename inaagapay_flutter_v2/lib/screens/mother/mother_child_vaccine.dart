@@ -1,3 +1,5 @@
+import '../../services/child_record_export.dart';
+import '../../widgets/child_export_button.dart';
 // lib/screens/mother/mother_child_vaccine.dart
 
 import 'package:flutter/material.dart';
@@ -67,12 +69,14 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
           .eq('child_id', widget.childId)
           .maybeSingle();
 
-      if (birthDetailsResponse != null && birthDetailsResponse['birthdate'] != null) {
+      if (birthDetailsResponse != null &&
+          birthDetailsResponse['birthdate'] != null) {
         _birthdate = DateTime.parse(birthDetailsResponse['birthdate']);
       }
 
       // Fetch taken immunizations
-      final immunizations = await ChildService.fetchImmunizations(widget.childId);
+      final immunizations =
+          await ChildService.fetchImmunizations(widget.childId);
 
       // Load all vaccines for the roadmap
       final vaccinesResponse = await client
@@ -86,9 +90,7 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
         setState(() {
           _immunizations = immunizations;
           _allVaccines = List<Map<String, dynamic>>.from(vaccinesResponse);
-          _takenVaccineIds = immunizations
-              .map((r) => r.vaccineId)
-              .toSet();
+          _takenVaccineIds = immunizations.map((r) => r.vaccineId).toSet();
           _loading = false;
         });
       }
@@ -97,8 +99,10 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
         setState(() {
           _errorMessage = NetworkStatus.friendlyError(
             e,
-            english: "Your child's vaccine records could not be loaded. Please try again.",
-            filipino: 'Hindi ma-load ang record ng bakuna ng iyong anak. Pakisubukan muli.',
+            english:
+                "Your child's vaccine records could not be loaded. Please try again.",
+            filipino:
+                'Hindi ma-load ang record ng bakuna ng iyong anak. Pakisubukan muli.',
           );
           _loading = false;
         });
@@ -153,160 +157,169 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
         return Scaffold(
           backgroundColor: AppColors.bgPrimary,
           appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(72),
-        child: SecondaryHeader(
-          title: _t('Vaccination Details', 'Detalye ng Bakuna'),
-          onBack: widget.onBack,
-        ),
-      ),
+            preferredSize: const Size.fromHeight(72),
+            child: SecondaryHeader(
+              title: _t('Vaccination Details', 'Detalye ng Bakuna'),
+              trailing: ChildExportButton(
+                  childId: widget.childId, kind: ChildExportKind.immunization),
+              onBack: widget.onBack,
+            ),
+          ),
           body: RefreshIndicator(
-        onRefresh: _fetchVaccines,
-        color: AppColors.brandPrimary,
-        child: _loading
-            ? const Center(
-                child: CircularProgressIndicator(
-                  color: AppColors.brandPrimary,
-                ),
-              )
-            : _errorMessage != null
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          size: 48,
-                          color: AppColors.error,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _errorMessage!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: _fetchVaccines,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.brandPrimary,
-                          ),
-                          child: Text(_t('Retry', 'Subukan Muli')),
-                        ),
-                      ],
+            onRefresh: _fetchVaccines,
+            color: AppColors.brandPrimary,
+            child: _loading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.brandPrimary,
                     ),
                   )
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        HeroCard(
-                          image: null,
-                          title: widget.childName,
-                          subtitle: widget.childAge,
-                          sex: widget.childGender,
-                          showWeekBadge: false,
-                          showHeartRow: false,
-                        ),
-                        const SizedBox(height: 20),
-
-                        // ── Immunization Roadmap ──
-                        if (_allVaccines.isNotEmpty) ...[
-                          _buildRoadmap(),
-                          // A bare Divider draws the theme's default rule,
-                          // which on this page came out as a hard black line
-                          // across the width — the only one in the mother's
-                          // app. The spacing already separates the roadmap
-                          // from the records below it.
-                          const SizedBox(height: 24),
-                        ],
-
-                        SmallDescription(
-                          text: _t(
-                              'Vaccines administered based on immunization schedule',
-                              'Mga bakunang ibinigay batay sa immunization schedule'),
-                        ),
-                        const SizedBox(height: 16),
-                        if (_immunizations.isEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(32),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
+                : _errorMessage != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.error_outline,
+                              size: 48,
+                              color: AppColors.error,
                             ),
-                            child: Column(
-                              children: [
-                                const Icon(
-                                  Icons.vaccines_outlined,
-                                  size: 48,
-                                  color: AppColors.textSecondary,
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  _t('No immunizations recorded yet',
-                                      'Wala pang naitalang bakuna'),
-                                  style: const TextStyle(
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        else
-                          ..._immunizations.map((v) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: RecordsDisplayCard(
-                                title:
-                                    '${v.vaccineName} (${_t('Dose', 'Dose')} ${v.doseNumber})',
-                                headerIcon: Icons.vaccines_outlined,
-                                items: [
-                                  RecordItem(
-                                    leadingIcon: Icons.schedule,
-                                    label: _t('Recommended', 'Inirerekomenda'),
-                                    value: _formatRecommendedAge(v.recommendedAgeMonths),
-                                  ),
-                                  RecordItem(
-                                    leadingIcon: Icons.calendar_month_rounded,
-                                    label: _t('Date Given', 'Petsa ng Pagbigay'),
-                                    value: _formatDate(v.vaccinationDate),
-                                  ),
-                                  // No "COMPLETED" beside the timeliness pill.
-                                  //
-                                  // Every card in this list is a dose that was
-                                  // given — it has a date on the line above —
-                                  // so the word restated the fact of the card
-                                  // and left "Very late" reading as a second,
-                                  // contradicting verdict beside it. The pill
-                                  // says the only thing that varies.
-                                  RecordItem(
-                                    leadingIcon: Icons.verified,
-                                    label: _t('Status', 'Status'),
-                                    value: '',
-                                    trailingWidget: () {
-                                      final timeliness = _getStatusIcon(v);
-                                      return timeliness == null
-                                          ? null
-                                          : StatusIndicator(status: timeliness);
-                                    }(),
-                                  ),
-                                  if (v.remarks != null && v.remarks!.isNotEmpty)
-                                    RecordItem(
-                                      leadingIcon: Icons.notes_outlined,
-                                      label: _t('Remarks', 'Mga Tala'),
-                                      value: v.remarks!,
-                                    ),
-                                ],
+                            const SizedBox(height: 16),
+                            Text(
+                              _errorMessage!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
                               ),
-                            );
-                          }),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
-                  ),
-      ),
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _fetchVaccines,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.brandPrimary,
+                              ),
+                              child: Text(_t('Retry', 'Subukan Muli')),
+                            ),
+                          ],
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            HeroCard(
+                              image: null,
+                              title: widget.childName,
+                              subtitle: widget.childAge,
+                              sex: widget.childGender,
+                              showWeekBadge: false,
+                              showHeartRow: false,
+                            ),
+                            const SizedBox(height: 20),
+
+                            // ── Immunization Roadmap ──
+                            if (_allVaccines.isNotEmpty) ...[
+                              _buildRoadmap(),
+                              // A bare Divider draws the theme's default rule,
+                              // which on this page came out as a hard black line
+                              // across the width — the only one in the mother's
+                              // app. The spacing already separates the roadmap
+                              // from the records below it.
+                              const SizedBox(height: 24),
+                            ],
+
+                            SmallDescription(
+                              text: _t(
+                                  'Vaccines administered based on immunization schedule',
+                                  'Mga bakunang ibinigay batay sa immunization schedule'),
+                            ),
+                            const SizedBox(height: 16),
+                            if (_immunizations.isEmpty)
+                              Container(
+                                padding: const EdgeInsets.all(32),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Icon(
+                                      Icons.vaccines_outlined,
+                                      size: 48,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      _t('No immunizations recorded yet',
+                                          'Wala pang naitalang bakuna'),
+                                      style: const TextStyle(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              ..._immunizations.map((v) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: RecordsDisplayCard(
+                                    title:
+                                        '${v.vaccineName} (${_t('Dose', 'Dose')} ${v.doseNumber})',
+                                    headerIcon: Icons.vaccines_outlined,
+                                    items: [
+                                      RecordItem(
+                                        leadingIcon: Icons.schedule,
+                                        label:
+                                            _t('Recommended', 'Inirerekomenda'),
+                                        value: _formatRecommendedAge(
+                                            v.recommendedAgeMonths),
+                                      ),
+                                      RecordItem(
+                                        leadingIcon:
+                                            Icons.calendar_month_rounded,
+                                        label: _t(
+                                            'Date Given', 'Petsa ng Pagbigay'),
+                                        value: _formatDate(v.vaccinationDate),
+                                      ),
+                                      // No "COMPLETED" beside the timeliness pill.
+                                      //
+                                      // Every card in this list is a dose that was
+                                      // given — it has a date on the line above —
+                                      // so the word restated the fact of the card
+                                      // and left "Very late" reading as a second,
+                                      // contradicting verdict beside it. The pill
+                                      // says the only thing that varies.
+                                      RecordItem(
+                                        leadingIcon: Icons.verified,
+                                        label: _t('Status', 'Status'),
+                                        value: '',
+                                        trailingWidget: () {
+                                          final timeliness = _getStatusIcon(v);
+                                          return timeliness == null
+                                              ? null
+                                              : StatusIndicator(
+                                                  status: timeliness);
+                                        }(),
+                                      ),
+                                      if (v.remarks != null &&
+                                          v.remarks!.isNotEmpty)
+                                        RecordItem(
+                                          leadingIcon: Icons.notes_outlined,
+                                          label: _t('Remarks', 'Mga Tala'),
+                                          value: v.remarks!,
+                                        ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            const SizedBox(height: 24),
+                          ],
+                        ),
+                      ),
+          ),
         );
       },
     );
@@ -340,7 +353,8 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
       return '$weeks Week${weeks != 1 ? 's' : ''}';
     }
     if (months < 12) {
-      if (LanguageService.isFilipino) return '${months.toStringAsFixed(0)} Buwan';
+      if (LanguageService.isFilipino)
+        return '${months.toStringAsFixed(0)} Buwan';
       return '${months.toStringAsFixed(0)} Month${months.round() != 1 ? 's' : ''}';
     }
     final years = months / 12;
@@ -405,11 +419,9 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
-            value:
-                _allVaccines.isEmpty ? 0 : givenCount / _allVaccines.length,
+            value: _allVaccines.isEmpty ? 0 : givenCount / _allVaccines.length,
             backgroundColor: AppColors.borderPrimary,
-            valueColor:
-                const AlwaysStoppedAnimation<Color>(AppColors.success),
+            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.success),
             minHeight: 6,
           ),
         ),
@@ -421,16 +433,15 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
             // Same four states as the midwife's roadmap. "Recommended" covered
             // both a dose due today and one months overdue.
             _legendDot(AppColors.success, _t('Given', 'Ibinigay')),
-            _legendDot(AppColors.warning,
-                _t('Catch-up needed', 'Kailangang habulin')),
+            _legendDot(
+                AppColors.warning, _t('Catch-up needed', 'Kailangang habulin')),
             _legendDot(AppColors.brandPrimary, _t('Due now', 'Takda na')),
             _legendDot(
                 AppColors.textSecondary, _t('Not yet due', 'Hindi pa takda')),
           ],
         ),
         const SizedBox(height: 16),
-        ...groups.map(
-            (entry) => _buildMilestoneGroup(entry.key, entry.value)),
+        ...groups.map((entry) => _buildMilestoneGroup(entry.key, entry.value)),
       ],
     );
   }
@@ -446,8 +457,8 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
         ),
         const SizedBox(width: 4),
         Text(label,
-            style: const TextStyle(
-                fontSize: 10, color: AppColors.textSecondary)),
+            style:
+                const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
       ],
     );
   }

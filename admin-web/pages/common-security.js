@@ -552,8 +552,8 @@
     document.body.appendChild(backdrop);
 
     function syncDrawerState() {
-      const isOpen = sidebar.classList.contains("open");
-      toggle.setAttribute("aria-expanded", String(isOpen));
+      const isOpen = window.innerWidth <= 992 && sidebar.classList.contains("open");
+      if (window.innerWidth <= 992) toggle.setAttribute("aria-expanded", String(isOpen));
       backdrop.classList.toggle("show", isOpen);
       backdrop.setAttribute("aria-hidden", String(!isOpen));
       document.body.classList.toggle("sidebar-open", isOpen && window.innerWidth <= 992);
@@ -569,6 +569,11 @@
     // second time. This keeps older pages compatible with the shared control.
     toggle.addEventListener("click", (event) => {
       event.stopImmediatePropagation();
+      if (window.innerWidth > 992) {
+        closeDrawer();
+        if (window.AdminSidebar) window.AdminSidebar.toggle();
+        return;
+      }
       sidebar.classList.toggle("open");
       syncDrawerState();
     }, true);

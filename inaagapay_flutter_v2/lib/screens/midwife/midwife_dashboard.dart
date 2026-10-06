@@ -113,14 +113,14 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
   @override
   void initState() {
     super.initState();
-    widget.refreshNotifier?.addListener(_loadDashboardData);
+    widget.refreshNotifier?.addListener(_refreshDashboardData);
     _loadDashboardData();
     _searchController.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
-    widget.refreshNotifier?.removeListener(_loadDashboardData);
+    widget.refreshNotifier?.removeListener(_refreshDashboardData);
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
@@ -300,6 +300,11 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
     });
   }
 
+  Future<void> _refreshDashboardData() async {
+    MidwifeAnalyticsService.invalidate();
+    await _loadDashboardData();
+  }
+
   Future<void> _loadDashboardData() async {
     if (_allMothers.isEmpty && _recentVisits.isEmpty) {
       setState(() {
@@ -335,7 +340,9 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
             .maybeSingle()
             .timeout(const Duration(seconds: 5))
             .catchError((_) => null),
-        SupabaseService.client.from('mothers').select('''
+        SupabaseService.client
+            .from('mothers')
+            .select('''
           mother_id,
           account_id,
           birthdate,
@@ -347,9 +354,11 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
             phone_number,
             email_address
           )
-        ''').eq('assigned_bhc_id', assignedBhcId!).eq('status', 'active')
-          .timeout(const Duration(seconds: 8))
-          .catchError((_) => <Map<String, dynamic>>[]),
+        ''')
+            .eq('assigned_bhc_id', assignedBhcId!)
+            .eq('status', 'active')
+            .timeout(const Duration(seconds: 8))
+            .catchError((_) => <Map<String, dynamic>>[]),
       ]);
 
       final accountResponse = stage1Results[0] as Map<String, dynamic>?;
@@ -366,7 +375,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
       _motherIds = mothersData.map<int>((m) => m['mother_id'] as int).toList();
 
       final sortedMothersList = List<Map<String, dynamic>>.from(mothersData);
-      sortedMothersList.sort((a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
+      sortedMothersList.sort(
+          (a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
 
       // Load all mothers for search. bhc_patient_id is filled in just below,
       // from the database, once the header has rendered.
@@ -425,9 +435,9 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
               .inFilter('mother_id', _motherIds)
               .timeout(const Duration(seconds: 8))
               .catchError((e) {
-                debugPrint('Dashboard children query note: $e');
-                return <Map<String, dynamic>>[];
-              }),
+            debugPrint('Dashboard children query note: $e');
+            return <Map<String, dynamic>>[];
+          }),
           SupabaseService.client
               .from('pregnancies')
               .select('pregnancy_id, mother_id, last_menstrual_period, '
@@ -435,9 +445,9 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
               .inFilter('mother_id', _motherIds)
               .timeout(const Duration(seconds: 8))
               .catchError((e) {
-                debugPrint('Dashboard pregnancies query note: $e');
-                return <Map<String, dynamic>>[];
-              }),
+            debugPrint('Dashboard pregnancies query note: $e');
+            return <Map<String, dynamic>>[];
+          }),
         ]);
 
         // Ran concurrently with the batch above. Applied here, before recent
@@ -516,9 +526,11 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         final sevenDaysAgoDate = sevenDaysAgo.toIso8601String().split('T')[0];
 
         final nowTime = DateTime.now();
-        final todayStart = DateTime(nowTime.year, nowTime.month, nowTime.day, 0, 0, 0);
+        final todayStart =
+            DateTime(nowTime.year, nowTime.month, nowTime.day, 0, 0, 0);
         final chartStart = todayStart.subtract(const Duration(days: 6));
-        final chartEnd = DateTime(nowTime.year, nowTime.month, nowTime.day, 23, 59, 59);
+        final chartEnd =
+            DateTime(nowTime.year, nowTime.month, nowTime.day, 23, 59, 59);
 
         List<dynamic> recentCheckups = [];
         List<dynamic> recentUltrasounds = [];
@@ -566,24 +578,26 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 }),
             SupabaseService.client
                 .from('ultrasounds')
-                .select('encounter_id, ultrasound_date, remarks:findings_summary, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
+                .select(
+                    'encounter_id, ultrasound_date, remarks:findings_summary, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
                 .inFilter('pregnancy_id', allPregnancyIds)
                 .gte('ultrasound_date', sevenDaysAgoDate)
                 .timeout(const Duration(seconds: 8))
                 .catchError((e) {
-                  debugPrint('Dashboard recent ultrasounds query note: $e');
-                  return <Map<String, dynamic>>[];
-                }),
+              debugPrint('Dashboard recent ultrasounds query note: $e');
+              return <Map<String, dynamic>>[];
+            }),
             SupabaseService.client
                 .from('lab_tests')
-                .select('encounter_id, lab_test_type, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession, created_at')
+                .select(
+                    'encounter_id, lab_test_type, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession, created_at')
                 .inFilter('pregnancy_id', allPregnancyIds)
                 .gte('created_at', sevenDaysAgo.toIso8601String())
                 .timeout(const Duration(seconds: 8))
                 .catchError((e) {
-                  debugPrint('Dashboard recent lab tests query note: $e');
-                  return <Map<String, dynamic>>[];
-                }),
+              debugPrint('Dashboard recent lab tests query note: $e');
+              return <Map<String, dynamic>>[];
+            }),
 
             // BHC Chart query (single call for 7 days)
             if (pregnancyIds.isNotEmpty)
@@ -596,9 +610,9 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                   .inFilter('pregnancy_id', pregnancyIds)
                   .timeout(const Duration(seconds: 8))
                   .catchError((e) {
-                    debugPrint('Dashboard chart query note: $e');
-                    return <Map<String, dynamic>>[];
-                  })
+                debugPrint('Dashboard chart query note: $e');
+                return <Map<String, dynamic>>[];
+              })
             else
               Future.value([]),
 
@@ -639,29 +653,33 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 }),
             SupabaseService.client
                 .from('ultrasounds')
-                .select('encounter_id, ultrasound_date, remarks:findings_summary, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
+                .select(
+                    'encounter_id, ultrasound_date, remarks:findings_summary, monitoring_classification, pregnancy_id, health_worker_name, ultrasound_location, ultrasound_image, health_worker_institution, health_worker_profession')
                 .inFilter('pregnancy_id', allPregnancyIds)
                 .order('ultrasound_date', ascending: false)
                 .limit(50)
                 .timeout(const Duration(seconds: 8))
                 .catchError((e) {
-                  debugPrint('Dashboard search ultrasounds query note: $e');
-                  return <Map<String, dynamic>>[];
-                }),
+              debugPrint('Dashboard search ultrasounds query note: $e');
+              return <Map<String, dynamic>>[];
+            }),
             SupabaseService.client
                 .from('lab_tests')
-                .select('encounter_id, lab_test_type, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession, created_at')
+                .select(
+                    'encounter_id, lab_test_type, pregnancy_id, health_worker_name, lab_test_image, health_worker_institution, health_worker_profession, created_at')
                 .inFilter('pregnancy_id', allPregnancyIds)
                 .limit(50)
                 .timeout(const Duration(seconds: 8))
                 .catchError((e) {
-                  debugPrint('Dashboard search lab tests query note: $e');
-                  return <Map<String, dynamic>>[];
-                }),
+              debugPrint('Dashboard search lab tests query note: $e');
+              return <Map<String, dynamic>>[];
+            }),
           ]);
 
           final List recentCheckupsRaw = clinicalResponses[0];
-          recentUltrasounds = (clinicalResponses[1]).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          recentUltrasounds = (clinicalResponses[1])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
           recentLabTests = (clinicalResponses[2]).map((e) {
             final map = Map<String, dynamic>.from(e as Map);
             map['lab_test_date'] = map['created_at'];
@@ -670,7 +688,9 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           }).toList();
           final List chartCheckupsRaw = clinicalResponses[3];
           final List checkupsDataRaw = clinicalResponses[4];
-          ultrasoundsData = (clinicalResponses[5]).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          ultrasoundsData = (clinicalResponses[5])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
           labTestsData = (clinicalResponses[6]).map((e) {
             final map = Map<String, dynamic>.from(e as Map);
             map['lab_test_date'] = map['created_at'];
@@ -683,17 +703,23 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           for (final enc in recentCheckupsRaw) {
             final innerCheckup = enc['checkup'] as Map<String, dynamic>?;
             if (innerCheckup != null) {
-              final double aog = ((enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0) +
-                  ((enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0) / 7.0;
+              final double aog =
+                  ((enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0) +
+                      ((enc['age_of_gestation_days'] as num?)?.toDouble() ??
+                              0) /
+                          7.0;
               recentCheckups.add({
-                'prenatal_checkup_id': innerCheckup['encounter_id'] ?? innerCheckup['prenatal_checkup_id'],
+                'prenatal_checkup_id': innerCheckup['encounter_id'] ??
+                    innerCheckup['prenatal_checkup_id'],
                 'checkup_datetime': enc['encounter_datetime'],
                 'remarks': enc['midwife_notes'],
                 'age_of_gestation': aog,
                 'td_vaccine_dose': innerCheckup['td_vaccine_dose'],
                 'pregnancy_id': innerCheckup['pregnancy_id'],
-                'blood_pressure_systolic': innerCheckup['blood_pressure_systolic'],
-                'blood_pressure_diastolic': innerCheckup['blood_pressure_diastolic'],
+                'blood_pressure_systolic':
+                    innerCheckup['blood_pressure_systolic'],
+                'blood_pressure_diastolic':
+                    innerCheckup['blood_pressure_diastolic'],
                 'checkup_weight': innerCheckup['checkup_weight'],
                 'fetal_position': innerCheckup['fetal_position'],
                 'fetal_heart_tone': innerCheckup['fetal_heart_tone'],
@@ -706,17 +732,22 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           }
 
           // Map chartCheckups
-          chartCheckups = chartCheckupsRaw.map((enc) => {
-            'checkup_datetime': enc['encounter_datetime'],
-          }).toList();
+          chartCheckups = chartCheckupsRaw
+              .map((enc) => {
+                    'checkup_datetime': enc['encounter_datetime'],
+                  })
+              .toList();
 
           // Map checkupsData
           checkupsData = [];
           for (final enc in checkupsDataRaw) {
             final innerCheckup = enc['checkup'] as Map<String, dynamic>?;
             if (innerCheckup != null) {
-              final double aog = ((enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0) +
-                  ((enc['age_of_gestation_days'] as num?)?.toDouble() ?? 0) / 7.0;
+              final double aog =
+                  ((enc['age_of_gestation_weeks'] as num?)?.toDouble() ?? 0) +
+                      ((enc['age_of_gestation_days'] as num?)?.toDouble() ??
+                              0) /
+                          7.0;
               checkupsData.add({
                 'prenatal_checkup_id': innerCheckup['encounter_id'],
                 'checkup_datetime': enc['encounter_datetime'],
@@ -724,8 +755,10 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                 'age_of_gestation': aog,
                 'td_vaccine_dose': innerCheckup['td_vaccine_dose'],
                 'pregnancy_id': innerCheckup['pregnancy_id'],
-                'blood_pressure_systolic': innerCheckup['blood_pressure_systolic'],
-                'blood_pressure_diastolic': innerCheckup['blood_pressure_diastolic'],
+                'blood_pressure_systolic':
+                    innerCheckup['blood_pressure_systolic'],
+                'blood_pressure_diastolic':
+                    innerCheckup['blood_pressure_diastolic'],
                 'checkup_weight': innerCheckup['checkup_weight'],
                 'fetal_position': innerCheckup['fetal_position'],
                 'fetal_heart_tone': innerCheckup['fetal_heart_tone'],
@@ -740,32 +773,43 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
         // Process recent visits (based solely on checkups, with optional lab/ultrasound labels)
         _recentVisits = [];
-        
+
         recentCheckups.sort((a, b) {
-          final da = DateTime.tryParse(a['checkup_datetime']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final db = DateTime.tryParse(b['checkup_datetime']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final da =
+              DateTime.tryParse(a['checkup_datetime']?.toString() ?? '') ??
+                  DateTime.fromMillisecondsSinceEpoch(0);
+          final db =
+              DateTime.tryParse(b['checkup_datetime']?.toString() ?? '') ??
+                  DateTime.fromMillisecondsSinceEpoch(0);
           return db.compareTo(da);
         });
 
         for (var checkup in recentCheckups.take(3)) {
           final pregId = checkup['pregnancy_id'] as int?;
           final mother = pregId != null ? _pregnancyToMotherMap[pregId] : null;
-          final fullName = mother != null ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'.trim() : 'Unknown Mother';
+          final fullName = mother != null
+              ? '${mother['first_name'] ?? ''} ${mother['last_name'] ?? ''}'
+                  .trim()
+              : 'Unknown Mother';
           final motherId = mother != null ? mother['mother_id'] as int? : null;
-          final bhcPatientId = mother != null ? mother['bhc_patient_id']?.toString() : null;
+          final bhcPatientId =
+              mother != null ? mother['bhc_patient_id']?.toString() : null;
           // No mother_id fallback: a missing patient number must look missing,
           // not like a valid number that happens to be wrong.
           final displayId = bhcPatientId ?? '—';
 
-          final dt = DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
+          final dt =
+              DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
           if (dt == null) continue;
 
-          final dateString = checkup['checkup_datetime']?.toString().split('T')[0];
+          final dateString =
+              checkup['checkup_datetime']?.toString().split('T')[0];
 
           // Check for matching ultrasound on the same day
           bool hasUltrasound = false;
           for (var us in recentUltrasounds) {
-            if (us['pregnancy_id'] == pregId && us['ultrasound_date']?.toString() == dateString) {
+            if (us['pregnancy_id'] == pregId &&
+                us['ultrasound_date']?.toString() == dateString) {
               hasUltrasound = true;
               break;
             }
@@ -786,8 +830,11 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           if (hasLabTest) visitTypeParts.add('Lab Test Result');
           final visitTypeLabel = visitTypeParts.join(', ');
 
-          final diffDays = nowTime.difference(DateTime(dt.year, dt.month, dt.day)).inDays;
-          String timeLabel = diffDays == 0 ? 'Today' : (diffDays == 1 ? 'Yesterday' : '$diffDays days ago');
+          final diffDays =
+              nowTime.difference(DateTime(dt.year, dt.month, dt.day)).inDays;
+          String timeLabel = diffDays == 0
+              ? 'Today'
+              : (diffDays == 1 ? 'Yesterday' : '$diffDays days ago');
 
           _recentVisits.add(MidwifeVisitItem(
             name: fullName,
@@ -805,7 +852,15 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
         // Process BHC Chart checkup counts (last 7 rolling days)
         _bhcVisitValues = List.filled(7, 0.0);
-        final List<String> dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        final List<String> dayLabels = [
+          'Sun',
+          'Mon',
+          'Tue',
+          'Wed',
+          'Thu',
+          'Fri',
+          'Sat'
+        ];
         _bhcVisitDays = [];
         for (int i = 0; i < 7; i++) {
           final dayDate = chartStart.add(Duration(days: i));
@@ -815,11 +870,14 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         }
 
         for (final checkup in chartCheckups) {
-          final dt = DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
+          final dt =
+              DateTime.tryParse(checkup['checkup_datetime']?.toString() ?? '');
           if (dt != null) {
             final localDt = dt.toLocal();
-            final localDateOnly = DateTime(localDt.year, localDt.month, localDt.day);
-            final chartStartOnly = DateTime(chartStart.year, chartStart.month, chartStart.day);
+            final localDateOnly =
+                DateTime(localDt.year, localDt.month, localDt.day);
+            final chartStartOnly =
+                DateTime(chartStart.year, chartStart.month, chartStart.day);
             final diffDays = localDateOnly.difference(chartStartOnly).inDays;
             if (diffDays >= 0 && diffDays < 7) {
               _bhcVisitValues[diffDays] += 1;
@@ -938,8 +996,9 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
   void _navigateToSearchResult(Map<String, dynamic> result) async {
     _clearSearch();
     if (result['type'] == 'mother') {
-      await Navigator.pushNamed(context, '/mother-profile', arguments: result['id']);
-      if (mounted) _loadDashboardData();
+      await Navigator.pushNamed(context, '/mother-profile',
+          arguments: result['id']);
+      if (mounted) _refreshDashboardData();
     } else if (result['type'] == 'child') {
       await Navigator.push(
         context,
@@ -947,7 +1006,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           builder: (_) => ChildProfilePage(childId: result['id']),
         ),
       );
-      if (mounted) _loadDashboardData();
+      if (mounted) _refreshDashboardData();
     } else if (result['type'] == 'checkup') {
       final record = result['record'] as Map<String, dynamic>;
       final checkupId = result['id'] as int;
@@ -987,7 +1046,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
         try {
           final response = await SupabaseService.client
               .from('mothers')
-              .select('height, blood_type, accounts(first_name, last_name, birthdate)')
+              .select(
+                  'height, blood_type, accounts(first_name, last_name, birthdate)')
               .eq('mother_id', motherId)
               .maybeSingle();
           if (response != null) {
@@ -1021,7 +1081,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           final mw = record['midwife'] as Map<String, dynamic>;
           final acc = mw['account'] as Map<String, dynamic>?;
           if (acc != null) {
-            midwifeName = '${acc['first_name'] ?? ''} ${acc['last_name'] ?? ''}'.trim();
+            midwifeName =
+                '${acc['first_name'] ?? ''} ${acc['last_name'] ?? ''}'.trim();
           }
         }
 
@@ -1031,13 +1092,16 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
           orElse: () => <String, dynamic>{},
         );
         final acc = motherData?['accounts'] as Map<String, dynamic>?;
-        final mName = '${acc?['first_name'] ?? motherMap['first_name'] ?? ''} ${acc?['last_name'] ?? motherMap['last_name'] ?? ''}'.trim();
+        final mName =
+            '${acc?['first_name'] ?? motherMap['first_name'] ?? ''} ${acc?['last_name'] ?? motherMap['last_name'] ?? ''}'
+                .trim();
         final birthStr = acc?['birthdate']?.toString();
         String? ageText;
         if (birthStr != null) {
           final birth = DateTime.tryParse(birthStr);
           if (birth != null) {
-            final yrs = (DateTime.now().difference(birth).inDays / 365.25).floor();
+            final yrs =
+                (DateTime.now().difference(birth).inDays / 365.25).floor();
             if (yrs > 0 && yrs < 120) ageText = '$yrs yrs';
           }
         }
@@ -1048,7 +1112,10 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
             name: mName,
             idLabel: motherMap['bhc_patient_id']?.toString(),
             age: ageText,
-            bloodType: (bloodType == null || bloodType.isEmpty || bloodType == 'null') ? null : bloodType,
+            bloodType:
+                (bloodType == null || bloodType.isEmpty || bloodType == 'null')
+                    ? null
+                    : bloodType,
           );
         }
 
@@ -1077,8 +1144,10 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
             if (givenMedicationsSummary != 'None')
               MapEntry('Given Medications', givenMedicationsSummary)
             else ...[
-              if (ferrousSummary != 'Not given') MapEntry('Ferrous + FA', ferrousSummary),
-              if (calciumSummary != 'Not given') MapEntry('Calcium', calciumSummary),
+              if (ferrousSummary != 'Not given')
+                MapEntry('Ferrous + FA', ferrousSummary),
+              if (calciumSummary != 'Not given')
+                MapEntry('Calcium', calciumSummary),
             ],
             MapEntry('TD Vaccine', _formatValue(record['td_vaccine_dose'])),
             MapEntry('Edema', _formatValue(record['edema'])),
@@ -1698,20 +1767,21 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                     : AnalyticsIcon.mothers),
             message: 'Nothing to analyse here yet. Cards appear as records '
                 'are added at this health centre.',
-            prescription: sections[tabIndex].title.toLowerCase().contains('suppl')
-                ? const AnalyticsPrescription(
-                    label: 'Open Inventory',
-                    action: AnalyticsAction.viewInventory,
-                  )
-                : (sections[tabIndex].title.toLowerCase().contains('child')
+            prescription:
+                sections[tabIndex].title.toLowerCase().contains('suppl')
                     ? const AnalyticsPrescription(
-                        label: 'View Children',
-                        action: AnalyticsAction.viewChildren,
+                        label: 'Open Inventory',
+                        action: AnalyticsAction.viewInventory,
                       )
-                    : const AnalyticsPrescription(
-                        label: 'View Mothers',
-                        action: AnalyticsAction.viewMothers,
-                      )),
+                    : (sections[tabIndex].title.toLowerCase().contains('child')
+                        ? const AnalyticsPrescription(
+                            label: 'View Children',
+                            action: AnalyticsAction.viewChildren,
+                          )
+                        : const AnalyticsPrescription(
+                            label: 'View Mothers',
+                            action: AnalyticsAction.viewMothers,
+                          )),
           ),
           onAction: _onAnalyticsAction,
         )
@@ -1776,7 +1846,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                           ),
                           const SizedBox(height: 24),
                           ElevatedButton.icon(
-                            onPressed: _loadDashboardData,
+                            onPressed: _refreshDashboardData,
                             icon: const Icon(Icons.refresh),
                             label: const Text('Retry'),
                             style: ElevatedButton.styleFrom(
@@ -1796,7 +1866,7 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                     ),
                   )
                 : RefreshIndicator(
-                    onRefresh: _loadDashboardData,
+                    onRefresh: _refreshDashboardData,
                     color: AppColors.brandPrimary,
                     child: SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
@@ -1821,7 +1891,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                               borderRadius: BorderRadius.circular(24),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.brandPrimary.withValues(alpha: 0.05),
+                                  color: AppColors.brandPrimary
+                                      .withValues(alpha: 0.05),
                                   blurRadius: 16,
                                   offset: const Offset(0, 8),
                                 ),
@@ -1830,11 +1901,13 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                             child: Column(
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             _getWelcomeMessage(),
@@ -1849,8 +1922,10 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 10, vertical: 4),
                                             decoration: BoxDecoration(
-                                              color: AppColors.brandPrimary.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(12),
+                                              color: AppColors.brandPrimary
+                                                  .withValues(alpha: 0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
                                             ),
                                             child: Row(
                                               mainAxisSize: MainAxisSize.min,
@@ -1870,8 +1945,10 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                                     _bhcName,
                                                     style: const TextStyle(
                                                       fontSize: 12,
-                                                      fontWeight: FontWeight.w600,
-                                                      color: AppColors.brandPrimary,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: AppColors
+                                                          .brandPrimary,
                                                     ),
                                                   ),
                                                 ),
@@ -1888,12 +1965,14 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         border: Border.all(
-                                          color: AppColors.brandPrimary.withValues(alpha: 0.2),
+                                          color: AppColors.brandPrimary
+                                              .withValues(alpha: 0.2),
                                           width: 3,
                                         ),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: AppColors.brandPrimary.withValues(alpha: 0.15),
+                                            color: AppColors.brandPrimary
+                                                .withValues(alpha: 0.15),
                                             blurRadius: 8,
                                             offset: const Offset(0, 3),
                                           ),
@@ -1903,8 +1982,9 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                         child: Image.asset(
                                           'assets/images/midwife.png',
                                           fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) =>
-                                              const Icon(
+                                          errorBuilder:
+                                              (context, error, stackTrace) =>
+                                                  const Icon(
                                             Icons.person,
                                             size: 36,
                                             color: AppColors.brandPrimary,
@@ -1921,9 +2001,10 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                   controller: _searchController,
                                   hintText: 'Search patients and records',
                                   leadingIcon: Icons.search,
-                                  trailingIcon: _searchController.text.isNotEmpty
-                                      ? Icons.clear
-                                      : null,
+                                  trailingIcon:
+                                      _searchController.text.isNotEmpty
+                                          ? Icons.clear
+                                          : null,
                                   onTrailingTap: _clearSearch,
                                 ),
                               ],
@@ -2023,16 +2104,22 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
 
                           // Stock & Clinical Alerts Quick Hub Banner
                           GestureDetector(
-                            onTap: () => MidwifeNotificationCenter.show(context),
+                            onTap: () =>
+                                MidwifeNotificationCenter.show(context),
                             child: Container(
                               width: double.infinity,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
-                                  colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)],
+                                  colors: [
+                                    Color(0xFFFFFBEB),
+                                    Color(0xFFFEF3C7)
+                                  ],
                                 ),
                                 borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: const Color(0xFFFDE68A)),
+                                border:
+                                    Border.all(color: const Color(0xFFFDE68A)),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: 0.04),
@@ -2049,12 +2136,16 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                       color: Color(0xFFF59E0B),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 16),
+                                    child: const Icon(
+                                        Icons.notifications_active_rounded,
+                                        color: Colors.white,
+                                        size: 16),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         const Text(
                                           'Active Alerts & Stock Notifications',
@@ -2075,7 +2166,8 @@ class _MidwifeDashboardState extends State<MidwifeDashboard> {
                                       ],
                                     ),
                                   ),
-                                  const Icon(Icons.chevron_right_rounded, color: Color(0xFF92400E), size: 20),
+                                  const Icon(Icons.chevron_right_rounded,
+                                      color: Color(0xFF92400E), size: 20),
                                 ],
                               ),
                             ),

@@ -1,3 +1,5 @@
+import '../../services/child_record_export.dart';
+import '../../widgets/child_export_button.dart';
 // lib/screens/midwife/child_immunization_list_page.dart
 
 import 'package:flutter/material.dart';
@@ -18,7 +20,8 @@ class ChildImmunizationListPage extends StatefulWidget {
   });
 
   @override
-  State<ChildImmunizationListPage> createState() => _ChildImmunizationListPageState();
+  State<ChildImmunizationListPage> createState() =>
+      _ChildImmunizationListPageState();
 }
 
 class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
@@ -42,16 +45,13 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
 
     try {
       // Fetch child details
-      final childResponse = await Supabase.instance.client
-          .from('children')
-          .select('''
+      final childResponse =
+          await Supabase.instance.client.from('children').select('''
             child_id,
             first_name,
             last_name,
             sex
-          ''')
-          .eq('child_id', widget.childId)
-          .single();
+          ''').eq('child_id', widget.childId).single();
 
       // Fetch birth details separately (directly from birth_details table)
       final birthDetailsResponse = await Supabase.instance.client
@@ -60,7 +60,8 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
           .eq('child_id', widget.childId)
           .maybeSingle();
 
-      if (birthDetailsResponse != null && birthDetailsResponse['birthdate'] != null) {
+      if (birthDetailsResponse != null &&
+          birthDetailsResponse['birthdate'] != null) {
         birthdate = DateTime.parse(birthDetailsResponse['birthdate']);
       }
 
@@ -96,10 +97,8 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
           .order('vaccine_name');
 
       _allVaccines = List<Map<String, dynamic>>.from(vaccinesResponse);
-      _takenVaccineIds = records
-          .map((r) => r['vaccine_id'] as int?)
-          .whereType<int>()
-          .toSet();
+      _takenVaccineIds =
+          records.map((r) => r['vaccine_id'] as int?).whereType<int>().toSet();
 
       debugPrint('Loaded ${records.length} immunization records');
 
@@ -122,7 +121,8 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
 
   String getChildName() {
     if (childData == null) return 'Child';
-    return '${childData!['first_name'] ?? ''} ${childData!['last_name'] ?? ''}'.trim();
+    return '${childData!['first_name'] ?? ''} ${childData!['last_name'] ?? ''}'
+        .trim();
   }
 
   String calculateAge() {
@@ -145,17 +145,21 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
       }
 
       if (years > 0) {
-        final monthPart = months > 0 ? ', $months month${months != 1 ? 's' : ''}' : '';
+        final monthPart =
+            months > 0 ? ', $months month${months != 1 ? 's' : ''}' : '';
         return '$years year${years != 1 ? 's' : ''}$monthPart old';
       } else if (months > 0) {
         final weeks = days ~/ 7;
-        final weekPart = weeks > 0 ? ', $weeks week${weeks != 1 ? 's' : ''}' : '';
+        final weekPart =
+            weeks > 0 ? ', $weeks week${weeks != 1 ? 's' : ''}' : '';
         return '$months month${months != 1 ? 's' : ''}$weekPart old';
       } else {
         if (days >= 7) {
           final weeks = days ~/ 7;
           final remainingDays = days % 7;
-          final dayPart = remainingDays > 0 ? ', $remainingDays day${remainingDays != 1 ? 's' : ''}' : '';
+          final dayPart = remainingDays > 0
+              ? ', $remainingDays day${remainingDays != 1 ? 's' : ''}'
+              : '';
           return '$weeks week${weeks != 1 ? 's' : ''}$dayPart old';
         } else if (days > 0) {
           return '$days day${days != 1 ? 's' : ''} old';
@@ -186,6 +190,8 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
         preferredSize: const Size.fromHeight(56),
         child: SecondaryHeader(
           title: 'Immunization Records',
+          trailing: ChildExportButton(
+              childId: widget.childId, kind: ChildExportKind.immunization),
           onBack: () => Navigator.pop(context),
         ),
       ),
@@ -315,20 +321,31 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
                         : ListView.separated(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
                             itemCount: records.length,
-                            separatorBuilder: (context, index) => const SizedBox(height: 12),
+                            separatorBuilder: (context, index) =>
+                                const SizedBox(height: 12),
                             itemBuilder: (context, index) {
                               final record = records[index];
-                              final vaccine = record['vaccine'] as Map<String, dynamic>?;
-                              final batch = record['batch'] as Map<String, dynamic>?;
-                              final vaccineName = vaccine?['vaccine_name']?.toString() ?? 'Unknown Vaccine';
-                              final doseNumber = vaccine?['dose_number']?.toString() ?? '';
-                              final date = record['vaccination_date']?.toString() ?? '';
-                              final remarks = record['remarks']?.toString() ?? '';
-                              final batchNumber = batch?['batch_number']?.toString();
+                              final vaccine =
+                                  record['vaccine'] as Map<String, dynamic>?;
+                              final batch =
+                                  record['batch'] as Map<String, dynamic>?;
+                              final vaccineName =
+                                  vaccine?['vaccine_name']?.toString() ??
+                                      'Unknown Vaccine';
+                              final doseNumber =
+                                  vaccine?['dose_number']?.toString() ?? '';
+                              final date =
+                                  record['vaccination_date']?.toString() ?? '';
+                              final remarks =
+                                  record['remarks']?.toString() ?? '';
+                              final batchNumber =
+                                  batch?['batch_number']?.toString();
                               final source = record['source']?.toString();
-                              final facilityName = record['facility_name']?.toString();
+                              final facilityName =
+                                  record['facility_name']?.toString();
 
                               // A year heading only where the list actually
                               // crosses years. On a two-dose history it would
@@ -336,9 +353,10 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
                               final year = _yearOf(date);
                               final showYear = _spansMultipleYears &&
                                   (index == 0 ||
-                                      _yearOf(records[index - 1]['vaccination_date']
-                                              ?.toString() ??
-                                          '') !=
+                                      _yearOf(records[index - 1]
+                                                      ['vaccination_date']
+                                                  ?.toString() ??
+                                              '') !=
                                           year);
 
                               return Column(
@@ -347,7 +365,9 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
                                   if (showYear && year != null) ...[
                                     Padding(
                                       padding: EdgeInsets.only(
-                                          left: 2, bottom: 8, top: index == 0 ? 0 : 6),
+                                          left: 2,
+                                          bottom: 8,
+                                          top: index == 0 ? 0 : 6),
                                       child: Text(
                                         '$year',
                                         style: const TextStyle(
@@ -408,7 +428,8 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
     final given = DateTime.tryParse(isoDate);
     if (birth == null || given == null) return null;
 
-    final days = DateUtils.dateOnly(given).difference(DateUtils.dateOnly(birth)).inDays;
+    final days =
+        DateUtils.dateOnly(given).difference(DateUtils.dateOnly(birth)).inDays;
     // A dose dated before the birthday is a data-entry problem, not an age.
     if (days < 0) return null;
     if (days == 0) return 'At birth';
@@ -505,8 +526,7 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
-            value:
-                _allVaccines.isEmpty ? 0 : givenCount / _allVaccines.length,
+            value: _allVaccines.isEmpty ? 0 : givenCount / _allVaccines.length,
             backgroundColor: AppColors.borderPrimary,
             valueColor:
                 const AlwaysStoppedAnimation<Color>(AppColors.brandPrimary),
@@ -528,8 +548,7 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
           ],
         ),
         const SizedBox(height: 12),
-        ...groups.map(
-            (entry) => _buildMilestoneGroup(entry.key, entry.value)),
+        ...groups.map((entry) => _buildMilestoneGroup(entry.key, entry.value)),
       ],
     );
   }
@@ -545,8 +564,8 @@ class _ChildImmunizationListPageState extends State<ChildImmunizationListPage> {
         ),
         const SizedBox(width: 4),
         Text(label,
-            style: const TextStyle(
-                fontSize: 10, color: AppColors.textSecondary)),
+            style:
+                const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
       ],
     );
   }
@@ -831,7 +850,8 @@ class ImmunizationRecordCard extends StatelessWidget {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle, size: 13, color: AppColors.success),
+                    Icon(Icons.check_circle,
+                        size: 13, color: AppColors.success),
                     SizedBox(width: 4),
                     Text(
                       'Given',
@@ -884,7 +904,8 @@ class ImmunizationRecordCard extends StatelessWidget {
               const Spacer(),
               if (batchNumber != null && batchNumber!.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: const Color(0xFFECFDF5),
                     borderRadius: BorderRadius.circular(6),
@@ -893,18 +914,23 @@ class ImmunizationRecordCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.colorize_rounded, size: 11, color: Color(0xFF059669)),
+                      const Icon(Icons.colorize_rounded,
+                          size: 11, color: Color(0xFF059669)),
                       const SizedBox(width: 4),
                       Text(
                         'Batch #$batchNumber',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF065F46)),
+                        style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF065F46)),
                       ),
                     ],
                   ),
                 )
               else if (isOutside)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: const Color(0xFFEFF6FF),
                     borderRadius: BorderRadius.circular(6),
@@ -913,11 +939,17 @@ class ImmunizationRecordCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.location_on_outlined, size: 11, color: Color(0xFF2563EB)),
+                      const Icon(Icons.location_on_outlined,
+                          size: 11, color: Color(0xFF2563EB)),
                       const SizedBox(width: 4),
                       Text(
-                        facilityName != null && facilityName!.isNotEmpty ? facilityName! : 'External Clinic',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
+                        facilityName != null && facilityName!.isNotEmpty
+                            ? facilityName!
+                            : 'External Clinic',
+                        style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1E40AF)),
                       ),
                     ],
                   ),

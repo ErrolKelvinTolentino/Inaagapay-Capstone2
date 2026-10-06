@@ -1,3 +1,5 @@
+import '../../services/child_record_export.dart';
+import '../../widgets/child_export_button.dart';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -54,7 +56,9 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
 
     try {
       final results = await Future.wait([
-        Supabase.instance.client.from('children').select('''
+        Supabase.instance.client
+            .from('children')
+            .select('''
           *,
           mother:mother_id (
             mother_id,
@@ -82,7 +86,10 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
             midwife_id,
             account:account_id (first_name, last_name)
           )
-        ''').eq('child_id', widget.childId).single().timeout(const Duration(seconds: 8)),
+        ''')
+            .eq('child_id', widget.childId)
+            .single()
+            .timeout(const Duration(seconds: 8)),
         Supabase.instance.client
             .from('birth_details')
             .select('*')
@@ -90,9 +97,9 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
             .maybeSingle()
             .timeout(const Duration(seconds: 8))
             .catchError((e) {
-              debugPrint('Child birth details note: $e');
-              return null;
-            }),
+          debugPrint('Child birth details note: $e');
+          return null;
+        }),
         Supabase.instance.client
             .from('child_growth_records')
             .select('*')
@@ -100,9 +107,9 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
             .order('created_at', ascending: true)
             .timeout(const Duration(seconds: 8))
             .catchError((e) {
-              debugPrint('Child growth records note: $e');
-              return <Map<String, dynamic>>[];
-            }),
+          debugPrint('Child growth records note: $e');
+          return <Map<String, dynamic>>[];
+        }),
         Supabase.instance.client
             .from('immunization_records')
             .select('''
@@ -185,17 +192,21 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
       }
 
       if (years > 0) {
-        final monthPart = months > 0 ? ', $months month${months != 1 ? 's' : ''}' : '';
+        final monthPart =
+            months > 0 ? ', $months month${months != 1 ? 's' : ''}' : '';
         return '$years year${years != 1 ? 's' : ''}$monthPart old';
       } else if (months > 0) {
         final weeks = days ~/ 7;
-        final weekPart = weeks > 0 ? ', $weeks week${weeks != 1 ? 's' : ''}' : '';
+        final weekPart =
+            weeks > 0 ? ', $weeks week${weeks != 1 ? 's' : ''}' : '';
         return '$months month${months != 1 ? 's' : ''}$weekPart old';
       } else {
         if (days >= 7) {
           final weeks = days ~/ 7;
           final remainingDays = days % 7;
-          final dayPart = remainingDays > 0 ? ', $remainingDays day${remainingDays != 1 ? 's' : ''}' : '';
+          final dayPart = remainingDays > 0
+              ? ', $remainingDays day${remainingDays != 1 ? 's' : ''}'
+              : '';
           return '$weeks week${weeks != 1 ? 's' : ''}$dayPart old';
         } else if (days > 0) {
           return '$days day${days != 1 ? 's' : ''} old';
@@ -320,7 +331,8 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
       final barangay = mother['barangay']?.toString() ?? '';
       final city = mother['city_municipality']?.toString() ?? '';
       final province = mother['province']?.toString() ?? '';
-      final parts = [barangay, city, province].where((p) => p.trim().isNotEmpty).toList();
+      final parts =
+          [barangay, city, province].where((p) => p.trim().isNotEmpty).toList();
       return parts.isNotEmpty ? parts.join(', ') : 'Not recorded';
     }
     return 'Not recorded';
@@ -510,6 +522,8 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
           preferredSize: const Size.fromHeight(56),
           child: SecondaryHeader(
             title: 'Child Information',
+            trailing: ChildExportButton(
+                childId: widget.childId, kind: ChildExportKind.profile),
             onBack: () => Navigator.pop(context),
           ),
         ),
@@ -563,6 +577,8 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
         preferredSize: const Size.fromHeight(56),
         child: SecondaryHeader(
           title: 'Child Information',
+          trailing: ChildExportButton(
+              childId: widget.childId, kind: ChildExportKind.profile),
           onBack: () => Navigator.pop(context),
         ),
       ),
@@ -853,6 +869,7 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
     if (heightM <= 0) return null;
     return weightKg / (heightM * heightM);
   }
+
   static const double _whoStandardSd = GrowthCalculator.whoStandardSd;
 
   static String _bandForZScore(double? zScore) =>
@@ -900,7 +917,8 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
             children: const [
               Text(
                 'Our growth indicators are based on the World Health Organization (WHO) Child Growth Standards.',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, height: 1.4),
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 13, height: 1.4),
               ),
               SizedBox(height: 12),
               Text(
@@ -908,16 +926,32 @@ class _ChildProfilePageState extends State<ChildProfilePage> {
                 style: TextStyle(fontSize: 13, height: 1.4),
               ),
               SizedBox(height: 8),
-              Text('• Within standard range (Green): between -2 and +2 Z-score.', style: TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w600)),
-              Text('• Below standard range (Yellow): less than -2 Z-score.', style: TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600)),
-              Text('• Above standard range (Yellow): greater than +2 Z-score.', style: TextStyle(fontSize: 13, color: Colors.orange, fontWeight: FontWeight.w600)),
+              Text(
+                  '• Within standard range (Green): between -2 and +2 Z-score.',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w600)),
+              Text('• Below standard range (Yellow): less than -2 Z-score.',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.orange,
+                      fontWeight: FontWeight.w600)),
+              Text('• Above standard range (Yellow): greater than +2 Z-score.',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.orange,
+                      fontWeight: FontWeight.w600)),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK', style: TextStyle(color: AppColors.brandPrimary, fontWeight: FontWeight.bold)),
+            child: const Text('OK',
+                style: TextStyle(
+                    color: AppColors.brandPrimary,
+                    fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1403,7 +1437,6 @@ $recordsSummary
               ),
             ],
           ),
-
           if (phone != 'Not recorded' && phone.isNotEmpty) ...[
             const SizedBox(height: 12),
             Row(
@@ -1618,4 +1651,3 @@ $recordsSummary
     );
   }
 }
-

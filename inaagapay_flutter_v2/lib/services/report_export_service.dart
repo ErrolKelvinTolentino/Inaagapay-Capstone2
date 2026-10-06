@@ -17,6 +17,7 @@ import 'package:excel/excel.dart' as xl;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'pdf_fonts.dart';
 
 /// One titled table, with the sentences that explain it.
 class ReportBlock {
@@ -68,6 +69,7 @@ class ReportDocument {
     this.facilityLabel = 'Facility',
     this.periodCaption = 'Period',
     this.preparedByLabel = 'Prepared by',
+    this.includeSignatures = true,
     DateTime? generatedAt,
   }) : generatedAt = generatedAt ?? DateTime.now();
 
@@ -81,6 +83,7 @@ class ReportDocument {
   final String facilityLabel;
   final String periodCaption;
   final String preparedByLabel;
+  final bool includeSignatures;
   final List<ReportBlock> blocks;
   final bool landscape;
   final DateTime generatedAt;
@@ -128,12 +131,14 @@ class ReportExportService {
 
   static Future<Uint8List> toPdf(ReportDocument doc) async {
     final pdf = pw.Document(
+      theme: await PdfFonts.theme(),
       title: '${doc.title} - ${doc.facilityName}',
       author: 'InaAgapay MCHIS',
       creator: 'InaAgapay MCHIS',
     );
 
-    final format = doc.landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4;
+    final format =
+        doc.landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4;
 
     pdf.addPage(
       pw.MultiPage(
@@ -145,8 +150,10 @@ class ReportExportService {
         footer: (context) => _pdfFooter(doc, context),
         build: (context) => [
           for (final block in doc.blocks) ..._pdfBlock(context, block),
-          pw.SizedBox(height: 24),
-          _pdfSignatures(doc),
+          if (doc.includeSignatures) ...[
+            pw.SizedBox(height: 24),
+            _pdfSignatures(doc),
+          ],
         ],
       ),
     );
@@ -317,7 +324,8 @@ class ReportExportService {
         context: context,
         headers: block.columns,
         data: [
-          for (final row in block.rows) [for (final cell in row) cellText(cell)],
+          for (final row in block.rows)
+            [for (final cell in row) cellText(cell)],
         ],
         border: pw.TableBorder.all(color: _rule, width: 0.5),
         headerDecoration: const pw.BoxDecoration(color: _brand),
@@ -377,7 +385,8 @@ class ReportExportService {
                 height: 14,
                 alignment: pw.Alignment.bottomLeft,
                 decoration: const pw.BoxDecoration(
-                  border: pw.Border(bottom: pw.BorderSide(color: _ink, width: 0.6)),
+                  border:
+                      pw.Border(bottom: pw.BorderSide(color: _ink, width: 0.6)),
                 ),
                 child: pw.Text(name,
                     style: pw.TextStyle(

@@ -574,7 +574,7 @@
     if (!badge) return;
     const n = unreadCount();
     badge.hidden = n === 0;
-    badge.textContent = n > 99 ? "99+" : String(n);
+    badge.textContent = n === 0 ? "" : n > 99 ? "99+" : String(n);
     if (bell) {
       bell.classList.toggle("has-unread", n > 0);
       bell.setAttribute(

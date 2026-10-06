@@ -1,6 +1,7 @@
 // lib/screens/midwife/record_detail_screen.dart
 
 import 'package:flutter/material.dart';
+import '../../services/pdf_fonts.dart';
 import 'package:flutter/services.dart';
 
 import 'package:pdf/pdf.dart';
@@ -20,7 +21,8 @@ import '../../widgets/profile_header_card.dart';
 import '../../services/blood_pressure_reference.dart';
 import '../../services/lab_test_reference.dart';
 import '../../services/lab_cbc_interpretation_engine.dart';
-import '../../services/ultrasound_interpretation_engine.dart' show MonitoringClassification, Trimester, UltrasoundInterpretationEngine;
+import '../../services/ultrasound_interpretation_engine.dart'
+    show MonitoringClassification, Trimester, UltrasoundInterpretationEngine;
 
 /// Who this record belongs to.
 ///
@@ -172,6 +174,7 @@ class RecordDetailScreen extends StatefulWidget {
 
 class _RecordDetailScreenState extends State<RecordDetailScreen> {
   final Set<String> _expandedLabInsightAspects = <String>{};
+
   /// Which language the *labels around* the assessment are written in. It
   /// follows the app's language setting; there is no in-page switch any more.
   ///
@@ -305,8 +308,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               text: "${_attributionLabel()}: $who",
             ),
           if ((patient.age ?? "").isNotEmpty)
-            ProfileHeaderChip(
-                icon: Icons.cake_outlined, text: patient.age!),
+            ProfileHeaderChip(icon: Icons.cake_outlined, text: patient.age!),
           if ((patient.bloodType ?? "").isNotEmpty)
             ProfileHeaderChip(
                 icon: Icons.bloodtype_outlined, text: patient.bloodType!),
@@ -404,7 +406,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           : _t('Assessed and approved by your midwife',
               'Sinuri at inaprubahan ng iyong midwife');
     } else {
-      label = _t('Pending midwife review', 'Hinihintay ang pagsusuri ng midwife');
+      label =
+          _t('Pending midwife review', 'Hinihintay ang pagsusuri ng midwife');
     }
 
     final Color accent =
@@ -465,8 +468,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       case 'Lab Test Information':
         return _t('Lab Test Information', 'Impormasyon ng Lab Test');
       case 'Health Worker Information':
-        return _t('Health Worker Information',
-            'Impormasyon ng Health Worker');
+        return _t('Health Worker Information', 'Impormasyon ng Health Worker');
       case 'Notes':
         return _t('Notes', 'Mga Tala');
       default:
@@ -518,7 +520,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     }
 
     // ── Build the PDF document ──
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: await PdfFonts.theme());
 
     // Helper: Section Title widget
     // A heading and a rule under it, the way a printed form does it — not a
@@ -577,7 +579,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     }
 
     // Helper: Info box
-    pw.Widget pdfInfoBox(String text, {PdfColor bg = bgSecondary, PdfColor border = brandPink}) {
+    pw.Widget pdfInfoBox(String text,
+        {PdfColor bg = bgSecondary, PdfColor border = brandPink}) {
       return pw.Container(
         width: double.infinity,
         margin: const pw.EdgeInsets.only(top: 4, bottom: 4),
@@ -657,7 +660,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                 letterSpacing: 0.5,
               ),
             ),
-            if (widget.subtitle != null && widget.subtitle!.trim().isNotEmpty) ...[
+            if (widget.subtitle != null &&
+                widget.subtitle!.trim().isNotEmpty) ...[
               pw.SizedBox(height: 3),
               pw.Text(
                 widget.subtitle!.trim(),
@@ -683,13 +687,11 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       content.add(pdfSectionTitle(_t('Patient', 'Pasyente')));
       content.add(pdfDetailRow(_t('Name', 'Pangalan'), pdfPatient.name));
       if ((pdfPatient.idLabel ?? '').trim().isNotEmpty) {
-        content.add(pdfDetailRow(
-            _t('Patient number', 'Numero ng pasyente'),
+        content.add(pdfDetailRow(_t('Patient number', 'Numero ng pasyente'),
             pdfPatient.idLabel!.trim()));
       }
       if ((pdfPatient.age ?? '').trim().isNotEmpty) {
-        content.add(
-            pdfDetailRow(_t('Age', 'Edad'), pdfPatient.age!.trim()));
+        content.add(pdfDetailRow(_t('Age', 'Edad'), pdfPatient.age!.trim()));
       }
       if ((pdfPatient.obstetric ?? '').trim().isNotEmpty) {
         content.add(pdfDetailRow(_t('Obstetric score', 'Obstetric score'),
@@ -705,8 +707,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     // this was on the screen and missing from the export.
     final recordedBy = (widget.approvedByName ?? '').trim();
     if (recordedBy.isNotEmpty) {
-      content.add(pdfDetailRow(
-          _t('Recorded by', 'Itinala ni'), recordedBy));
+      content.add(pdfDetailRow(_t('Recorded by', 'Itinala ni'), recordedBy));
     }
 
     // ── THE RESULT ──
@@ -715,8 +716,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     // on the screen but missing from the export — which printed who typed
     // the record and where, and not the haemoglobin or the blood group.
     if (widget.resultRows.isNotEmpty) {
-      content.add(pdfSectionTitle(
-          widget.resultsTitle ?? _t('Results', 'Mga Resulta')));
+      content.add(
+          pdfSectionTitle(widget.resultsTitle ?? _t('Results', 'Mga Resulta')));
       for (final row in widget.resultRows) {
         content.add(pdfDetailRow(row.key, row.value));
       }
@@ -726,8 +727,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     if (classification != null) {
       content.add(pdfSectionTitle(
           _t('Monitoring classification', 'Klasipikasyon ng pagsubaybay')));
-      content.add(pdfDetailRow(
-          _t('Classification', 'Klasipikasyon'), classification));
+      content.add(
+          pdfDetailRow(_t('Classification', 'Klasipikasyon'), classification));
     }
 
     if (widget.isMidwifeApproved == true) {
@@ -741,7 +742,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
 
     // ── ATTACHED IMAGES ──
     if (imageDataList.isNotEmpty) {
-      content.add(pdfSectionTitle(_t('Attached Images', 'Mga Kalakip na Larawan')));
+      content.add(
+          pdfSectionTitle(_t('Attached Images', 'Mga Kalakip na Larawan')));
 
       final List<pw.Widget> imageWidgets = [];
       for (final imgBytes in imageDataList) {
@@ -798,8 +800,10 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
         color: textPrimary,
       ));
       final weightBuf = StringBuffer();
-      if (eval['status'] != null) weightBuf.writeln('Status: ${eval['status']}');
-      if (eval['bmi_category'] != null) weightBuf.writeln('BMI Category: ${eval['bmi_category']}');
+      if (eval['status'] != null)
+        weightBuf.writeln('Status: ${eval['status']}');
+      if (eval['bmi_category'] != null)
+        weightBuf.writeln('BMI Category: ${eval['bmi_category']}');
       if (eval['message'] != null) weightBuf.writeln(eval['message']);
       content.add(pdfInfoBox(
         weightBuf.toString().trim(),
@@ -823,9 +827,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           padding: const pw.EdgeInsets.all(10),
           margin: const pw.EdgeInsets.only(bottom: 6),
           decoration: pw.BoxDecoration(
-            color: isHighRisk
-                ? bgSecondary
-                : bgSecondary,
+            color: isHighRisk ? bgSecondary : bgSecondary,
             border: pw.Border.all(color: riskColor, width: 0.5),
             borderRadius: pw.BorderRadius.circular(6),
           ),
@@ -872,7 +874,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       );
     }
 
-    if (widget.suggestedActions != null && widget.suggestedActions!.isNotEmpty) {
+    if (widget.suggestedActions != null &&
+        widget.suggestedActions!.isNotEmpty) {
       content.add(
         pw.Padding(
           padding: const pw.EdgeInsets.only(left: 8, top: 8, bottom: 4),
@@ -949,7 +952,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                 pw.Padding(
                   padding: const pw.EdgeInsets.only(bottom: 8),
                   child: pw.Text(
-                    _tAi('Source: $pdfProvenance', 'Pinagmulan: $pdfProvenance'),
+                    _tAi(
+                        'Source: $pdfProvenance', 'Pinagmulan: $pdfProvenance'),
                     style: pw.TextStyle(
                       fontSize: 8.5,
                       fontWeight: pw.FontWeight.bold,
@@ -1133,14 +1137,17 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           if (patient != null && !patient.isEmpty)
             pair(_t('Name', 'Pangalan'), patient.name),
           if (clean(patient?.idLabel) != null)
-            pair(_t('Patient number', 'Numero ng pasyente'), patient!.idLabel!.trim()),
+            pair(_t('Patient number', 'Numero ng pasyente'),
+                patient!.idLabel!.trim()),
           if (clean(patient?.age) != null)
             pair(_t('Age', 'Edad'), patient!.age!.trim()),
           if (clean(patient?.obstetric) != null)
-            pair(_t('Obstetric score', 'Obstetric score'), patient!.obstetric!.trim()),
+            pair(_t('Obstetric score', 'Obstetric score'),
+                patient!.obstetric!.trim()),
           if (clean(patient?.bloodType) != null)
             pair(_t('Blood type', 'Uri ng dugo'), patient!.bloodType!.trim()),
-          if (recordedBy != null) pair(_t('Recorded by', 'Itinala ni'), recordedBy),
+          if (recordedBy != null)
+            pair(_t('Recorded by', 'Itinala ni'), recordedBy),
         ],
         emptyText: _t('No patient details on this record.',
             'Walang detalye ng pasyente sa rekord na ito.'),
@@ -1167,17 +1174,23 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     final eval = widget.weightGainEval;
     final assessment = <List<Object?>>[
       if (_classificationLabel() != null)
-        pair(_t('Monitoring classification', 'Klasipikasyon'), _classificationLabel()!),
+        pair(_t('Monitoring classification', 'Klasipikasyon'),
+            _classificationLabel()!),
       if (clean(widget.riskLevel) != null)
-        pair(_t('Risk level', 'Antas ng panganib'), widget.riskLevel!.trim().toUpperCase()),
+        pair(_t('Risk level', 'Antas ng panganib'),
+            widget.riskLevel!.trim().toUpperCase()),
       if ((widget.riskFactors ?? const []).isNotEmpty)
-        pair(_t('Risk factors', 'Mga salik ng panganib'), widget.riskFactors!.join('; ')),
+        pair(_t('Risk factors', 'Mga salik ng panganib'),
+            widget.riskFactors!.join('; ')),
       if (eval != null && eval['status'] != null)
-        pair(_t('Weight gain', 'Pagtaas ng timbang'), eval['status'].toString()),
+        pair(
+            _t('Weight gain', 'Pagtaas ng timbang'), eval['status'].toString()),
       if (eval != null && eval['bmi_category'] != null)
-        pair(_t('BMI category', 'Kategorya ng BMI'), eval['bmi_category'].toString()),
+        pair(_t('BMI category', 'Kategorya ng BMI'),
+            eval['bmi_category'].toString()),
       if (eval != null && eval['message'] != null)
-        pair(_t('Weight gain note', 'Tala sa timbang'), eval['message'].toString()),
+        pair(_t('Weight gain note', 'Tala sa timbang'),
+            eval['message'].toString()),
       if (widget.isMidwifeApproved == true)
         pair(_t('Assessed and approved by', 'Sinuri at inaprubahan ni'),
             recordedBy ?? _t('Midwife', 'Midwife')),
@@ -1208,7 +1221,10 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       final provenance = _summaryProvenance().label;
       blocks.add(ReportBlock(
         title: _tAi('Remarks', 'Mga Tala'),
-        lead: [if (provenance.isNotEmpty) _tAi('Source: $provenance', 'Pinagmulan: $provenance')],
+        lead: [
+          if (provenance.isNotEmpty)
+            _tAi('Source: $provenance', 'Pinagmulan: $provenance')
+        ],
         columns: const ['Remarks'],
         rows: [
           [_getAiTextForLanguage(widget.aiAnalysis!.trim())],
@@ -1716,7 +1732,6 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     };
   }
 
-
   Widget _buildDetailSection(
       String title, List<MapEntry<String, String>> rows) {
     final icon = _sectionIcon(title);
@@ -1777,7 +1792,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               ),
               const SizedBox(height: 12),
               for (int i = 0; i < rows.length; i++) ...[
-                if (title == 'Symptoms' && _labelKey(rows[i].key) == 'symptoms') ...[
+                if (title == 'Symptoms' &&
+                    _labelKey(rows[i].key) == 'symptoms') ...[
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1793,7 +1809,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: rows[i].value
+                        children: rows[i]
+                            .value
                             .split(',')
                             .map((s) => s.trim())
                             .where((s) => s.isNotEmpty)
@@ -1839,7 +1856,9 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                       ),
                     ],
                   ),
-                ] else if (title == 'Interpretation' || _labelKey(rows[i].key) == 'remarks' || _labelKey(rows[i].key) == 'notes') ...[
+                ] else if (title == 'Interpretation' ||
+                    _labelKey(rows[i].key) == 'remarks' ||
+                    _labelKey(rows[i].key) == 'notes') ...[
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Text(
@@ -1897,9 +1916,23 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
   /// and a section with nothing in it does not appear at all.
   bool _isBlankValue(String value) {
     const blanks = {
-      '', '-', '—', 'n/a', 'na', 'none', 'notgiven', 'notprovided',
-      'notrecorded', 'norecord', 'hindinailagay', 'walang', 'wala',
-      'nonerecorded', 'notdocumented', 'unknown', 'null',
+      '',
+      '-',
+      '—',
+      'n/a',
+      'na',
+      'none',
+      'notgiven',
+      'notprovided',
+      'notrecorded',
+      'norecord',
+      'hindinailagay',
+      'walang',
+      'wala',
+      'nonerecorded',
+      'notdocumented',
+      'unknown',
+      'null',
     };
     return blanks.contains(_normalizeForCompare(value));
   }
@@ -1967,18 +2000,24 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     if (k.contains("weight")) return Icons.monitor_weight_outlined;
     if (k.contains("height")) return Icons.straighten_rounded;
     if (k.contains("bmi")) return Icons.speed_rounded;
-    if (k.contains("ageofgestation") || k == "aog") return Icons.pregnant_woman_outlined;
+    if (k.contains("ageofgestation") || k == "aog")
+      return Icons.pregnant_woman_outlined;
     if (k.contains("fetalcount")) return Icons.child_care_outlined;
     if (k.contains("fetalheart")) return Icons.favorite_border;
     if (k.contains("fetalposition")) return Icons.rotate_right_rounded;
     if (k.contains("edema")) return Icons.water_drop_outlined;
     if (k.contains("symptom")) return Icons.healing_outlined;
-    if (k.contains("vaccine") || k.contains("tddose")) return Icons.vaccines_outlined;
-    if (k.contains("ferrous") || k.contains("calcium") || k.contains("medication")) {
+    if (k.contains("vaccine") || k.contains("tddose"))
+      return Icons.vaccines_outlined;
+    if (k.contains("ferrous") ||
+        k.contains("calcium") ||
+        k.contains("medication")) {
       return Icons.medication_outlined;
     }
-    if (k.contains("schedule") || k.contains("nextvisit")) return Icons.event_outlined;
-    if (k.contains("remarks") || k.contains("notes")) return Icons.sticky_note_2_outlined;
+    if (k.contains("schedule") || k.contains("nextvisit"))
+      return Icons.event_outlined;
+    if (k.contains("remarks") || k.contains("notes"))
+      return Icons.sticky_note_2_outlined;
     if (k.contains("labtesttype")) return Icons.science_outlined;
     if (k.contains("date")) return Icons.calendar_today_outlined;
     if (k.contains("location")) return Icons.place_outlined;
@@ -2170,7 +2209,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           fontWeight: isNotProvided ? FontWeight.w400 : FontWeight.w600,
           height: 1.35,
           fontStyle: isNotProvided ? FontStyle.italic : FontStyle.normal,
-          color: isNotProvided ? AppColors.textSecondary : const Color(0xFF5A5A5A),
+          color:
+              isNotProvided ? AppColors.textSecondary : const Color(0xFF5A5A5A),
         ),
       ),
     );
@@ -2330,16 +2370,14 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       if (inRecommendations) {
         // Stop if we hit another section header
         if (RegExp(r'^[A-Z][A-Z\s]{3,}:').hasMatch(trimmed)) break;
-        final cleaned = trimmed
-            .replaceFirst(RegExp(r'^[\-\*\d.]+\s*'), '')
-            .trim();
+        final cleaned =
+            trimmed.replaceFirst(RegExp(r'^[\-\*\d.]+\s*'), '').trim();
         if (cleaned.isNotEmpty) recommendations.add(cleaned);
       }
     }
 
     return recommendations;
   }
-
 
   // In record_detail_screen.dart, replace _buildPrenatalAiInsights with:
 
@@ -2630,14 +2668,18 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
   }
 
   Color _statusChipBackground(String status) {
-    if (_isConcerningStatus(status)) return AppColors.error.withValues(alpha: 0.08);
-    if (_isCautionStatus(status)) return AppColors.warning.withValues(alpha: 0.08);
+    if (_isConcerningStatus(status))
+      return AppColors.error.withValues(alpha: 0.08);
+    if (_isCautionStatus(status))
+      return AppColors.warning.withValues(alpha: 0.08);
     return AppColors.success.withValues(alpha: 0.08);
   }
 
   Color _statusChipBorder(String status) {
-    if (_isConcerningStatus(status)) return AppColors.error.withValues(alpha: 0.25);
-    if (_isCautionStatus(status)) return AppColors.warning.withValues(alpha: 0.25);
+    if (_isConcerningStatus(status))
+      return AppColors.error.withValues(alpha: 0.25);
+    if (_isCautionStatus(status))
+      return AppColors.warning.withValues(alpha: 0.25);
     return AppColors.success.withValues(alpha: 0.25);
   }
 
@@ -2693,8 +2735,16 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
         .replaceAll('!', '')
         .replaceAll('⚠️', '')
         .replaceAll('⚠', '')
-        .replaceAll(RegExp(r'\[\s*(NORMAL|ABNORMAL|EXPECTED|MONITOR|REVIEW|CONCERNING|OBSERVE|INFO|UNKNOWN)\s*\]', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\b(NORMAL|ABNORMAL|EXPECTED|MONITOR|REVIEW|CONCERNING|OBSERVE)\b', caseSensitive: false), '')
+        .replaceAll(
+            RegExp(
+                r'\[\s*(NORMAL|ABNORMAL|EXPECTED|MONITOR|REVIEW|CONCERNING|OBSERVE|INFO|UNKNOWN)\s*\]',
+                caseSensitive: false),
+            '')
+        .replaceAll(
+            RegExp(
+                r'\b(NORMAL|ABNORMAL|EXPECTED|MONITOR|REVIEW|CONCERNING|OBSERVE)\b',
+                caseSensitive: false),
+            '')
         .trim();
 
     return (
@@ -2933,7 +2983,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    _translateLine(_statusMeaning(row.status), _showAiInFilipino),
+                    _translateLine(
+                        _statusMeaning(row.status), _showAiInFilipino),
                     style: const TextStyle(
                       fontSize: 11,
                       color: AppColors.textSecondary,
@@ -3071,10 +3122,10 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       headerColor = Colors.teal;
       headerIcon = Icons.straighten;
     } else if (normalized == 'ANATOMICAL ASSESSMENT') {
-        headerColor = AppColors.success;
+      headerColor = AppColors.success;
       headerIcon = Icons.child_care_outlined;
     } else if (normalized == 'ABNORMAL FINDINGS') {
-        headerColor = AppColors.error;
+      headerColor = AppColors.error;
       headerIcon = Icons.warning_amber_rounded;
     } else if (normalized.contains('NORMAL RANGES')) {
       headerIcon = Icons.analytics_outlined;
@@ -3144,7 +3195,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                             ),
                           ),
                           child: Text(
-                            _friendlyStatusLabel(row.status, isUltrasound, !isUltrasound),
+                            _friendlyStatusLabel(
+                                row.status, isUltrasound, !isUltrasound),
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -3201,16 +3253,16 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     final normalized = title.trim().toUpperCase();
     if (normalized.contains('HEALTH STATUS')) {
       final hasHealthy = lines.any((v) => v.toLowerCase().contains('healthy'));
-        color = hasHealthy ? AppColors.success : AppColors.warning;
+      color = hasHealthy ? AppColors.success : AppColors.warning;
       icon = Icons.monitor_heart_outlined;
     } else if (normalized == 'DETAILED MEASUREMENTS ASSESSMENT') {
       color = Colors.teal;
       icon = Icons.straighten;
     } else if (normalized == 'ANATOMICAL ASSESSMENT') {
-        color = AppColors.success;
+      color = AppColors.success;
       icon = Icons.child_care_outlined;
     } else if (normalized == 'ABNORMAL FINDINGS') {
-        color = AppColors.error;
+      color = AppColors.error;
       icon = Icons.warning_amber_rounded;
     } else if (normalized.contains('RECOMMENDED')) {
       color = Colors.blue;
@@ -3374,8 +3426,12 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
   }) {
     final statusColor = isWarning ? AppColors.warning : AppColors.success;
     final statusText = _showAiInFilipino
-        ? (isWarning ? 'Para sa Dagdag na Pagsubaybay' : 'Nasa Inaasahang Kondisyon')
-        : (isWarning ? 'Closer Monitoring Recommended' : 'Within Expected Range');
+        ? (isWarning
+            ? 'Para sa Dagdag na Pagsubaybay'
+            : 'Nasa Inaasahang Kondisyon')
+        : (isWarning
+            ? 'Closer Monitoring Recommended'
+            : 'Within Expected Range');
 
     return Container(
       width: double.infinity,
@@ -3437,7 +3493,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: statusColor.withValues(alpha: 0.2), width: 1),
+                  border: Border.all(
+                      color: statusColor.withValues(alpha: 0.2), width: 1),
                 ),
                 child: Text(
                   statusText,
@@ -3467,14 +3524,19 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     );
   }
 
-  Widget _buildUltrasoundStructuredInsights(String text, Map<String, List<String>> sections) {
+  Widget _buildUltrasoundStructuredInsights(
+      String text, Map<String, List<String>> sections) {
     // 1. Resolve Gestational Age & Monitoring Classification
 
-    final classificationStr = widget.ultrasoundClassification?.toLowerCase() ?? '';
-    MonitoringClassification classification = MonitoringClassification.withinExpectedRange;
-    if (classificationStr.contains('closer') || classificationStr.contains('monitor')) {
+    final classificationStr =
+        widget.ultrasoundClassification?.toLowerCase() ?? '';
+    MonitoringClassification classification =
+        MonitoringClassification.withinExpectedRange;
+    if (classificationStr.contains('closer') ||
+        classificationStr.contains('monitor')) {
       classification = MonitoringClassification.requiresCloserMonitoring;
-    } else if (classificationStr.contains('follow') || classificationStr.contains('recommend')) {
+    } else if (classificationStr.contains('follow') ||
+        classificationStr.contains('recommend')) {
       classification = MonitoringClassification.followUpRecommended;
     }
 
@@ -3485,7 +3547,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       for (final match in regExp.allMatches(text)) {
         statuses.add(match.group(1)!);
       }
-      final computed = UltrasoundInterpretationEngine.classifyMonitoring(statuses);
+      final computed =
+          UltrasoundInterpretationEngine.classifyMonitoring(statuses);
       if (computed != MonitoringClassification.withinExpectedRange) {
         classification = computed;
       }
@@ -3500,20 +3563,70 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     final isFilipino = _showAiInFilipino;
 
     // Resolve statuses
-    final growthWarning = (classification != MonitoringClassification.withinExpectedRange &&
-            hasKeywords(['growth', 'size', 'bpd', 'hc', 'ac', 'fl', 'weight', 'efw', 'restricted', 'iugr', 'lga', 'sga', 'sukat', 'laki', 'timbang'])) ||
-        hasKeywords(['growth restriction', 'iugr', 'small for gestational', 'large for gestational', 'abnormal growth']);
+    final growthWarning =
+        (classification != MonitoringClassification.withinExpectedRange &&
+                hasKeywords([
+                  'growth',
+                  'size',
+                  'bpd',
+                  'hc',
+                  'ac',
+                  'fl',
+                  'weight',
+                  'efw',
+                  'restricted',
+                  'iugr',
+                  'lga',
+                  'sga',
+                  'sukat',
+                  'laki',
+                  'timbang'
+                ])) ||
+            hasKeywords([
+              'growth restriction',
+              'iugr',
+              'small for gestational',
+              'large for gestational',
+              'abnormal growth'
+            ]);
 
-    final heartWarning = (classification != MonitoringClassification.withinExpectedRange &&
-            hasKeywords(['heart', 'fhr', 'cardiac', 'beat', 'tibok', 'puso', 'bpm'])) ||
-        hasKeywords(['bradycardia', 'tachycardia', 'irregular heart rate', 'fetal distress', 'abnormal heartbeat']);
+    final heartWarning = (classification !=
+                MonitoringClassification.withinExpectedRange &&
+            hasKeywords(
+                ['heart', 'fhr', 'cardiac', 'beat', 'tibok', 'puso', 'bpm'])) ||
+        hasKeywords([
+          'bradycardia',
+          'tachycardia',
+          'irregular heart rate',
+          'fetal distress',
+          'abnormal heartbeat'
+        ]);
 
-    final envWarning = (classification != MonitoringClassification.withinExpectedRange &&
-            hasKeywords(['fluid', 'amniotic', 'afi', 'oligo', 'poly', 'placenta', 'previa', 'praevia', 'tubig', 'inunan'])) ||
-        hasKeywords(['oligohydramnios', 'polyhydramnios', 'placenta previa', 'low-lying placenta', 'placental abruption']);
+    final envWarning =
+        (classification != MonitoringClassification.withinExpectedRange &&
+                hasKeywords([
+                  'fluid',
+                  'amniotic',
+                  'afi',
+                  'oligo',
+                  'poly',
+                  'placenta',
+                  'previa',
+                  'praevia',
+                  'tubig',
+                  'inunan'
+                ])) ||
+            hasKeywords([
+              'oligohydramnios',
+              'polyhydramnios',
+              'placenta previa',
+              'low-lying placenta',
+              'placental abruption'
+            ]);
 
     // Colors & Text based on classification
-    final Color overallColor = classification == MonitoringClassification.withinExpectedRange
+    final Color overallColor = classification ==
+            MonitoringClassification.withinExpectedRange
         ? AppColors.success
         : (classification == MonitoringClassification.requiresCloserMonitoring
             ? AppColors.warning
@@ -3522,24 +3635,28 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     final String overallTitle = isFilipino
         ? (classification == MonitoringClassification.withinExpectedRange
             ? 'Nasa Inaasahang Kondisyon'
-            : (classification == MonitoringClassification.requiresCloserMonitoring
+            : (classification ==
+                    MonitoringClassification.requiresCloserMonitoring
                 ? 'Kailangan ng Masusing Pagsubaybay'
                 : 'Inirerekomenda ang Konsultasyon'))
         : (classification == MonitoringClassification.withinExpectedRange
             ? 'Within Expected Monitoring Range'
-            : (classification == MonitoringClassification.requiresCloserMonitoring
+            : (classification ==
+                    MonitoringClassification.requiresCloserMonitoring
                 ? 'Requires Closer Monitoring'
                 : 'Clinical Follow-Up Recommended'));
 
     final String overallDesc = isFilipino
         ? (classification == MonitoringClassification.withinExpectedRange
             ? 'Ang iyong ultrasound ay umaayon sa inaasahang kondisyon sa yugtong ito ng pagbubuntis. Ipagpatuloy ang iyong nakasanayang pangangalaga!'
-            : (classification == MonitoringClassification.requiresCloserMonitoring
+            : (classification ==
+                    MonitoringClassification.requiresCloserMonitoring
                 ? 'May mga obserbasyon sa iyong ultrasound na nangangailangan ng karagdagang atensyon sa susunod na checkup. Huwag mag-alala, ito ay para sa tamang gabay.'
                 : 'May mga natuklasang obserbasyon na nangangailangan ng konsultasyon sa doktor o espesyalista upang masigurong ligtas kayo ni baby.'))
         : (classification == MonitoringClassification.withinExpectedRange
             ? 'Your recorded ultrasound results generally appear consistent with the expected range for this stage of pregnancy. Continue your regular prenatal care!'
-            : (classification == MonitoringClassification.requiresCloserMonitoring
+            : (classification ==
+                    MonitoringClassification.requiresCloserMonitoring
                 ? 'Some observations in your ultrasound suggest closer attention in upcoming checkups. There is no cause for alarm; this is for standard prenatal guidance.'
                 : 'Certain findings suggest that a clinical follow-up or consultation is recommended to ensure both you and your baby remain healthy and safe.'));
 
@@ -3554,7 +3671,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
         decoration: BoxDecoration(
           color: overallColor.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: overallColor.withValues(alpha: 0.25), width: 1.5),
+          border: Border.all(
+              color: overallColor.withValues(alpha: 0.25), width: 1.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -3564,7 +3682,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                 Icon(
                   classification == MonitoringClassification.withinExpectedRange
                       ? Icons.check_circle_outline_rounded
-                      : (classification == MonitoringClassification.requiresCloserMonitoring
+                      : (classification ==
+                              MonitoringClassification.requiresCloserMonitoring
                           ? Icons.info_outline_rounded
                           : Icons.warning_amber_rounded),
                   color: overallColor,
@@ -3576,7 +3695,9 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isFilipino ? 'Pangkalahatang Katayuan' : 'Overall Pregnancy Status',
+                        isFilipino
+                            ? 'Pangkalahatang Katayuan'
+                            : 'Overall Pregnancy Status',
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -3617,7 +3738,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     summaryWidgets.add(
       Row(
         children: [
-          const Icon(Icons.favorite_rounded, color: Colors.pinkAccent, size: 18),
+          const Icon(Icons.favorite_rounded,
+              color: Colors.pinkAccent, size: 18),
           const SizedBox(width: 8),
           Text(
             isFilipino ? 'Mga Gabay Para sa Ina' : 'Simple Monitoring Notes',
@@ -3635,8 +3757,12 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     // Card 1: Baby's Growth
     summaryWidgets.add(
       _buildUltrasoundMotherFriendlyCard(
-        title: isFilipino ? 'Suporta sa Paglaki at Sukat ng Baby' : "Baby's Growth & Size Support",
-        subtitle: isFilipino ? 'BPD, HC, AC, FL, gestational age, at fetal weight' : 'Body metrics, weight, and general size',
+        title: isFilipino
+            ? 'Suporta sa Paglaki at Sukat ng Baby'
+            : "Baby's Growth & Size Support",
+        subtitle: isFilipino
+            ? 'BPD, HC, AC, FL, gestational age, at fetal weight'
+            : 'Body metrics, weight, and general size',
         icon: Icons.child_care_rounded,
         iconColor: Colors.teal.shade500,
         isWarning: growthWarning,
@@ -3655,7 +3781,9 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     summaryWidgets.add(
       _buildUltrasoundMotherFriendlyCard(
         title: isFilipino ? 'Tibok ng Puso ni Baby' : "Baby's Heart Activity",
-        subtitle: isFilipino ? 'Tibok ng puso o Fetal Heart Rate (FHR)' : 'Fetal Heart Rate (FHR) & cardiac rhythm',
+        subtitle: isFilipino
+            ? 'Tibok ng puso o Fetal Heart Rate (FHR)'
+            : 'Fetal Heart Rate (FHR) & cardiac rhythm',
         icon: Icons.favorite_border_rounded,
         iconColor: Colors.redAccent.shade200,
         isWarning: heartWarning,
@@ -3673,8 +3801,12 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     // Card 3: Baby's Environment & Placenta
     summaryWidgets.add(
       _buildUltrasoundMotherFriendlyCard(
-        title: isFilipino ? 'Placenta at Tubig sa Sinapupunan' : "Baby's Environment & Placenta Support",
-        subtitle: isFilipino ? 'Amniotic fluid at posisyon ng inunan' : 'Amniotic fluid level and placental position',
+        title: isFilipino
+            ? 'Placenta at Tubig sa Sinapupunan'
+            : "Baby's Environment & Placenta Support",
+        subtitle: isFilipino
+            ? 'Amniotic fluid at posisyon ng inunan'
+            : 'Amniotic fluid level and placental position',
         icon: Icons.water_drop_outlined,
         iconColor: Colors.blue.shade400,
         isWarning: envWarning,
@@ -3704,7 +3836,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
 
     for (final key in sectionOrder) {
       if (sections.containsKey(key)) {
-        detailedWidgets.add(_buildUltrasoundMetricsSummaryCard(key, sections[key]!));
+        detailedWidgets
+            .add(_buildUltrasoundMetricsSummaryCard(key, sections[key]!));
       }
     }
 
@@ -3719,28 +3852,29 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               // background instead of under it.
               type: MaterialType.transparency,
               child: ExpansionTile(
-              title: Row(
-                children: [
-                  const Icon(Icons.settings_outlined, color: AppColors.brandPrimary, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      isFilipino
-                          ? 'Detalyadong Resulta ng Ultrasound (Para sa Midwife)'
-                          : 'Detailed Ultrasound Findings (Healthcare Personnel View)',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.brandPrimary,
+                title: Row(
+                  children: [
+                    const Icon(Icons.settings_outlined,
+                        color: AppColors.brandPrimary, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isFilipino
+                            ? 'Detalyadong Resulta ng Ultrasound (Para sa Midwife)'
+                            : 'Detailed Ultrasound Findings (Healthcare Personnel View)',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.brandPrimary,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(top: 8),
+                children: detailedWidgets,
               ),
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: const EdgeInsets.only(top: 8),
-              children: detailedWidgets,
-            ),
             ),
           ),
         ),
@@ -3753,15 +3887,19 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     );
   }
 
-  Widget _buildLabStructuredInsights(String text, Map<String, List<String>> sections) {
+  Widget _buildLabStructuredInsights(
+      String text, Map<String, List<String>> sections) {
     // 1. Determine Trimester from AI text
     Trimester trimester = Trimester.third;
     final lowerText = text.toLowerCase();
-    if (lowerText.contains('1st trimester') || lowerText.contains('first trimester')) {
+    if (lowerText.contains('1st trimester') ||
+        lowerText.contains('first trimester')) {
       trimester = Trimester.first;
-    } else if (lowerText.contains('2nd trimester') || lowerText.contains('second trimester')) {
+    } else if (lowerText.contains('2nd trimester') ||
+        lowerText.contains('second trimester')) {
       trimester = Trimester.second;
-    } else if (lowerText.contains('3rd trimester') || lowerText.contains('third trimester')) {
+    } else if (lowerText.contains('3rd trimester') ||
+        lowerText.contains('third trimester')) {
       trimester = Trimester.third;
     }
 
@@ -3772,7 +3910,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     for (final line in labLines) {
       final parsed = _parseLabResultLine(line);
       if (parsed.testName.isNotEmpty && parsed.value.isNotEmpty) {
-        final val = double.tryParse(parsed.value.replaceAll(RegExp(r'[^\d.]'), ''));
+        final val =
+            double.tryParse(parsed.value.replaceAll(RegExp(r'[^\d.]'), ''));
         if (val != null) {
           parsedValues[parsed.testName] = val;
           parsedValueStrs[parsed.testName] = parsed.value;
@@ -3822,13 +3961,16 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     final clottingStatus = getGroupStatus(['Platelets']);
 
     // 5. Overall Monitoring Classification
-    final overallClassification = LabCbcInterpretationEngine.classifyOverall(cbcResults);
+    final overallClassification =
+        LabCbcInterpretationEngine.classifyOverall(cbcResults);
 
-    final overallColor = overallClassification == MonitoringClassification.withinExpectedRange
-        ? AppColors.success
-        : (overallClassification == MonitoringClassification.requiresCloserMonitoring
-            ? AppColors.warning
-            : AppColors.error);
+    final overallColor =
+        overallClassification == MonitoringClassification.withinExpectedRange
+            ? AppColors.success
+            : (overallClassification ==
+                    MonitoringClassification.requiresCloserMonitoring
+                ? AppColors.warning
+                : AppColors.error);
 
     final overallTitle = _showAiInFilipino
         ? 'Pangkalahatang Buod ng Pagsusuri sa Dugo'
@@ -3837,24 +3979,28 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     final overallBadge = _showAiInFilipino
         ? (overallClassification == MonitoringClassification.withinExpectedRange
             ? '✅ Maayos at Normal na Antas'
-            : (overallClassification == MonitoringClassification.requiresCloserMonitoring
+            : (overallClassification ==
+                    MonitoringClassification.requiresCloserMonitoring
                 ? '⚠️ Iminumungkahi ang Masusing Pagsubaybay'
                 : '🚨 Konsultasyon sa Doktor ay Iminumungkahi'))
         : (overallClassification == MonitoringClassification.withinExpectedRange
             ? '✅ Within Expected Monitoring Range'
-            : (overallClassification == MonitoringClassification.requiresCloserMonitoring
+            : (overallClassification ==
+                    MonitoringClassification.requiresCloserMonitoring
                 ? '⚠️ Monitoring Recommended'
                 : '🚨 Clinical Follow-Up Recommended'));
 
     final overallDesc = _showAiInFilipino
         ? (overallClassification == MonitoringClassification.withinExpectedRange
             ? 'Ang iyong kabuuang resulta ng pagsusuri sa dugo ay maayos at angkop para sa iyong yugto ng pagbubuntis.'
-            : (overallClassification == MonitoringClassification.requiresCloserMonitoring
+            : (overallClassification ==
+                    MonitoringClassification.requiresCloserMonitoring
                 ? 'Iminumungkahi ang masusing pagsubaybay sa ilang antas ng iyong dugo kasama ang iyong midwife o doktor.'
                 : 'Lubhang iminumungkahi ang agarang konsultasyon sa iyong doktor o midwife upang masuri ang mga antas ng iyong dugo.'))
         : (overallClassification == MonitoringClassification.withinExpectedRange
             ? 'Your overall blood monitoring results generally appear consistent with the expected range for this stage of pregnancy.'
-            : (overallClassification == MonitoringClassification.requiresCloserMonitoring
+            : (overallClassification ==
+                    MonitoringClassification.requiresCloserMonitoring
                 ? 'A closer monitoring of certain blood levels is recommended in coordination with your midwife or doctor.'
                 : 'A prompt follow-up consultation with your doctor or midwife is highly recommended to evaluate your blood levels.'));
 
@@ -3899,7 +4045,13 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     final rangeLines = sections['NORMAL RANGES'] ?? const <String>[];
     final detailedWidgets = <Widget>[];
 
-    final highPriorityComponents = {'Hemoglobin', 'Hematocrit', 'WBC', 'Platelets', 'MCV'};
+    final highPriorityComponents = {
+      'Hemoglobin',
+      'Hematocrit',
+      'WBC',
+      'Platelets',
+      'MCV'
+    };
     final highPriorityWidgets = <Widget>[];
     final secondaryWidgets = <Widget>[];
 
@@ -3948,7 +4100,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
                   IconButton(
                     padding: EdgeInsets.zero,
                     splashRadius: 16,
-                    constraints: const BoxConstraints.tightFor(width: 24, height: 24),
+                    constraints:
+                        const BoxConstraints.tightFor(width: 24, height: 24),
                     onPressed: () {
                       setState(() {
                         if (isExpanded) {
@@ -3969,7 +4122,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: statusColor,
                     borderRadius: BorderRadius.circular(16),
@@ -4028,10 +4182,13 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     }
     if (secondaryWidgets.isNotEmpty) {
       detailedWidgets.add(const SizedBox(height: 8));
-      detailedWidgets.add(const Divider(color: AppColors.borderPrimary, height: 1));
+      detailedWidgets
+          .add(const Divider(color: AppColors.borderPrimary, height: 1));
       detailedWidgets.add(const SizedBox(height: 16));
       detailedWidgets.add(Text(
-        _showAiInFilipino ? 'Pang-sekundaryang Antas ng Dugo' : 'Secondary CBC Indices',
+        _showAiInFilipino
+            ? 'Pang-sekundaryang Antas ng Dugo'
+            : 'Secondary CBC Indices',
         style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.bold,
@@ -4102,11 +4259,14 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               color: AppColors.brandAccent.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.favorite_rounded, color: AppColors.brandAccent, size: 20),
+            child: const Icon(Icons.favorite_rounded,
+                color: AppColors.brandAccent, size: 20),
           ),
           const SizedBox(width: 12),
           Text(
-            _showAiInFilipino ? 'Gabay sa Pagsusuri' : 'Simple Monitoring Notes',
+            _showAiInFilipino
+                ? 'Gabay sa Pagsusuri'
+                : 'Simple Monitoring Notes',
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
@@ -4121,7 +4281,9 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     // Blood Oxygen Support card
     summaryWidgets.add(
       _buildMotherFriendlyCard(
-        title: _showAiInFilipino ? 'Suporta sa Oxygen ng Dugo (Blood Oxygen Support)' : 'Blood Oxygen Support',
+        title: _showAiInFilipino
+            ? 'Suporta sa Oxygen ng Dugo (Blood Oxygen Support)'
+            : 'Blood Oxygen Support',
         icon: Icons.air_rounded,
         status: oxygenStatus,
         description: oxygenDesc,
@@ -4131,7 +4293,9 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     // Infection & Immune Monitoring card
     summaryWidgets.add(
       _buildMotherFriendlyCard(
-        title: _showAiInFilipino ? 'Pagsubaybay sa Impeksyon at Imunidad' : 'Infection & Immune Monitoring',
+        title: _showAiInFilipino
+            ? 'Pagsubaybay sa Impeksyon at Imunidad'
+            : 'Infection & Immune Monitoring',
         icon: Icons.shield_outlined,
         status: immuneStatus,
         description: immuneDesc,
@@ -4141,7 +4305,9 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     // Blood Clotting Support card
     summaryWidgets.add(
       _buildMotherFriendlyCard(
-        title: _showAiInFilipino ? 'Suporta sa Pag-ampat ng Dugo (Blood Clotting Support)' : 'Blood Clotting Support',
+        title: _showAiInFilipino
+            ? 'Suporta sa Pag-ampat ng Dugo (Blood Clotting Support)'
+            : 'Blood Clotting Support',
         icon: Icons.water_drop_outlined,
         status: clottingStatus,
         description: clottingDesc,
@@ -4162,28 +4328,29 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               // background instead of under it.
               type: MaterialType.transparency,
               child: ExpansionTile(
-              title: Row(
-                children: [
-                  const Icon(Icons.settings_outlined, color: AppColors.brandPrimary, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _showAiInFilipino
-                          ? 'Detalyadong Resulta ng Lab Test (Para sa Midwife)'
-                          : 'Detailed Laboratory Findings (Healthcare Personnel View)',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.brandPrimary,
+                title: Row(
+                  children: [
+                    const Icon(Icons.settings_outlined,
+                        color: AppColors.brandPrimary, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _showAiInFilipino
+                            ? 'Detalyadong Resulta ng Lab Test (Para sa Midwife)'
+                            : 'Detailed Laboratory Findings (Healthcare Personnel View)',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.brandPrimary,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(top: 8),
+                children: detailedWidgets,
               ),
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: const EdgeInsets.only(top: 8),
-              children: detailedWidgets,
-            ),
             ),
           ),
         ),
@@ -4394,29 +4561,30 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               // background instead of under it.
               type: MaterialType.transparency,
               child: ExpansionTile(
-              title: Row(
-                children: [
-                  const Icon(Icons.settings_outlined, color: AppColors.brandPrimary, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _tAi(
-                        'Detailed Ultrasound Findings (Healthcare Personnel View)',
-                        'Detalyadong Resulta ng Ultrasound (Para sa Midwife)',
-                      ),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.brandPrimary,
+                title: Row(
+                  children: [
+                    const Icon(Icons.settings_outlined,
+                        color: AppColors.brandPrimary, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _tAi(
+                          'Detailed Ultrasound Findings (Healthcare Personnel View)',
+                          'Detalyadong Resulta ng Ultrasound (Para sa Midwife)',
+                        ),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.brandPrimary,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(top: 8),
+                children: detailedWidgets,
               ),
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: const EdgeInsets.only(top: 8),
-              children: detailedWidgets,
-            ),
             ),
           ),
         ),
@@ -4434,29 +4602,30 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
               // background instead of under it.
               type: MaterialType.transparency,
               child: ExpansionTile(
-              title: Row(
-                children: [
-                  const Icon(Icons.settings_outlined, color: AppColors.brandPrimary, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _tAi(
-                        'Detailed Laboratory Findings (Healthcare Personnel View)',
-                        'Detalyadong Resulta ng Lab Test (Para sa Midwife)',
-                      ),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.brandPrimary,
+                title: Row(
+                  children: [
+                    const Icon(Icons.settings_outlined,
+                        color: AppColors.brandPrimary, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _tAi(
+                          'Detailed Laboratory Findings (Healthcare Personnel View)',
+                          'Detalyadong Resulta ng Lab Test (Para sa Midwife)',
+                        ),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.brandPrimary,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(top: 8),
+                children: detailedWidgets,
               ),
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: const EdgeInsets.only(top: 8),
-              children: detailedWidgets,
-            ),
             ),
           ),
         ),
@@ -4476,8 +4645,10 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     var result = line;
 
     // Apply clinical softening first for both languages if present
-    final polyReg = RegExp(r'\bmild\s+polyhydramnios\b|\bpolyhydramnios\b', caseSensitive: false);
-    result = result.replaceAll(polyReg, 'Ang naitalang sukat ng amniotic fluid ay mukhang mas mataas nang bahagya sa karaniwang inaasahang saklaw at maaaring makinabang sa patuloy na pagsubaybay.');
+    final polyReg = RegExp(r'\bmild\s+polyhydramnios\b|\bpolyhydramnios\b',
+        caseSensitive: false);
+    result = result.replaceAll(polyReg,
+        'Ang naitalang sukat ng amniotic fluid ay mukhang mas mataas nang bahagya sa karaniwang inaasahang saklaw at maaaring makinabang sa patuloy na pagsubaybay.');
 
     final translations = {
       // Ultrasound common phrases
@@ -4499,7 +4670,7 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           'Ang AI-assisted na paliwanag na ito ay muling isinasalaysay lamang sa simpleng salita ang natuklasan ng sonologist at suporta lamang sa pagsubaybay at hindi pumapalit sa propesyonal na payong medikal.',
       'Continued prenatal checkups and healthcare consultation may help support pregnancy health':
           'Ang patuloy na prenatal checkup at konsultasyon sa doktor ay makakatulong upang maging ligtas ang iyong pagbubuntis.',
-      
+
       // Ultrasound anatomical organs
       'skull': 'ulo / bungo',
       'brain': 'utak',
@@ -4518,13 +4689,14 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       // Clinical softening for monitoring/referrals (English & Tagalog alignment)
       'requires closer monitoring': 'kailangan ng masusing pagsubaybay',
       'requires monitoring': 'kailangan ng pagsubaybay',
-      'within expected monitoring range': 'nasa inaasahang saklaw ng pagsubaybay',
+      'within expected monitoring range':
+          'nasa inaasahang saklaw ng pagsubaybay',
       'within expected range': 'nasa inaasahang saklaw',
       'within normal limits': 'nasa normal na limitasyon',
       'monitoring': 'pagsubaybay',
       'monitor': 'subaybayan',
       'requires': 'kailangan',
-      
+
       // Lab test results status meanings
       'Consistent with expected findings for this test.':
           'Naaayon sa inaasahang mga resulta para sa test na ito.',
@@ -4583,16 +4755,19 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
       'Overweight BMI': 'Mataas ang BMI (Overweight)',
       'Obese BMI': 'Sobrang Taas ng BMI (Obese)',
       'Multiple Pregnancy': 'Kambal o Higit Pa (Multiple Pregnancy)',
-      'AOG Discrepancy (LMP vs AI)': 'May Pagkakaiba sa Edad ng Baby (AOG Discrepancy)',
+      'AOG Discrepancy (LMP vs AI)':
+          'May Pagkakaiba sa Edad ng Baby (AOG Discrepancy)',
       'Patient Name Mismatch': 'Hindi Tugma ang Pangalan sa Ultrasound',
-      'No high-risk complications detected': 'Walang nakitang kumplikasyon o mataas na panganib',
+      'No high-risk complications detected':
+          'Walang nakitang kumplikasyon o mataas na panganib',
     };
 
     translations.forEach((eng, fil) {
       final pattern = RegExp.escape(eng);
       final startBoundary = RegExp(r'^\w').hasMatch(eng) ? r'\b' : '';
       final endBoundary = RegExp(r'\w$').hasMatch(eng) ? r'\b' : '';
-      final reg = RegExp('$startBoundary$pattern$endBoundary', caseSensitive: false);
+      final reg =
+          RegExp('$startBoundary$pattern$endBoundary', caseSensitive: false);
       result = result.replaceAll(reg, fil);
     });
 
@@ -4694,7 +4869,8 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     if (lower == 'low') {
       return _t('Within Expected Monitoring Range', 'Nasa Inaasahang Saklaw');
     } else if (lower == 'high') {
-      return _t('Requires Closer Monitoring', 'Kailangan ng Masusing Pagsubaybay');
+      return _t(
+          'Requires Closer Monitoring', 'Kailangan ng Masusing Pagsubaybay');
     }
     return val.toUpperCase();
   }
@@ -4724,7 +4900,9 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
 
     final isHighRisk = riskLevel.toLowerCase().contains('high');
     final cardBg = isHighRisk ? _riskHighCardBg : Colors.white;
-    final cardBorder = isHighRisk ? _riskHighCardBorder.withValues(alpha: 0.3) : Colors.transparent;
+    final cardBorder = isHighRisk
+        ? _riskHighCardBorder.withValues(alpha: 0.3)
+        : Colors.transparent;
 
     return Container(
       width: double.infinity,
@@ -5013,69 +5191,72 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
           // background instead of under it.
           type: MaterialType.transparency,
           child: ExpansionTile(
-          leading: const Icon(Icons.menu_book_outlined, color: AppColors.brandPrimary, size: 20),
-          title: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          children: [
-            const Divider(height: 1, color: AppColors.borderPrimary),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.bgSecondary,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.info_outline, size: 16, color: AppColors.brandPrimary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _tAi(
-                        'Clinical Reference Disclaimer: The references listed below represent standard guidelines used to establish normal ranges and monitoring thresholds. They do not constitute diagnostic opinions or active medical prescriptions.',
-                        'Paunawa sa Sanggunian (Clinical Reference Disclaimer): Ang mga sangguniang nakalista sa ibaba ay mga karaniwang gabay na ginagamit para sa mga normal na saklaw at antas ng pagsubaybay. Hindi ito katumbas ng medikal na diagnosis o reseta ng doktor.',
-                      ),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
+            leading: const Icon(Icons.menu_book_outlined,
+                color: AppColors.brandPrimary, size: 20),
+            title: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
               ),
             ),
-            const SizedBox(height: 12),
-            ...citations.map((citation) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.arrow_right, size: 18, color: AppColors.brandPrimary),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          citation,
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            color: AppColors.textPrimary,
-                            height: 1.4,
-                          ),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            children: [
+              const Divider(height: 1, color: AppColors.borderPrimary),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.bgSecondary,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline,
+                        size: 16, color: AppColors.brandPrimary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _tAi(
+                          'Clinical Reference Disclaimer: The references listed below represent standard guidelines used to establish normal ranges and monitoring thresholds. They do not constitute diagnostic opinions or active medical prescriptions.',
+                          'Paunawa sa Sanggunian (Clinical Reference Disclaimer): Ang mga sangguniang nakalista sa ibaba ay mga karaniwang gabay na ginagamit para sa mga normal na saklaw at antas ng pagsubaybay. Hindi ito katumbas ng medikal na diagnosis o reseta ng doktor.',
+                        ),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                          height: 1.4,
                         ),
                       ),
-                    ],
-                  ),
-                )),
-          ],
-        ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...citations.map((citation) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.arrow_right,
+                            size: 18, color: AppColors.brandPrimary),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            citation,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.textPrimary,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+            ],
+          ),
         ),
       ),
     );

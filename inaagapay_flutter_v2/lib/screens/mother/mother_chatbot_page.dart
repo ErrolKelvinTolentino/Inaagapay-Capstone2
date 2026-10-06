@@ -18,6 +18,8 @@ import '../../theme/app_colors.dart';
 import '../../services/language_service.dart';
 import '../../services/chatbot_service.dart';
 import '../../services/groq_service.dart';
+import '../../services/mother_chat_context.dart';
+import '../../services/speech_text.dart';
 import '../../services/auth_storage.dart';
 import '../../models/chatbot_models.dart';
 import 'mother_journal_screen.dart';
@@ -54,6 +56,16 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final GroqService _groqService = GroqService();
+  MotherChatContext? _liveContext;
+  bool get _hasCurrentPregnancy => _liveContext == null
+      ? widget.hasPregnancy
+      : _liveContext!.pregnancy != null;
+  int get _currentWeek =>
+      _liveContext == null ? widget.week : (_liveContext!.week ?? 0);
+  String get _currentTrimester => _liveContext?.trimester ?? widget.trimester;
+  String get _currentRisk =>
+      _liveContext?.pregnancy?['pregnancy_risk_level']?.toString() ??
+      widget.riskLevel;
 
   List<ChatSession> _sessions = [];
   ChatSession? _currentSession;
@@ -81,6 +93,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
 
   // TTS & Search State
   late AudioPlayer _audioPlayer;
+  int _speechRequest = 0;
   String? _currentlyReadingMessageId;
   String? _loadingTtsMessageId; // shows spinner while fetching audio
   final TextEditingController _drawerSearchController = TextEditingController();
@@ -211,7 +224,8 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
   /// Never throws: this is the path taken when something else has already
   /// gone wrong, so a failure here has to be quiet and let the caller show
   /// the plain message.
-  Future<bool> _speakOnDevice(String text, String messageId) async {
+  Future<bool> _speakOnDevice(
+      String text, String messageId, int request) async {
     try {
       final tts = _deviceTts ??= FlutterTts();
 
@@ -236,9 +250,11 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
       // may be hearing it while holding a baby.
       await tts.setSpeechRate(0.45);
       await tts.setPitch(1.0);
+      if (!mounted || request != _speechRequest) return false;
 
       tts.setCompletionHandler(() {
-        if (mounted) setState(() => _currentlyReadingMessageId = null);
+        if (mounted && request == _speechRequest)
+          setState(() => _currentlyReadingMessageId = null);
       });
 
       if (mounted) {
@@ -249,18 +265,15 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
       }
 
       // Markdown reads badly aloud — asterisks become "asterisk".
-      final clean = text
-          .replaceAll(RegExp(r'[*#_`]'), '')
-          .replaceAll(RegExp(r'\n{2,}'), '. ')
-          .replaceAll('\n', ' ')
-          .trim();
+      final clean = SpeechText.clean(text);
+      if (clean.isEmpty) return false;
 
       // An error handler, so a browser SpeechSynthesisErrorEvent is not left
       // to surface as a bare "[object SpeechSynthesisErrorEvent]" with the
       // reading state stuck on.
       tts.setErrorHandler((dynamic message) {
         debugPrint('[MotherChatbotPage] device TTS error: $message');
-        if (mounted) {
+        if (mounted && request == _speechRequest) {
           setState(() {
             _loadingTtsMessageId = null;
             _currentlyReadingMessageId = null;
@@ -272,7 +285,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
       return result == 1;
     } catch (e) {
       debugPrint('[MotherChatbotPage] device TTS unavailable: $e');
-      if (mounted) {
+      if (mounted && request == _speechRequest) {
         setState(() {
           _loadingTtsMessageId = null;
           _currentlyReadingMessageId = null;
@@ -347,7 +360,8 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
 
       _amplitudeTimer?.cancel();
       _currentAmplitude = 0.0;
-      _amplitudeTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) async {
+      _amplitudeTimer =
+          Timer.periodic(const Duration(milliseconds: 100), (timer) async {
         try {
           if (_isRecording) {
             final amp = await _audioRecorder.getAmplitude();
@@ -556,7 +570,21 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
       final motherId = await AuthStorage.getMotherId();
       if (motherId == null) return;
 
+      // Fetch AI Privacy settings from secure storage
+      final hidePregnancy = await AuthStorage.getHiddenPregnancyInfo();
+      final hiddenAllergiesList = await AuthStorage.getHiddenAllergies();
+      final hiddenConditionsList =
+          await AuthStorage.getHiddenMedicalConditions();
+
+      _hidePregnancyInfo = hidePregnancy;
+      _hiddenAllergies = hiddenAllergiesList;
+      _hiddenMedicalConditions = hiddenConditionsList;
       final client = Supabase.instance.client;
+      try {
+        _liveContext = await MotherChatContext.load(motherId);
+      } catch (e) {
+        debugPrint('[MotherChatbotPage] Current context unavailable: $e');
+      }
 
       // Fetch allergies
       final allergyRows = await client
@@ -584,12 +612,6 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
           .where((cond) => cond.isNotEmpty)
           .toList();
 
-      // Fetch AI Privacy settings from secure storage
-      final hidePregnancy = await AuthStorage.getHiddenPregnancyInfo();
-      final hiddenAllergiesList = await AuthStorage.getHiddenAllergies();
-      final hiddenConditionsList =
-          await AuthStorage.getHiddenMedicalConditions();
-
       if (mounted) {
         setState(() {
           _activeAllergies = activeAllergiesList;
@@ -609,6 +631,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
     _recordingTimer?.cancel();
     _amplitudeTimer?.cancel();
     _recordingGlowController.dispose();
+    _speechRequest++;
     _audioPlayer.dispose();
     _deviceTts?.stop();
     _audioRecorder.dispose();
@@ -706,11 +729,11 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
 
   Future<void> _sendInitialGreeting(int sessionId) async {
     String greeting;
-    if (widget.hasPregnancy) {
-      if (widget.week > 0) {
+    if (_hasCurrentPregnancy) {
+      if (_currentWeek > 0) {
         greeting = _t(
-          "Hi $_onlyFirstName! I'm Ate Assistant, your digital midwife guide. You're currently in Week ${widget.week} of your pregnancy (${_tTrimester(widget.trimester)}). How can I help you today? 🌸",
-          "Kumusta, $_onlyFirstName! Ako si Ate Assistant, ang iyong gabay sa pagbubuntis. Nasa Week ${widget.week} ka na ngayon (${_tTrimester(widget.trimester)}). Paano kita matutulungan ngayong araw? 🌸",
+          "Hi $_onlyFirstName! I'm Ate Assistant, your digital midwife guide. You're currently in Week ${_currentWeek} of your pregnancy (${_tTrimester(_currentTrimester)}). How can I help you today? 🌸",
+          "Kumusta, $_onlyFirstName! Ako si Ate Assistant, ang iyong gabay sa pagbubuntis. Nasa Week ${_currentWeek} ka na ngayon (${_tTrimester(_currentTrimester)}). Paano kita matutulungan ngayong araw? 🌸",
         );
       } else {
         greeting = _t(
@@ -855,19 +878,23 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
     final isFilipino = LanguageService.isFilipino;
 
     final allergiesStr = visibleAllergies.isEmpty
-        ? (isFilipino ? 'Wala (o walang ibinahagi ang ina)' : 'None (or none shared by the mother)')
+        ? (isFilipino
+            ? 'Wala (o walang ibinahagi ang ina)'
+            : 'None (or none shared by the mother)')
         : visibleAllergies.join(', ');
     final medicalConditionsStr = visibleConditions.isEmpty
-        ? (isFilipino ? 'Wala (o walang ibinahagi ang ina)' : 'None (or none shared by the mother)')
+        ? (isFilipino
+            ? 'Wala (o walang ibinahagi ang ina)'
+            : 'None (or none shared by the mother)')
         : visibleConditions.join(', ');
 
-    final includePregnancy = widget.hasPregnancy && !_hidePregnancyInfo;
+    final includePregnancy = _hasCurrentPregnancy && !_hidePregnancyInfo;
 
     final contextString = isFilipino
         ? (includePregnancy
             ? "Pangalan ng Buntis: $_onlyFirstName\n"
-                "Linggo ng Pagbubuntis: Linggo ${widget.week} (${_tTrimester(widget.trimester)})\n"
-                "Antas ng Panganib: ${_tRiskLevel(widget.riskLevel)}\n"
+                "Linggo ng Pagbubuntis: Linggo ${_currentWeek} (${_tTrimester(_currentTrimester)})\n"
+                "Antas ng Panganib: ${_tRiskLevel(_currentRisk)}\n"
                 "Mga Risk Factors: ${widget.riskFactors?.join(', ') ?? 'Wala'}\n"
                 "Mga Rekomendadong Aksyon: ${widget.suggestedActions?.join(', ') ?? 'Wala'}\n"
                 "Mga Aktibong Alerdye (Allergies) na ibinahagi: $allergiesStr\n"
@@ -878,8 +905,8 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                 "Mga Kasalukuyang Kondisyong Medikal (Medical Conditions) na ibinahagi: $medicalConditionsStr")
         : (includePregnancy
             ? "Mother's Name: $_onlyFirstName\n"
-                "Pregnancy Week: Week ${widget.week} (${_tTrimester(widget.trimester)})\n"
-                "Risk Level: ${_tRiskLevel(widget.riskLevel)}\n"
+                "Pregnancy Week: Week ${_currentWeek} (${_tTrimester(_currentTrimester)})\n"
+                "Risk Level: ${_tRiskLevel(_currentRisk)}\n"
                 "Risk Factors: ${widget.riskFactors?.join(', ') ?? 'None'}\n"
                 "Suggested Actions: ${widget.suggestedActions?.join(', ') ?? 'None'}\n"
                 "Shared Active Allergies: $allergiesStr\n"
@@ -914,6 +941,9 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
     return "$personaPrompt\n\n"
         "Here is the context about the mother you are talking to:\n"
         "$contextString\n\n"
+        "Context date: ${DateFormat('yyyy-MM-dd').format(DateTime.now())}.\n"
+        "${!_hidePregnancyInfo ? 'Upcoming recorded schedules:\n${_liveContext == null ? 'Unavailable; do not invent dates.' : _liveContext!.schedules.isEmpty ? 'No upcoming appointments recorded.' : _liveContext!.schedules.join('\n')}' : 'Pregnancy and appointment details are hidden by the mother.'}\n"
+        "Use the current recorded week, trimester and dates to answer direct questions. Do not say you do not know when these facts are provided. Current context overrides an old greeting or earlier chat. Never invent a date or treat a health center session as a confirmed personal appointment.\n"
         "Rules:\n"
         "1. Limit your responses to 2-3 brief paragraphs so they are easy to read on a mobile phone screen.\n"
         "2. STRICT LANGUAGE MATCHING: You must detect and mirror the language or dialect style the mother uses. If she asks in Tagalog, respond in warm, conversational Tagalog. If she asks in Taglish, respond in natural Taglish. If she asks in English, respond in clear English. Sound warm, natural, and never use rigid clinical translations.\n"
@@ -1376,8 +1406,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                         Text(
                           // Named for what she decides here, not for the
                           // settings screen it technically is.
-                          _t('What Ate can see',
-                              'Ano ang nakikita ni Ate'),
+                          _t('What Ate can see', 'Ano ang nakikita ni Ate'),
                           style: const TextStyle(
                             fontSize: 19,
                             fontWeight: FontWeight.w800,
@@ -1388,7 +1417,8 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                       ],
                     ),
                   ),
-                  const Divider(height: 24, thickness: 1, color: Color(0xFFF5E4EC)),
+                  const Divider(
+                      height: 24, thickness: 1, color: Color(0xFFF5E4EC)),
                   Expanded(
                     child: ListView(
                       padding: const EdgeInsets.symmetric(
@@ -1436,13 +1466,12 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                               _t('Share Pregnancy Details',
                                   'Ibahagi ang Detalye ng Pagbubuntis'),
                               style: TextStyle(
-                                  color: AppColors.headingSoft,
-                                  fontSize: 14),
+                                  color: AppColors.headingSoft, fontSize: 14),
                             ),
                             subtitle: Text(
                               _t(
-                                'Week ${widget.week}, ${_tTrimester(widget.trimester)}, Risk Level: ${_tRiskLevel(widget.riskLevel)}',
-                                'Linggo ${widget.week}, ${_tTrimester(widget.trimester)}, Antas ng Panganib: ${_tRiskLevel(widget.riskLevel)}',
+                                'Week ${_currentWeek}, ${_tTrimester(_currentTrimester)}, Risk Level: ${_tRiskLevel(_currentRisk)}',
+                                'Linggo ${_currentWeek}, ${_tTrimester(_currentTrimester)}, Antas ng Panganib: ${_tRiskLevel(_currentRisk)}',
                               ),
                               style: const TextStyle(
                                   fontSize: 12, color: AppColors.textSecondary),
@@ -1460,7 +1489,10 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                               });
                             },
                           ),
-                          const Divider(height: 24, thickness: 1, color: Color(0xFFF5E4EC)),
+                          const Divider(
+                              height: 24,
+                              thickness: 1,
+                              color: Color(0xFFF5E4EC)),
                         ],
                         _buildPrivacyHeader(_t('Allergies', 'Mga Allergy')),
                         if (_activeAllergies.isEmpty)
@@ -1485,8 +1517,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                               title: Text(
                                 allergen,
                                 style: TextStyle(
-                                    color: AppColors.headingSoft,
-                                    fontSize: 14),
+                                    color: AppColors.headingSoft, fontSize: 14),
                               ),
                               value: isVisible,
                               onChanged: (val) async {
@@ -1510,7 +1541,8 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                               },
                             );
                           }),
-                        const Divider(height: 24, thickness: 1, color: Color(0xFFF5E4EC)),
+                        const Divider(
+                            height: 24, thickness: 1, color: Color(0xFFF5E4EC)),
                         _buildPrivacyHeader(_t(
                             'Medical Conditions', 'Mga Medikal na Kondisyon')),
                         if (_activeMedicalConditions.isEmpty)
@@ -1535,8 +1567,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                               title: Text(
                                 cond,
                                 style: TextStyle(
-                                    color: AppColors.headingSoft,
-                                    fontSize: 14),
+                                    color: AppColors.headingSoft, fontSize: 14),
                               ),
                               value: isVisible,
                               onChanged: (val) async {
@@ -1560,7 +1591,8 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                               },
                             );
                           }),
-                        const Divider(height: 24, thickness: 1, color: Color(0xFFF5E4EC)),
+                        const Divider(
+                            height: 24, thickness: 1, color: Color(0xFFF5E4EC)),
                         const SizedBox(height: 8),
                         _buildPrivacyHeader(_t('AI Ethical Code & Safe Use',
                             'Etika at Ligtas na Paggamit ng AI')),
@@ -2460,8 +2492,10 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
   }
 
   Future<void> _toggleTts(String messageId, String text) async {
+    final request = ++_speechRequest;
     // If already playing this message → stop
-    if (_currentlyReadingMessageId == messageId) {
+    if (_currentlyReadingMessageId == messageId ||
+        _loadingTtsMessageId == messageId) {
       // Both engines: either one could be the one talking, and stopping only
       // the player would leave the device voice reading on.
       await _audioPlayer.stop();
@@ -2469,6 +2503,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
       if (mounted) {
         setState(() {
           _currentlyReadingMessageId = null;
+          _loadingTtsMessageId = null;
         });
       }
       return;
@@ -2477,6 +2512,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
     // Stop whatever is currently playing, from either engine.
     await _audioPlayer.stop();
     await _deviceTts?.stop();
+    if (!mounted || request != _speechRequest) return;
     if (mounted) {
       setState(() {
         _currentlyReadingMessageId = null;
@@ -2484,40 +2520,31 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
       });
     }
 
-    // Filipino goes straight to the device voice.
-    //
-    // Orpheus is `orpheus-v1-english` — an English-only model. Asked to read a
-    // Tagalog reply it pronounces it as English, which is worse than not
-    // reading it at all for the mother who chose Filipino. The phone's own
-    // engine has a fil-PH voice on most Android builds.
-    // If the device voice fails, this falls through to Groq below rather than
-    // returning — an English-accented reading is worse than a Filipino one,
-    // but both are better than a mother tapping the speaker and getting
-    // nothing. On web the device path fails often, which is what the
-    // SpeechSynthesisErrorEvent in the log was.
-    if (LanguageService.isFilipino) {
-      final spoken = await _speakOnDevice(text, messageId);
-      if (spoken) return;
-      debugPrint('[MotherChatbotPage] device voice failed; trying Groq');
-    }
+    // Hosted speech is primary for every reply. Orpheus is English-trained,
+    // so Filipino text keeps its original wording with an English accent.
 
     try {
       final wavBytes = await _groqService.speakWithGroqTts(text);
 
-      if (!mounted) return;
+      if (!mounted || request != _speechRequest) return;
       setState(() {
         _loadingTtsMessageId = null;
         _currentlyReadingMessageId = messageId;
       });
 
       // Write bytes to a temporary file to guarantee compatibility across all Android devices/emulators
-      final tempDir = await getTemporaryDirectory();
-      final tempFile = File('${tempDir.path}/temp_tts_$messageId.wav');
-      await tempFile.writeAsBytes(wavBytes, flush: true);
-
-      // Play from the temporary file source
-      await _audioPlayer.play(DeviceFileSource(tempFile.path));
+      if (kIsWeb) {
+        await _audioPlayer.play(
+            BytesSource(Uint8List.fromList(wavBytes), mimeType: 'audio/wav'));
+      } else {
+        final tempDir = await getTemporaryDirectory();
+        final tempFile = File('${tempDir.path}/temp_tts_$messageId.wav');
+        await tempFile.writeAsBytes(wavBytes, flush: true);
+        if (!mounted || request != _speechRequest) return;
+        await _audioPlayer.play(DeviceFileSource(tempFile.path));
+      }
     } catch (e) {
+      if (!mounted || request != _speechRequest) return;
       debugPrint('[MotherChatbotPage] Groq TTS error: $e');
 
       // The phone can read it even when the service will not.
@@ -2527,7 +2554,16 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
       // message read to her. The device engine needs no key, no terms, and no
       // signal. Tried before giving up, so the feature degrades instead of
       // failing.
-      if (await _speakOnDevice(text, messageId)) return;
+      if (await _speakOnDevice(text, messageId, request)) {
+        if (mounted && request == _speechRequest) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(_t(
+                  'AI voice is unavailable. Using the device voice.',
+                  'Hindi available ang AI voice. Ginagamit ang boses ng device.'))));
+        }
+        return;
+      }
+      if (!mounted || request != _speechRequest) return;
       if (mounted) {
         setState(() {
           _loadingTtsMessageId = null;
@@ -2648,7 +2684,8 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
             if (_isTranscribing)
               Expanded(
                 child: ShimmerTranscribingLoader(
-                  text: _t('Converting speech to text...', 'Isinasalin ang boses sa teksto...'),
+                  text: _t('Converting speech to text...',
+                      'Isinasalin ang boses sa teksto...'),
                 ),
               )
             else if (_isRecording)
@@ -2664,12 +2701,14 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                         color: AppColors.bgPrimaryOf(context),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: Colors.redAccent.withValues(alpha: 0.2 + 0.3 * glowVal),
+                          color: Colors.redAccent
+                              .withValues(alpha: 0.2 + 0.3 * glowVal),
                           width: 1.5,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.redAccent.withValues(alpha: 0.05 + 0.15 * glowVal),
+                            color: Colors.redAccent
+                                .withValues(alpha: 0.05 + 0.15 * glowVal),
                             blurRadius: 8.0,
                             spreadRadius: 1.0,
                           ),
@@ -2688,11 +2727,15 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: Colors.redAccent.withValues(alpha: 0.4 + 0.6 * _recordingGlowController.value),
+                              color: Colors.redAccent.withValues(
+                                  alpha: 0.4 +
+                                      0.6 * _recordingGlowController.value),
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.redAccent.withValues(alpha: 0.4 * _recordingGlowController.value),
+                                  color: Colors.redAccent.withValues(
+                                      alpha:
+                                          0.4 * _recordingGlowController.value),
                                   blurRadius: 4,
                                   spreadRadius: 1,
                                 )
@@ -2729,7 +2772,8 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                         },
                         constraints: const BoxConstraints(),
                         padding: EdgeInsets.zero,
-                        tooltip: _t('Cancel recording', 'Kanselahin ang recording'),
+                        tooltip:
+                            _t('Cancel recording', 'Kanselahin ang recording'),
                       ),
                     ],
                   ),
@@ -2761,10 +2805,9 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                         color: AppColors.inputText, fontSize: 14.5),
                     decoration: InputDecoration(
                       isDense: true,
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 14),
-                      hintText: _t('Ask Ate anything…',
-                          'Magtanong ka lang kay Ate…'),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      hintText:
+                          _t('Ask Ate anything…', 'Magtanong ka lang kay Ate…'),
                       hintStyle: const TextStyle(
                           color: AppColors.textSecondary, fontSize: 14.5),
                       border: InputBorder.none,
@@ -2775,7 +2818,8 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
             const SizedBox(width: 8),
             PulsingMicButton(
               isRecording: _isRecording,
-              onPressed: (_isTyping || _isTranscribing) ? () {} : _toggleVoiceInput,
+              onPressed:
+                  (_isTyping || _isTranscribing) ? () {} : _toggleVoiceInput,
             ),
             const SizedBox(width: 8),
             // A filled circle, matching the send affordance elsewhere. A bare
@@ -2822,80 +2866,81 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
           child: Theme(
             // The default ExpansionTile draws a rule above and below itself
             // when open — two more hard lines on a page that had several.
-            data: Theme.of(context)
-                .copyWith(dividerColor: Colors.transparent),
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: Material(
               // Its own surface, so the tap ripple draws above the card's
               // background instead of under it.
               type: MaterialType.transparency,
               child: ExpansionTile(
-            title: Text(
-              _t(faq.questionEn, faq.questionTl),
-              style: const TextStyle(
-                fontSize: 15,
-                height: 1.35,
-                fontWeight: FontWeight.w800,
-                color: AppColors.headingSoft,
-              ),
-            ),
-            // A pill that fits its words.
-            //
-            // The category sat in a full-width block under every question, so
-            // "Nutrition" arrived as a pink bar the width of the card and read
-            // as a progress meter rather than a label.
-            subtitle: Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                margin: const EdgeInsets.only(top: 6),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFEDF4),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  _tCategory(faq.category),
+                title: Text(
+                  _t(faq.questionEn, faq.questionTl),
                   style: const TextStyle(
-                    fontSize: 11.5,
+                    fontSize: 15,
+                    height: 1.35,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.brandText,
+                    color: AppColors.headingSoft,
                   ),
                 ),
-              ),
-            ),
-            iconColor: AppColors.brandPrimary,
-            collapsedIconColor: AppColors.brandPrimary,
-            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            expandedAlignment: Alignment.topLeft,
-            children: [
-              Text(
-                _t(faq.answerEn, faq.answerTl),
-                style: const TextStyle(
-                  fontSize: 14,
-                  height: 1.55,
-                  color: AppColors.inputText,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () => _askFAQInChat(faq),
-                  icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
-                  label: Text(_t('Ask Ate in Chat', 'Itanong kay Ate sa Chat')),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    backgroundColor: AppColors.brandPrimary,
+                // A pill that fits its words.
+                //
+                // The category sat in a full-width block under every question, so
+                // "Nutrition" arrived as a pink bar the width of the card and read
+                // as a progress meter rather than a label.
+                subtitle: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 6),
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    shape: const StadiumBorder(),
-                    textStyle: const TextStyle(
-                        fontSize: 13.5, fontWeight: FontWeight.w800),
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFEDF4),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      _tCategory(faq.category),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.brandText,
+                      ),
+                    ),
                   ),
                 ),
+                iconColor: AppColors.brandPrimary,
+                collapsedIconColor: AppColors.brandPrimary,
+                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                expandedAlignment: Alignment.topLeft,
+                children: [
+                  Text(
+                    _t(faq.answerEn, faq.answerTl),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.55,
+                      color: AppColors.inputText,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => _askFAQInChat(faq),
+                      icon: const Icon(Icons.chat_bubble_outline_rounded,
+                          size: 16),
+                      label: Text(
+                          _t('Ask Ate in Chat', 'Itanong kay Ate sa Chat')),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.brandPrimary,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        shape: const StadiumBorder(),
+                        textStyle: const TextStyle(
+                            fontSize: 13.5, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-            ),
             ),
           ),
         );
@@ -2977,7 +3022,8 @@ class ShimmerTranscribingLoader extends StatefulWidget {
   const ShimmerTranscribingLoader({super.key, required this.text});
 
   @override
-  State<ShimmerTranscribingLoader> createState() => _ShimmerTranscribingLoaderState();
+  State<ShimmerTranscribingLoader> createState() =>
+      _ShimmerTranscribingLoaderState();
 }
 
 class _ShimmerTranscribingLoaderState extends State<ShimmerTranscribingLoader>
@@ -3027,7 +3073,8 @@ class _ShimmerTranscribingLoaderState extends State<ShimmerTranscribingLoader>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: AppColors.brandPrimaryOf(context).withValues(alpha: 0.3),
+                        color: AppColors.brandPrimaryOf(context)
+                            .withValues(alpha: 0.3),
                         width: 2,
                       ),
                     ),
@@ -3091,7 +3138,19 @@ class SoundwaveVisualizer extends StatefulWidget {
 class _SoundwaveVisualizerState extends State<SoundwaveVisualizer>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  final List<double> _baseHeights = [8.0, 16.0, 24.0, 12.0, 32.0, 20.0, 28.0, 16.0, 22.0, 10.0, 6.0];
+  final List<double> _baseHeights = [
+    8.0,
+    16.0,
+    24.0,
+    12.0,
+    32.0,
+    20.0,
+    28.0,
+    16.0,
+    22.0,
+    10.0,
+    6.0
+  ];
 
   @override
   void initState() {
@@ -3121,12 +3180,14 @@ class _SoundwaveVisualizerState extends State<SoundwaveVisualizer>
             final phase = (index * 0.15) % 1.0;
             final sine = (value + phase) % 1.0;
             final factor = sine < 0.5 ? sine * 2 : (1.0 - sine) * 2;
-            
+
             const double idleLevel = 0.15;
-            final double scalingFactor = idleLevel + (1.0 - idleLevel) * widget.volume;
-            
+            final double scalingFactor =
+                idleLevel + (1.0 - idleLevel) * widget.volume;
+
             const double minHeight = 4.0;
-            final double height = minHeight + (_baseHeights[index] - minHeight) * factor * scalingFactor;
+            final double height = minHeight +
+                (_baseHeights[index] - minHeight) * factor * scalingFactor;
 
             return Container(
               width: 3.0,
@@ -3144,7 +3205,8 @@ class _SoundwaveVisualizerState extends State<SoundwaveVisualizer>
                 borderRadius: BorderRadius.circular(1.5),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.redAccent.withValues(alpha: 0.3 * scalingFactor),
+                    color:
+                        Colors.redAccent.withValues(alpha: 0.3 * scalingFactor),
                     blurRadius: 2.0,
                     spreadRadius: 0.5,
                   ),
@@ -3255,7 +3317,7 @@ class _PulsingMicButtonState extends State<PulsingMicButton>
           final pulseVal = _pulseController.value;
           final size1 = 48.0 + (24.0 * pulseVal);
           final size2 = 48.0 + (12.0 * pulseVal);
-          
+
           return Stack(
             alignment: Alignment.center,
             clipBehavior: Clip.none,

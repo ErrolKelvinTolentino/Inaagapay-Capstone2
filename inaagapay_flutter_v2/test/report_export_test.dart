@@ -52,8 +52,8 @@ ReportDocument _checkupDoc({int copies = 1}) {
   return ReportDocument(
     title: 'Prenatal Checkup Records',
     facilityName: 'Pinagbarilan BHC',
-    periodLabel: MidwifeReportService.periodLabel(DateTimeRange(
-        start: DateTime(2026, 9, 1), end: DateTime(2026, 9, 30))),
+    periodLabel: MidwifeReportService.periodLabel(
+        DateTimeRange(start: DateTime(2026, 9, 1), end: DateTime(2026, 9, 30))),
     preparedBy: 'Juana Santos',
     generatedAt: _now,
     blocks: [
@@ -93,6 +93,7 @@ ReportDocument _statsDoc() {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test('period labels read as a month when they cover one', () {
     expect(
       MidwifeReportService.periodLabel(DateTimeRange(
@@ -130,8 +131,8 @@ void main() {
     expect(doc.blocks.length, 3);
     final coverage = doc.blocks[1];
     expect(coverage.lead, contains('Coverage: 7 of 9.'));
-    expect(coverage.lead.any((l) => l.startsWith('Reading: Two mothers')),
-        isTrue);
+    expect(
+        coverage.lead.any((l) => l.startsWith('Reading: Two mothers')), isTrue);
     expect(doc.blocks[2].rows, isEmpty);
     expect(doc.blocks[2].emptyText, 'No weight gain assessed yet.');
   });

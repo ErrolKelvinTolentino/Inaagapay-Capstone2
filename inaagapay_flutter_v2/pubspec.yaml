@@ -49,6 +49,7 @@ flutter:
   - assets/images/
   - assets/images/fetal_growth/
   - assets/pdf/
+  - assets/fonts/
   # Keep .env declared. flutter_dotenv loads it as an asset at startup, so
   # dropping it from this list breaks the app on launch. The baby-book branch
   # removed it; that removal is deliberately not carried over.

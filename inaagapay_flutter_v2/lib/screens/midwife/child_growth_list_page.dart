@@ -1,3 +1,6 @@
+import '../../widgets/growth_z_score_summary.dart';
+import '../../services/child_record_export.dart';
+import '../../widgets/child_export_button.dart';
 // lib/screens/midwife/child_growth_list_page.dart
 
 import 'package:flutter/material.dart';
@@ -94,7 +97,8 @@ class _ChildGrowthListPageState extends State<ChildGrowthListPage> {
       await _fetchBirthDetails();
       await _fetchGrowthRecords();
 
-      final realRecords = records.where((r) => r['child_details_id'] != -1).toList();
+      final realRecords =
+          records.where((r) => r['child_details_id'] != -1).toList();
       if (realRecords.isNotEmpty && birthdate != null) {
         final latestReal = realRecords.last;
         final latestId = (latestReal['child_details_id'] as int?) ?? 0;
@@ -109,8 +113,9 @@ class _ChildGrowthListPageState extends State<ChildGrowthListPage> {
             final lower = savedText.toLowerCase();
             final isOldOrSingleLang = !lower.contains('english') ||
                 !(lower.contains('filipino') || lower.contains('tagalog'));
-            final isBulletFormat = savedText.contains('## Baby Growth Summary') ||
-                savedText.contains('Buod ng Paglaki ng Bata');
+            final isBulletFormat =
+                savedText.contains('## Baby Growth Summary') ||
+                    savedText.contains('Buod ng Paglaki ng Bata');
 
             if (!isGeneratedByAi || isOldOrSingleLang || isBulletFormat) {
               await _generateAndSaveAIAnalysis(latestId);
@@ -186,7 +191,11 @@ class _ChildGrowthListPageState extends State<ChildGrowthListPage> {
 
     records = List<Map<String, dynamic>>.from(response);
 
-    if (birthdate != null && birthWeight != null && birthWeight! > 0 && birthHeight != null && birthHeight! > 0) {
+    if (birthdate != null &&
+        birthWeight != null &&
+        birthWeight! > 0 &&
+        birthHeight != null &&
+        birthHeight! > 0) {
       final birthRecord = {
         'child_details_id': -1, // Synthetic ID for chart purposes
         'child_id': widget.childId,
@@ -382,7 +391,8 @@ $recordsSummary
     }
 
     if (years > 0) {
-      final monthPart = months > 0 ? ', $months month${months != 1 ? 's' : ''}' : '';
+      final monthPart =
+          months > 0 ? ', $months month${months != 1 ? 's' : ''}' : '';
       return '$years year${years != 1 ? 's' : ''}$monthPart old';
     } else if (months > 0) {
       final weeks = days ~/ 7;
@@ -392,7 +402,9 @@ $recordsSummary
       if (days >= 7) {
         final weeks = days ~/ 7;
         final remainingDays = days % 7;
-        final dayPart = remainingDays > 0 ? ', $remainingDays day${remainingDays != 1 ? 's' : ''}' : '';
+        final dayPart = remainingDays > 0
+            ? ', $remainingDays day${remainingDays != 1 ? 's' : ''}'
+            : '';
         return '$weeks week${weeks != 1 ? 's' : ''}$dayPart old';
       } else if (days > 0) {
         return '$days day${days != 1 ? 's' : ''} old';
@@ -432,6 +444,8 @@ $recordsSummary
         preferredSize: const Size.fromHeight(56),
         child: SecondaryHeader(
           title: 'Growth Records',
+          trailing: ChildExportButton(
+              childId: widget.childId, kind: ChildExportKind.growth),
           onBack: () => Navigator.pop(context),
         ),
       ),
@@ -447,9 +461,7 @@ $recordsSummary
                 )
               : AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
-                  child: records.isEmpty
-                      ? _buildEmptyState()
-                      : _buildContent(),
+                  child: records.isEmpty ? _buildEmptyState() : _buildContent(),
                 ),
         ),
       ),
@@ -532,6 +544,7 @@ $recordsSummary
       ],
     );
   }
+
   /// Growth records mapped into the shared card's input, oldest first.
   List<GrowthMeasurement> _growthMeasurements() {
     final out = <GrowthMeasurement>[];
@@ -610,14 +623,13 @@ $recordsSummary
             final date = record['created_at']?.toString() ?? '';
             final weeks = _ageInWeeks(DateTime.parse(date));
             final isLatest = record == records.last;
-            final bmi = _calculateBMI(height, weight);
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _buildHistoryRecordCard(
                 height: height,
                 weight: weight,
-                bmi: bmi,
+                measuredAt: date,
                 date: formatDate(date),
                 weekNumber: weeks,
                 isLatest: isLatest,
@@ -631,7 +643,7 @@ $recordsSummary
   Widget _buildHistoryRecordCard({
     required double height,
     required double weight,
-    required double bmi,
+    required String measuredAt,
     required String date,
     required int weekNumber,
     required bool isLatest,
@@ -728,42 +740,6 @@ $recordsSummary
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: AppColors.brandText.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.brandText.withValues(alpha: 0.15),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.straighten, size: 18, color: AppColors.brandText),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Calculated BMI',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.brandText,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    bmi > 0 ? bmi.toStringAsFixed(1) : 'n/a',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ] else if (activeTab == 1) ...[
             _buildMeasurementItem(
               'Weight',
@@ -779,6 +755,12 @@ $recordsSummary
               AppColors.brandPrimary,
             ),
           ],
+          const SizedBox(height: 12),
+          GrowthZScoreSummary(record: {
+            'child_height': height,
+            'child_weight': weight,
+            'created_at': measuredAt
+          }, birthdate: birthdate, sex: childData?['sex']?.toString()),
         ],
       ),
     );

@@ -8,6 +8,7 @@
 //   TC-MW-PREG-005    initial prenatal checkup skipped
 
 import 'package:flutter/material.dart';
+import 'package:inaagapay_flutter_v2/widgets/app_dropdown_field.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inaagapay_flutter_v2/screens/midwife/add_child_step3_child.dart';
 import 'package:inaagapay_flutter_v2/screens/midwife/add_child_step4_birth.dart';
@@ -130,11 +131,11 @@ void main() {
     await settle(tester);
 
     // Choose the destination, leave the reason blank, confirm.
-    await tester.tap(find.byType(DropdownButtonFormField<int>));
+    await tester.tap(find.byType(AppDropdownField<int>));
     await tester.pumpAndSettle();
     await tester.tap(find.textContaining('Sabang BHC').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Transfer'));
+    await tester.tap(find.text('Transfer mother'));
     await tester.pumpAndSettle();
 
     expect(find.text('Say briefly why she is being transferred.'), findsOneWidget);

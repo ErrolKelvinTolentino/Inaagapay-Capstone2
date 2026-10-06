@@ -3,9 +3,13 @@
 // Choosing where a mother is moving to. See MotherTransferService.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/mother_transfer_service.dart';
 import '../theme/app_colors.dart';
+import 'app_dropdown_field.dart';
+import 'app_input_field.dart';
+import 'main_button.dart';
 
 /// Returns true when the mother was transferred.
 Future<bool> showTransferMotherSheet(
@@ -111,17 +115,6 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
     });
   }
 
-  InputDecoration _field(String label, {String? hint, String? error}) =>
-      InputDecoration(
-        labelText: label,
-        hintText: hint,
-        errorText: error,
-        errorMaxLines: 2,
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      );
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -164,7 +157,8 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
               '${widget.motherName} and her records will appear at the new '
               'health center. Checkups and doses already given stay recorded '
               'where they happened.',
-              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              style:
+                  const TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
             FutureBuilder<List<TransferDestination>>(
@@ -178,33 +172,34 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
                 if (options == null) {
                   return const LinearProgressIndicator(minHeight: 2);
                 }
-                return DropdownButtonFormField<int>(
-                  isExpanded: true,
-                  initialValue: _to,
-                  decoration: _field('Move to', error: _destinationError),
-                  items: [
-                    for (final d in options)
-                      DropdownMenuItem(
-                        value: d.id,
-                        child: Text(d.label, overflow: TextOverflow.ellipsis),
-                      ),
-                  ],
-                  onChanged: _busy
-                      ? null
-                      : (value) => setState(() {
-                            _to = value;
-                            _destinationError = null;
-                          }),
+                return IgnorePointer(
+                  ignoring: _busy,
+                  child: AppDropdownField<int>(
+                    hintText: 'Destination health center',
+                    leadingIcon: Icons.local_hospital_outlined,
+                    value: _to,
+                    errorText: _destinationError,
+                    options: options.map((d) => d.id).toList(),
+                    displayStringForOption: (id) =>
+                        options.firstWhere((d) => d.id == id).label,
+                    onSelected: (value) => setState(() {
+                      _to = value;
+                      _destinationError = null;
+                    }),
+                  ),
                 );
               },
             ),
             const SizedBox(height: 12),
-            TextField(
+            AppInputField(
               controller: _barangay,
-              enabled: !_busy,
-              decoration: _field('New barangay (optional)',
-                  hint: 'Leave blank to keep her address'),
+              readOnly: _busy,
+              hintText: 'New barangay (optional)',
+              leadingIcon: Icons.location_on_outlined,
             ),
+            const SizedBox(height: 6),
+            const Text('Leave blank to keep her current barangay.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
               value: _moveChildren,
@@ -217,47 +212,30 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
               subtitle: const Text('They get new child numbers there.',
                   style: TextStyle(fontSize: 12)),
             ),
-            TextField(
+            AppInputField(
               controller: _reason,
-              enabled: !_busy,
-              maxLines: 2,
-              maxLength: 300,
+              readOnly: _busy,
+              hintText: 'Reason for transfer',
+              inputFormatters: [LengthLimitingTextInputFormatter(300)],
+              isRequired: true,
+              leadingIcon: Icons.edit_note_rounded,
+              errorText: _reasonError,
               onChanged: (value) {
-                if (_reasonError != null && value.trim().length >= 5) {
+                if (_reasonError != null && value.trim().length >= 5)
                   setState(() => _reasonError = null);
-                }
               },
-              decoration: _field('Reason',
-                  hint: 'e.g. Moved to Sabang with her family',
-                  error: _reasonError),
             ),
+            const SizedBox(height: 16),
             if (_error != null) ...[
               Text(_error!,
                   style: const TextStyle(fontSize: 13, color: AppColors.error)),
               const SizedBox(height: 8),
             ],
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _busy ? null : _submit,
-                icon: _busy
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.swap_horiz_rounded),
-                label: const Text('Transfer',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.brandPrimary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
+            if (_busy) const Center(child: CircularProgressIndicator()),
+            MainButton(
+              label: _busy ? 'Transferring...' : 'Transfer mother',
+              leftIcon: Icons.swap_horiz_rounded,
+              onPressed: _busy ? null : _submit,
             ),
           ],
         ),

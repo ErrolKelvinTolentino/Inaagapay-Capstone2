@@ -11,6 +11,8 @@ import 'inventory_models.dart';
 /// clinical screen deducted from were not guaranteed to be the same shelf.
 /// Both now come from .env, resolved once in main.dart.
 class InventoryRepository {
+  // Cached alert snapshots must refresh after a successful local stock write.
+  static int inventoryRevision = 0;
   InventoryRepository({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
 
@@ -418,6 +420,7 @@ class InventoryRepository {
       // earlier failure instead of leaving every workflow RPC disabled for
       // the rest of the session once one of them has ever failed.
       _workflowRpcUnavailable = false;
+      inventoryRevision++;
       return InventoryStockRequestRecord.fromJson(row);
     } catch (error) {
       if (_isMissingWorkflow(error)) {
@@ -461,6 +464,7 @@ class InventoryRepository {
       }
       // Same healing as submitStockRequest above.
       _workflowRpcUnavailable = false;
+      inventoryRevision++;
       return InventoryTransferRecord.fromJson(row);
     } catch (error) {
       if (_isMissingWorkflow(error)) {
@@ -582,6 +586,7 @@ class InventoryRepository {
           'Supabase did not return the issued transfer.',
         );
       }
+      inventoryRevision++;
       return InventoryTransferRecord.fromJson(row);
     } catch (error) {
       if (_isMissingWorkflow(error)) {
@@ -644,6 +649,7 @@ class InventoryRepository {
           'Supabase did not return the recorded stock activity.',
         );
       }
+      inventoryRevision++;
       return InventoryStockActivityResult.fromJson(row);
     } catch (error) {
       if (_isMissingWorkflow(error)) {
@@ -763,6 +769,7 @@ class InventoryRepository {
               'inventory_transfers',
               'inventory_unusable_stock_reports',
             }.contains(tableName)) {
+              inventoryRevision++;
               onInventoryChanged();
             }
           },
@@ -856,6 +863,7 @@ class InventoryRepository {
         );
       }
 
+      inventoryRevision++;
       return row;
     } on Object catch (error) {
       if (error is InventoryRepositoryException) rethrow;

@@ -5219,6 +5219,20 @@ table.data-table tbody tr:hover td {
   box-shadow: 0 0 0 2px #fff;
 }
 
+.notif-count[hidden] { display: none; }
+
+/* Account dialogs use a dimmed surface without backdrop blur. Combining a
+   moving dialog with a filtered background produced compositor seams. */
+.page-accounts .modal-overlay,
+.page-accounts .rhu-modal-overlay { backdrop-filter: none; }
+.page-accounts .modal,
+.page-accounts .modal-overlay.show .modal { transform: none; transition: none; }
+
+@media (min-width: 993px) {
+  .sidebar-backdrop, .sidebar-backdrop.show { display: none; }
+  body.sidebar-open { overflow: auto; }
+}
+
 .notif-panel {
   position: absolute;
   top: calc(100% + 10px);

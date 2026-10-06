@@ -152,7 +152,7 @@
   // plain equivalents rather than embed a 300 KB font in every report.
   function pdfSafe(value) {
     return String(value === null || value === undefined ? "" : value)
-      .replace(/[\u2012-\u2015\u2212]/g, "-")
+      .replace(/[\u2010-\u2015\u2212]/g, "-")
       .replace(/[\u2018\u2019\u201A\u2032]/g, "'")
       .replace(/[\u201C\u201D\u201E\u2033]/g, '"')
       .replace(/\u2026/g, "...")
@@ -177,45 +177,33 @@
     }
 
     _titleBlock() {
-      const d = this.doc;
-      const m = this.margin;
+      const d = this.doc, m = this.margin;
       d.setFont("helvetica", "bold");
       d.setFontSize(7);
       d.setTextColor(...MUTED);
       d.text("INAAGAPAY MATERNAL AND CHILD HEALTH INFORMATION SYSTEM", m, 14);
-
       d.setFontSize(16);
       d.setTextColor(...INK);
-      const titleLines = d.splitTextToSize(this.opts.title, this.content * 0.6);
-      d.text(titleLines, m, 21);
-      let y = 21 + (titleLines.length - 1) * 6.5;
-
+      const titleLines = d.splitTextToSize(this.opts.title, this.content);
+      d.text(titleLines, m, 22, { lineHeightFactor: 1.2 });
+      let y = 22 + titleLines.length * 6.8;
       d.setFontSize(9.5);
       d.setTextColor(...BRAND);
-      d.text(d.splitTextToSize(this.opts.scope, this.content * 0.6), m, y + 6);
-
-      const meta = [
-        ["Period", this.opts.period || "All records"],
-        ["Prepared by", this.opts.preparedBy],
-        ["Generated", stamp(this.generated)],
-      ];
+      const scopeLines = d.splitTextToSize(this.opts.scope, this.content);
+      d.text(scopeLines, m, y, { lineHeightFactor: 1.2 });
+      y += scopeLines.length * 4.5 + 3;
+      // Metadata occupies its own rows; long facility names and preparation
+      // names can no longer collide in the same header column.
+      d.setFont("helvetica", "normal");
       d.setFontSize(7.5);
-      meta.forEach(([k, v], i) => {
-        const yy = 16 + i * 4.2;
-        d.setFont("helvetica", "bold");
-        d.setTextColor(...MUTED);
-        const label = `${k}: `;
-        d.setFont("helvetica", "normal");
-        const valueWidth = d.getTextWidth(String(v));
-        const right = this.width - m;
-        d.setTextColor(...INK);
-        d.text(String(v), right, yy, { align: "right" });
-        d.setFont("helvetica", "bold");
-        d.setTextColor(...MUTED);
-        d.text(label, right - valueWidth, yy, { align: "right" });
-      });
-
-      this.y = Math.max(y + 10, 31);
+      d.setTextColor(...MUTED);
+      for (const [label, value] of [["Period", this.opts.period || "All records"],
+        ["Prepared by", this.opts.preparedBy], ["Generated", stamp(this.generated)]]) {
+        const lines = d.splitTextToSize(`${label}: ${value}`, this.content);
+        d.text(lines, m, y, { lineHeightFactor: 1.2 });
+        y += lines.length * 3.5;
+      }
+      this.y = y + 3;
       d.setDrawColor(...BRAND);
       d.setLineWidth(0.5);
       d.line(m, this.y, this.width - m, this.y);
@@ -232,16 +220,18 @@
 
     heading(text) {
       const d = this.doc;
-      this.ensureSpace(16);
-      d.setFillColor(...BRAND_SOFT);
-      d.rect(this.margin, this.y, this.content, 7.5, "F");
-      d.setFillColor(...BRAND);
-      d.rect(this.margin, this.y, 1.2, 7.5, "F");
       d.setFont("helvetica", "bold");
       d.setFontSize(10.5);
+      const lines = d.splitTextToSize(pdfSafe(text), this.content - 7);
+      const h = Math.max(7.5, lines.length * 4.5 + 3);
+      this.ensureSpace(h + 8);
+      d.setFillColor(...BRAND_SOFT);
+      d.rect(this.margin, this.y, this.content, h, "F");
+      d.setFillColor(...BRAND);
+      d.rect(this.margin, this.y, 1.2, h, "F");
       d.setTextColor(...INK);
-      d.text(pdfSafe(text), this.margin + 3.5, this.y + 5.1);
-      this.y += 11;
+      d.text(lines, this.margin + 3.5, this.y + 5.1, { lineHeightFactor: 1.2 });
+      this.y += h + 3.5;
     }
 
     paragraph(text, style) {
@@ -277,21 +267,27 @@
       const gap = 3;
       const w = (this.content - gap * (perRow - 1)) / perRow;
       for (let i = 0; i < pairs.length; i += perRow) {
-        this.ensureSpace(17);
-        pairs.slice(i, i + perRow).forEach(([label, value], j) => {
-          const x = this.margin + j * (w + gap);
-          d.setDrawColor(...RULE);
-          d.setFillColor(250, 250, 250);
-          d.roundedRect(x, this.y, w, 14, 1.5, 1.5, "FD");
+        const row = pairs.slice(i, i + perRow).map(([label, value]) => {
           d.setFont("helvetica", "bold");
           d.setFontSize(12);
-          d.setTextColor(...BRAND);
-          d.text(pdfSafe(value), x + w / 2, this.y + 6.5, { align: "center" });
+          const values = d.splitTextToSize(pdfSafe(value), w - 6);
           d.setFontSize(6.5);
-          d.setTextColor(...MUTED);
-          d.text(d.splitTextToSize(pdfSafe(label).toUpperCase(), w - 2), x + w / 2, this.y + 10.8, { align: "center" });
+          const labels = d.splitTextToSize(pdfSafe(label).toUpperCase(), w - 6);
+          return { values, labels };
         });
-        this.y += 17;
+        const h = Math.max(...row.map(r => 6 + r.values.length * 5 + r.labels.length * 3));
+        this.ensureSpace(h + 3);
+        row.forEach((r, j) => {
+          const x = this.margin + j * (w + gap);
+          d.setDrawColor(...RULE); d.setFillColor(250, 250, 250);
+          d.roundedRect(x, this.y, w, h, 1.5, 1.5, "FD");
+          d.setFont("helvetica", "bold"); d.setFontSize(12); d.setTextColor(...BRAND);
+          d.text(r.values, x + w / 2, this.y + 6, { align: "center", lineHeightFactor: 1.15 });
+          d.setFontSize(6.5); d.setTextColor(...MUTED);
+          d.text(r.labels, x + w / 2, this.y + 6 + r.values.length * 5,
+            { align: "center", lineHeightFactor: 1.2 });
+        });
+        this.y += h + 3;
       }
     }
 
@@ -337,20 +333,22 @@
       const gap = 6;
       const w = (this.content - gap * (n - 1)) / n;
       for (let i = 0; i < list.length; i += n) {
-        const row = list.slice(i, i + n);
-        const h = Math.max(...row.map((it) => w * (it.canvas.height / it.canvas.width)));
-        this.ensureSpace(h + 10);
+        const d = this.doc;
+        d.setFont("helvetica", "bold"); d.setFontSize(8);
+        const row = list.slice(i, i + n).map(it => ({ ...it, lines: d.splitTextToSize(pdfSafe(it.title), w) }));
+        const titleHeight = Math.max(...row.map(it => it.lines.length * 3.8)) + 2;
+        const maxImageHeight = this.height - 42 - titleHeight;
+        const h = Math.min(maxImageHeight, Math.max(...row.map(it => w * it.canvas.height / it.canvas.width)));
+        this.ensureSpace(h + titleHeight + 5);
         row.forEach((it, j) => {
           const x = this.margin + j * (w + gap);
-          const d = this.doc;
-          d.setFont("helvetica", "bold");
-          d.setFontSize(8);
           d.setTextColor(...INK);
-          d.text(d.splitTextToSize(pdfSafe(it.title), w), x, this.y + 3);
-          const ih = w * (it.canvas.height / it.canvas.width);
-          d.addImage(this._canvasImage(it.canvas), "JPEG", x, this.y + 5, w, ih);
+          d.text(it.lines, x, this.y + 3, { lineHeightFactor: 1.2 });
+          const ih = Math.min(h, w * it.canvas.height / it.canvas.width);
+          const iw = ih * it.canvas.width / it.canvas.height;
+          d.addImage(this._canvasImage(it.canvas), "JPEG", x, this.y + titleHeight, iw, ih);
         });
-        this.y += h + 9;
+        this.y += h + titleHeight + 5;
       }
     }
 
@@ -411,10 +409,12 @@
         if (p > 1) {
           d.setFont("helvetica", "bold");
           d.setTextColor(...INK);
-          d.text(this.opts.title, this.margin, 11);
+          const title = d.splitTextToSize(this.opts.title, this.content * 0.48)[0] || "";
+          d.text(title, this.margin, 11);
           d.setFont("helvetica", "normal");
           d.setTextColor(...MUTED);
-          d.text(`${this.opts.scope}${this.opts.period ? "  |  " + this.opts.period : ""}`,
+          const scope = d.splitTextToSize(`${this.opts.scope}${this.opts.period ? "  |  " + this.opts.period : ""}`, this.content * 0.48)[0] || "";
+          d.text(scope,
             this.width - this.margin, 11, { align: "right" });
           d.setDrawColor(...RULE);
           d.setLineWidth(0.2);

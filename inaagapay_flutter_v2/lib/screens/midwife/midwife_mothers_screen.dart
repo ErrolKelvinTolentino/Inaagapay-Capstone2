@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_input_field.dart';
+import '../../widgets/app_dropdown_field.dart';
+import '../../widgets/main_button.dart';
+import '../../services/mother_directory_order.dart';
 import '../../services/supabase_service.dart';
 import '../mother/mother_profile_page.dart';
 import 'midwife_add_mother_screen.dart';
@@ -51,45 +54,20 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
   String _selectedRiskFilter = 'All';
   Timer? _searchDebounceTimer;
 
-  String _selectedSort = 'Risk (High to Low)';
+  String _selectedSort = 'Risk';
+  bool _sortAscending = false;
 
-  /// Sort weight for a risk level — lower sorts first.
-  ///
-  /// Covers `medium` as well as high and low: pregnancies.pregnancy_risk_level
-  /// permits all three, and treating an unrecognised value as high rather than
-  /// low keeps an unclassified mother at the top where she will be looked at,
-  /// instead of buried where she will not.
-  static int _riskRank(Object? level) {
-    switch (level?.toString().toLowerCase().trim()) {
-      case 'critical':
-        return 0;
-      case 'high':
-        return 1;
-      case 'medium':
-      case 'moderate':
-        return 2;
-      case 'low':
-        return 3;
-      default:
-        return 1;
-    }
-  }
-
-  /// The numeric part of a patient number, for ordering within a risk band.
-  ///
-  /// "INA-002" sorts before "INA-010", which a plain string comparison would
-  /// get backwards. Mothers without a number sort last rather than first — an
-  /// absent number is not a low one.
-  static int _patientNumberOf(Map<String, dynamic> mother) {
-    final raw = mother['bhc_patient_id']?.toString() ?? '';
-    final digits = RegExp(r'\d+').firstMatch(raw)?.group(0);
-    return digits == null ? 1 << 30 : int.parse(digits);
-  }
   int _currentPage = 1;
   static const int _pageSize = 5;
 
   // Filter options
-  final List<String> _riskFilters = ['All', 'Low Risk', 'High Risk'];
+  final List<String> _riskFilters = [
+    'All',
+    'Low Risk',
+    'Medium Risk',
+    'High Risk',
+    'Critical Risk'
+  ];
 
   // Scroll controller
   final ScrollController _scrollController = ScrollController();
@@ -167,57 +145,15 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
             mother['risk_level']?.toString().toLowerCase() ?? 'low';
         if (filterLower == 'high risk') return riskLevel == 'high';
         if (filterLower == 'low risk') return riskLevel == 'low';
+        if (filterLower == 'medium risk')
+          return riskLevel == 'medium' || riskLevel == 'moderate';
+        if (filterLower == 'critical risk') return riskLevel == 'critical';
         return true;
       }).toList();
     }
 
-    // Apply sorting
-    if (_selectedSort == 'Risk (High to Low)') {
-      // The default. A midwife opening this list is triaging, so the mothers
-      // needing attention are at the top; patient number orders within a band
-      // so the same mother is always in the same place relative to her
-      // neighbours.
-      results.sort((a, b) {
-        final byRisk = _riskRank(a['risk_level']).compareTo(
-          _riskRank(b['risk_level']),
-        );
-        if (byRisk != 0) return byRisk;
-        return _patientNumberOf(a).compareTo(_patientNumberOf(b));
-      });
-    } else if (_selectedSort == 'ID Number') {
-      results.sort((a, b) => (a['mother_id'] as int? ?? 0).compareTo(b['mother_id'] as int? ?? 0));
-    } else if (_selectedSort == 'Name (A-Z)') {
-      results.sort((a, b) => (a['full_name']?.toString() ?? '')
-          .compareTo(b['full_name']?.toString() ?? ''));
-    } else if (_selectedSort == 'Age (Ascending)') {
-      results.sort(
-          (a, b) => (a['age'] as int? ?? 0).compareTo(b['age'] as int? ?? 0));
-    } else if (_selectedSort == 'Age (Descending)') {
-      results.sort(
-          (a, b) => (b['age'] as int? ?? 0).compareTo(a['age'] as int? ?? 0));
-    } else if (_selectedSort == 'Due Date (Ascending)') {
-      results.sort((a, b) {
-        final dateA =
-            DateTime.tryParse(a['expected_due_date']?.toString() ?? '');
-        final dateB =
-            DateTime.tryParse(b['expected_due_date']?.toString() ?? '');
-        if (dateA == null && dateB == null) return 0;
-        if (dateA == null) return 1;
-        if (dateB == null) return -1;
-        return dateA.compareTo(dateB);
-      });
-    } else if (_selectedSort == 'Due Date (Descending)') {
-      results.sort((a, b) {
-        final dateA =
-            DateTime.tryParse(a['expected_due_date']?.toString() ?? '');
-        final dateB =
-            DateTime.tryParse(b['expected_due_date']?.toString() ?? '');
-        if (dateA == null && dateB == null) return 0;
-        if (dateA == null) return 1;
-        if (dateB == null) return -1;
-        return dateB.compareTo(dateA);
-      });
-    }
+    results.sort((a, b) =>
+        MotherDirectoryOrder.compare(a, b, _selectedSort, _sortAscending));
 
     setState(() {
       _filteredMothers = results;
@@ -270,7 +206,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
     if (_assignedBhcId == null) {
       final accountId = await AuthStorage.getUserId();
       if (accountId == null) throw Exception('Not authenticated');
-      
+
       final ctx = await SupabaseService.getMidwifeContext(accountId);
       _assignedBhcId = ctx['assigned_bhc_id'] as int?;
     }
@@ -305,7 +241,8 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         ''').eq('assigned_bhc_id', _assignedBhcId!);
 
     final List<dynamic> rawMothers = List<dynamic>.from(response);
-    rawMothers.sort((a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
+    rawMothers.sort(
+        (a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
 
     final accountIds = rawMothers
         .map((r) => r['account_id'] as int?)
@@ -322,16 +259,17 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
             .inFilter('uploaded_by', accountIds)
             .timeout(const Duration(seconds: 5))
             .catchError((e) {
-              debugPrint('Batch profile picture fetch note: $e');
-              return <Map<String, dynamic>>[];
-            });
+          debugPrint('Batch profile picture fetch note: $e');
+          return <Map<String, dynamic>>[];
+        });
 
         for (var file in filesResponse) {
           final accId = file['uploaded_by'] as int?;
           final path = file['file_path'] as String?;
           final bucket = file['bucket_name'] as String? ?? 'files';
           if (accId != null && path != null && path.isNotEmpty) {
-            final url = SupabaseService.client.storage.from(bucket).getPublicUrl(path);
+            final url =
+                SupabaseService.client.storage.from(bucket).getPublicUrl(path);
             profileUrlsByAccountId[accId] = url;
           }
         }
@@ -381,9 +319,12 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
       String riskLevel = 'low';
       String? expectedDueDate;
       if (ongoingPregnancy != null) {
-        riskLevel = ongoingPregnancy['pregnancy_risk_level'] as String? ?? 'low';
-        expectedDueDate = ongoingPregnancy['expected_date_of_delivery'] as String?;
-        final String? lmpString = ongoingPregnancy['last_menstrual_period'] as String?;
+        riskLevel =
+            ongoingPregnancy['pregnancy_risk_level'] as String? ?? 'low';
+        expectedDueDate =
+            ongoingPregnancy['expected_date_of_delivery'] as String?;
+        final String? lmpString =
+            ongoingPregnancy['last_menstrual_period'] as String?;
         if (lmpString != null && lmpString.isNotEmpty) {
           final DateTime? lmpDate = DateTime.tryParse(lmpString);
           if (lmpDate != null) {
@@ -411,7 +352,8 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         'barangay': raw['barangay']?.toString() ?? '',
         'profile_picture': profilePictureUrl,
         'pregnancy_id': ongoingPregnancy?['pregnancy_id'] as int?,
-        'last_menstrual_period': ongoingPregnancy?['last_menstrual_period'] as String?,
+        'last_menstrual_period':
+            ongoingPregnancy?['last_menstrual_period'] as String?,
       });
     }
 
@@ -432,7 +374,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
       if (_assignedBhcId == null) {
         final accountId = await AuthStorage.getUserId();
         if (accountId == null) return;
-        
+
         final ctx = await SupabaseService.getMidwifeContext(accountId);
         _assignedBhcId = ctx['assigned_bhc_id'] as int?;
       }
@@ -465,7 +407,8 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
           ''').eq('assigned_bhc_id', _assignedBhcId!);
 
       final List<dynamic> rawMothers = List<dynamic>.from(response);
-      rawMothers.sort((a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
+      rawMothers.sort(
+          (a, b) => (a['mother_id'] as int).compareTo(b['mother_id'] as int));
 
       final patientNumbersByAccountId =
           await SupabaseService.getPatientNumbersByAccountId(
@@ -511,9 +454,12 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
         String riskLevel = 'low';
         String? expectedDueDate;
         if (ongoingPregnancy != null) {
-          riskLevel = ongoingPregnancy['pregnancy_risk_level'] as String? ?? 'low';
-          expectedDueDate = ongoingPregnancy['expected_date_of_delivery'] as String?;
-          final String? lmpString = ongoingPregnancy['last_menstrual_period'] as String?;
+          riskLevel =
+              ongoingPregnancy['pregnancy_risk_level'] as String? ?? 'low';
+          expectedDueDate =
+              ongoingPregnancy['expected_date_of_delivery'] as String?;
+          final String? lmpString =
+              ongoingPregnancy['last_menstrual_period'] as String?;
           if (lmpString != null && lmpString.isNotEmpty) {
             final DateTime? lmpDate = DateTime.tryParse(lmpString);
             if (lmpDate != null) {
@@ -540,13 +486,15 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
           'barangay': raw['barangay']?.toString() ?? '',
           'profile_picture': profilePictureUrl,
           'pregnancy_id': ongoingPregnancy?['pregnancy_id'] as int?,
-          'last_menstrual_period': ongoingPregnancy?['last_menstrual_period'] as String?,
+          'last_menstrual_period':
+              ongoingPregnancy?['last_menstrual_period'] as String?,
           'bhc_patient_id': bhcPatientId,
         });
       }
 
       bool hasChanges = false;
-      if (_mothersCache == null || _mothersCache!.length != parsedMothers.length) {
+      if (_mothersCache == null ||
+          _mothersCache!.length != parsedMothers.length) {
         hasChanges = true;
       } else {
         for (int i = 0; i < parsedMothers.length; i++) {
@@ -623,168 +571,101 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
     setState(() {
       _searchController.clear();
       _searchQuery = '';
-      _selectedSort = 'Risk (High to Low)';
+      _selectedSort = 'Risk';
+      _sortAscending = false;
       _selectedRiskFilter = 'All';
       _applyFilters();
     });
   }
 
   void _showFilterSortDialog() {
-    String tempSort = _selectedSort;
-    String tempRisk = _selectedRiskFilter;
-
-    showDialog(
+    var tempSort = _selectedSort;
+    var tempAscending = _sortAscending;
+    var tempRisk = _selectedRiskFilter;
+    showDialog<void>(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24)),
-              backgroundColor: AppColors.cardColorOf(context),
-              insetPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      builder: (context) => StatefulBuilder(
+          builder: (context, update) => Dialog(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24)),
+                backgroundColor: AppColors.bgSecondaryOf(context),
+                insetPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Sort & Filter',
-                            style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.brandPrimary)),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        )
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Sort By',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        'Risk (High to Low)',
-                        'ID Number',
-                        'Name (A-Z)',
-                        'Age (Ascending)',
-                        'Age (Descending)',
-                        'Due Date (Ascending)',
-                        'Due Date (Descending)'
-                      ].map((sortOption) {
-                        final isSelected = tempSort == sortOption;
-                        return ChoiceChip(
-                          label: Text(sortOption),
-                          selected: isSelected,
-                          onSelected: (selected) {
-                            if (selected) {
-                              setModalState(() => tempSort = sortOption);
-                            }
-                          },
-                          selectedColor: AppColors.brandPrimary,
-                          backgroundColor: Colors.white,
-                          labelStyle: TextStyle(
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.brandPrimary,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            fontSize: 12,
-                          ),
-                          side: const BorderSide(
-                            color: AppColors.brandPrimary,
-                            width: 1,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          showCheckmark: false,
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text('Filter by Risk',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children:
-                          ['All', 'Low Risk', 'High Risk'].map((riskOption) {
-                        final isSelected = tempRisk == riskOption;
-                        return ChoiceChip(
-                          label: Text(
-                              riskOption == 'All' ? 'All Risks' : riskOption),
-                          selected: isSelected,
-                          onSelected: (selected) {
-                            if (selected) {
-                              setModalState(() => tempRisk = riskOption);
-                            }
-                          },
-                          selectedColor: AppColors.brandPrimary,
-                          backgroundColor: Colors.white,
-                          labelStyle: TextStyle(
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.brandPrimary,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            fontSize: 12,
-                          ),
-                          side: const BorderSide(
-                            color: AppColors.brandPrimary,
-                            width: 1,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          showCheckmark: false,
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.brandPrimary,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(28)),
-                          elevation: 0,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _selectedSort = tempSort;
-                            _selectedRiskFilter = tempRisk;
-                            _applyFilters();
-                          });
-                          Navigator.pop(context);
-                        },
-                        child: const Text('Apply',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
+                        Row(children: [
+                          const Expanded(
+                              child: Text('Sort & Filter',
+                                  style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.brandText))),
+                          IconButton(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.close)),
+                        ]),
+                        const SizedBox(height: 16),
+                        const Text('Sort by',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        AppDropdownField<String>(
+                            hintText: 'Criteria',
+                            value: tempSort,
+                            options: const [
+                              'Risk',
+                              'ID Number',
+                              'Name',
+                              'Age',
+                              'Due Date'
+                            ],
+                            displayStringForOption: (v) => v,
+                            onSelected: (v) => update(() {
+                                  tempSort = v;
+                                  tempAscending = v != 'Risk';
+                                })),
+                        const SizedBox(height: 16),
+                        AppDropdownField<bool>(
+                            hintText: 'Order',
+                            value: tempAscending,
+                            options: const [true, false],
+                            displayStringForOption: (v) =>
+                                v ? 'Ascending' : 'Descending',
+                            onSelected: (v) => update(() => tempAscending = v)),
+                        const SizedBox(height: 16),
+                        const Text('Filter by risk',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        AppDropdownField<String>(
+                            hintText: 'Risk level',
+                            value: tempRisk,
+                            options: _riskFilters,
+                            displayStringForOption: (v) =>
+                                v == 'All' ? 'All risk levels' : v,
+                            onSelected: (v) => update(() => tempRisk = v)),
+                        const SizedBox(height: 24),
+                        MainButton(
+                            label: 'Apply',
+                            onPressed: () {
+                              _selectedSort = tempSort;
+                              _sortAscending = tempAscending;
+                              _selectedRiskFilter = tempRisk;
+                              _applyFilters();
+                              Navigator.pop(context);
+                            }),
+                        TextButton(
+                            onPressed: () => update(() {
+                                  tempSort = 'Risk';
+                                  tempAscending = false;
+                                  tempRisk = 'All';
+                                }),
+                            child: const Text('Reset filters')),
+                      ]),
                 ),
-              ),
-            );
-          },
-        );
-      },
+              )),
     );
   }
 
@@ -833,8 +714,10 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                     bottom: 0,
                     top: 0,
                     child: Padding(
-                      padding: const EdgeInsets.only(right: 16.0, top: 4.0, bottom: 4.0),
-                      child: Image.asset('assets/images/pregnant1.png', fit: BoxFit.contain),
+                      padding: const EdgeInsets.only(
+                          right: 16.0, top: 4.0, bottom: 4.0),
+                      child: Image.asset('assets/images/pregnant1.png',
+                          fit: BoxFit.contain),
                     ),
                   ),
                   Positioned(
@@ -879,8 +762,9 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                       hintText: 'Search mothers',
                       controller: _searchController,
                       leadingIcon: Icons.search,
-                      trailingIcon:
-                          _searchController.text.isNotEmpty ? Icons.clear : null,
+                      trailingIcon: _searchController.text.isNotEmpty
+                          ? Icons.clear
+                          : null,
                       onTrailingTap: _searchController.text.isNotEmpty
                           ? () {
                               _searchController.clear();
@@ -894,14 +778,14 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                   // Sort & Filter Icon Button
                   Container(
                     decoration: BoxDecoration(
-                      color: (_selectedSort != 'Risk (High to Low)' ||
+                      color: ((_selectedSort != 'Risk' || _sortAscending) ||
                               _selectedRiskFilter != 'All' ||
                               _searchQuery.isNotEmpty)
                           ? AppColors.brandPrimary
                           : Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: (_selectedSort != 'Risk (High to Low)' ||
+                        color: ((_selectedSort != 'Risk' || _sortAscending) ||
                                 _selectedRiskFilter != 'All' ||
                                 _searchQuery.isNotEmpty)
                             ? AppColors.brandPrimary
@@ -912,7 +796,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                     child: IconButton(
                       icon: Icon(
                         Icons.filter_list,
-                        color: (_selectedSort != 'Risk (High to Low)' ||
+                        color: ((_selectedSort != 'Risk' || _sortAscending) ||
                                 _selectedRiskFilter != 'All' ||
                                 _searchQuery.isNotEmpty)
                             ? Colors.white
@@ -922,7 +806,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                       tooltip: 'Sort & Filter',
                     ),
                   ),
-                  if (_selectedSort != 'Risk (High to Low)' ||
+                  if ((_selectedSort != 'Risk' || _sortAscending) ||
                       _selectedRiskFilter != 'All' ||
                       _searchQuery.isNotEmpty) ...[
                     const SizedBox(width: 8),
@@ -957,8 +841,7 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
-                    (_searchQuery.isNotEmpty ||
-                            _selectedRiskFilter != 'All')
+                    (_searchQuery.isNotEmpty || _selectedRiskFilter != 'All')
                         ? 'Showing ${_filteredMothers.length} of ${_allMothers.length} mothers'
                         : 'Total of ${_allMothers.length} registered mothers',
                     style: const TextStyle(
@@ -1206,7 +1089,9 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                     width: 8,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: isCurrent ? AppColors.brandPrimary : Colors.transparent,
+                      color: isCurrent
+                          ? AppColors.brandPrimary
+                          : Colors.transparent,
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: AppColors.brandPrimary,
@@ -1420,10 +1305,12 @@ class _MotherCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: AppColors.brandPrimary.withValues(alpha: 0.08),
+                              color: AppColors.brandPrimary
+                                  .withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: AppColors.brandPrimary.withValues(alpha: 0.2),
+                                color: AppColors.brandPrimary
+                                    .withValues(alpha: 0.2),
                               ),
                             ),
                             child: Text(

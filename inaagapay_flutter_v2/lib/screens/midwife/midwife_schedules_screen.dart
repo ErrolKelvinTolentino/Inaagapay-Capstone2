@@ -739,14 +739,14 @@ class _MidwifeSchedulesScreenState extends State<MidwifeSchedulesScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
+                      Expanded(child: Text(
                         DateFormat('EEEE, MMMM d').format(_selectedDay),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
                           color: AppColors.brandText,
                         ),
-                      ),
+                      )),
                       Row(
                         children: [
                           IconButton(
