@@ -45,22 +45,37 @@ the midwife QR link; no API keys are part of that link.
 ## Publish the file with the website
 
 The APK is a generated artifact excluded from Git and Vercel's CLI source
-upload. Configure the hosted build to fetch the prepared APK:
+upload. Clean Git deployments fetch the official release pinned in
+`downloads/release.json`, verify its SHA-256 and Android archive, and include
+it in the website. Both hosting root configurations use this same manifest.
+No Vercel environment variables are needed for the pinned release.
+
+When publishing a new APK:
 
 1. Run `./scripts/prepare-apk.ps1` and keep its SHA-256 value.
 2. Upload `admin-web/downloads/inaagapay.apk` to the team's artifact storage.
    Use a fixed, direct HTTPS file URL. For example, an APK attached to a specific
    GitHub release can be the build input. People downloading from the website
    will still receive the file from the website's own download URL.
-3. Set these environment variables in the Vercel project for the environment
-   being deployed:
+3. Update `admin-web/downloads/release.json` with the specific release asset URL
+   and the SHA-256 printed by `prepare-apk.ps1`:
+
+   ```json
+   {
+     "url": "https://github.com/<team>/<repository>/releases/download/<tag>/inaagapay.apk",
+     "sha256": "<64-character SHA-256>"
+   }
+   ```
+
+   For a hosting-specific override, set both of these environment variables in
+   the Vercel project for the environment being deployed:
 
    ```text
    APK_ARTIFACT_URL=<direct HTTPS URL of the prepared APK>
    APK_ARTIFACT_SHA256=<64-character SHA-256 printed by prepare-apk.ps1>
    ```
 
-4. Deploy the updated website. Both Vercel configurations already invoke
+4. Commit the manifest and deploy the updated website. Both Vercel configurations invoke
    `prepare-download.mjs`, which downloads the artifact during the hosted build,
    verifies the pinned hash and APK format, and includes it in the static output.
    A missing or invalid artifact stops the build with an actionable error.

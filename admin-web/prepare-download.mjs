@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, open, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
 const apkPath = fileURLToPath(new URL('./downloads/inaagapay.apk', import.meta.url));
+const releasePath = fileURLToPath(new URL('./downloads/release.json', import.meta.url));
 const minimumBytes = 1024;
 const maximumBytes = 1_000_000_000;
 const maximumDirectoryBytes = 32 * 1024 * 1024;
@@ -160,23 +161,36 @@ async function fetchArtifact(initialUrl, signal) {
 }
 
 async function prepareDownload() {
-  const remoteValue = process.env.APK_ARTIFACT_URL?.trim();
-  const hash = expectedHash(process.env.APK_ARTIFACT_SHA256?.trim(), Boolean(remoteValue));
+  let remoteValue = process.env.APK_ARTIFACT_URL?.trim();
+  let hash = expectedHash(process.env.APK_ARTIFACT_SHA256?.trim(), Boolean(remoteValue));
   if (!remoteValue) {
     let size;
     try {
       size = await validateApk(apkPath);
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        throw new PreparationError('APK is missing. Run scripts/prepare-apk.ps1 locally, or set APK_ARTIFACT_URL and APK_ARTIFACT_SHA256 in the hosting build environment.');
+      if (error.code !== 'ENOENT') throw error;
+    }
+    if (size !== undefined) {
+      if (hash && await hashFile(apkPath) !== hash) {
+        throw new PreparationError('The local APK SHA-256 does not match. Prepare the expected official release APK.');
       }
-      throw error;
+      console.log(`Using validated local APK (${(size / 1_000_000).toFixed(1)} MB).`);
+      return;
     }
-    if (hash && await hashFile(apkPath) !== hash) {
-      throw new PreparationError('The local APK SHA-256 does not match. Prepare the expected official release APK.');
+
+    // Git deployments omit generated APKs. Fetch the specific official release
+    // pinned in source, without requiring project-level environment setup.
+    let release;
+    try {
+      release = JSON.parse(await readFile(releasePath, 'utf8'));
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        throw new PreparationError('APK is missing. Publish downloads/release.json with the official APK URL and SHA-256, run scripts/prepare-apk.ps1 locally, or set APK_ARTIFACT_URL and APK_ARTIFACT_SHA256 in the hosting build environment.');
+      }
+      throw new PreparationError('downloads/release.json must contain valid JSON with the official APK url and sha256.');
     }
-    console.log(`Using validated local APK (${(size / 1_000_000).toFixed(1)} MB).`);
-    return;
+    remoteValue = release?.url;
+    hash = expectedHash(release?.sha256, true);
   }
 
   const url = artifactUrl(remoteValue);
