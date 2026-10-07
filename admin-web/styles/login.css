@@ -65,7 +65,7 @@ body::before {
 
 .left-brand img {
   width: auto;
-  height: 52px !important;
+  height: calc(52px / 1.5) !important;
   max-width: 100%;
   padding: 0;
   border: 0;
