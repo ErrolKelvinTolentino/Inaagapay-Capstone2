@@ -2834,7 +2834,7 @@
           document.getElementById("chart-vac-total").textContent =
             total ? `${total} Children` : "WHO / DOH Standards";
 
-          if (!total) { showEmptyChart(ctx, "No children with a recorded birthdate"); return; }
+          if (!total) { showEmptyChart(ctx, "No child records in this reporting scope"); return; }
 
           const slices = [
             ["Fully immunized (12 mo+)", counts.fully_immunized, "#68CBB8"],
@@ -3812,9 +3812,9 @@
           chartDriveTurnout = new Chart(ctx, {
             type: "bar",
             data: {
-              // An array per tick is how Chart.js draws a two-line label; a
-              // "\n" inside a string is rendered literally.
-              labels: recent.map(d => [formatDriveDate(d.schedule_date), d.barangay || d.facility_name || ""]),
+              // Short numbered dates keep twelve drives readable in a small card.
+              // The complete facility/vaccine label remains in the tooltip.
+              labels: recent.map((d, i) => `#${i + 1} ${new Date(d.schedule_date + "T12:00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric" })}`),
               datasets: [
                 { label: "Invited", data: recent.map(d => d.invited_count || 0), backgroundColor: "#C7D2FE", borderRadius: 5 },
                 { label: "Came", data: recent.map(d => d.attended_count || 0), backgroundColor: "#FF68A5", borderRadius: 5 }
@@ -3829,7 +3829,7 @@
                   callbacks: {
                     title: (items) => {
                       const d = recent[items[0].dataIndex];
-                      return `${formatDriveDate(d.schedule_date)} — ${d.vaccine_name}`;
+                      return `${formatDriveDate(d.schedule_date)} — ${d.facility_name || d.barangay || "Health center"} — ${d.vaccine_name}`;
                     },
                     afterBody: (items) => {
                       const d = recent[items[0].dataIndex];
@@ -3843,7 +3843,7 @@
               },
               scales: {
                 y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11 } }, grid: { color: "#F0F0F0" } },
-                x: { ticks: { font: { size: 9 }, maxRotation: 0, autoSkip: false }, grid: { display: false } }
+                x: { ticks: { font: { size: 10 }, minRotation: 45, maxRotation: 45, autoSkip: true, maxTicksLimit: 6 }, grid: { display: false } }
               }
             }
           });

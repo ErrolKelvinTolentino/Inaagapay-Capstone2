@@ -738,7 +738,9 @@ class MidwifeInventoryReportService {
     final parts = <String>[];
     if (t.referenceType.isNotEmpty &&
         t.referenceType != '-' &&
-        t.referenceType != '—') parts.add(t.referenceType);
+        t.referenceType != '—') {
+      parts.add(t.referenceType);
+    }
     if (t.notes.isNotEmpty) parts.add(t.notes);
     if (parts.isEmpty) return '-';
     return parts.join(' | ');

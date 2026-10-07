@@ -28,7 +28,8 @@
   const CDN = {
     jspdf: "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
     autotable: "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js",
-    xlsx: "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
+    // SheetJS-compatible writer with OpenXML cell styles (borders/wrapping).
+    xlsx: "https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js",
   };
 
   const BRAND = [199, 53, 120];
@@ -63,7 +64,7 @@
   }
 
   async function ensureXlsx() {
-    if (!window.XLSX) await loadScript(CDN.xlsx);
+    await loadScript(CDN.xlsx);
     return window.XLSX;
   }
 
@@ -465,16 +466,20 @@
         ["Generated", stamp()],
       ];
       const widths = [];
+      const tables = [];
+      const titleRows = [0];
+      const proseRows = [];
       const measure = (row) => row.forEach((c, i) => {
-        const len = String(c === null || c === undefined ? "" : c).length;
+        const len = Math.max(...String(c === null || c === undefined ? "" : c).split(/\r?\n/).map(s => s.length));
         widths[i] = Math.min(Math.max(widths[i] || 10, len + 2), 60);
       });
 
       (sheet.blocks || []).forEach((block) => {
         aoa.push([]);
-        if (block.title) aoa.push([block.title]);
-        (block.lead || []).forEach((line) => aoa.push([line]));
+        if (block.title) { titleRows.push(aoa.length); aoa.push([block.title]); }
+        (block.lead || []).forEach((line) => { proseRows.push(aoa.length); aoa.push([line]); });
         const columns = block.columns || [];
+        const header = aoa.length;
         aoa.push(columns);
         measure(columns);
         const rows = block.rows || [];
@@ -484,11 +489,52 @@
           aoa.push(row);
           measure(row);
         });
-        (block.notes || []).forEach((line) => aoa.push([line]));
+        if (columns.length) tables.push({ header, end: aoa.length - 1, columns: columns.length });
+        (block.notes || []).forEach((line) => { proseRows.push(aoa.length); aoa.push([line]); });
       });
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws["!cols"] = widths.map((w) => ({ wch: w }));
+      const columnCount = Math.max(2, widths.length);
+      const cellAt = (r, c) => {
+        const address = XLSX.utils.encode_cell({ r, c });
+        return ws[address] || (ws[address] = { t: "s", v: "" });
+      };
+      const edge = { style: "thin", color: { rgb: "CBD5E1" } };
+      const border = { top: edge, bottom: edge, left: edge, right: edge };
+      ws["!rows"] = [];
+      ws["!merges"] = [];
+      titleRows.concat(proseRows).forEach(r => {
+        if (columnCount > 1) ws["!merges"].push({ s: { r, c: 0 }, e: { r, c: columnCount - 1 } });
+        cellAt(r, 0).s = {
+          font: { name: "Calibri", sz: r === 0 ? 16 : 11, bold: titleRows.includes(r), color: { rgb: "7E224C" } },
+          alignment: { vertical: "top", wrapText: true },
+        };
+        ws["!rows"][r] = { hpt: r === 0 ? 28 : 24 };
+      });
+      for (let r = 1; r <= 4; r++) {
+        cellAt(r, 0).s = { font: { name: "Calibri", bold: true, sz: 10 }, alignment: { vertical: "top" } };
+        cellAt(r, 1).s = { font: { name: "Calibri", sz: 10 }, alignment: { wrapText: true, vertical: "top" } };
+        if (columnCount > 2) ws["!merges"].push({ s: { r, c: 1 }, e: { r, c: columnCount - 1 } });
+        ws["!rows"][r] = { hpt: 26 };
+      }
+      tables.forEach(table => {
+        for (let r = table.header; r <= table.end; r++) {
+          let lines = 1;
+          for (let c = 0; c < table.columns; c++) {
+            const cell = cellAt(r, c);
+            const text = String(cell.v ?? "");
+            lines = Math.max(lines, text.split(/\r?\n/).reduce((n, line) => n + Math.max(1, Math.ceil(line.length / Math.max(8, (widths[c] || 12) - 2))), 0));
+            cell.s = {
+              font: { name: "Calibri", sz: 11, bold: r === table.header, color: { rgb: r === table.header ? "FFFFFF" : "1F2937" } },
+              fill: { patternType: "solid", fgColor: { rgb: r === table.header ? "C73578" : (r - table.header) % 2 ? "FFFFFF" : "FFF4F8" } },
+              alignment: { wrapText: true, vertical: "top", horizontal: cell.t === "n" ? "right" : "left" },
+              border,
+            };
+          }
+          ws["!rows"][r] = { hpt: Math.min(409, Math.max(28, lines * 15 + 8)) };
+        }
+      });
 
       let sheetName = String(sheet.name || "Sheet").replace(/[\[\]:*?\/\\]/g, " ").slice(0, 31).trim() || "Sheet";
       let n = 2;

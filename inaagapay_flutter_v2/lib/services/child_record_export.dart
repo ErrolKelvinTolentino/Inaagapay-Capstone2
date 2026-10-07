@@ -18,8 +18,9 @@ class ChildRecordExport {
     ''').eq('child_id', childId);
     if ((await AuthStorage.getUserRole())?.toLowerCase() == 'mother') {
       final motherId = await AuthStorage.getMotherId();
-      if (motherId == null)
+      if (motherId == null) {
         throw StateError('Sign in to export your child records.');
+      }
       childQuery = childQuery.eq('mother_id', motherId);
     }
     // Verify the child belongs to the signed-in mother before reading history.

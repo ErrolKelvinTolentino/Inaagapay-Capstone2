@@ -8,6 +8,7 @@ import '../../widgets/app_input_field.dart';
 import '../../widgets/app_dropdown_field.dart';
 import '../../widgets/main_button.dart';
 import '../../services/mother_directory_order.dart';
+import '../../services/pregnancy_stage.dart';
 import '../../services/supabase_service.dart';
 import '../mother/mother_profile_page.dart';
 import 'midwife_add_mother_screen.dart';
@@ -145,8 +146,9 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
             mother['risk_level']?.toString().toLowerCase() ?? 'low';
         if (filterLower == 'high risk') return riskLevel == 'high';
         if (filterLower == 'low risk') return riskLevel == 'low';
-        if (filterLower == 'medium risk')
+        if (filterLower == 'medium risk') {
           return riskLevel == 'medium' || riskLevel == 'moderate';
+        }
         if (filterLower == 'critical risk') return riskLevel == 'critical';
         return true;
       }).toList();
@@ -970,8 +972,8 @@ class _MidwifeMothersScreenState extends State<MidwifeMothersScreen> {
                                     final edd =
                                         DateTime.tryParse(expectedDueDate);
                                     if (edd != null) {
-                                      final daysUntil =
-                                          edd.difference(DateTime.now()).inDays;
+                                      final daysUntil = PregnancyStage.daysUntilDue(
+                                          edd: edd, now: DateTime.now());
                                       if (daysUntil >= 0) {
                                         final int months = daysUntil ~/ 30;
                                         final int remainingDays =

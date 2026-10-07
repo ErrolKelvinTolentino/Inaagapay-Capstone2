@@ -1,0 +1,9 @@
+{
+  "name": "inaagapay-revision-validation",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "xlsx-js-style": "1.2.0"
+  }
+}

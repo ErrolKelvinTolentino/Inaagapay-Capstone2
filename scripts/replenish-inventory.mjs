@@ -25,11 +25,13 @@ try {
     api('health_facilities', 'select=facility_id,name,facility_type,is_active&is_active=eq.true'),
     api('inventory_batches', 'select=batch_id,item_id,facility_id,batch_number,quantity_received,quantity_remaining,status,expiration_date'),
   ]);
+  // QA fixtures must never be multiplied onto every real facility's shelf.
+  const supplyItems = items.filter(i => !/^Codex QA /i.test(i.name));
   const shelves = [...facilities.filter(f => ['BHC', 'RHU', 'MHO'].includes(f.facility_type))];
   // Older portals use a null facility ID for their municipal warehouse.
   if (batches.some(b => b.facility_id === null)) shelves.push({ facility_id: null, name: 'Municipal Warehouse', facility_type: 'MHO' });
   const additions = [];
-  for (const facility of shelves) for (const item of items) {
+  for (const facility of shelves) for (const item of supplyItems) {
     const number = `${run}-F${facility.facility_id ?? 'MW'}-I${item.item_id}`;
     if (batches.some(b => b.batch_number === number)) continue;
     const tier = facility.facility_type === 'MHO' ? 5 : facility.facility_type === 'RHU' ? 2 : 1;
@@ -43,7 +45,7 @@ try {
       expiration_date: item.item_type === 'vaccine' ? '2028-04-07' : '2029-04-07',
       manufacturer: null, status: 'active', created_by: null });
   }
-  console.log(JSON.stringify({ mode: process.argv.includes('--apply') ? 'apply' : 'preview', activeItems: items.length,
+  console.log(JSON.stringify({ mode: process.argv.includes('--apply') ? 'apply' : 'preview', activeItems: supplyItems.length,
     facilities: shelves.length, barangayCenters: shelves.filter(f => f.facility_type === 'BHC').length,
     newBatches: additions.length, unitsToAdd: additions.reduce((n, b) => n + b.quantity_received, 0) }));
   if (!process.argv.includes('--apply')) process.exit(0);
@@ -61,7 +63,7 @@ try {
   if (receipts.length) await api('inventory_transactions', 'select=transaction_id', 'POST', receipts);
   const after = await api('inventory_batches', 'select=item_id,facility_id,quantity_remaining,status,expiration_date');
   const shortages = [];
-  for (const f of shelves) for (const i of items) {
+  for (const f of shelves) for (const i of supplyItems) {
     const available = after.filter(b => b.item_id === i.item_id && b.facility_id === f.facility_id && b.status === 'active' && b.expiration_date >= date)
       .reduce((sum, b) => sum + b.quantity_remaining, 0);
     const target = Math.max(i.item_type === 'supplement' ? 5000 : 1000, (i.minimum_stock_threshold ?? 0) * 10)

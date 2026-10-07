@@ -427,8 +427,9 @@ class _MotherChildGrowthPageState extends State<MotherChildGrowthPage> {
 
   Color _zScoreColor(double? zScore) {
     if (zScore == null) return AppColors.textSecondary;
-    if (!GrowthCalculator.bandForZScore(zScore).isWithin)
+    if (!GrowthCalculator.bandForZScore(zScore).isWithin) {
       return Colors.orange; // Yellow/Orange
+    }
     return AppColors.success; // Green
   }
 

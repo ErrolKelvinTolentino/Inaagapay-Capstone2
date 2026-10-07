@@ -253,8 +253,9 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
       if (!mounted || request != _speechRequest) return false;
 
       tts.setCompletionHandler(() {
-        if (mounted && request == _speechRequest)
+        if (mounted && request == _speechRequest) {
           setState(() => _currentlyReadingMessageId = null);
+        }
       });
 
       if (mounted) {
@@ -732,8 +733,8 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
     if (_hasCurrentPregnancy) {
       if (_currentWeek > 0) {
         greeting = _t(
-          "Hi $_onlyFirstName! I'm Ate Assistant, your digital midwife guide. You're currently in Week ${_currentWeek} of your pregnancy (${_tTrimester(_currentTrimester)}). How can I help you today? 🌸",
-          "Kumusta, $_onlyFirstName! Ako si Ate Assistant, ang iyong gabay sa pagbubuntis. Nasa Week ${_currentWeek} ka na ngayon (${_tTrimester(_currentTrimester)}). Paano kita matutulungan ngayong araw? 🌸",
+          "Hi $_onlyFirstName! I'm Ate Assistant, your digital midwife guide. You're currently in Week $_currentWeek of your pregnancy (${_tTrimester(_currentTrimester)}). How can I help you today? 🌸",
+          "Kumusta, $_onlyFirstName! Ako si Ate Assistant, ang iyong gabay sa pagbubuntis. Nasa Week $_currentWeek ka na ngayon (${_tTrimester(_currentTrimester)}). Paano kita matutulungan ngayong araw? 🌸",
         );
       } else {
         greeting = _t(
@@ -893,7 +894,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
     final contextString = isFilipino
         ? (includePregnancy
             ? "Pangalan ng Buntis: $_onlyFirstName\n"
-                "Linggo ng Pagbubuntis: Linggo ${_currentWeek} (${_tTrimester(_currentTrimester)})\n"
+                "Linggo ng Pagbubuntis: Linggo $_currentWeek (${_tTrimester(_currentTrimester)})\n"
                 "Antas ng Panganib: ${_tRiskLevel(_currentRisk)}\n"
                 "Mga Risk Factors: ${widget.riskFactors?.join(', ') ?? 'Wala'}\n"
                 "Mga Rekomendadong Aksyon: ${widget.suggestedActions?.join(', ') ?? 'Wala'}\n"
@@ -905,7 +906,7 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                 "Mga Kasalukuyang Kondisyong Medikal (Medical Conditions) na ibinahagi: $medicalConditionsStr")
         : (includePregnancy
             ? "Mother's Name: $_onlyFirstName\n"
-                "Pregnancy Week: Week ${_currentWeek} (${_tTrimester(_currentTrimester)})\n"
+                "Pregnancy Week: Week $_currentWeek (${_tTrimester(_currentTrimester)})\n"
                 "Risk Level: ${_tRiskLevel(_currentRisk)}\n"
                 "Risk Factors: ${widget.riskFactors?.join(', ') ?? 'None'}\n"
                 "Suggested Actions: ${widget.suggestedActions?.join(', ') ?? 'None'}\n"
@@ -1470,8 +1471,8 @@ class _MotherChatbotPageState extends State<MotherChatbotPage>
                             ),
                             subtitle: Text(
                               _t(
-                                'Week ${_currentWeek}, ${_tTrimester(_currentTrimester)}, Risk Level: ${_tRiskLevel(_currentRisk)}',
-                                'Linggo ${_currentWeek}, ${_tTrimester(_currentTrimester)}, Antas ng Panganib: ${_tRiskLevel(_currentRisk)}',
+                                'Week $_currentWeek, ${_tTrimester(_currentTrimester)}, Risk Level: ${_tRiskLevel(_currentRisk)}',
+                                'Linggo $_currentWeek, ${_tTrimester(_currentTrimester)}, Antas ng Panganib: ${_tRiskLevel(_currentRisk)}',
                               ),
                               style: const TextStyle(
                                   fontSize: 12, color: AppColors.textSecondary),

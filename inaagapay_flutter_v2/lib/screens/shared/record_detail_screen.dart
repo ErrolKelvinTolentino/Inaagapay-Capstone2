@@ -800,10 +800,12 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
         color: textPrimary,
       ));
       final weightBuf = StringBuffer();
-      if (eval['status'] != null)
+      if (eval['status'] != null) {
         weightBuf.writeln('Status: ${eval['status']}');
-      if (eval['bmi_category'] != null)
+      }
+      if (eval['bmi_category'] != null) {
         weightBuf.writeln('BMI Category: ${eval['bmi_category']}');
+      }
       if (eval['message'] != null) weightBuf.writeln(eval['message']);
       content.add(pdfInfoBox(
         weightBuf.toString().trim(),
@@ -2000,24 +2002,28 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
     if (k.contains("weight")) return Icons.monitor_weight_outlined;
     if (k.contains("height")) return Icons.straighten_rounded;
     if (k.contains("bmi")) return Icons.speed_rounded;
-    if (k.contains("ageofgestation") || k == "aog")
+    if (k.contains("ageofgestation") || k == "aog") {
       return Icons.pregnant_woman_outlined;
+    }
     if (k.contains("fetalcount")) return Icons.child_care_outlined;
     if (k.contains("fetalheart")) return Icons.favorite_border;
     if (k.contains("fetalposition")) return Icons.rotate_right_rounded;
     if (k.contains("edema")) return Icons.water_drop_outlined;
     if (k.contains("symptom")) return Icons.healing_outlined;
-    if (k.contains("vaccine") || k.contains("tddose"))
+    if (k.contains("vaccine") || k.contains("tddose")) {
       return Icons.vaccines_outlined;
+    }
     if (k.contains("ferrous") ||
         k.contains("calcium") ||
         k.contains("medication")) {
       return Icons.medication_outlined;
     }
-    if (k.contains("schedule") || k.contains("nextvisit"))
+    if (k.contains("schedule") || k.contains("nextvisit")) {
       return Icons.event_outlined;
-    if (k.contains("remarks") || k.contains("notes"))
+    }
+    if (k.contains("remarks") || k.contains("notes")) {
       return Icons.sticky_note_2_outlined;
+    }
     if (k.contains("labtesttype")) return Icons.science_outlined;
     if (k.contains("date")) return Icons.calendar_today_outlined;
     if (k.contains("location")) return Icons.place_outlined;
@@ -2668,18 +2674,22 @@ class _RecordDetailScreenState extends State<RecordDetailScreen> {
   }
 
   Color _statusChipBackground(String status) {
-    if (_isConcerningStatus(status))
+    if (_isConcerningStatus(status)) {
       return AppColors.error.withValues(alpha: 0.08);
-    if (_isCautionStatus(status))
+    }
+    if (_isCautionStatus(status)) {
       return AppColors.warning.withValues(alpha: 0.08);
+    }
     return AppColors.success.withValues(alpha: 0.08);
   }
 
   Color _statusChipBorder(String status) {
-    if (_isConcerningStatus(status))
+    if (_isConcerningStatus(status)) {
       return AppColors.error.withValues(alpha: 0.25);
-    if (_isCautionStatus(status))
+    }
+    if (_isCautionStatus(status)) {
       return AppColors.warning.withValues(alpha: 0.25);
+    }
     return AppColors.success.withValues(alpha: 0.25);
   }
 

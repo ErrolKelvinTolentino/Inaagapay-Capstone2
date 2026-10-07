@@ -696,6 +696,7 @@ class PregnancyDetailPage extends StatefulWidget {
   final int week;
   final String trimester;
   final String dueDate;
+  final DateTime? expectedDeliveryDate;
   final int weeksLeft;
   final String babySize;
   final String babyWeight;
@@ -711,6 +712,7 @@ class PregnancyDetailPage extends StatefulWidget {
     required this.week,
     required this.trimester,
     required this.dueDate,
+    this.expectedDeliveryDate,
     required this.weeksLeft,
     required this.babySize,
     required this.babyWeight,
@@ -757,8 +759,8 @@ class _PregnancyDetailPageState extends State<PregnancyDetailPage>
   CurrentPregnancyState get _pregnancyState => CurrentPregnancyState(
         pregnancyId: widget.pregnancyId,
         currentWeek: widget.week,
-        currentMonth: BabyBookRepository.stageForWeek(widget.week)?.month ?? 1,
-        estimatedDueDate:
+        currentMonth: BabyBookRepository.stageForWeek(widget.week.clamp(1, 40))?.month ?? 1,
+        estimatedDueDate: widget.expectedDeliveryDate ??
             DateTime.now().add(Duration(days: widget.weeksLeft * 7)),
         numberOfBabies: widget.fetalCount <= 0 ? 1 : widget.fetalCount,
         pregnancyProgress: (widget.week / 40).clamp(0.0, 1.0),

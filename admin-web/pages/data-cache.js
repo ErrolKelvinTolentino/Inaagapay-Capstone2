@@ -94,11 +94,11 @@
 
     inventory_items:
       "item_id, name, generic_name, item_type, unit_of_measure, " +
-      "doses_per_unit, minimum_stock_threshold, is_archived",
+      "doses_per_unit, open_vial_shelf_hours, minimum_stock_threshold, is_archived",
 
     inventory_batches:
       "batch_id, item_id, facility_id, quantity_remaining, " +
-      "doses_remaining_in_open_vial, expiration_date, status",
+      "doses_remaining_in_open_vial, vial_opened_at, expiration_date, status",
 
     vaccines:
       "vaccine_id, vaccine_name, dose_number, recommended_age_months, " +
@@ -106,7 +106,7 @@
 
     child_immunization_coverage:
       "child_id, child_number, mother_id, assigned_bhc_id, sex, age_months, " +
-      "age_band, doses_required, doses_received, doses_overdue, " +
+      "age_band, birthdate, coverage_status, doses_required, doses_received, doses_overdue, " +
       "is_fully_immunized, has_bcg, has_penta1, has_penta3, has_mcv1, " +
       "missing_doses, last_dose_on",
 

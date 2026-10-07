@@ -19,6 +19,7 @@ import '../../services/network_status.dart';
 import '../../services/maternal_td_alert.dart';
 import '../../services/maternal_td_service.dart';
 import '../../services/mother_profile_service.dart';
+import '../../services/pregnancy_stage.dart';
 import '../../services/supabase_service.dart';
 import '../../services/weight_gain_engine.dart';
 import '../midwife/maternal_td_screen.dart';
@@ -35,6 +36,8 @@ class MotherDashboard extends StatefulWidget {
 }
 
 class _MotherDashboardState extends State<MotherDashboard> {
+  // Keep the tip content and renderer available while its wording is reviewed.
+  static const bool _showWeeklyTip = false;
   bool _isLoading = true;
   String? _errorMessage;
   bool _isUnlinked = false;
@@ -377,15 +380,23 @@ class _MotherDashboardState extends State<MotherDashboard> {
         final String? eddStr =
             pregnancy['expected_date_of_delivery'] as String?;
 
-        if (lmpStr != null && lmpStr.isNotEmpty) {
-          final DateTime lmp = DateTime.parse(lmpStr);
-          _lmpDate = lmp;
-          final DateTime now = DateTime.now();
-          _week = now.difference(lmp).inDays ~/ 7;
-          if (_week < 1) _week = 1;
-          if (_week > 40) _week = 40;
+        final lmp = PregnancyStage.parse(lmpStr);
+        final edd = PregnancyStage.dueDate(
+            lmp: lmp, edd: PregnancyStage.parse(eddStr));
+        final now = DateTime.now();
+        final gestationalDays = PregnancyStage.gestationalDays(
+            lmp: lmp, edd: edd, now: now);
+        _lmpDate = lmp;
+        _eddDate = edd;
+        if (edd != null) _dueDate = DateFormat('MMMM d, yyyy').format(edd);
 
-          final babyGrowth = BabyGrowthData.getForWeek(_week);
+        if (gestationalDays != null && gestationalDays >= 0) {
+          _week = PregnancyStage.completedWeeks(gestationalDays);
+          if (_week < 1) _week = 1;
+
+          final babyGrowth = _week <= 40
+              ? BabyGrowthData.getForWeek(_week)
+              : const BabyGrowth(size: '—', weight: '—');
           _babySize = babyGrowth.size;
           _babyWeight = babyGrowth.weight;
 
@@ -393,17 +404,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
               .toLowerCase();
           _fetalCount = _parseInt(pregnancy['fetal_count'], 1);
 
-          DateTime edd;
-          if (eddStr != null && eddStr.isNotEmpty) {
-            edd = DateTime.parse(eddStr);
-          } else {
-            edd = lmp.add(const Duration(days: 280));
-          }
-
-          _eddDate = edd;
-          _dueDate = DateFormat('MMMM d, yyyy').format(edd);
-
-          _weeksLeft = _week > 0 ? 40 - _week : 0;
+          _weeksLeft = edd == null ? 0 :
+              PregnancyStage.daysUntilDue(edd: edd, now: now) ~/ 7;
           if (_weeksLeft < 0) _weeksLeft = 0;
 
           if (_week <= 13) {
@@ -1381,6 +1383,7 @@ class _MotherDashboardState extends State<MotherDashboard> {
           week: _week,
           trimester: _trimester,
           dueDate: _dueDate,
+          expectedDeliveryDate: _eddDate,
           weeksLeft: _weeksLeft,
           babySize: _babySize,
           babyWeight: _babyWeight,
@@ -2596,8 +2599,11 @@ class _MotherDashboardState extends State<MotherDashboard> {
 
           Future<void> saveVitals() async {
             validateInputs();
-            if (heightError != null || weightError != null || ppwError != null)
+            if (heightError != null ||
+                weightError != null ||
+                ppwError != null) {
               return;
+            }
 
             final height = double.parse(heightCtrl.text.trim());
             final weight = double.parse(weightCtrl.text.trim());
@@ -2936,8 +2942,9 @@ class _MotherDashboardState extends State<MotherDashboard> {
   Widget _buildCountdownCard() {
     final now = DateTime.now();
     final edd = _eddDate!;
-    final totalDaysLeft = edd.difference(now).inDays;
+    final totalDaysLeft = PregnancyStage.daysUntilDue(edd: edd, now: now);
     final daysLeft = totalDaysLeft < 0 ? 0 : totalDaysLeft;
+    final daysPastDue = totalDaysLeft < 0 ? -totalDaysLeft : 0;
     final weeksRemaining = daysLeft ~/ 7;
     final extraDays = daysLeft % 7;
     final progress = (_week / 40).clamp(0.0, 1.0);
@@ -2991,12 +2998,15 @@ class _MotherDashboardState extends State<MotherDashboard> {
           Center(
             child: Text(
               daysLeft > 0
-                  ? '$daysLeft ${_t('days to go!', 'araw na lang!')}'
-                  : _t('Any day now!', 'Anumang araw na!'),
-              style: const TextStyle(
+                  ? '$daysLeft ${_t(daysLeft == 1 ? 'day to go!' : 'days to go!', 'araw na lang!')}'
+                  : daysPastDue > 0
+                      ? '$daysPastDue ${_t(daysPastDue == 1 ? 'day past due date' : 'days past due date', 'araw lampas sa takdang petsa')}'
+                      : _t('Due today', 'Takdang araw ngayon'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: AppColors.brandPrimary,
+                color: daysPastDue > 0 ? AppColors.warning : AppColors.brandPrimary,
               ),
             ),
           ),
@@ -3005,8 +3015,12 @@ class _MotherDashboardState extends State<MotherDashboard> {
             child: Text(
               daysLeft > 0
                   ? '$weeksRemaining ${_t('weeks', 'linggo')} ${_t('and', 'at')} $extraDays ${_t('days', 'araw')}'
-                  : _t('Your due date has arrived!',
-                      'Dumating na ang iyong takdang araw!'),
+                  : daysPastDue > 0
+                      ? _t('Contact your midwife to review your pregnancy and delivery plan. If you have delivered, ask her to update your record.',
+                          'Makipag-ugnayan sa iyong midwife para masuri ang pagbubuntis at plano sa panganganak. Kung nanganak ka na, ipaki-update ang iyong rekord.')
+                      : _t('Your due date has arrived!',
+                          'Dumating na ang iyong takdang araw!'),
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 14,
                 color: AppColors.textSecondary,
@@ -3029,7 +3043,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${_t('Week', 'Linggo')} $_week ${_t('of', 'sa')} 40',
+                _week > 40 ? '${_t('Week', 'Linggo')} $_week' :
+                    '${_t('Week', 'Linggo')} $_week ${_t('of', 'sa')} 40',
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,
@@ -3215,11 +3230,13 @@ class _MotherDashboardState extends State<MotherDashboard> {
                               _buildCountdownCard(),
                             ],
 
-                            if (_hasPregnancy && _week > 0) ...[
+                            if (_hasPregnancy && _week > 0 && _week <= 40) ...[
                               const SizedBox(height: 16),
                               _buildBabySizeCard(),
-                              const SizedBox(height: 16),
-                              _buildWeeklyTipCard(),
+                              if (_showWeeklyTip) ...[
+                                const SizedBox(height: 16),
+                                _buildWeeklyTipCard(),
+                              ],
                             ],
 
                             // Reads as the natural "tell me more" after the

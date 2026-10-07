@@ -38,7 +38,7 @@
 -- rows this aborts rather than seeding a warehouse in isolation.
 --
 -- Safe to run more than once: batches are keyed on (item, facility) through
--- their generated batch_number, and re-running refreshes quantities in place.
+-- their generated batch_number; re-running preserves quantities already used.
 -- ==============================================================================
 
 BEGIN;
@@ -150,31 +150,10 @@ SELECT
 
 
 -- ---------------------------------------------------------------------------
--- 4. Re-running refreshes quantities rather than stacking new batches.
---
--- Note this puts every seeded batch back to FULL. That is the point on a demo
--- database being reset before a run-through, but it does mean running this file
--- on its own discards whatever has since been dispensed from these batches. The
--- ledger keeps the movements; the counts go back to opening stock.
---
--- Only rows this file created are touched -- the batch_number prefixes are the
--- marker. Anything received through the portal is left alone.
+-- 4. Re-running preserves existing quantities and movement history.
+-- Newly missing batches are inserted above. Existing batches are never refilled
+-- by a seed rerun; replenishment must be recorded as a new receipt.
 -- ---------------------------------------------------------------------------
-UPDATE public.inventory_batches b
-   SET quantity_received  = i.minimum_stock_threshold * CASE
-                              WHEN b.batch_number LIKE 'MW-%'  THEN 25
-                              WHEN b.batch_number LIKE 'RHU%'  THEN 8
-                              ELSE 3
-                            END,
-       quantity_remaining = i.minimum_stock_threshold * CASE
-                              WHEN b.batch_number LIKE 'MW-%'  THEN 25
-                              WHEN b.batch_number LIKE 'RHU%'  THEN 8
-                              ELSE 3
-                            END,
-       status             = 'active'
-  FROM public.inventory_items i
- WHERE b.item_id = i.item_id
-   AND (b.batch_number LIKE 'MW-%' OR b.batch_number LIKE 'RHU%' OR b.batch_number LIKE 'BHC%');
 
 
 -- ---------------------------------------------------------------------------
@@ -204,7 +183,7 @@ SELECT
     WHERE a.status = 'active' AND a.account_type IN ('mho', 'admin')
     ORDER BY CASE WHEN a.account_type = 'mho' THEN 0 ELSE 1 END, a.account_id
     LIMIT 1),
-  b.quantity_remaining,
+  b.quantity_received,
   b.received_date::timestamp + TIME '09:00'
   FROM public.inventory_batches b
   LEFT JOIN public.health_facilities hf ON hf.facility_id = b.facility_id

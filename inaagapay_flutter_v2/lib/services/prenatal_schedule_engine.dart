@@ -95,12 +95,15 @@ class PrenatalScheduleProposal {
     required this.intervalDays,
     required this.reason,
     this.cappedAtTerm = false,
+    this.requiresClinicalReview = false,
   });
 
   /// Date only — no time. Prenatal visits at a barangay health centre run as
   /// a walk-in morning clinic, so naming an hour would promise precision the
   /// service does not offer.
-  final DateTime date;
+  /// Null when the routine scheduling window has ended. The midwife may
+  /// still enter a follow-up date after reviewing the pregnancy.
+  final DateTime? date;
 
   final int intervalDays;
 
@@ -110,6 +113,7 @@ class PrenatalScheduleProposal {
   /// True when the proposal was pulled back to the end of the safe window
   /// rather than following the interval.
   final bool cappedAtTerm;
+  final bool requiresClinicalReview;
 }
 
 class PrenatalScheduleEngine {
@@ -117,10 +121,9 @@ class PrenatalScheduleEngine {
 
   /// The next visit date to offer after a checkup on [lastVisit].
   ///
-  /// [gestationalWeeks] null means gestation is unknown — usually a missing
-  /// LMP. The interval then falls back to the early-pregnancy spacing, which
-  /// is what the existing screen does, because proposing nothing leaves the
-  /// midwife with an empty field and no prompt at all.
+  /// Uses the due date when [gestationalWeeks] is unknown. With neither date
+  /// available, preserves the existing early-pregnancy fallback. At the end
+  /// of the routine window it asks for clinical review instead of a date.
   static PrenatalScheduleProposal propose({
     required DateTime lastVisit,
     double? gestationalWeeks,
@@ -129,16 +132,36 @@ class PrenatalScheduleEngine {
     PrenatalVisitIntervals intervals = PrenatalVisitIntervals.standard,
   }) {
     final base = DateTime(lastVisit.year, lastVisit.month, lastVisit.day);
-    final weeks = gestationalWeeks ?? 0;
+    final edd = expectedDateOfDelivery == null ? null : DateTime(
+      expectedDateOfDelivery.year, expectedDateOfDelivery.month,
+      expectedDateOfDelivery.day);
+    final weeks = gestationalWeeks ??
+        (edd == null ? 0 : (280 - edd.difference(base).inDays) / 7);
+    final latest = _latestSensibleDate(
+      base: base,
+      gestationalWeeks: gestationalWeeks,
+      expectedDateOfDelivery: edd,
+      intervals: intervals,
+    );
+    if (latest != null && !latest.isAfter(base)) {
+      return PrenatalScheduleProposal(
+        date: null,
+        intervalDays: 0,
+        reason: 'At or beyond week ${intervals.maximumGestationWeeks} — '
+            'review the pregnancy and delivery plan. No routine visit is '
+            'automatically proposed; enter a follow-up date after clinical review.',
+        requiresClinicalReview: true,
+      );
+    }
 
     late final int days;
     late final String reason;
 
-    if (weeks > intervals.postTermFromWeek) {
+    if (weeks > intervals.postTermFromWeek || (edd?.isBefore(base) ?? false)) {
       // Past the due date the question changes from routine care to
       // surveillance, and it outranks the risk level.
       days = intervals.postTermDays;
-      reason = 'Post-term monitoring (+${intervals.postTermDays} days)';
+      reason = 'Past-due monitoring (+${intervals.postTermDays} days)';
     } else if (isHighRisk) {
       final late = weeks >= intervals.secondIntervalFromWeek;
       days = late ? intervals.highRiskLateDays : intervals.highRiskEarlyDays;
@@ -164,13 +187,6 @@ class PrenatalScheduleEngine {
 
     // Never propose a routine visit past the end of a plausible pregnancy.
     // Without this the arithmetic happily books week 45.
-    final latest = _latestSensibleDate(
-      base: base,
-      gestationalWeeks: gestationalWeeks,
-      expectedDateOfDelivery: expectedDateOfDelivery,
-      intervals: intervals,
-    );
-
     if (latest != null && proposed.isAfter(latest)) {
       return PrenatalScheduleProposal(
         date: latest,
@@ -196,23 +212,24 @@ class PrenatalScheduleEngine {
     required DateTime? expectedDateOfDelivery,
     required PrenatalVisitIntervals intervals,
   }) {
+    DateTime? latest;
     if (gestationalWeeks != null && gestationalWeeks > 0) {
       final weeksLeft = intervals.maximumGestationWeeks - gestationalWeeks;
-      if (weeksLeft <= 0) return null; // Already past it; surveillance rules.
-      return base.add(Duration(days: (weeksLeft * 7).round()));
+      latest = base.add(Duration(days: (weeksLeft * 7).round()));
     }
 
     if (expectedDateOfDelivery != null) {
-      // Two weeks past the due date is week 42 by definition.
+      // Apply the configured limit relative to the 40-week due date.
       final edd = DateTime(
         expectedDateOfDelivery.year,
         expectedDateOfDelivery.month,
         expectedDateOfDelivery.day,
       );
-      final limit = edd.add(const Duration(days: 14));
-      return limit.isAfter(base) ? limit : null;
+      final limit = edd.add(Duration(days:
+          (intervals.maximumGestationWeeks - 40) * 7));
+      if (latest == null || limit.isBefore(latest)) latest = limit;
     }
 
-    return null;
+    return latest;
   }
 }

@@ -35,6 +35,20 @@
 
   /** Doses sitting in vials at this batch whose seal is already broken. */
   function openDoses(batch) {
+    const item = items.find(i => String(i.item_id) === String(batch?.item_id));
+    return usableOpenDoses(batch, item);
+  }
+
+  function isOpenVialExpired(batch, item, now = Date.now()) {
+    if (!(Number(batch?.doses_remaining_in_open_vial) > 0)) return false;
+    const hours = Number(item?.open_vial_shelf_hours || 0);
+    if (hours <= 0) return false;
+    const opened = Date.parse(batch?.vial_opened_at || "");
+    return !Number.isFinite(opened) || opened + hours * 3600000 <= now;
+  }
+
+  function usableOpenDoses(batch, item) {
+    if (isExpired(batch) || isOpenVialExpired(batch, item)) return 0;
     return Math.max(0, parseInt(batch && batch.doses_remaining_in_open_vial, 10) || 0);
   }
 
@@ -71,6 +85,8 @@
     get items() { return items; },
     get batches() { return batches; },
     get facilities() { return facilities; },
+    isOpenVialExpired,
+    usableOpenDoses,
 
     /** Allow pages to explicitly provide their already-resolved BHC facility roster. */
     setFacilities(list) {
@@ -177,7 +193,7 @@
         String(b.item_id) === String(itemId) &&
         matchesFacility(b, facilityFilter) &&
         b.status === "active" &&
-        !isExpired(b));
+        !isExpired(b) && !isOpenVialExpired(b, item));
 
       const available = usable.reduce((sum, b) => sum + (b.quantity_remaining || 0), 0);
       const open = usable.reduce((sum, b) => sum + openDoses(b), 0);

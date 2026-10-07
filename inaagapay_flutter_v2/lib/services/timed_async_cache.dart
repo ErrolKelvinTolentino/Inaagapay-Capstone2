@@ -9,8 +9,9 @@ class TimedAsyncCache<T> {
 
   T? peek(String key) {
     final entry = _values[key];
-    if (entry == null || DateTime.now().difference(entry.at) >= ttl)
+    if (entry == null || DateTime.now().difference(entry.at) >= ttl) {
       return null;
+    }
     return entry.value;
   }
 

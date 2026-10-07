@@ -435,3 +435,23 @@ No portal or app change needed. Requires `20260928_mother_transfer.sql`.
 Idempotent. **Re-run hazard:** `20260928_mother_transfer.sql` and
 `database/seed_redesigned_accounts.sql` define the old versions; run this file
 again after either.
+
+---
+
+# Stock-request requester deletion (2026-10-07)
+
+Run `migrations/20261007_stock_request_requester_delete_cascade.sql` as
+`postgres` in the Supabase SQL Editor after the inventory workflow migration.
+It changes `inventory_stock_requests_requested_by_fkey` to `ON DELETE CASCADE`:
+deleting any account deletes the stock requests submitted by that account.
+Applying the migration itself deletes no accounts or requests. Safe to re-run.
+
+Transfers linked to deleted requests keep their stock records and receive a
+null `request_id`. Other account references, including transfer `issued_by`
+and unusable-stock report `reported_by`, still use their existing delete rules
+and may block an account deletion. The portal's account-deletion guard still
+protects accounts with inventory history; this change affects the underlying
+foreign key used by direct SQL and table-editor deletes.
+
+The migration ends with a query showing the installed constraint definition.
+`00_check_migration_state.sql` also checks that its delete action is `CASCADE`.

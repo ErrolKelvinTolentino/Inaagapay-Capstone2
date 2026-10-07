@@ -20,6 +20,7 @@ import '../../widgets/pregnancy_risk_override.dart';
 import '../../services/sms_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/prenatal_schedule_engine.dart';
+import '../../services/pregnancy_stage.dart';
 import '../../services/blood_pressure_reference.dart';
 import '../../services/fetal_heart_rate_reference.dart';
 import '../../services/maternal_td_service.dart';
@@ -1417,13 +1418,13 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
   PrenatalScheduleProposal _scheduleProposal() {
     return PrenatalScheduleEngine.propose(
       lastVisit: _normalizedDate(_checkupDateTime),
-      gestationalWeeks: _aogWeeks,
+      gestationalWeeks: _scheduleGestationalWeeks,
       isHighRisk: _pregnancyRiskLevel.toLowerCase() == 'high',
       expectedDateOfDelivery: _effectiveEdd(),
     );
   }
 
-  DateTime _calculateRecommendedNextSchedule() => _scheduleProposal().date;
+  DateTime? _calculateRecommendedNextSchedule() => _scheduleProposal().date;
 
   String _scheduleRecommendationReason() => _scheduleProposal().reason;
 
@@ -1436,7 +1437,9 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
   }
 
   DateTime? _effectiveEdd([Map<String, dynamic>? pregnancy]) {
-    final eddFromPregnancy = _tryDate(pregnancy?['expected_date_of_delivery']);
+    final eddFromPregnancy = _tryDate(pregnancy?['expected_date_of_delivery']) ??
+        _tryDate((_motherRiskContext?['pregnancy'] as Map<String, dynamic>?)?
+            ['expected_date_of_delivery']);
     if (eddFromPregnancy != null) return eddFromPregnancy;
     final lmp = _effectiveLmp(pregnancy);
     return lmp?.add(const Duration(days: 280));
@@ -1450,6 +1453,12 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
         .inDays;
     if (days < 0) return null;
     return (days / 7).floorToDouble();
+  }
+
+  double? get _scheduleGestationalWeeks {
+    final days = PregnancyStage.gestationalDays(
+      lmp: _effectiveLmp(), edd: _effectiveEdd(), now: _checkupDateTime);
+    return days == null || days < 0 ? null : days / 7;
   }
 
   BpCategory get _bpCategory {
@@ -4496,9 +4505,11 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                       const SizedBox(width: 12),
                       Expanded(
                         child: _nextSchedule == null
-                            ? const Text(
-                                'Recommended next visit (optional)',
-                                style: TextStyle(
+                            ? Text(
+                                _scheduleProposal().requiresClinicalReview
+                                    ? 'Follow-up date after clinical review (optional)'
+                                    : 'Recommended next visit (optional)',
+                                style: const TextStyle(
                                   color: AppColors.textSecondary,
                                   fontSize: 14,
                                 ),

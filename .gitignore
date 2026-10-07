@@ -93,3 +93,7 @@ database/backups/*/
 database/new-project/export/
 database/new-project/settings.env
 database/new-project/functions.secrets.env
+
+# Isolated revision validation dependencies and generated QA artifacts.
+scripts/validation/node_modules/
+tmp/

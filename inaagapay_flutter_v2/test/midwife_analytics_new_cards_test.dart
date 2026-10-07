@@ -22,6 +22,16 @@ int _band(AnalyticsMetric m, String label) =>
 
 void main() {
   group('pregnancy stage', () {
+    test('due today is not counted as overdue; the next day is', () {
+      final dueToday = MidwifeAnalyticsService.pregnancyStageCard(
+          [_pregnancy(eddInDays: 0)], _now);
+      expect(_band(dueToday, 'Past 40 weeks'), 0);
+      expect(_band(dueToday, 'Third trimester'), 1);
+      final overdue = MidwifeAnalyticsService.pregnancyStageCard(
+          [_pregnancy(eddInDays: -1)], _now);
+      expect(_band(overdue, 'Past 40 weeks'), 1);
+    });
+
     test('trimesters follow completed weeks', () {
       expect(PregnancyStage.trimesterOf(13 * 7 + 6), Trimester.first);
       expect(PregnancyStage.trimesterOf(14 * 7), Trimester.second);

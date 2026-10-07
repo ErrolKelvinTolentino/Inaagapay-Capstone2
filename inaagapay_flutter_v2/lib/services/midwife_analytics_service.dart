@@ -527,7 +527,7 @@ class MidwifeAnalyticsService {
         undated++;
         continue;
       }
-      if (days >= PregnancyStage.termDays) {
+      if (days > PregnancyStage.termDays) {
         pastTerm++;
         if (PregnancyStage.completedWeeks(days) >= 42) postTerm++;
         continue;
@@ -561,7 +561,7 @@ class MidwifeAnalyticsService {
         shortLabel: '40+',
         count: pastTerm,
         severity: AnalyticsSeverity.alert,
-        detail: postTerm > 0 ? '$postTerm past 42 weeks' : null,
+        detail: postTerm > 0 ? '$postTerm at or beyond 42 weeks' : null,
       ),
       AnalyticsBand(
         label: 'No dates recorded',
@@ -585,7 +585,7 @@ class MidwifeAnalyticsService {
         'record, or refer for post-term care.',
         tone: AnalyticsTone.alert,
         evidence: postTerm > 0
-            ? '$postTerm ${_plural(postTerm, 'is', 'are')} past 42 weeks, '
+            ? '$postTerm ${_plural(postTerm, 'is', 'are')} at or beyond 42 weeks, '
                 'the post-term threshold.'
             : 'A pregnancy stays "ongoing" here until it is concluded in the app.',
       );

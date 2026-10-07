@@ -75,14 +75,10 @@ five facilities' worth of fictional paperwork in the audit trail.
 
 ## Re-running
 
-`01`–`03` are all re-runnable. Items upsert on `name`; allocations are matched
-by their generated `batch_number` and refreshed in place rather than stacked.
-
-One thing to know: re-running `03` puts every seeded batch back to **full**. On a
-demo database being reset that is the point, but it means running it alone
-discards whatever has since been dispensed. Only batches this file created are
-touched — the `MW-` / `RHU` / `BHC` prefixes are the marker — so anything
-received through the portal is left alone.
+`01`–`03` are all re-runnable. Items upsert on `name`; allocations are
+matched by their generated `batch_number` and inserted only when missing.
+Existing quantities, status and dispensing history are preserved. Replenishment
+belongs in a new received batch, not in a seed that restores opening stock.
 
 ## Two things worth not breaking
 
@@ -136,7 +132,7 @@ of everything from `03_allocations.sql`, but those arrived 20 days ago and the
 June and July drives predate them — the ledger would show a June dose drawn
 from August stock. The new batches carry an earlier expiry so FEFO consumes
 them first, and the `03_allocations.sql` batches are left alone. That also
-survives a re-run of `03`, which only refills `MW-` / `RHU` / `BHC` batches.
+survives a re-run of `03`, which preserves consumed quantities in existing batches.
 
 Expect afterwards: Pentavalent 30 → 12, PCV 20 → 11, Td 5 vials → 4 with **3
 doses left in an open vial dated 24 Aug**.
@@ -233,3 +229,19 @@ They stay **behind for their age**, and that is correct: they have only ever
 attended drives, so they have Pentavalent and PCV and nothing else. That is a
 real follow-up worklist, and it is what makes the "Behind for their age" slice
 of the Infant Immunization Status chart non-empty.
+
+## Final revision preparation
+
+- `20_remove_qa_fixtures.sql` removes every account whose email ends in `@qa.test`, its patient records, `Codex QA` catalogue items, and batches marked `CODEX-MW-QA-` or `QA-CODEX-`, together with dependent QA inventory and fixture audits. QA requesters' stock requests are removed even when they use ordinary catalogue items. A child's name alone does not select it for deletion. The transaction refuses cross-links to non-QA clinical records or stock transfers and asserts that all other accounts and ordinary stock rows remain intact. It keeps the Tarcan family/drive seeds and other movement/audit history.
+- `22_remove_qa_facilities.sql`, run after `20`, removes facilities named `Codex QA` or `Codex MW QA` from both `bhc` and `health_facilities`, including their unused synthetic revision stock and receipts. It refuses assigned accounts, clinical or operational dependencies, consumed stock, and ordinary child facilities. All accounts and other facilities/stock are checked before commit.
+- `23_remove_qa_history.sql`, run after `22`, removes remaining audit entries with meaningful QA/Codex text and emails addressed to `@qa.test`. Embedded base64 images and credential fields are excluded from marker matching. It verifies every other public row remains unchanged, apart from the application's normal audit refresh notifications, and refuses new foreign keys referencing the history tables.
+- `21_admin_consumption_activity.sql` adds a repeatable previous-month and current-month dispensing scenario using the existing dose workflow, with batch and movement totals that agree. It preserves other batches.
+- `../migrations/20261007_require_open_vial_disposal.sql` requires acknowledged disposal before the admin dispensing RPC can use a batch with spoiled open doses. The existing discard RPC records the officer/reason and removes only open doses, preserving sealed stock. It creates no scheduler or automatic write-off. The migration preserves the installed dispensing implementation and refuses an unexpected version rather than overwriting it.
+
+Run the targeted cleanup in order `20`, `22`, `23`, then the optional activity seed `21`. These scripts are not inventory resets. Verify the final SELECT results after each script.
+
+On Windows, run `./scripts/apply-final-revisions.ps1 -IncludeDemoActivity` from the repository root. It uses `new-project/settings.env`, prompts locally for the database password, and saves a public-schema backup under the gitignored `database/backups/` directory before cleanup. Each SQL file is a separate transaction; if a later step fails, earlier successful steps remain applied and the script can be rerun.
+
+With October 2026 as the current month, select **September + Tarcan + Ferrous Sulfate + Folic Acid** to show 1,800 seeded dispensed units and a 360-unit peak on September 15. October has three 60-unit records after October 6. The dedicated iron batch then has 150 units left. The portal totals also include existing batches and dispensing, so the new batch does not establish a 150-unit total or guarantee a low-stock alert. Other BHCs in Tarcan's RHU have lower consumption, and calcium provides a second item filter. The seed creates no patient encounters and labels its movements as fictional capstone activity.
+
+Validate without a Supabase connection: install pinned test dependencies with `npm install --prefix scripts/validation --ignore-scripts`, then run `node scripts/test-manual-vial-disposal.mjs`, `node scripts/test-revision-seeds.mjs`, `node scripts/test-qa-history-cleanup.mjs`, and `node --test admin-web/tests/*.test.js`.

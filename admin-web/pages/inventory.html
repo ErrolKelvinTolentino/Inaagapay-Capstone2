@@ -1461,15 +1461,15 @@
                 <select class="form-select" id="batches-filter-status" style="width: auto" aria-label="Filter by batch status">
                   <option value="">All Statuses</option>
                   <option value="active">Active</option>
-                  <option value="expired">Expired</option>
-                  <option value="discarded">Discarded</option>
+                  <option value="expired">Expired (batch or open doses)</option>
+                  <option value="discarded">Discarded (batch or open doses)</option>
                 </select>
                 <!-- The question actually asked of this table is "what is about
                      to go off?", and until now it could only be answered by
                      reading every row's countdown badge. -->
                 <select class="form-select" id="batches-filter-expiry" style="width: auto" aria-label="Filter by expiry window">
                   <option value="">Any Expiry</option>
-                  <option value="expired">Already Expired</option>
+                  <option value="expired">Already Expired (batch or open doses)</option>
                   <option value="30">Expiring within 30 days</option>
                   <option value="60">Expiring within 60 days</option>
                   <option value="90">Expiring within 90 days</option>
@@ -1506,7 +1506,7 @@
                     <th class="th-sort" data-sort="batches:received" tabindex="0">Received Date<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="batches:expiration" tabindex="0">Expiration Date<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th class="th-sort" data-sort="batches:remaining" tabindex="0" style="text-align: right">Remaining Qty<i class="fa-solid fa-sort sort-ind"></i></th>
-                    <th class="th-sort" data-sort="batches:expiration" tabindex="0" style="text-align: center">Countdown<i class="fa-solid fa-sort sort-ind"></i></th>
+                    <th class="th-sort" data-sort="batches:expiry_priority" tabindex="0" style="text-align: center" title="Sort by expired open doses first, then the next batch or open-vial expiry">Countdown<i class="fa-solid fa-sort sort-ind"></i></th>
                     <th style="text-align: center">Action</th>
                   </tr>
                 </thead>
@@ -1780,6 +1780,7 @@
                   <option value="receipt">Stock Receipt (+)</option>
                   <option value="dispense">Dispensed (-)</option>
                   <option value="adjustment">Stock Adjustment</option>
+                  <option value="discards">All Discards &amp; Disposals (-)</option>
                   <option value="expiry_disposal">Expiry Disposal (-)</option>
                   <option value="transfer">Facility Transfer</option>
                 </select>
@@ -1846,7 +1847,7 @@
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn btn-secondary btn-sm" onclick="loadInventoryAuditLog(true)"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
-                <button class="btn btn-outline-pink btn-sm" onclick="exportInventoryAuditCSV()"><i class="fa-solid fa-file-csv"></i> Export Activity CSV</button>
+                <button class="btn btn-outline-pink btn-sm" onclick="exportInventoryAuditXlsx()"><i class="fa-solid fa-file-excel"></i> Export Activity Excel</button>
               </div>
             </div>
             <div class="table-controls">
@@ -2926,6 +2927,7 @@
               <option value="Damaged vial / visible particulate matter">Damaged vial / visible particulate matter observed</option>
               <option value="Cold chain or equipment failure">Cold chain or refrigerator breakdown</option>
               <option value="Other clinical discard">Other clinical discard</option>
+              <option value="Opening time unavailable">Opening time unavailable / shelf-life cannot be verified</option>
             </select>
           </div>
 
@@ -3201,9 +3203,9 @@
             }
           },
           batches: {
-            // Expiry ascending is the only default that puts the batch you
-            // must act on first.
-            sortField: "expiration", sortAsc: true,
+            // Spoiled open doses need acknowledgment even when the sealed
+            // batch expiry is still months away.
+            sortField: "expiry_priority", sortAsc: true,
             render: () => renderBatches(),
             defaults: {
               "batches-search": "", "batches-filter-status": "",
@@ -4435,6 +4437,8 @@
         function isUsableBatch(batch) {
           if (!batch || batch.status !== "active" || isBatchExpired(batch)) return false;
           if (isBatchColdChainCompromised(batch)) return false;
+          const item = items.find(i => String(i.item_id) === String(batch.item_id));
+          if (isOpenVialExpired(batch, item)) return false;
           return Number(batch.quantity_remaining || 0) > 0;
         }
 
@@ -5145,9 +5149,16 @@
           return itemDosesPerUnit(item) > 1;
         }
 
-        /** Doses sitting in vials that are already open at this batch. */
+        /** Stored doses remain visible for disposal, including overdue doses. */
+        function storedOpenDoses(batch) {
+          return Math.max(0, parseInt(batch?.doses_remaining_in_open_vial, 10) || 0);
+        }
+
+        /** Only usable open doses contribute to stock and dispensing capacity. */
         function batchOpenDoses(batch) {
-            return Math.max(0, parseInt(batch?.doses_remaining_in_open_vial, 10) || 0);
+          const item = items.find(i => String(i.item_id) === String(batch?.item_id));
+          if (isBatchExpired(batch) || isOpenVialExpired(batch, item)) return 0;
+          return storedOpenDoses(batch);
         }
 
         /** "8 vials (78 doses)" for multi-dose items, "8 units" for the rest. */
@@ -5166,7 +5177,7 @@
 
           const added = itemBatches.reduce((sum, b) => sum + (b.quantity_received || 0), 0);
 
-          const usableBatches = itemBatches.filter(b => b.status === 'active' && !isBatchExpired(b));
+          const usableBatches = itemBatches.filter(b => b.status === 'active' && !isBatchExpired(b) && !isOpenVialExpired(b, item));
           const available = usableBatches.reduce((sum, b) => sum + (b.quantity_remaining || 0), 0);
 
           // Doses already drawn out of a vial. They are no longer part of
@@ -5477,6 +5488,7 @@
             renderOpenVialsTracker();
             renderSubviewCounts();
             populateDropdowns();
+            scheduleOpenVialExpiryRefresh();
             setupCatalogSearchDropdown();
             openPendingIssueModal();
 
@@ -5847,21 +5859,99 @@
           }).join('');
         }
 
-        // Render Subview C: Active Batches Table
-        // Whole days from today until a batch expires. Negative once it has.
-        function daysUntilExpiry(dateStr) {
-          if (!dateStr) return null;
-          const exp = new Date(`${dateStr}T12:00:00`);
-          if (isNaN(exp.getTime())) return null;
-          const now = new Date();
-          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
-          return Math.round((exp - today) / 86400000);
-        }
-
         // One naming rule for every shelf on this page, so a batch, a ledger row
         // and a transfer leg all call the same place the same thing.
         function batchLocationName(b) {
           return transferEndpointName(b.facility_id);
+        }
+
+        function batchExpiryState(batch) {
+          const item = items.find(i => String(i.item_id) === String(batch.item_id));
+          const openExpired = isOpenVialExpired(batch, item);
+          const batchExpired = batch.status === 'expired' || isBatchExpired(batch);
+          const hours = openVialShelfHours(item);
+          const opened = Date.parse(batch.vial_opened_at || '');
+          const openDeadline = storedOpenDoses(batch) > 0 && hours > 0 && Number.isFinite(opened)
+            ? opened + hours * 3600000 : null;
+          const sealedDate = new Date(batch.expiration_date || NaN);
+          sealedDate.setHours(0, 0, 0, 0);
+          const deadlines = [sealedDate.getTime(), openDeadline].filter(t => t !== null && Number.isFinite(t));
+          const hasStock = Number(batch.quantity_remaining) > 0 || storedOpenDoses(batch) > 0;
+          const rank = openExpired ? 0 : !hasStock || ['discarded', 'depleted'].includes(batch.status)
+            ? 3 : batchExpired ? 1 : 2;
+          return { openExpired, batchExpired, rank,
+            deadline: openExpired ? openDeadline : deadlines.length ? Math.min(...deadlines) : null };
+        }
+
+        function sortByExpiryPriority(rows, ascending = true) {
+          const direction = ascending ? 1 : -1;
+          return rows.map(batch => ({ batch, expiry: batchExpiryState(batch) })).sort((a, b) => {
+            const rank = a.expiry.rank - b.expiry.rank;
+            if (rank) return direction * rank;
+            // An unverified opening time stays in the disposal group, with
+            // known expiry deadlines ordered before it in either direction.
+            if (a.expiry.deadline === null && b.expiry.deadline !== null) return 1;
+            if (b.expiry.deadline === null && a.expiry.deadline !== null) return -1;
+            const deadline = (a.expiry.deadline ?? 0) - (b.expiry.deadline ?? 0);
+            return direction * (deadline || cmpValues(a.batch.batch_number, b.batch.batch_number));
+          }).map(({ batch }) => batch);
+        }
+
+        function matchesBatchExpiryFilters(batch, status, expiryWindow) {
+          const expiry = batchExpiryState(batch);
+          const expired = expiry.openExpired || expiry.batchExpired;
+          const effectiveStatus = batch.status === 'discarded' ? 'discarded' : expired ? 'expired' : batch.status;
+          if (status === 'discarded') {
+            // Open-dose discards retain the sealed batch's usable status.
+            // Include its recorded losses without marking that stock discarded.
+            if (batch.status !== 'discarded' && !batchDiscardHistory(batch).records.length) return false;
+          } else if (status && effectiveStatus !== status) return false;
+          if (!expiryWindow) return true;
+          if (expiryWindow === 'expired') return expired;
+          if (expired || expiry.deadline === null) return false;
+          const days = Math.ceil((expiry.deadline - Date.now()) / 86400000);
+          if (expiryWindow === 'safe') return days > 90;
+          return /^\d+$/.test(expiryWindow) && days >= 0 && days <= Number(expiryWindow);
+        }
+
+        function isDiscardTransaction(tx) {
+          return ['discard', 'expiry_disposal'].includes(tx.transaction_type) &&
+            (Number(tx.quantity) < 0 || Number(tx.dose_quantity) < 0);
+        }
+
+        function batchDiscardHistory(batch) {
+          const records = (transactions || []).filter(tx =>
+            String(tx.batch_id) === String(batch.batch_id) && isDiscardTransaction(tx))
+            .sort((a, b) => (Date.parse(b.logged_at) || 0) - (Date.parse(a.logged_at) || 0));
+          let openDoses = 0, units = 0;
+          records.forEach(tx => {
+            const openOnly = /^(open vial discard|open vial expiry|open_vial_expired)$/i.test(String(tx.reference_type || '').trim()) ||
+              (tx.transaction_type === 'discard' && Number(tx.quantity) === 0);
+            if (openOnly) {
+              // Older vial records stored the dose loss in quantity; never
+              // interpret those doses as discarded sealed units.
+              openDoses += Math.max(0, -(Number(tx.dose_quantity) < 0 ? Number(tx.dose_quantity) : Number(tx.quantity))) || 0;
+            } else {
+              units += Math.max(0, -Number(tx.quantity)) || 0;
+            }
+          });
+          return { records, openDoses, units };
+        }
+
+        function getBatchExpiryCountdownBadge(batch, item) {
+          const sealedBadge = getExpiryCountdownBadge(batch.expiration_date, batch.status);
+          if (storedOpenDoses(batch) <= 0) return sealedBadge;
+          const age = openVialAgeHours(batch);
+          const hours = openVialShelfHours(item);
+          let openBadge = '';
+          if (isOpenVialExpired(batch, item)) {
+            openBadge = `<span class="badge-health-danger"><i class="fa-solid fa-ban"></i> ${age === null ? 'Open time unverified' : 'Open doses expired'}</span><div style="font-size:10px;color:#dc2626;margin-top:2px;">Manual discard required</div>`;
+          } else if (hours > 0 && age !== null) {
+            const left = Math.max(0, hours - age);
+            const countdown = left < 1 ? `${Math.ceil(left * 60)}m` : left < 24 ? `${left.toFixed(1)}h` : `${(left / 24).toFixed(1)}d`;
+            openBadge = `<span class="${left <= (hours <= 6 ? 1 : 72) ? 'badge-health-warning' : 'badge-health-success'}"><i class="fa-solid fa-syringe"></i> Open doses: ${countdown} left</span>`;
+          }
+          return openBadge ? `${openBadge}<div style="font-size:10px;margin-top:4px;">Sealed: ${sealedBadge}</div>` : sealedBadge;
         }
 
         function renderBatches() {
@@ -5878,15 +5968,7 @@
           const inScope = batches.filter(b => facilityMatches(b.facility_id, bhcFilter));
 
           const filtered = inScope.filter(b => {
-            if (status && b.status !== status) return false;
-
-            if (expiryWindow) {
-              const d = daysUntilExpiry(b.expiration_date);
-              if (d === null) return false;
-              if (expiryWindow === "expired" && d >= 0) return false;
-              if (expiryWindow === "safe" && d <= 90) return false;
-              if (/^\d+$/.test(expiryWindow) && !(d >= 0 && d <= Number(expiryWindow))) return false;
-            }
+            if (!matchesBatchExpiryFilters(b, status, expiryWindow)) return false;
 
             if (!inDateWindow(b.received_date, win)) return false;
 
@@ -5896,14 +5978,16 @@
             return true;
           });
 
-          const sorted = sortRows("batches", filtered, {
-            batch: b => b.batch_number || "",
-            item: b => items.find(i => i.item_id === b.item_id)?.name || "",
-            location: b => batchLocationName(b),
-            received: b => b.received_date || "",
-            expiration: b => b.expiration_date || "",
-            remaining: b => b.quantity_remaining ?? 0
-          });
+          const sorted = tableViews.batches.sortField === 'expiry_priority'
+            ? sortByExpiryPriority(filtered, tableViews.batches.sortAsc)
+            : sortRows("batches", filtered, {
+                batch: b => b.batch_number || "",
+                item: b => items.find(i => i.item_id === b.item_id)?.name || "",
+                location: b => batchLocationName(b),
+                received: b => b.received_date || "",
+                expiration: b => b.expiration_date || "",
+                remaining: b => b.quantity_remaining ?? 0
+              });
           syncSortIndicators("batches");
           renderTableMeta("batches", sorted.length, inScope.length);
 
@@ -5922,7 +6006,12 @@
 
           tbody.innerHTML = paginatedBatches.map(b => {
             const item = items.find(i => i.item_id === b.item_id);
-            const countdownBadge = getExpiryCountdownBadge(b.expiration_date, b.status);
+            const countdownBadge = getBatchExpiryCountdownBadge(b, item);
+            const discard = batchDiscardHistory(b);
+            const discardLabel = b.status === 'discarded' ? 'Batch discarded' : [
+              discard.openDoses > 0 ? `${discard.openDoses} open dose(s) discarded` : '',
+              discard.units > 0 ? `${discard.units} sealed unit(s) discarded` : ''
+            ].filter(Boolean).join(' · ') || 'Discard recorded';
 
             // One rule for naming a shelf, five call sites — this used to be
             // five copies, each of which called the municipal warehouse by
@@ -5933,6 +6022,8 @@
             const nearestUsable = getNearestUsableBatch(b.item_id, locFilter);
             const isFefoFirst = nearestUsable && b.batch_id === nearestUsable.batch_id;
             const openDoses = b.doses_remaining_in_open_vial || 0;
+            const usableOpen = batchOpenDoses(b);
+            const expiredOpen = openDoses > 0 && usableOpen === 0;
             const isVaccine = isColdChainItem(item);
             const isExcursion = isVaccine && isBatchColdChainCompromised(b);
 
@@ -5942,7 +6033,9 @@
                   <strong style="font-family:monospace;">${esc(b.batch_number)}</strong>
                   ${isFefoFirst && !isExcursion ? `<span class="badge-health-success" style="font-size:9.5px;padding:1px 5px;margin-left:4px;" title="Earliest expiring usable batch (FEFO)"><i class="fa-solid fa-star"></i> Use First</span>` : ''}
                   ${isExcursion ? `<span class="badge" style="background:#fef2f2;color:#b91c1c;border:1px solid #fca5a5;font-size:9.5px;padding:2px 6px;margin-left:4px;border-radius:4px;font-weight:700;" title="Active cold-chain excursion recorded — locked out from patient administration"><i class="fa-solid fa-snowflake"></i> Cold-Chain Excursion</span>` : ''}
-                  ${openDoses > 0 ? `<span class="badge" style="background:#ecfdf5;color:#059669;font-size:9.5px;padding:2px 6px;margin-left:4px;border-radius:4px;border:1px solid #a7f3d0;font-weight:700;"><i class="fa-solid fa-syringe"></i> Open (${openDoses} doses)</span>` : ''}
+                  ${openDoses > 0 ? `<span class="badge" style="background:${expiredOpen ? '#fef2f2' : '#ecfdf5'};color:${expiredOpen ? '#dc2626' : '#059669'};font-size:9.5px;padding:2px 6px;margin-left:4px;border-radius:4px;font-weight:700;"><i class="fa-solid fa-syringe"></i> ${expiredOpen ? 'Expired open doses' : `Open (${openDoses} doses)`}</span>` : ''}
+                  ${b.status === 'discarded' || discard.records.length ? `<div style="margin-top:4px;font-size:10px;color:var(--text-secondary);"><i class="fa-solid fa-trash-can"></i> ${esc(discardLabel)}</div>` : ''}
+                  ${discard.records.length ? `<button class="btn btn-xs btn-secondary" style="margin-top:4px;" onclick="openMovementNarrative(${Number(discard.records[0].transaction_id)})"><i class="fa-solid fa-clipboard-list"></i> View last discard</button>` : ''}
                 </td>
                 <td class="col-item-details">
                   <div style="display:flex;align-items:center;gap:4px;">
@@ -5959,20 +6052,21 @@
                 <td style="font-size:11.5px;color:var(--text-secondary);white-space:nowrap;">${b.received_date ? formatShortDate(b.received_date) : '—'}</td>
                 <td style="font-size:11.5px;font-weight:600;white-space:nowrap;">${formatShortDate(b.expiration_date)}</td>
                 <td style="text-align:right;font-weight:700;color:var(--brand-primary);">
-                  ${b.quantity_remaining} <span style="font-size:10px;color:var(--text-secondary);font-weight:normal;">/ ${b.quantity_received}</span>
-                  ${openDoses > 0 ? `<div style="font-size:10px;font-weight:700;color:#059669;margin-top:2px;">+ ${openDoses} open doses</div>` : ''}
+                  ${Number(b.quantity_remaining || 0)} <span style="font-size:10px;color:var(--text-secondary);font-weight:normal;">${esc(item?.unit_of_measure || "units")} remaining</span>
+                  <div style="font-size:10px;color:var(--text-secondary);font-weight:normal;">Received: ${Number(b.quantity_received || 0)}</div>
+                  ${openDoses > 0 ? `<div style="font-size:10px;font-weight:700;color:${expiredOpen ? '#dc2626' : '#059669'};margin-top:2px;">${expiredOpen ? `${openDoses} expired doses (unusable)` : `+ ${openDoses} usable open doses`}</div>` : ''}
                 </td>
                 <td style="text-align:center;">${countdownBadge}</td>
                 <td style="text-align:center; white-space:nowrap;">
                   ${isExcursion ? `
                     <button class="btn btn-sm btn-outline-pink" onclick="openDisposalModal(${b.batch_id})" style="padding:2px 6px;font-size:10.5px;color:#dc2626;border-color:#fca5a5;" title="Execute DOH Disposal Protocol"><i class="fa-solid fa-trash"></i> Dispose</button>
-                  ` : (b.status === 'active' && !isBatchExpired(b) && (b.quantity_remaining > 0 || openDoses > 0) ? `
+                  ` : (!expiredOpen && b.status === 'active' && !isBatchExpired(b) && (b.quantity_remaining > 0 || usableOpen > 0) ? `
                     <div style="display:inline-flex;gap:4px;align-items:center;justify-content:center;">
                       <button class="btn btn-sm btn-outline-pink" onclick="quickDispense(${b.batch_id})" style="padding:2px 6px;font-size:10.5px;"><i class="fa-solid fa-minus"></i> Use</button>
                       ${openDoses > 0 ? `<button class="btn btn-xs btn-secondary" onclick="openDiscardVialModal(${b.batch_id})" title="Discard Open Vial (${openDoses} open doses under DOH MDVP)" style="padding:2px 5px;font-size:10.5px;color:#b45309;border-color:#fde68a;"><i class="fa-solid fa-hourglass-end"></i></button>` : ''}
                       ${isVaccine ? `<button class="btn btn-xs btn-secondary" onclick="openColdChainModal(${b.batch_id})" title="Report Cold-Chain Excursion / Temperature Breach" style="padding:2px 5px;font-size:10.5px;color:#dc2626;border-color:#fca5a5;"><i class="fa-solid fa-temperature-arrow-up"></i></button>` : ''}
                     </div>
-                  ` : '—')}
+                  ` : (expiredOpen ? `<button class="btn btn-sm btn-outline-pink" onclick="openDiscardVialModal(${b.batch_id})">Discard expired doses</button>` : '—'))}
                 </td>
               </tr>
             `;
@@ -6490,9 +6584,12 @@
           const inScope = transactions.filter(t => facilityMatches(t.facility_id, bhcFilter));
 
           const filtered = inScope.filter(t => {
-            if (type && t.transaction_type !== type) return false;
-            if (direction === "in" && !(t.quantity > 0)) return false;
-            if (direction === "out" && !(t.quantity < 0)) return false;
+            if (type === 'discards') {
+              if (!isDiscardTransaction(t)) return false;
+            } else if (type && t.transaction_type !== type) return false;
+            const movement = Number(t.quantity) || Number(t.dose_quantity) || 0;
+            if (direction === "in" && !(movement > 0)) return false;
+            if (direction === "out" && !(movement < 0)) return false;
             if (!inDateWindow(t.logged_at, win)) return false;
 
             const batch = batches.find(b => b.batch_id === t.batch_id);
@@ -6539,6 +6636,7 @@
             receipt: `<span class="badge-health-success"><i class="fa-solid fa-arrow-down"></i> Receipt</span>`,
             dispense: `<span class="badge-health-warning"><i class="fa-solid fa-hand-holding-medical"></i> Dispense</span>`,
             adjustment: `<span class="badge-health-muted"><i class="fa-solid fa-sliders"></i> Adjustment</span>`,
+            discard: `<span class="badge-health-danger" title="Open vial doses discarded"><i class="fa-solid fa-trash-can" aria-hidden="true"></i> Discarded</span>`,
             expiry_disposal: `<span class="badge-health-danger"><i class="fa-solid fa-trash"></i> Disposal</span>`,
             transfer: `<span class="badge-health-warning"><i class="fa-solid fa-arrow-right-arrow-left"></i> Transfer</span>`
           };
@@ -6557,9 +6655,11 @@
               !!t.client_operation_key &&
               String(t.reference_type || "").startsWith("BHC unusable report");
 
+            const movementType = String(t.transaction_type || '').trim().toLowerCase();
+            const movementLabel = movementType.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()) || 'Movement';
             let movementBadge = isBhcUnusableRecord
               ? `<span class="badge-health-danger"><i class="fa-solid fa-triangle-exclamation"></i> Reported Unusable</span>`
-              : (typeBadges[t.transaction_type] || t.transaction_type);
+              : (typeBadges[movementType] || `<span class="badge-health-muted">${esc(movementLabel)}</span>`);
             if (transfer) {
               movementBadge += `<div style="margin-top:3px;">${directionChip(transferDirectionOf(transfer))}</div>`;
               movementBadge += `<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">${t.quantity < 0 ? "Left this shelf" : "Landed here"}</div>`;
@@ -7606,7 +7706,13 @@
                   <div style="font-weight:600;">${esc(row.actor_name || "System")}</div>
                   ${row.actor_facility_name ? `<div style="font-size:10px;color:var(--text-secondary);">${esc(row.actor_facility_name)}</div>` : ""}
                 </td>
-                <td style="font-size:11.5px;color:var(--text-secondary);max-width:260px;"><div class="text-clamp-2" title="${esc(summary)}">${esc(summary)}</div></td>
+                <td style="font-size:11.5px;color:var(--text-secondary);max-width:260px;">
+                  <div class="text-clamp-2">${esc(summary)}</div>
+                  <button class="btn btn-sm btn-secondary" onclick="openInventoryAuditDetail(${Number(row.audit_id)})"
+                          style="margin-top:6px;font-size:11px;" aria-label="Read full details for inventory record ${Number(row.audit_id)}">
+                    <i class="fa-solid fa-book-open"></i> View details
+                  </button>
+                </td>
               </tr>`;
           }).join("");
 
@@ -7693,28 +7799,6 @@
               </div>
             </div>`).join("");
 
-          const related = (row.related_ids && typeof row.related_ids === "object")
-            ? Object.entries(row.related_ids).filter(([, v]) => v !== null && v !== undefined && v !== "")
-            : [];
-          const relatedHtml = related.length === 0 ? "" : `
-            <div style="background:#ffffff; border:1px solid var(--border-primary); border-radius:10px; padding:14px 16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
-              <h4 style="font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:var(--text-secondary); margin:0 0 10px; display:flex; align-items:center; gap:6px;">
-                <i class="fa-solid fa-link" style="color:var(--brand-primary); font-size:11px;"></i> Connected System Records
-              </h4>
-              <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
-                ${related.map(([k, v]) => `
-                  <span class="select-chip chip-batch" style="font-size:11px; padding:4px 8px;">
-                    <strong style="text-transform:capitalize;">${esc(k.replace(/_/g, " "))}:</strong> #${esc(String(v))}
-                  </span>`).join("")}
-                ${transfer ? `
-                  <button class="action-pill-btn pill-pink no-print" onclick="closeModal('modal-invaudit-detail'); openTransferQR(${transfer.transfer_id});"
-                          title="View official dispatch voucher" style="height:24px; padding:0 10px; font-size:11px; cursor:pointer; margin-left:auto;">
-                    <i class="fa-solid fa-qrcode"></i> View Dispatch Slip (STV)
-                  </button>
-                ` : ""}
-              </div>
-            </div>`;
-
           document.getElementById("invaudit-detail-title").innerHTML =
             `<i class="fa-solid fa-file-signature" style="color:var(--brand-primary); margin-right:8px;"></i> ${esc(actLabel)}`;
           document.getElementById("invaudit-detail-subtitle").textContent =
@@ -7797,55 +7881,41 @@
             </div>
 
             ${sectionsHtml}
-            ${relatedHtml}
 
-            <!-- Official Certification & Signatory Section -->
-            <div style="border: 1px solid #94a3b8; border-radius: 6px; padding: 10px 14px; background: #f8fafc; margin-top: 14px; page-break-inside: avoid;">
-              <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px; margin-bottom: 8px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px;">
-                Official Certification &amp; Accountability
-              </div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; font-size: 10px; margin-top: 20px;">
-                <div>
-                  <div style="border-top: 1px solid #0f172a; padding-top: 4px; text-align: center;">
-                    <strong style="display: block; font-size: 11px; text-transform: uppercase; color: #0f172a;">${esc(row.actor_name || 'Authorized Personnel')}</strong>
-                    <span style="color: #64748b; font-size: 9.5px;">Recording Officer / Personnel-in-Charge</span>
-                  </div>
-                </div>
-                <div>
-                  <div style="border-top: 1px solid #0f172a; padding-top: 4px; text-align: center;">
-                    <strong style="display: block; font-size: 11px; text-transform: uppercase; color: #0f172a;">Municipal Health Officer / Supervisor</strong>
-                    <span style="color: #64748b; font-size: 9.5px;">Rural Health Unit (RHU) &bull; Verified &amp; Audited</span>
-                  </div>
-                </div>
-              </div>
-            </div>
           `;
           openModal("modal-invaudit-detail");
         };
 
-        window.exportInventoryAuditCSV = function() {
+        window.exportInventoryAuditXlsx = async function() {
           const rows = filteredInventoryAuditRows();
-          if (rows.length === 0) {
-            showToast("Nothing to export with the current filters.", "warning");
-            return;
-          }
-          const headers = ["Record", "Timestamp", "Severity", "Event", "Entity",
-                           "Performed By", "Role", "Facility", "Summary", "Full Account"];
-          const cell = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
-          const body = rows.map(r => [
-            cell(r.audit_id),
-            cell(r.action_timestamp ? formatDateTime(r.action_timestamp) : ""),
-            cell(auditSeverityOf(r)),
-            cell(auditActionLabel(r.action)),
-            cell(r.entity_label || ""),
-            cell(r.actor_name || "System"),
-            cell(r.actor_role || ""),
-            cell(r.actor_facility_name || ""),
-            cell(r.description || ""),
-            cell((r.narrative || "").replace(/\s+/g, " "))
-          ]);
-          const csv = [headers.join(","), ...body.map(r => r.join(","))].join("\n");
-          window.downloadCsvFile(`inventory_activity_log_${localDateKey()}.csv`, csv);
+          if (!rows.length) { showToast('Nothing to export with the current filters.', 'warning'); return; }
+          const summary = rows.map(r => [r.audit_id,
+            auditDate(r.action_timestamp)?.toLocaleString('en-PH') || '',
+            auditSeverityOf(r), auditActionLabel(r.action), r.entity_label || '',
+            r.actor_name || 'System', r.actor_role || '', r.actor_facility_name || '',
+            r.description || '']);
+          const details = rows.flatMap(r => {
+            const entries = [
+              [r.audit_id, 'Written account', r.narrative || r.description || ''],
+              [r.audit_id, 'Performed by', r.actor_name || 'System'],
+            ];
+            (r.details?.sections || []).forEach(section => {
+              (section.rows || []).forEach(kv => entries.push([r.audit_id,
+                [section.title, kv.label].filter(Boolean).join(' - '), String(kv.value ?? '')]));
+            });
+            return entries;
+          });
+          try {
+            await ExportKit.xlsx(`inventory_activity_log_${localDateKey()}.xlsx`, [
+              { name: 'Activity log', title: 'Inventory activity log', scope: ExportKit.scopeLabel(),
+                period: 'Current activity filters', blocks: [{
+                  columns: ['Record', 'Timestamp', 'Severity', 'Event', 'Entity', 'Performed by', 'Role', 'Facility', 'Summary'], rows: summary,
+                }] },
+              { name: 'Event details', title: 'Inventory activity details', scope: ExportKit.scopeLabel(),
+                period: 'Current activity filters', blocks: [{ columns: ['Record', 'Detail', 'Account / value'], rows: details }] },
+            ]);
+            showToast('Inventory activity workbook downloaded.', 'success');
+          } catch (err) { showToast('Could not export the activity workbook: ' + err.message, 'error'); }
         };
 
         // Render Disposal Management Table
@@ -10245,11 +10315,11 @@
               const bh = bhcs.find(x => String(x.bhc_id) === String(batch.facility_id));
               loc = bh ? bh.bhc_name : unknownFacilityLabel(batch.facility_id);
             }
-            const doses = batchOpenDoses(batch);
+            const doses = storedOpenDoses(batch);
             return {
               kind: "vials",
               title: `Open Vial Expired: ${esc(item?.name || 'Vaccine')} (Batch ${esc(batch.batch_number)})`,
-              desc: `${doses} dose(s) still drawn • Location: ${esc(loc)} • Open ${Math.floor(hours)}h, past the ${describeShelfLimit(limit)} limit. These doses can no longer be given.`,
+              desc: `${doses} spoiled open dose(s) • Location: ${esc(loc)} • ${openVialAgeHours(batch) === null ? 'Opening time cannot be verified' : `Open ${Math.floor(hours)}h, past the ${describeShelfLimit(limit)} limit`}. This batch is blocked from dispensing until its open doses are discarded and recorded.`,
               shortcut: `closeModal('modal-alerts-hub'); focusOpenVial(${batch.batch_id});`,
               action: `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                 <button class="btn btn-sm btn-secondary" onclick="closeModal('modal-alerts-hub'); focusBatch(${batch.batch_id});"><i class="fa-solid fa-magnifying-glass"></i> View Batch</button>
@@ -11036,7 +11106,7 @@
           const adminDosesStatEl = document.getElementById("stat-doses-administered");
           const bhcFilter = document.getElementById("global-bhc-filter")?.value || "all";
 
-          const openBatches = (batches || []).filter(b => (b.doses_remaining_in_open_vial || 0) > 0 && facilityMatches(b.facility_id, bhcFilter));
+          const openBatches = sortByExpiryPriority((batches || []).filter(b => storedOpenDoses(b) > 0 && facilityMatches(b.facility_id, bhcFilter)));
 
           if (openCountStatEl) {
             openCountStatEl.textContent = `${openBatches.length} vial${openBatches.length === 1 ? '' : 's'}`;
@@ -11135,14 +11205,13 @@
             const shelfLimitHours = openVialShelfHours(item);
             const isReconstituted = shelfLimitHours === 6 || /bcg|measles|mmr|rubella/i.test(item?.name || "");
 
-            let openedTimeStr = "Recently";
-            let isExpired = false;
-            let hoursOpen = 0;
+            let openedTimeStr = "Opening time missing";
+            const isExpiredOpen = isOpenVialExpired(b, item);
+            const isExpired = isExpiredOpen || isBatchExpired(b) || b.status === 'expired';
+            const age = openVialAgeHours(b);
+            const hoursOpen = Math.max(0, age ?? 0);
 
-            if (b.vial_opened_at) {
-              const openedDate = new Date(b.vial_opened_at);
-              const now = new Date();
-              hoursOpen = Math.max(0, (now - openedDate) / (1000 * 60 * 60));
+            if (age !== null) {
               if (hoursOpen < 1) {
                 openedTimeStr = `${Math.max(1, Math.round(hoursOpen * 60))} mins ago`;
               } else if (hoursOpen < 24) {
@@ -11150,8 +11219,6 @@
               } else {
                 openedTimeStr = `${Math.floor(hoursOpen / 24)}d ${Math.round(hoursOpen % 24)}h ago`;
               }
-
-              isExpired = isOpenVialExpired(b, item);
             }
 
             const policyBadge = isReconstituted
@@ -11160,9 +11227,13 @@
 
             let statusBadge = "";
             let hoursLeft = Math.max(0, shelfLimitHours - hoursOpen);
-            if (isExpired) {
+            if (shelfLimitHours > 0 && openVialAgeHours(b) === null) {
+              statusBadge = `<span class="badge badge-danger" style="background:#fee2e2;color:#dc2626;">Time unverified — unusable</span>`;
+            } else if (isExpiredOpen) {
               const overtime = hoursOpen - shelfLimitHours;
               statusBadge = `<span class="badge badge-danger" style="background:#fee2e2; color:#dc2626; padding:3px 8px; border-radius:6px; font-size:11px; font-weight:700;"><i class="fa-solid fa-triangle-exclamation"></i> EXPIRED (+${overtime >= 24 ? (overtime/24).toFixed(1) + 'd' : overtime.toFixed(1) + 'h'} past limit)</span>`;
+            } else if (isExpired) {
+              statusBadge = `<span class="badge badge-danger" style="background:#fee2e2;color:#dc2626;">Batch expired — unusable</span>`;
             } else if (hoursLeft <= (isReconstituted ? 1 : 72)) {
               statusBadge = `<span class="badge" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; padding:3px 8px; border-radius:6px; font-size:11px; font-weight:700;"><i class="fa-solid fa-clock"></i> Expiring Soon (${hoursLeft < 1 ? Math.round(hoursLeft * 60) + 'm' : hoursLeft.toFixed(1) + 'h'} left)</span>`;
             } else {
@@ -11194,7 +11265,7 @@
           const batch = batches.find(b => b.batch_id === batchId);
           if (!batch) return;
           const item = items.find(i => String(i.item_id) === String(batch.item_id));
-          const openDoses = batchOpenDoses(batch);
+          const openDoses = storedOpenDoses(batch);
           if (openDoses <= 0) {
             showToast("This batch has no open-vial doses to discard.", "warning");
             return;
@@ -11202,6 +11273,7 @@
 
           const shelfLimitHours = openVialShelfHours(item);
           const isExpired = isOpenVialExpired(batch, item);
+          const timeMissing = shelfLimitHours > 0 && openVialAgeHours(batch) === null;
           const hoursOpen = openVialAgeHours(batch) || 0;
           const isReconstituted = shelfLimitHours === 6 || /bcg|measles|mmr|rubella/i.test(item?.name || "");
 
@@ -11211,7 +11283,9 @@
           const locText = batchLocationName(batch);
           let hoursLeft = Math.max(0, shelfLimitHours - hoursOpen);
           let urgencyHtml = "";
-          if (isExpired) {
+          if (timeMissing) {
+            urgencyHtml = `<span class="badge badge-danger" style="background:#fee2e2;color:#dc2626;">Opening time unverified</span>`;
+          } else if (isExpired) {
             const overtime = hoursOpen - shelfLimitHours;
             urgencyHtml = `<span class="badge badge-danger" style="background:#fee2e2; color:#dc2626; padding:3px 8px; border-radius:6px; font-size:11px; font-weight:700;"><i class="fa-solid fa-triangle-exclamation"></i> EXPIRED (+${overtime >= 24 ? (overtime/24).toFixed(1) + 'd' : overtime.toFixed(1) + 'h'} past limit)</span>`;
           } else if (hoursLeft <= (isReconstituted ? 1 : 72)) {
@@ -11246,7 +11320,9 @@
 
           // Pre-select appropriate DOH MDVP reason
           const reasonSelect = document.getElementById("discard-vial-reason");
-          if (isExpired && isReconstituted) {
+          if (timeMissing) {
+            reasonSelect.value = "Opening time unavailable";
+          } else if (isExpired && isReconstituted) {
             reasonSelect.value = "Reconstituted shelf-life expired (>6 hours)";
           } else if (isExpired) {
             reasonSelect.value = "MDVP 28-day cold-chain limit reached";
@@ -11294,7 +11370,7 @@
           const batch = batches.find(b => b.batch_id === batchId);
           if (!batch) return;
           const item = items.find(i => String(i.item_id) === String(batch.item_id));
-          const openDoses = batchOpenDoses(batch);
+          const openDoses = storedOpenDoses(batch);
 
           const fullReason = `[DOH MDVP] ${reason} (Witness: ${witness}${notes ? ' | Notes: ' + notes : ''})`;
 
@@ -11397,10 +11473,10 @@
           // 2. Dispense Batch Select
           const batchSel = document.getElementById("dispense-batch-id");
           const activeBatches = batches.filter(b => {
-            const hasStock = (b.quantity_remaining > 0) || ((b.doses_remaining_in_open_vial || 0) > 0);
+            const hasStock = (b.quantity_remaining > 0) || (batchOpenDoses(b) > 0);
             if (b.status !== 'active' || isBatchExpired(b) || !hasStock) return false;
             const parentItem = items.find(i => i.item_id === b.item_id);
-            return parentItem && !parentItem.is_archived;
+            return parentItem && !parentItem.is_archived && !isOpenVialExpired(b, parentItem);
           });
 
           if (batchSel) {
@@ -11412,7 +11488,7 @@
                 const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
                 locText = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
               }
-              const openDoses = b.doses_remaining_in_open_vial || 0;
+              const openDoses = batchOpenDoses(b);
               const extraOpen = openDoses > 0 ? ` + ${openDoses} open doses` : '';
               return `<option value="${b.batch_id}">${formatBatchOption(item?.name, b.batch_number, b.quantity_remaining, locText)}${extraOpen}</option>`;
             }).join('');
@@ -11427,7 +11503,7 @@
                 const bh = bhcs.find(x => String(x.bhc_id) === String(b.facility_id));
                 locText = bh ? bh.bhc_name : unknownFacilityLabel(b.facility_id);
               }
-              const openDoses = b.doses_remaining_in_open_vial || 0;
+              const openDoses = batchOpenDoses(b);
               const openDoseChip = openDoses > 0
                 ? `<span class="select-chip" style="background:#ecfdf5;color:#059669;font-weight:700;"><i class="fa-solid fa-syringe"></i> ${openDoses} open doses</span>`
                 : '';
@@ -11654,7 +11730,7 @@
 
         /** Hours an open vial has been open, or null when nothing is open. */
         function openVialAgeHours(batch) {
-          if (!batch || !batch.vial_opened_at || batchOpenDoses(batch) <= 0) return null;
+          if (!batch || !batch.vial_opened_at || storedOpenDoses(batch) <= 0) return null;
           const opened = new Date(batch.vial_opened_at);
           if (!Number.isFinite(opened.getTime())) return null;
           return (Date.now() - opened.getTime()) / 3600000;
@@ -11670,9 +11746,10 @@
         }
 
         function isOpenVialExpired(batch, item) {
+          if (storedOpenDoses(batch) <= 0) return false;
           const age = openVialAgeHours(batch);
           const limit = openVialShelfHours(item);
-          return age !== null && limit > 0 && age > limit;
+          return limit > 0 && (age === null || age >= limit);
         }
 
         function describeShelfLimit(hours) {
@@ -11693,7 +11770,7 @@
             : facilityFilter;
 
           return (batches || []).filter(b => {
-            if (batchOpenDoses(b) <= 0) return false;
+            if (storedOpenDoses(b) <= 0) return false;
             return facilityMatches(b.facility_id, scope);
           }).map(batch => {
             const item = items.find(i => String(i.item_id) === String(batch.item_id));
@@ -11704,6 +11781,59 @@
               limit: openVialShelfHours(item),
             };
           }).filter(({ batch, item }) => isOpenVialExpired(batch, item));
+        }
+
+        // Refresh existing in-memory data at the next vial deadline. This is a
+        // browser clock, not a database job or another network polling loop.
+        let openVialExpiryTimer = null;
+        function scheduleOpenVialExpiryRefresh() {
+          if (openVialExpiryTimer !== null) clearTimeout(openVialExpiryTimer);
+          openVialExpiryTimer = null;
+          const deadlines = batches.flatMap(batch => {
+            if (storedOpenDoses(batch) <= 0) return [];
+            const item = items.find(i => String(i.item_id) === String(batch.item_id));
+            const hours = openVialShelfHours(item);
+            const opened = Date.parse(batch.vial_opened_at || '');
+            const deadline = opened + hours * 3600000;
+            return hours > 0 && Number.isFinite(opened) && deadline > Date.now() ? [deadline] : [];
+          });
+          if (deadlines.length) {
+            openVialExpiryTimer = setTimeout(refreshOpenVialControls,
+              Math.min(2147483647, Math.max(1, Math.min(...deadlines) - Date.now() + 1)));
+          }
+        }
+
+        function showOpenVialDisposalNotice(batch) {
+          const host = document.getElementById('dispense-plan');
+          const saveBtn = document.getElementById('save-dispense-btn');
+          if (host) {
+            host.className = 'dispense-plan is-blocked';
+            host.style.display = 'block';
+            host.innerHTML = '<div class="dispense-plan-title"><i class="fa-solid fa-ban"></i> Disposal required before use</div>' +
+              '<div>Record the discard of ' + storedOpenDoses(batch) + ' spoiled or unverified open dose(s). Sealed stock in this batch becomes usable after the discard is confirmed.</div>' +
+              '<button type="button" class="btn btn-sm btn-outline-pink" style="margin-top:8px;" onclick="closeModal(&quot;modal-dispense&quot;); openDiscardVialModal(' + Number(batch.batch_id) + ')">Discard open doses</button>';
+          }
+          if (saveBtn) { saveBtn.disabled = true; saveBtn.dataset.doseBlocked = 'true'; }
+        }
+
+        function refreshOpenVialControls() {
+          const selected = selectedDispenseBatch();
+          renderKPIs();
+          renderCatalog();
+          renderBatches();
+          renderOpenVialsTracker();
+          renderSubviewCounts();
+          populateDropdowns();
+          if (selected && isOpenVialExpired(selected, items.find(i => String(i.item_id) === String(selected.item_id)))) {
+            showOpenVialDisposalNotice(selected);
+          } else {
+            updateDispensePlan();
+          }
+          if (document.getElementById('modal-alerts-hub')?.classList.contains('active')) {
+            const activeFilter = document.querySelector('[id^="alert-tab-"].active')?.id.replace('alert-tab-', '') || 'all';
+            window.filterAlerts?.(activeFilter);
+          }
+          scheduleOpenVialExpiryRefresh();
         }
 
         function updateDispensePlan() {
@@ -11735,6 +11865,11 @@
             return;
           }
 
+          if (type === 'dispense' && isOpenVialExpired(batch, item)) {
+            showOpenVialDisposalNotice(batch);
+            return;
+          }
+
           // Adjustments and disposals move whole packages by definition, so the
           // only thing worth saying is what a package holds.
           if (!doseMode) {
@@ -11743,7 +11878,7 @@
               host.innerHTML = "";
               return;
             }
-            const openNow = batchOpenDoses(batch);
+            const openNow = storedOpenDoses(batch);
             host.className = "dispense-plan";
             host.style.display = "block";
             host.innerHTML =
@@ -11759,7 +11894,6 @@
 
           const doses = parseInt(qtyInput.value, 10);
           const shelfHours = openVialShelfHours(item);
-          const stale = isOpenVialExpired(batch, item);
           const plan = planDoseDispense(batch, item, Number.isFinite(doses) && doses > 0 ? doses : 0);
 
           host.style.display = "block";
@@ -11777,11 +11911,7 @@
             return;
           }
 
-          // A stale open vial is written off before the draw, so the real plan
-          // starts from zero open doses.
-          const effective = stale
-            ? planDoseDispense(Object.assign({}, batch, { doses_remaining_in_open_vial: 0 }), item, doses)
-            : plan;
+          const effective = plan;
 
           if (!effective.fits) {
             host.className = "dispense-plan is-blocked";
@@ -11789,10 +11919,7 @@
               '<div class="dispense-plan-title"><i class="fa-solid fa-ban"></i> Only ' +
               effective.capacity + ' dose(s) available in this batch</div>' +
               '<div>' +
-              (stale
-                ? 'The open vial is past its ' + describeShelfLimit(shelfHours) + ' limit, so its ' +
-                  plan.open + ' dose(s) will be written off first. '
-                : effective.open + ' open plus ') +
+              effective.open + ' open plus ' +
               effective.sealed + ' sealed ' + uom + '(s) of ' + effective.dpu + '. ' +
               'Reduce the count, or pick another batch.</div>';
             if (saveBtn) {
@@ -11803,10 +11930,7 @@
           }
 
           const steps = [];
-          if (stale) {
-            steps.push('Discard ' + plan.open + ' dose(s) from the open vial — past its ' +
-                       describeShelfLimit(shelfHours) + ' limit');
-          } else if (effective.fromOpen > 0) {
+          if (effective.fromOpen > 0) {
             steps.push('Draw ' + effective.fromOpen + ' dose(s) from the vial already open');
           }
           if (effective.vialsOpened > 0) {
@@ -11817,7 +11941,7 @@
                        describeShelfLimit(shelfHours));
           }
 
-          host.className = stale ? "dispense-plan is-warning" : "dispense-plan";
+          host.className = "dispense-plan";
           host.innerHTML =
             '<div class="dispense-plan-title"><i class="fa-solid fa-syringe"></i> ' +
             doses + ' dose(s) from Batch ' + esc(batch.batch_number) + '</div>' +
@@ -11853,6 +11977,13 @@
         }
 
         window.quickDispense = function(batchId, presetType) {
+          const batch = batches.find(b => String(b.batch_id) === String(batchId));
+          const item = batch && items.find(i => String(i.item_id) === String(batch.item_id));
+          if ((!presetType || presetType === 'dispense') && batch && isOpenVialExpired(batch, item)) {
+            showToast('Record disposal of the spoiled open doses before using this batch.', 'warning');
+            window.openDiscardVialModal(batch.batch_id);
+            return;
+          }
           const el = document.getElementById("dispense-batch-id");
           if (el) {
             el.value = batchId;
@@ -12135,6 +12266,10 @@
 
           // ── Dose path ──────────────────────────────────────────────────────
           if (type === 'dispense') {
+            if (isOpenVialExpired(batch, batchItem)) {
+              showToast('Record disposal of the spoiled open doses before dispensing from this batch.', 'warning');
+              return;
+            }
             const plan = planDoseDispense(batch, batchItem, qtyInput);
             if (!plan.fits) {
               showToast(`Batch ${batch.batch_number} can supply at most ${plan.capacity} dose(s).`, "warning");
@@ -12162,13 +12297,20 @@
                   : error.message);
               }
               if (!data || data.success !== true) {
+                if (data?.code === 'OPEN_VIAL_DISPOSAL_REQUIRED') {
+                  closeModal('modal-dispense');
+                  await loadInventoryData();
+                  window.openDiscardVialModal(batchId);
+                  showToast(data.error, 'warning');
+                  return;
+                }
                 throw new Error((data && data.error) || "The dispense was rejected.");
               }
 
               await logInventoryAudit(
                 "dispense_inventory",
                 `dispensed ${data.doses_dispensed} dose(s) from batch ${batch.batch_number}`,
-                { quantity_remaining: batch.quantity_remaining, doses_open: batchOpenDoses(batch) },
+                { quantity_remaining: batch.quantity_remaining, doses_open: storedOpenDoses(batch) },
                 {
                   quantity_remaining: data.units_remaining,
                   doses_open: data.doses_left_open,

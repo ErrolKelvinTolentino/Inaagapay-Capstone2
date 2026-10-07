@@ -62,6 +62,10 @@ MANUAL = {
         ('+', 'trg_maternal_td_mark_deducted flips this when a vial actually moves'),
     ('20260913_fix_audit_account_change_type_mismatch.sql', 'audit_account_change'):
         ('+', "THEN '[]'::jsonb ELSE public.audit_kv('E-mail'"),
+    ('20261001_mother_transfer_patient_numbers.sql', 'sync_mother_facility_assignment'):
+        ('+', 'A patient number belongs to the centre that issued it'),
+    ('20261001_mother_transfer_patient_numbers.sql', 'transfer_mother'):
+        ('+', '1. Her posting, first.'),
 }
 
 BS = chr(92)
@@ -127,6 +131,11 @@ def guarded(tables, expr):
 
 
 DATA = {
+    '20261007_stock_request_requester_delete_cascade.sql': [
+        ('stock requests cascade when requester account is deleted',
+         "EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_stock_requests_requested_by_fkey' "
+         "AND conrelid = to_regclass('public.inventory_stock_requests') "
+         "AND confrelid = to_regclass('public.accounts') AND contype = 'f' AND confdeltype = 'c')")],
     '20260803_inventory_notifications_realtime.sql': [
         ('notifications in the realtime publication',
          "EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' "

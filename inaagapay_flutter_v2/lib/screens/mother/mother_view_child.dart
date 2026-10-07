@@ -778,13 +778,15 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                       validator: (val) {
-                        if (val == null || val.isEmpty)
+                        if (val == null || val.isEmpty) {
                           return _t(
                               'Please enter height', 'Pakilagay ang taas');
+                        }
                         final numVal = double.tryParse(val);
-                        if (numVal == null || numVal <= 0)
+                        if (numVal == null || numVal <= 0) {
                           return _t('Please enter a valid height',
                               'Pakilagay ang tamang taas');
+                        }
                         return null;
                       },
                     ),
@@ -807,13 +809,15 @@ class _MotherViewChildPageState extends State<MotherViewChildPage> {
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                       validator: (val) {
-                        if (val == null || val.isEmpty)
+                        if (val == null || val.isEmpty) {
                           return _t(
                               'Please enter weight', 'Pakilagay ang timbang');
+                        }
                         final numVal = double.tryParse(val);
-                        if (numVal == null || numVal <= 0)
+                        if (numVal == null || numVal <= 0) {
                           return _t('Please enter a valid weight',
                               'Pakilagay ang tamang timbang');
+                        }
                         return null;
                       },
                     ),

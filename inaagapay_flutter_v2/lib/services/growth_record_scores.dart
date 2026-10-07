@@ -10,19 +10,23 @@ class GrowthRecordScores {
     final normalized = sex?.toLowerCase();
     if (birthdate == null ||
         measured == null ||
-        !['male', 'female'].contains(normalized)) return;
+        !['male', 'female'].contains(normalized)) {
+      return;
+    }
     final days = DateTime(measured.year, measured.month, measured.day)
         .difference(DateTime(birthdate.year, birthdate.month, birthdate.day))
         .inDays;
     if (days < 0) return;
     final weight = (record['child_weight'] as num?)?.toDouble();
     final height = (record['child_height'] as num?)?.toDouble();
-    if (weight != null && weight > 0)
+    if (weight != null && weight > 0) {
       weightZ = GrowthCalculator.calculateWeightZScore(
           weight, days ~/ 7, normalized!);
-    if (height != null && height > 0)
+    }
+    if (height != null && height > 0) {
       heightZ = GrowthCalculator.calculateHeightZScore(
           height, days ~/ 7, normalized!);
+    }
   }
   double? weightZ;
   double? heightZ;

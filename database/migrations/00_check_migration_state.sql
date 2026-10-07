@@ -415,7 +415,8 @@ checks(sort_order, migration, requirement, present) AS (
             OR EXISTS (SELECT 1 FROM procs WHERE proname = 'deduct_immunization_stock' AND position('''message'', ''Recorded as given outside this facility - no stock deducted'');' IN prosrc) > 0))),
     (4303, '20260819_solidify_multi_dose_open_vial_system.sql', 'function discard_open_vial_doses() at this version',
           (EXISTS (SELECT 1 FROM procs WHERE proname = 'discard_open_vial_doses' AND position('RETURN jsonb_build_object(''success'', false, ''error'', ''Batch not found'');' IN prosrc) > 0)
-            OR EXISTS (SELECT 1 FROM procs WHERE proname = 'discard_open_vial_doses' AND position('RETURN jsonb_build_object(''success'', false, ''error'', ''Batch #'' || p_batch_id || '' not foun' IN prosrc) > 0))),
+            OR EXISTS (SELECT 1 FROM procs WHERE proname = 'discard_open_vial_doses' AND position('RETURN jsonb_build_object(''success'', false, ''error'', ''Batch #'' || p_batch_id || '' not foun' IN prosrc) > 0)
+            OR EXISTS (SELECT 1 FROM procs WHERE proname = 'discard_open_vial_doses' AND position('SELECT * INTO v_batch FROM public.inventory_batches WHERE batch_id=p_batch_id FOR UPDATE;' IN prosrc) > 0))),
     (4304, '20260819_solidify_multi_dose_open_vial_system.sql', 'function deduct_prenatal_encounter_inventory() at this version',
           (EXISTS (SELECT 1 FROM procs WHERE proname = 'deduct_prenatal_encounter_inventory' AND position('RETURN jsonb_build_object(''success'', false, ''error'', ''Prenatal encounter not found'');' IN prosrc) > 0)
             OR EXISTS (SELECT 1 FROM procs WHERE proname = 'deduct_prenatal_encounter_inventory' AND position('v_outstanding  INTEGER;' IN prosrc) > 0)
@@ -440,7 +441,8 @@ checks(sort_order, migration, requirement, present) AS (
     (4603, '20260821_inventory_and_td_fixes.sql', 'function resolve_actor_account_id()',
           EXISTS (SELECT 1 FROM procs WHERE proname = 'resolve_actor_account_id')),
     (4604, '20260821_inventory_and_td_fixes.sql', 'function discard_open_vial_doses() at this version',
-          (EXISTS (SELECT 1 FROM procs WHERE proname = 'discard_open_vial_doses' AND position('RETURN jsonb_build_object(''success'', false, ''error'', ''Batch #'' || p_batch_id || '' not foun' IN prosrc) > 0))),
+          (EXISTS (SELECT 1 FROM procs WHERE proname = 'discard_open_vial_doses' AND position('RETURN jsonb_build_object(''success'', false, ''error'', ''Batch #'' || p_batch_id || '' not foun' IN prosrc) > 0)
+            OR EXISTS (SELECT 1 FROM procs WHERE proname = 'discard_open_vial_doses' AND position('SELECT * INTO v_batch FROM public.inventory_batches WHERE batch_id=p_batch_id FOR UPDATE;' IN prosrc) > 0))),
     (4605, '20260821_inventory_and_td_fixes.sql', 'function deduct_immunization_stock() at this version',
           (EXISTS (SELECT 1 FROM procs WHERE proname = 'deduct_immunization_stock' AND position('''message'', ''Recorded as given outside this facility - no stock deducted'');' IN prosrc) > 0))),
     (4606, '20260821_inventory_and_td_fixes.sql', 'function normalize_td_dose() at this version',
@@ -755,7 +757,8 @@ checks(sort_order, migration, requirement, present) AS (
           to_regclass('public.idx_maternal_td_records_facility_date') IS NOT NULL),
     (7100, '20260913_fix_audit_account_change_type_mismatch.sql', 'function audit_account_change() at this version',
           (EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_account_change' AND position('THEN ''[]''::jsonb ELSE public.audit_kv(''E-mail''' IN prosrc) > 0)
-            OR EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_account_change' AND position('v_row.account_id, ''login'', ''accounts'', v_row.account_id::text, v_name,' IN prosrc) > 0))),
+            OR EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_account_change' AND position('v_row.account_id, ''login'', ''accounts'', v_row.account_id::text, v_name,' IN prosrc) > 0)
+            OR EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_account_change' AND position('ELSIF TG_OP = ''INSERT'' AND (v_json->>''created_by'') ~ ''^[0-9]+$'' THEN' IN prosrc) > 0))),
     (7200, '20260914_immunization_coverage_and_drive_demographics.sql', 'view child_immunization_coverage',
           to_regclass('public.child_immunization_coverage') IS NOT NULL),
     (7201, '20260914_immunization_coverage_and_drive_demographics.sql', 'view vaccination_drive_doses',
@@ -824,7 +827,8 @@ checks(sort_order, migration, requirement, present) AS (
     (7700, '20260922_audit_clinical_encounter_tables.sql', 'function audit_clinical_change() at this version',
           (EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_clinical_change' AND position('WHERE ce.encounter_id = public.audit_bigint(v_json->>''encounter_id'');' IN prosrc) > 0))),
     (7800, '20260923_auth_session_audit.sql', 'function audit_account_change() at this version',
-          (EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_account_change' AND position('v_row.account_id, ''login'', ''accounts'', v_row.account_id::text, v_name,' IN prosrc) > 0))),
+          (EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_account_change' AND position('v_row.account_id, ''login'', ''accounts'', v_row.account_id::text, v_name,' IN prosrc) > 0)
+            OR EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_account_change' AND position('ELSIF TG_OP = ''INSERT'' AND (v_json->>''created_by'') ~ ''^[0-9]+$'' THEN' IN prosrc) > 0))),
     (7801, '20260923_auth_session_audit.sql', 'function record_auth_event()',
           EXISTS (SELECT 1 FROM procs WHERE proname = 'record_auth_event')),
     (7900, '20260924_maternal_td_records_readable.sql', 'maternal_td_records readable (row level security off)',
@@ -866,24 +870,28 @@ checks(sort_order, migration, requirement, present) AS (
           EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'InaAgapay app uploads to the files bucket')),
     (8402, '20260929_profile_photo_storage.sql', 'files writable by the app (row level security off)',
           COALESCE((SELECT NOT relrowsecurity FROM pg_class WHERE oid = to_regclass('public.files')), false)),
-    (8500, '20260930_portal_admin_scope_and_audit_actor.sql', 'function admin_assigned_facility_id() counts BHC postings',
-          EXISTS (SELECT 1 FROM procs WHERE proname = 'admin_assigned_facility_id' AND position('IN (''MHO'', ''RHU'', ''BHC'')' IN prosrc) > 0)),
+    (8500, '20260930_portal_admin_scope_and_audit_actor.sql', 'function admin_assigned_facility_id() at this version',
+          (EXISTS (SELECT 1 FROM procs WHERE proname = 'admin_assigned_facility_id' AND position('ORDER BY (hf.facility_type IN (''MHO'', ''RHU'')) DESC,' IN prosrc) > 0))),
     (8501, '20260930_portal_admin_scope_and_audit_actor.sql', 'function audit_account_actor()',
           EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_account_actor')),
     (8502, '20260930_portal_admin_scope_and_audit_actor.sql', 'function audit_trail_enrich() at this version',
-          EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_trail_enrich' AND position('public.audit_account_actor(NEW.account_id)' IN prosrc) > 0)),
+          (EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_trail_enrich' AND position('v_actor := public.audit_account_actor(NEW.account_id);' IN prosrc) > 0))),
     (8503, '20260930_portal_admin_scope_and_audit_actor.sql', 'function audit_account_change() at this version',
-          EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_account_change' AND position('inaagapay.actor_id' IN prosrc) > 0)),
+          (EXISTS (SELECT 1 FROM procs WHERE proname = 'audit_account_change' AND position('ELSIF TG_OP = ''INSERT'' AND (v_json->>''created_by'') ~ ''^[0-9]+$'' THEN' IN prosrc) > 0))),
     (8504, '20260930_portal_admin_scope_and_audit_actor.sql', 'function admin_delete_account() at this version',
-          EXISTS (SELECT 1 FROM procs WHERE proname = 'admin_delete_account' AND position('''has_records''' IN prosrc) > 0)),
+          (EXISTS (SELECT 1 FROM procs WHERE proname = 'admin_delete_account' AND position('''error'', ''This account is named on inventory records, which must be kept. Archive it inste' IN prosrc) > 0))),
     (8505, '20260930_portal_admin_scope_and_audit_actor.sql', 'function admin_archive_account() at this version',
-          EXISTS (SELECT 1 FROM procs WHERE proname = 'admin_archive_account' AND position('inaagapay.actor_id' IN prosrc) > 0)),
-    (8600, '20261001_mother_transfer_patient_numbers.sql', 'function sync_mother_facility_assignment() at this version',
-          EXISTS (SELECT 1 FROM procs WHERE proname = 'sync_mother_facility_assignment' AND position('A patient number belongs to the centre that issued it' IN prosrc) > 0)),
+          (EXISTS (SELECT 1 FROM procs WHERE proname = 'admin_archive_account' AND position('PERFORM set_config(''inaagapay.actor_id'', p_actor_id::text, true);' IN prosrc) > 0))),
+    (8600, '20261001_mother_transfer_patient_numbers.sql', 'function sync_mother_facility_assignment()',
+          (EXISTS (SELECT 1 FROM procs WHERE proname = 'sync_mother_facility_assignment' AND position('A patient number belongs to the centre that issued it' IN prosrc) > 0))),
     (8601, '20261001_mother_transfer_patient_numbers.sql', 'function transfer_mother() at this version',
-          EXISTS (SELECT 1 FROM procs WHERE proname = 'transfer_mother' AND position('1. Her posting, first.' IN prosrc) > 0)),
+          (EXISTS (SELECT 1 FROM procs WHERE proname = 'transfer_mother' AND position('1. Her posting, first.' IN prosrc) > 0))),
     (8602, '20261001_mother_transfer_patient_numbers.sql', 'trigger trg_sync_mother_facility',
-          EXISTS (SELECT 1 FROM trgs WHERE tgname = 'trg_sync_mother_facility'))
+          EXISTS (SELECT 1 FROM trgs WHERE tgname = 'trg_sync_mother_facility')),
+    (8700, '20261007_require_open_vial_disposal.sql', 'function discard_open_vial_doses() at this version',
+          (EXISTS (SELECT 1 FROM procs WHERE proname = 'discard_open_vial_doses' AND position('SELECT * INTO v_batch FROM public.inventory_batches WHERE batch_id=p_batch_id FOR UPDATE;' IN prosrc) > 0))),
+    (8800, '20261007_stock_request_requester_delete_cascade.sql', 'stock requests cascade when requester account is deleted',
+          EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_stock_requests_requested_by_fkey' AND conrelid = to_regclass('public.inventory_stock_requests') AND confrelid = to_regclass('public.accounts') AND contype = 'f' AND confdeltype = 'c'))
 ),
 per_file AS (
   SELECT migration,

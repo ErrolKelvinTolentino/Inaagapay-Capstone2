@@ -431,6 +431,7 @@
     <script src="data-cache.js"></script>
     <script src="sidebar.js"></script>
     <script src="inventory-stock.js"></script>
+    <script src="export-kit.js"></script>
     <script src="live-refresh.js"></script>
     <script src="notification-center.js"></script>
     <script>
@@ -1107,92 +1108,48 @@
         document.getElementById("detail-close-btn")?.addEventListener("click", () => document.getElementById("detail-modal").classList.remove("show"));
         document.getElementById("detail-modal")?.addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("show"); });
 
-        // PDF Report Handler
-        document.getElementById('export-pdf-btn')?.addEventListener('click', () => {
+        // The summary is a scoped health/operations report, without audit logs.
+        document.getElementById('export-pdf-btn')?.addEventListener('click', async () => {
+          const button = document.getElementById('export-pdf-btn');
+          button.disabled = true;
           try {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('l', 'mm', 'a4'); // Landscape A4
-            
-            doc.setTextColor(40, 40, 40);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(12);
-            doc.text('1. Operational System Statistics Summary', 14, 28);
-            
-            const statsHeaders = ["Indicator Metric", "System-wide Count"];
-            const statsRows = [
-              ["Active Registered Mothers", document.getElementById("stat-mothers").textContent || "0"],
-              ["Assigned Health Center Midwives", document.getElementById("stat-midwives").textContent || "0"],
-              ["Tracked Children & Infants", document.getElementById("stat-children").textContent || "0"],
-              ["Ongoing Active Pregnancies", document.getElementById("stat-pregnancies").textContent || "0"],
-              ["Active Barangay Health Centers", document.getElementById("stat-bhc").textContent || "0"]
+            const report = await ExportKit.pdf({
+              title: 'Executive Dashboard Summary',
+              scope: ExportKit.scopeLabel(),
+              period: 'Current operations and six-month registration trend',
+            });
+            report.heading('Operations overview');
+            report.table({ columns: ['Indicator', 'Count in this office'], rows: [
+              ['Active registered mothers', document.getElementById('stat-mothers').textContent],
+              ['Assigned midwives', document.getElementById('stat-midwives').textContent],
+              ['Tracked children', document.getElementById('stat-children').textContent],
+              ['Ongoing pregnancies', document.getElementById('stat-pregnancies').textContent],
+              ['Active health centers', document.getElementById('stat-bhc').textContent],
+            ] });
+            const charts = [
+              ['Pregnancy risk distribution', chartRiskInstance],
+              ['Patient load per health center', chartBhcInstance],
+              ['Six-month prenatal registrations', chartMonthlyInstance],
+              ['Inventory stock status', chartInventoryInstance],
             ];
-            
-            doc.autoTable({
-              head: [statsHeaders],
-              body: statsRows,
-              startY: 32,
-              margin: { left: 14, right: 14 },
-              theme: 'grid',
-              headStyles: { fillColor: [255, 104, 165], textColor: [255, 255, 255], fontStyle: 'bold' },
-              styles: { fontSize: 8.5, cellPadding: 2.5, font: 'helvetica' },
-              columnStyles: { 0: { cellWidth: 90, fontStyle: 'bold' }, 1: { cellWidth: 50 } }
-            });
-            
-            let lastY = doc.previousAutoTable.finalY + 12;
-            
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(12);
-            doc.text('2. Recent System Audit Trail Logs', 14, lastY);
-            
-            const activityHeaders = ["Date & Time", "User", "Action", "Category", "Description"];
-            const activityRows = cachedAuditLogs.map(l => [
-              formatTimestamp(l.action_timestamp),
-              l.account_id ? (accountNameCache.get(l.account_id) || 'Administrator') : 'System',
-              getHumanReadableActionName(l.action),
-              getActionCategory(l.action),
-              l.description || '—'
-            ]);
-            
-            doc.autoTable({
-              head: [activityHeaders],
-              body: activityRows.length ? activityRows : [["—", "—", "No recent logs", "—", "—"]],
-              startY: lastY + 4,
-              margin: { left: 14, right: 14, bottom: 15 },
-              theme: 'striped',
-              headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' },
-              styles: { fontSize: 8, cellPadding: 2.5, font: 'helvetica' },
-              columnStyles: { 0: { cellWidth: 42 }, 1: { cellWidth: 40 }, 2: { cellWidth: 40 }, 3: { cellWidth: 25 }, 4: { cellWidth: 'auto' } }
-            });
-            
-            // Header / Footer Page Numbers
-            const totalPages = doc.internal.getNumberOfPages();
-            for (let i = 1; i <= totalPages; i++) {
-              doc.setPage(i);
-              
-              doc.setFillColor(255, 104, 165);
-              doc.rect(0, 0, doc.internal.pageSize.width, 18, 'F');
-              
-              doc.setTextColor(255, 255, 255);
-              doc.setFont('helvetica', 'bold');
-              doc.setFontSize(12);
-              doc.text('INAAGAPAY: MATERNAL & CHILD HEALTH SYSTEM', 14, 12);
-              
-              doc.setFontSize(9);
-              doc.setFont('helvetica', 'normal');
-              doc.text('EXECUTIVE DASHBOARD SUMMARY', doc.internal.pageSize.width - 14, 12, { align: 'right' });
-              
-              doc.setFontSize(8);
-              doc.setTextColor(128, 128, 128);
-              doc.text(`Report Generated by Admin: ${session.first_name || "Admin"} ${session.last_name || ""} | Date: ${new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}, ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`, 14, doc.internal.pageSize.height - 8);
-              doc.text(`Page ${i} of ${totalPages}`, doc.internal.pageSize.width - 14, doc.internal.pageSize.height - 8, { align: 'right' });
+            for (const [title, chart] of charts) {
+              report.heading(title);
+              if (!chart || !chart.data?.datasets?.length || chart.canvas?.style.display === 'none') {
+                report.paragraph('No recorded data available for this indicator in the current scope.');
+                continue;
+              }
+              report.table({ columns: ['Category / period', chart.data.datasets[0].label || 'Count'],
+                rows: chart.data.labels.map((label, i) => [Array.isArray(label) ? label.join(' ') : label,
+                  chart.data.datasets[0].data[i] ?? 0]) });
+              report.chart(chart.canvas, title);
             }
-            
-            doc.save(`inaagapay_dashboard_summary_${new Date().toISOString().slice(0,10)}.pdf`);
-            showToast("Executive PDF Summary downloaded successfully!", "success");
+            report.paragraph('Figures describe the facilities accessible to the signed-in office. Stock reflects current usable batches; registration trends cover the displayed six-month period.');
+            report.save(ExportKit.fileName('InaAgapay dashboard summary', 'pdf'));
+            showToast('Dashboard summary downloaded.', 'success');
           } catch (err) {
-            console.error("PDF Export error:", err);
-            showToast("Failed to generate PDF report: " + err.message, "error");
-          }
+            console.error('PDF export error:', err);
+            showToast('Failed to generate PDF report: ' + err.message, 'error');
+          } finally { button.disabled = false; }
         });
 
         // Initialize All Dashboard Operations. The office scope is resolved

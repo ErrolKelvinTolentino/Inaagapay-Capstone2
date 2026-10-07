@@ -221,8 +221,9 @@ class _TransferMotherSheetState extends State<_TransferMotherSheet> {
               leadingIcon: Icons.edit_note_rounded,
               errorText: _reasonError,
               onChanged: (value) {
-                if (_reasonError != null && value.trim().length >= 5)
+                if (_reasonError != null && value.trim().length >= 5) {
                   setState(() => _reasonError = null);
+                }
               },
             ),
             const SizedBox(height: 16),

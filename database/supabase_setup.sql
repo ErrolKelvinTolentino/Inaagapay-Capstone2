@@ -1135,7 +1135,7 @@ CREATE TABLE IF NOT EXISTS public.inventory_stock_requests (
       )
     ),
   requested_by BIGINT NOT NULL
-    REFERENCES public.accounts(account_id) ON DELETE RESTRICT,
+    REFERENCES public.accounts(account_id) ON DELETE CASCADE,
   reviewed_by BIGINT
     REFERENCES public.accounts(account_id) ON DELETE SET NULL,
   reviewed_at TIMESTAMPTZ,

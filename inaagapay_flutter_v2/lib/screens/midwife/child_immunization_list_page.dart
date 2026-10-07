@@ -867,41 +867,47 @@ class ImmunizationRecordCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const Icon(
-                Icons.calendar_today,
-                size: 13,
-                color: AppColors.textSecondary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                date,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              // How old the child was that day, beside the day itself — the two
-              // belong together, and the age is the half that says whether the
-              // dose landed near its scheduled point. It is only omitted when
-              // no birthday is on file to measure from.
-              if (ageAtDose != null) ...[
-                const SizedBox(width: 7),
-                const Text('·',
-                    style: TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary)),
-                const SizedBox(width: 7),
-                Text(
-                  'at $ageAtDose',
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.calendar_today,
+                    size: 13,
                     color: AppColors.textSecondary,
                   ),
-                ),
-              ],
-              const Spacer(),
+                  Text(
+                    date,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  // How old the child was that day, beside the day itself — the two
+                  // belong together, and the age is the half that says whether the
+                  // dose landed near its scheduled point. It is only omitted when
+                  // no birthday is on file to measure from.
+                  if (ageAtDose != null) ...[
+                    const Text('·',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary)),
+                    Text(
+                      'at $ageAtDose',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
               if (batchNumber != null && batchNumber!.isNotEmpty)
                 Container(
                   padding:
@@ -917,12 +923,14 @@ class ImmunizationRecordCard extends StatelessWidget {
                       const Icon(Icons.colorize_rounded,
                           size: 11, color: Color(0xFF059669)),
                       const SizedBox(width: 4),
-                      Text(
-                        'Batch #$batchNumber',
-                        style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF065F46)),
+                      Flexible(
+                        child: Text(
+                          'Batch #$batchNumber',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF065F46)),
+                        ),
                       ),
                     ],
                   ),
@@ -942,14 +950,16 @@ class ImmunizationRecordCard extends StatelessWidget {
                       const Icon(Icons.location_on_outlined,
                           size: 11, color: Color(0xFF2563EB)),
                       const SizedBox(width: 4),
-                      Text(
-                        facilityName != null && facilityName!.isNotEmpty
-                            ? facilityName!
-                            : 'External Clinic',
-                        style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E40AF)),
+                      Flexible(
+                        child: Text(
+                          facilityName != null && facilityName!.isNotEmpty
+                              ? facilityName!
+                              : 'External Clinic',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1E40AF)),
+                        ),
                       ),
                     ],
                   ),

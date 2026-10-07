@@ -44,6 +44,16 @@ class PregnancyStage {
 
   static int completedWeeks(int gestationalDays) => gestationalDays ~/ 7;
 
+  static DateTime? dueDate({DateTime? lmp, DateTime? edd}) {
+    final date = edd ?? lmp?.add(const Duration(days: termDays));
+    return date == null ? null : DateTime(date.year, date.month, date.day);
+  }
+
+  /// Calendar days, so a date tomorrow never reads as due today at noon.
+  static int daysUntilDue({required DateTime edd, required DateTime now}) =>
+      DateTime(edd.year, edd.month, edd.day)
+          .difference(DateTime(now.year, now.month, now.day)).inDays;
+
   static Trimester trimesterOf(int gestationalDays) {
     final weeks = completedWeeks(gestationalDays);
     if (weeks < 14) return Trimester.first;

@@ -353,8 +353,9 @@ class _MotherChildVaccinePageState extends State<MotherChildVaccinePage> {
       return '$weeks Week${weeks != 1 ? 's' : ''}';
     }
     if (months < 12) {
-      if (LanguageService.isFilipino)
+      if (LanguageService.isFilipino) {
         return '${months.toStringAsFixed(0)} Buwan';
+      }
       return '${months.toStringAsFixed(0)} Month${months.round() != 1 ? 's' : ''}';
     }
     final years = months / 12;

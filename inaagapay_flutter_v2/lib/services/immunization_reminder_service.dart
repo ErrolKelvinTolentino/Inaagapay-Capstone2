@@ -118,13 +118,11 @@ class ImmunizationReminderService {
       // 4. Maternal Vaccine Queries (Active pregnancies)
       final activePregnancies = <int, Map<String, dynamic>>{}; // mother_id -> pregnancy
       if (maternalVaccines.isNotEmpty) {
-        final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
         final pregRes = await _client
             .from('pregnancies')
             .select('pregnancy_id, mother_id, expected_date_of_delivery, status')
             .inFilter('mother_id', motherIds)
-            .eq('status', 'ongoing')
-            .gte('expected_date_of_delivery', todayStr);
+            .eq('status', 'ongoing');
 
         for (final p in pregRes) {
           final motherId = p['mother_id'] as int;

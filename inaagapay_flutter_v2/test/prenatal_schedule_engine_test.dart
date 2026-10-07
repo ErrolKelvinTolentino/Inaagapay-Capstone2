@@ -58,13 +58,13 @@ void main() {
     });
   });
 
-  group('post-term outranks everything', () {
+  group('past-due monitoring outranks everything', () {
     test('past 40 weeks tightens to close surveillance', () {
       expect(at(41).intervalDays, 3);
-      expect(at(41).reason, contains('Post-term'));
+      expect(at(41).reason, contains('Past-due'));
     });
 
-    test('post-term applies even when not flagged high risk', () {
+    test('past-due monitoring applies even when not flagged high risk', () {
       expect(at(41, highRisk: false).intervalDays, 3);
       expect(at(41, highRisk: true).intervalDays, 3);
     });
@@ -86,18 +86,18 @@ void main() {
       final late = at(41.9);
       expect(late.cappedAtTerm, isTrue);
       expect(late.reason, contains('Brought forward'));
-      expect(late.date.difference(visit).inDays, lessThan(3));
+      expect(late.date!.difference(visit).inDays, lessThan(3));
     });
 
     test('the cap uses the due date when gestation is unknown', () {
       final result = PrenatalScheduleEngine.propose(
         lastVisit: visit,
         gestationalWeeks: null,
-        expectedDateOfDelivery: DateTime(2026, 3, 15),
+        expectedDateOfDelivery: DateTime(2026, 2, 25),
       );
 
       expect(result.cappedAtTerm, isTrue);
-      expect(result.date, DateTime(2026, 3, 29)); // due date + 14 days
+      expect(result.date, DateTime(2026, 3, 11)); // due date + 14 days
     });
 
     test('an ordinary mid-pregnancy proposal is never capped', () {
@@ -108,6 +108,13 @@ void main() {
   });
 
   group('missing gestational age still produces a prompt', () {
+    test('uses the due date to select a late-pregnancy interval', () {
+      final result = PrenatalScheduleEngine.propose(
+        lastVisit: visit,
+        expectedDateOfDelivery: visit.add(const Duration(days: 7)),
+      );
+      expect(result.intervalDays, 7);
+    });
     test('falls back to the early-pregnancy interval rather than nothing', () {
       final result = PrenatalScheduleEngine.propose(
         lastVisit: visit,
@@ -124,9 +131,9 @@ void main() {
         lastVisit: DateTime(2026, 3, 10, 14, 37, 12),
         gestationalWeeks: 30,
       );
-      expect(result.date.hour, 0);
-      expect(result.date.minute, 0);
-      expect(result.date.second, 0);
+      expect(result.date!.hour, 0);
+      expect(result.date!.minute, 0);
+      expect(result.date!.second, 0);
       expect(result.date, DateTime(2026, 3, 24));
     });
   });
@@ -152,6 +159,48 @@ void main() {
       );
       expect(result.intervalDays, 14);
       expect(at(25).intervalDays, 28);
+    });
+  });
+
+  group('due-date boundaries and clinical review', () {
+    test('the due day stays weekly; the first overdue day uses the existing shorter interval', () {
+      expect(at(40).intervalDays, 7);
+      expect(at(40 + 1 / 7).intervalDays, 3);
+      expect(at(40 + 6 / 7).intervalDays, 3);
+    });
+
+    test('41 weeks 6 days is capped at 42 weeks, not rounded down', () {
+      final result = at(41 + 6 / 7);
+      expect(result.intervalDays, 1);
+      expect(result.date, visit.add(const Duration(days: 1)));
+      expect(result.cappedAtTerm, isTrue);
+    });
+
+    test('42 weeks and later require review without an automatic future date', () {
+      for (final weeks in [42.0, 42 + 1 / 7, 44.0, 50.0]) {
+        final result = at(weeks);
+        expect(result.requiresClinicalReview, isTrue);
+        expect(result.date, isNull);
+        expect(result.intervalDays, 0);
+        expect(result.reason, contains('clinical review'));
+      }
+    });
+
+    test('EDD-only pregnancies also require review at and after the limit', () {
+      for (final pastDueDays in [14, 28]) {
+        final result = PrenatalScheduleEngine.propose(
+          lastVisit: visit,
+          expectedDateOfDelivery: visit.subtract(Duration(days: pastDueDays)),
+        );
+        expect(result.date, isNull);
+        expect(result.requiresClinicalReview, isTrue);
+      }
+    });
+
+    test('an official due date is not ignored when an older age estimate disagrees', () {
+      final result = at(39, edd: visit.subtract(const Duration(days: 14)));
+      expect(result.date, isNull);
+      expect(result.requiresClinicalReview, isTrue);
     });
   });
 }
