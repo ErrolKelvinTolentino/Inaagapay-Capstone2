@@ -1,13 +1,14 @@
 # Seeds
 
-Three unrelated seeds live here. They share nothing, and only the two Tarcan
-files depend on each other — `11` needs the mothers `10` creates.
+Four seed sets live here. The two Tarcan files depend on each other — `11`
+needs the mothers `10` creates. The Baliwag population is independent.
 
 | Seed | Files |
 |------|-------|
 | **Inventory** — a clean catalogue with stock on every shelf | `00_` … `03_` |
 | **Tarcan vaccination drives** — ten families and a year of drives, for the drive analytics | `10_tarcan_drive_scenario.sql` |
 | **Tarcan child immunization** — older siblings with complete and incomplete histories, for the coverage rate | `11_tarcan_child_immunization.sql` |
+| **Baliwag demo population** — all 22 barangays under RHU I-IV, with midwife, mother, child, drive and RHU admin data | `20261007_baliwag_demo_population.sql` |
 
 ---
 
@@ -233,3 +234,36 @@ They stay **behind for their age**, and that is correct: they have only ever
 attended drives, so they have Pentavalent and PCV and nothing else. That is a
 real follow-up worklist, and it is what makes the "Behind for their age" slice
 of the Infant Immunization Status chart non-empty.
+
+---
+
+# Baliwag demo population (`20261007_baliwag_demo_population.sql`)
+
+Run this on a **demo or staging database** after migrations through
+`20261001_mother_transfer_patient_numbers.sql` and
+`20260806_seed_doh_epi_vaccines.sql`. The script writes to the shared database,
+so the Flutter app and admin portal read the same records. It is rerunnable.
+
+It covers all 22 barangays in RHU I-IV. Each BHC gets one midwife, five
+fictional mothers with profiles and pregnancies, two prenatal checkups per
+mother, one child per mother, two growth measurements per child, childhood
+immunization history (including one complete child per BHC), and five
+vaccination drives with eligible invitations. Some
+mothers have an allergy or medical condition. The held Td and MMR doses are
+linked to their drives. Historical demo doses do not deduct inventory.
+
+| Account | Email pattern | Initial password |
+| --- | --- | --- |
+| RHU admin | `rhu1.baliwag@inaagapay.ph` through `rhu4.baliwag@inaagapay.ph` | `RHU1@123` through `RHU4@123` respectively |
+| Barangay midwife | `midwife.<barangay_slug>@seed.inaagapay.test` | `SeedDemo@2026!` |
+| Mother | `mother.<barangay_slug>.<1-5>@seed.inaagapay.test` | `SeedDemo@2026!` |
+
+Examples: `midwife.tarcan@seed.inaagapay.test` and
+`mother.tarcan.1@seed.inaagapay.test`. New RHU admins change their temporary
+password on first sign-in. Existing accounts retain their current passwords.
+
+The final query verifies counts per BHC. On a fresh demo database, expect
+**4 RHU admins, 22 midwives, 110 mothers, 110 children, 220 prenatal checkups,
+154 maternal Td doses, 220 growth records, 616 child immunization records,
+110 drives and 440 invitations**. The mother totals by RHU are **20, 45, 25,
+20**. Select August–October 2026 in admin reports to see every seeded drive.
