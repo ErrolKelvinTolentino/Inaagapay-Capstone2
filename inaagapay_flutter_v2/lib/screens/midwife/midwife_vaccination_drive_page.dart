@@ -43,6 +43,7 @@ class _MidwifeVaccinationDrivePageState
   bool _sending = false;
 
   int? _bhcId;
+  int? _accountId;
   String _facilityName = 'this health center';
 
   List<DriveVaccine> _vaccines = [];
@@ -69,6 +70,7 @@ class _MidwifeVaccinationDrivePageState
   Future<void> _load() async {
     try {
       final accountId = await AuthStorage.getUserId();
+      _accountId = accountId;
       if (accountId != null) {
         final context = await SupabaseService.getMidwifeContext(accountId);
         _bhcId = context['assigned_bhc_id'] as int?;
@@ -187,6 +189,7 @@ class _MidwifeVaccinationDrivePageState
       vaccineId: vaccineId,
       date: date,
       notes: _notesCtrl.text,
+      scheduledBy: _accountId,
     );
     if (!mounted) return;
     setState(() {

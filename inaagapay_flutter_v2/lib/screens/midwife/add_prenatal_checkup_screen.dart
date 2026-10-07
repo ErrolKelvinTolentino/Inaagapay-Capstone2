@@ -2379,13 +2379,22 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
 
       // Audit trail for AI remarks
       await client.from('audit_trail').insert({
-        'action': aiResponseUpdated ? 'UPDATE' : 'INSERT',
+        'action': (aiResponseUpdated || wasEdited)
+            ? 'ai_insight_saved'
+            : 'ai_insight_generated',
         'table_name': 'ai_responses',
         'account_id': _accountId,
+        'row_id': aiResponseId?.toString(),
+        'related_ids': {
+          'ai_response_id': aiResponseId,
+          'encounter_id': encounterId,
+        },
         'new_data': {
           'ai_response_id': aiResponseId,
           'status': aiStatus,
           'remarks_source': _remarksSource,
+          'reference_table': 'prenatal_checkups',
+          'reference_id': encounterId,
         },
         'description':
             'AI checkup insight ${wasEdited ? "edited by midwife and " : ""}saved for prenatal checkup $encounterId.',
@@ -2403,13 +2412,21 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
         });
 
         await client.from('audit_trail').insert({
-          'action': 'UPDATE',
+          'action': 'ai_prenatal_insight_edited',
           'table_name': 'ai_edit_history',
           'account_id': _accountId,
-          'old_data': {'content': originalAiText},
-          'new_data': {'content': finalAiText, 'ai_response_id': aiResponseId},
+          'related_ids': {
+            'ai_response_id': aiResponseId,
+            'encounter_id': encounterId,
+          },
+          'new_data': {
+            'ai_response_id': aiResponseId,
+            'reference_table': 'prenatal_checkups',
+            'reference_id': encounterId,
+            'content_changed': originalAiText != finalAiText,
+          },
           'description':
-              'Midwife edited AI checkup remarks content before submission.',
+              'Midwife edited AI insights for prenatal checkup $encounterId before submission.',
         });
       }
     }

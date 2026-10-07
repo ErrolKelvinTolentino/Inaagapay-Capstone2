@@ -795,10 +795,12 @@ class VaccinationDriveService {
     required int vaccineId,
     required DateTime date,
     String? notes,
+    int? scheduledBy,
   }) async {
     final payload = {
       'vaccine_id': vaccineId,
       'schedule_date': _isoDate(date),
+      if (scheduledBy != null) 'scheduled_by': scheduledBy,
       if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
     };
 

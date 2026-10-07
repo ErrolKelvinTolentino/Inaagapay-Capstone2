@@ -1,16 +1,15 @@
 # What Vercel uploads when it deploys from the repository root.
 #
-# This file is load-bearing, not a safety net. The Vercel project's Root
-# Directory is unset, so the deployment source is this directory -- and without
-# the rules below that publishes every SQL migration, the whole Flutter source
-# tree and the planning documents on a public URL.
+# CLI deployments from the repository root use these rules even when the
+# project's Root Directory is admin-web. Keep the upload limited to website
+# files so database migrations, Flutter source and planning documents stay out.
 #
 # The companion piece is the root vercel.json, which rewrites incoming paths
 # down into admin-web/ so the site answers on "/" rather than "/admin-web/".
 #
-# If the Root Directory is ever set to `admin-web` in the project settings,
-# Vercel reads admin-web/.vercelignore and admin-web/vercel.json instead and
-# ignores both files at this level. Everything keeps working either way.
+# Git deployments with Root Directory admin-web use that directory's config.
+# CLI uploads must include admin-web/vercel.json as well so hosted builds apply
+# its redirects, rewrites and response headers.
 
 # Ignore everything, then allow back only what is meant to ship.
 *
@@ -30,7 +29,3 @@ admin-web/downloads/README.md
 # generated binary as CLI source. Partial downloads never belong in source.
 admin-web/downloads/*.apk
 admin-web/downloads/*.partial
-
-# Redundant while the Root Directory is unset: at this level it is an ordinary
-# file that would be served over HTTP rather than read as configuration.
-admin-web/vercel.json

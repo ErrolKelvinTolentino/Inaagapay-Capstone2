@@ -172,5 +172,17 @@ const iDiff = changedFields(invLog);
 check('quantities still fully legible',
   iDiff.length === 1 && iDiff[0].was === '5' && iDiff[0].now === '4', iDiff);
 
+// AI insights contain patient findings too, including older generic edit rows.
+for (const table_name of ['ai_responses', 'ai_edit_history', 'ai_prompt_logs',
+  'pregnancy_risk_assessments', 'pregnancy_risk_factors']) {
+  const log = { table_name, old_data: { ai_response_id: 7, content: 'Private original findings' },
+    new_data: { ai_response_id: 7, content: 'Private edited findings', response: 'Private diagnosis', prompt: 'Private patient prompt' } };
+  const snap = redactSnapshot(log.new_data, redactionPolicy(log));
+  check(table_name + ': structural id retained', snap.ai_response_id === 7);
+  check(table_name + ': clinical content withheld', !JSON.stringify(snap).includes('Private'));
+  check(table_name + ': edited field remains auditable without its content',
+    changedFields(log).some(d => d.key === 'Content' && d.was === '(recorded)' && d.now === '(changed)'));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
