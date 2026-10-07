@@ -1228,7 +1228,7 @@
         </div>
 
         <!-- ── Healthcare Coverage & Subsidy Summary Card ── -->
-        <div class="card" style="margin-bottom: 24px;">
+        <div class="card" id="social-coverage-card" hidden style="display: none !important; margin-bottom: 24px;">
           <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
             <h3 class="card-title" style="font-size:15px; color:var(--brand-text);">
               <i class="fa-solid fa-id-card-clip" style="color:var(--brand-primary); margin-right:6px;"></i> PhilHealth Insurance &amp; 4Ps Social Protection Coverage
@@ -2662,7 +2662,10 @@
           const shortageCount = shortages.length;
           const criticalNames = shortages.slice(0, 3).map(s => s.name || s.item_name).filter(Boolean);
 
-          const p1 = `<strong>1. Maternal care.</strong> ${scopeLabel} covers ${motherCount.toLocaleString()} registered ${motherCount === 1 ? "mother" : "mothers"}, of whom ${ongoingCount.toLocaleString()} ${ongoingCount === 1 ? "is" : "are"} currently pregnant, for ${periodText}. Risk assessment places ${highRisk} of those pregnancies at high risk (${highRiskPct}%), ${medRisk} at medium and ${lowRisk} at low. By gestational age, ${t1} ${t1 === 1 ? "is" : "are"} in the first trimester, ${t2} in the second and ${t3} in the third. ${adolescentCount} ${adolescentCount === 1 ? "mother is" : "mothers are"} under 18 and ${advancedAgeCount} ${advancedAgeCount === 1 ? "is" : "are"} 35 or older — both groups carry added obstetric risk and are seen more often. ${philhealthPct}% hold PhilHealth cover (${philhealthCount.toLocaleString()} as member or dependent) and ${fourPsCount.toLocaleString()} ${fourPsCount === 1 ? "household is" : "households are"} enrolled in 4Ps.`;
+          const coverageNarrative = reportsCoverageVisible()
+            ? ` ${philhealthPct}% hold PhilHealth cover (${philhealthCount.toLocaleString()} as member or dependent) and ${fourPsCount.toLocaleString()} ${fourPsCount === 1 ? "household is" : "households are"} enrolled in 4Ps.`
+            : "";
+          const p1 = `<strong>1. Maternal care.</strong> ${scopeLabel} covers ${motherCount.toLocaleString()} registered ${motherCount === 1 ? "mother" : "mothers"}, of whom ${ongoingCount.toLocaleString()} ${ongoingCount === 1 ? "is" : "are"} currently pregnant, for ${periodText}. Risk assessment places ${highRisk} of those pregnancies at high risk (${highRiskPct}%), ${medRisk} at medium and ${lowRisk} at low. By gestational age, ${t1} ${t1 === 1 ? "is" : "are"} in the first trimester, ${t2} in the second and ${t3} in the third. ${adolescentCount} ${adolescentCount === 1 ? "mother is" : "mothers are"} under 18 and ${advancedAgeCount} ${advancedAgeCount === 1 ? "is" : "are"} 35 or older — both groups carry added obstetric risk and are seen more often.${coverageNarrative}`;
 
           const p2 = `<strong>2. Child health and growth.</strong> ${children.length.toLocaleString()} ${children.length === 1 ? "child is" : "children are"} on the books here. Fully Immunized Child completion among those who have passed their first birthday is ${ficRateStr} (${ficCompleted} of ${ficEligible}), against the 95% national target. Growth monitoring has measured ${growth.assessed} ${growth.assessed === 1 ? "child" : "children"} against the WHO standards: ${growth.normal} (${growth.normalPct === null ? "—" : growth.normalPct + "%"}) are growing normally on all three indicators, ${growth.stunted} are stunted${growth.severeStunted > 0 ? ` including ${growth.severeStunted} severely` : ""}, ${growth.underweight} are underweight and ${growth.wasted} are wasted. Stunting reflects long-term nutrition and wasting reflects the last few weeks, so the two call for different responses.`;
 
@@ -4393,6 +4396,10 @@
           ];
         }
 
+        function reportsCoverageVisible() {
+          return document.getElementById("social-coverage-card")?.hidden === false;
+        }
+
         function reportsCoverageFigures() {
           const v = (id) => exportText(document.getElementById(id)) || "0";
           return [
@@ -4436,8 +4443,10 @@
           report.heading("Indicators");
           report.charts(reportsCharts(), 3);
 
-          report.heading("PhilHealth and 4Ps coverage");
-          report.figures(reportsCoverageFigures());
+          if (reportsCoverageVisible()) {
+            report.heading("PhilHealth and 4Ps coverage");
+            report.figures(reportsCoverageFigures());
+          }
 
           reportsTables().forEach(t => {
             report.heading(t.title);
@@ -4471,7 +4480,9 @@
               { title: "Recommended actions", columns: ["#", "Severity", "Area", "Where", "Finding", "Action"],
                 rows: recs.map((r, i) => [i + 1, r.severity, r.domain, r.place, `${r.headline}. ${r.finding}`, r.action]),
                 emptyText: "Nothing needs action for the selected scope." },
-              { title: "PhilHealth and 4Ps coverage", columns: ["Group", "Count"], rows: reportsCoverageFigures() },
+              ...(reportsCoverageVisible() ? [
+                { title: "PhilHealth and 4Ps coverage", columns: ["Group", "Count"], rows: reportsCoverageFigures() },
+              ] : []),
             ],
           }];
           reportsTables().forEach(t => sheets.push({
