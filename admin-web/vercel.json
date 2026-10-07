@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "node prepare-download.mjs",
+  "outputDirectory": ".",
   "redirects": [
     {
       "source": "/app",

@@ -85,7 +85,8 @@ For a local preview, `prepare-apk.ps1` already places the APK beside the website
 it again. When a remote artifact URL is configured, its pinned artifact is used.
 
 Both Vercel configurations support either repository-root hosting or an
-`admin-web` project root:
+`admin-web` project root. They explicitly use `.` as the static output directory,
+so the APK preparation build does not require a generated `public` directory:
 
 - `/downloads/inaagapay.apk` serves the APK.
 - `/apk` rewrites to the same file; it does not redirect to GitHub.
