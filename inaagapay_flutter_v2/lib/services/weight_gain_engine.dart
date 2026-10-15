@@ -9,6 +9,8 @@
 // weight gain by pre-pregnancy BMI category.
 
 
+import 'dart:math' as math;
+
 import '../models/weight_gain_models.dart';
 
 class WeightGainEngine {
@@ -129,7 +131,13 @@ class WeightGainEngine {
       final fraction = aogWeeks / 13.0;
       expectedGainMid = firstTrimesterGain * fraction;
       expectedGainMin = 0.0; // 0 kg gain in 1st trimester is normal
-      expectedGainMax = (expectedGainMid * 1.4).clamp(1.0, firstTrimesterGain * 1.3);
+      final firstTrimesterMax = firstTrimesterGain * 1.3;
+      // The Obese singleton cap is 0.91 kg, below the usual 1 kg floor.
+      // Keep the category's cap without passing inverted bounds to clamp.
+      expectedGainMax = (expectedGainMid * 1.4).clamp(
+        math.min(1.0, firstTrimesterMax),
+        firstTrimesterMax,
+      );
     } else {
       // Second/third trimester
       final weeksAfterFirst = aogWeeks - 13;
