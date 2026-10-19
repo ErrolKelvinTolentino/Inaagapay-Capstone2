@@ -87,7 +87,7 @@ class _MidwifeReportsScreenState extends State<MidwifeReportsScreen> {
     _ReportDef(
       id: 'mother-stats',
       title: 'Mother statistics',
-      subtitle: 'Age, stage of pregnancy, risk, Td protection, supplements',
+      subtitle: 'Age, stage of pregnancy, risk, Td status, supplements',
       icon: Icons.pregnant_woman_outlined,
       usesPeriod: false,
       build: (scope, _) =>

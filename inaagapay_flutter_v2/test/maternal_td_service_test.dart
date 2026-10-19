@@ -53,16 +53,16 @@ void main() {
       expect(s.isProtectedAtBirth, isFalse);
     });
 
-    test('Td2 confers PAB', () {
+    test('Td2 completes the series', () {
       final s = statusOf({'Td1': 60, 'Td2': 19});
       expect(s.highestCompletedDose, 2);
       expect(s.isProtectedAtBirth, isTrue);
-      expect(s.isFim, isFalse);
+      expect(s.isFim, isTrue);
     });
 
-    test('Td5 is FIM and needs nothing further', () {
+    test('Td2 is complete and needs nothing further', () {
       final s = statusOf({
-        'Td1': 2000, 'Td2': 1900, 'Td3': 1700, 'Td4': 1300, 'Td5': 900,
+        'Td1': 200, 'Td2': 100,
       });
       expect(s.isFim, isTrue);
       expect(s.nextDoseKey, isNull);
@@ -72,34 +72,25 @@ void main() {
   });
 
   group('eligibility', () {
-    test('reproduces the reported screen: Td2 given 19 days ago blocks Td3', () {
-      final s = statusOf({'Td1': 47, 'Td2': 19});
+    test('Td1 given 10 days ago blocks Td2 until 28 days', () {
+      final s = statusOf({'Td1': 10});
 
-      expect(s.nextDoseKey, 'Td3');
+      expect(s.nextDoseKey, 'Td2');
       expect(s.nextAction, TdNextAction.waiting);
       expect(s.canAdministerToday, isFalse,
-          reason: 'the form must not be offered - the RPC would reject it');
-      // Td3 requires 180 days after Td2; 19 elapsed leaves 161.
-      expect(s.daysUntilEligible, 161);
+          reason: 'the form must not be offered - interval not met');
+      // Td2 requires 28 days after Td1; 10 elapsed leaves 18.
+      expect(s.daysUntilEligible, 18);
     });
 
     test('becomes eligible exactly on the interval boundary', () {
-      expect(statusOf({'Td1': 209, 'Td2': 180}).canAdministerToday, isTrue);
-      expect(statusOf({'Td1': 208, 'Td2': 179}).canAdministerToday, isFalse);
+      expect(statusOf({'Td1': 28}).canAdministerToday, isTrue);
+      expect(statusOf({'Td1': 27}).canAdministerToday, isFalse);
     });
 
     test('Td2 opens 28 days after Td1', () {
       expect(statusOf({'Td1': 27}).daysUntilEligible, 1);
       expect(statusOf({'Td1': 28}).canAdministerToday, isTrue);
-    });
-
-    test('a later dose on file does not let the series skip a gap', () {
-      // Td3 recorded but Td2 missing. The next dose owed is still Td2, and it
-      // is anchored on the dated Td1, so it may be given today.
-      final s = statusOf({'Td1': 400, 'Td3': 100});
-      expect(s.nextDoseKey, 'Td2');
-      expect(s.nextAction, TdNextAction.eligibleNow);
-      expect(s.highestCompletedDose, 3);
     });
 
     test('a dateless registration-reported dose cannot anchor an interval', () {
@@ -110,20 +101,20 @@ void main() {
     });
 
     test('nextEligibleDate is the previous dose plus the DOH interval', () {
-      final s = statusOf({'Td1': 300, 'Td2': 200, 'Td3': 10});
-      final td3 = s.recordFor('Td3')!.date!;
-      expect(s.nextDoseKey, 'Td4');
-      expect(s.nextEligibleDate, td3.add(const Duration(days: 365)));
+      final s = statusOf({'Td1': 10});
+      final td1 = s.recordFor('Td1')!.date!;
+      expect(s.nextDoseKey, 'Td2');
+      expect(s.nextEligibleDate, td1.add(const Duration(days: 28)));
     });
   });
 
   group('selectableDoseKeys', () {
     test('offers only the due dose, and nothing while waiting', () {
       expect(statusOf({'Td1': 30}).selectableDoseKeys, ['Td2']);
-      expect(statusOf({'Td1': 47, 'Td2': 19}).selectableDoseKeys, isEmpty);
+      expect(statusOf({'Td1': 10}).selectableDoseKeys, isEmpty);
       expect(
         statusOf({
-          'Td1': 2000, 'Td2': 1900, 'Td3': 1700, 'Td4': 1300, 'Td5': 900,
+          'Td1': 200, 'Td2': 100,
         }).selectableDoseKeys,
         isEmpty,
       );

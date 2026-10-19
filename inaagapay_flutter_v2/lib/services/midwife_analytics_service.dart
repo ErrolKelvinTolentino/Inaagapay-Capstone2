@@ -861,7 +861,7 @@ class MidwifeAnalyticsService {
     List<Map<String, dynamic>> checkups,
     DateTime now,
   ) {
-    const title = 'Tetanus (TD) protection';
+    const title = 'Tetanus (TD) vaccination';
 
     if (ongoing.isEmpty) {
       return const AnalyticsMetric.empty(

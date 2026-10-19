@@ -2464,8 +2464,6 @@ class _RecordsScreenState extends State<RecordsScreen>
                                 }
                                 final givenOn =
                                     _formatDate(record['record_date']);
-                                final protectionUntil =
-                                    record['td_protection_until'];
                                 final nextDue = record['td_next_due'];
                                 // "Given here" or the name of the facility that
                                 // gave it — a dose from another clinic is still
@@ -2496,12 +2494,6 @@ class _RecordsScreenState extends State<RecordsScreen>
                                               ? _t('Another facility',
                                                   'Ibang pasilidad')
                                               : _notInputted()),
-                                    ),
-                                    MapEntry(
-                                      _t('Protected until', 'Protektado hanggang'),
-                                      protectionUntil != null
-                                          ? _formatDate(protectionUntil)
-                                          : _notInputted(),
                                     ),
                                     MapEntry(
                                       _t('Next dose due', 'Susunod na dose'),

@@ -29,9 +29,12 @@ void main() {
     await _pumpAt(tester, const Size(375, 812));
     expect(tester.takeException(), isNull);
 
-    // The dose progress strip shows all five doses.
-    for (final key in ['Td1', 'Td2', 'Td3', 'Td4', 'Td5']) {
+    // The dose progress strip shows the two doses (Td1, Td2) and no Td3..5.
+    for (final key in ['Td1', 'Td2']) {
       expect(find.text(key), findsWidgets, reason: '$key chip missing');
+    }
+    for (final key in ['Td3', 'Td4', 'Td5']) {
+      expect(find.text(key), findsNothing, reason: '$key chip should not exist');
     }
   });
 
@@ -61,8 +64,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('DOH 5-Dose Td Timeline'), findsOneWidget);
-    expect(find.textContaining('of 5 doses recorded'), findsOneWidget);
+    expect(find.text('DOH Td Timeline'), findsOneWidget);
+    expect(find.textContaining('of 2 doses recorded'), findsOneWidget);
 
     // Backfill is in the Lifetime History tab
     expect(find.text('Backfill Past Doses'), findsOneWidget);

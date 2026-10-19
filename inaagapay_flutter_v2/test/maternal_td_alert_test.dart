@@ -34,8 +34,7 @@ void main() {
     });
 
     test('a fully immunized mother gets no notice', () {
-      final s = statusOf(
-          {'Td1': 2000, 'Td2': 1900, 'Td3': 1500, 'Td4': 1000, 'Td5': 400});
+      final s = statusOf({'Td1': 200, 'Td2': 100});
       expect(MaternalTdAlert.evaluate(s, isPregnant: true, week: 30), isNull);
     });
 
@@ -45,8 +44,8 @@ void main() {
     });
 
     test('a dose weeks away is not announced yet', () {
-      // Td3 opens 180 days after Td2; 100 days in leaves 80 to go.
-      final s = statusOf({'Td1': 200, 'Td2': 100});
+      // Td2 opens 28 days after Td1; 5 days in leaves 23 to go (> 14 days).
+      final s = statusOf({'Td1': 5});
       expect(MaternalTdAlert.evaluate(s, isPregnant: true, week: 20), isNull);
     });
 
@@ -77,15 +76,15 @@ void main() {
 
     test('a due dose between pregnancies is still due', () {
       final alert = MaternalTdAlert.evaluate(
-          statusOf({'Td1': 400, 'Td2': 370}),
+          statusOf({'Td1': 400}),
           isPregnant: false)!;
       expect(alert.level, TdAlertLevel.due);
-      expect(alert.doseKey, 'Td3');
+      expect(alert.doseKey, 'Td2');
     });
   });
 
   group('urgent', () {
-    test('third trimester without protection at birth', () {
+    test('third trimester without Td2', () {
       final alert = MaternalTdAlert.evaluate(statusOf({'Td1': 40}),
           isPregnant: true, week: MaternalTdAlert.urgentFromWeek)!;
       expect(alert.level, TdAlertLevel.urgent);
@@ -98,12 +97,11 @@ void main() {
       expect(alert.level, TdAlertLevel.due);
     });
 
-    test('not when her baby is already protected at birth', () {
-      // Td3 due, but Td2 already protects this baby.
+    test('not when series is already complete', () {
       final alert = MaternalTdAlert.evaluate(
           statusOf({'Td1': 400, 'Td2': 370}),
-          isPregnant: true, week: 34)!;
-      expect(alert.level, TdAlertLevel.due);
+          isPregnant: true, week: 34);
+      expect(alert, isNull);
     });
   });
 
@@ -120,20 +118,19 @@ void main() {
 
   group('read state', () {
     test('is kept per dose and per level', () {
+      final dueTd1 = MaternalTdAlert.evaluate(statusOf({}),
+          isPregnant: true, week: 12)!;
       final dueTd2 = MaternalTdAlert.evaluate(statusOf({'Td1': 30}),
           isPregnant: true, week: 20)!;
       final urgentTd2 = MaternalTdAlert.evaluate(statusOf({'Td1': 30}),
           isPregnant: true, week: 32)!;
-      final dueTd3 = MaternalTdAlert.evaluate(
-          statusOf({'Td1': 400, 'Td2': 370}),
-          isPregnant: true, week: 20)!;
 
       expect(dueTd2.noticeType, 'td_due_Td2');
-      // Escalating reaches her again; the next dose is a new notice.
+      // Escalating reaches her again; different dose is a new notice.
       expect(urgentTd2.noticeType, isNot(dueTd2.noticeType));
-      expect(dueTd3.noticeType, isNot(dueTd2.noticeType));
+      expect(dueTd1.noticeType, isNot(dueTd2.noticeType));
       // The notifications screen recognises its own by this prefix.
-      for (final a in [dueTd2, urgentTd2, dueTd3]) {
+      for (final a in [dueTd1, dueTd2, urgentTd2]) {
         expect(a.noticeType.startsWith('td_'), isTrue);
       }
     });

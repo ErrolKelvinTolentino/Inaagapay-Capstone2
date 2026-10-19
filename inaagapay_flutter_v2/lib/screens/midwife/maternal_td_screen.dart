@@ -1084,19 +1084,14 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
 
   Widget _buildHeroProtectionCard() {
     final highestDose = _status.highestCompletedDose;
-    final isPab = _status.isProtectedAtBirth;
-    final isFim = _status.isFim;
+    final isComplete = _status.completedCount >= 2;
 
-    // One hue, three depths. The previous version switched to crimson (0xFFE11D48)
-    // the moment the mother reached PAB and to burgundy at FIM, so the screen
-    // turned red exactly when the news was good — off-brand and alarming.
-    // Progress now reads as the brand pink deepening.
     late final Color startColor;
     late final Color endColor;
-    if (isFim) {
+    if (isComplete) {
       startColor = const Color(0xFF9E2A5F); // deepest — series complete
       endColor = AppColors.brandText;
-    } else if (isPab) {
+    } else if (highestDose == 1) {
       startColor = AppColors.brandText;
       endColor = AppColors.brandAccent;
     } else {
@@ -1106,18 +1101,15 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
 
     String statusTitle;
     String statusSubtitle;
-    if (isFim) {
-      statusTitle = 'Fully Immunized Mother (FIM)';
-      statusSubtitle = 'Lifetime maternal and infant protection achieved';
+    if (isComplete) {
+      statusTitle = 'Td Series Complete';
+      statusSubtitle = 'All scheduled Td doses recorded (Td1 & Td2)';
     } else if (highestDose == 0) {
       statusTitle = 'No Td Recorded';
       statusSubtitle = 'Needs Td1 as early as possible in pregnancy';
-    } else if (isPab) {
-      statusTitle = 'Td$highestDose Completed';
-      statusSubtitle = 'Infant Protected at Birth (PAB)';
     } else {
-      statusTitle = 'Td$highestDose Completed (Priming)';
-      statusSubtitle = 'Not yet protected — Td2 gives infant protection';
+      statusTitle = 'Td1 Completed';
+      statusSubtitle = 'Needs Td2 (at least 4 weeks after Td1)';
     }
 
     return Container(
@@ -1159,7 +1151,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  isFim ? 'FIM' : (isPab ? 'PAB ACTIVE' : 'UNPROTECTED'),
+                  isComplete ? 'COMPLETE' : (highestDose == 1 ? '1 OF 2' : '0 OF 2'),
                   style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.3),
                 ),
               ),
@@ -1192,7 +1184,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     switch (action) {
       case TdNextAction.complete:
         icon = Icons.verified_rounded;
-        label = 'All 5 doses complete — no further Td needed';
+        label = 'Td series complete — no further Td needed';
         break;
       case TdNextAction.eligibleNow:
         icon = Icons.event_available_rounded;
@@ -1252,7 +1244,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
             children: [
               const Expanded(
                 child: Text(
-                  'DOH 5-Dose Progress',
+                  'Td Schedule Progress',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
@@ -1261,9 +1253,6 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                   ),
                 ),
               ),
-              // The count the strip never actually stated. Reading it off five
-              // chips means counting ticks; a midwife checking whether a
-              // mother is on her way to FIM wants the number.
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(
@@ -1271,7 +1260,7 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  '${_status.completedCount} of 5 recorded',
+                  '${_status.completedCount} of 2 recorded',
                   style: const TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
@@ -1461,12 +1450,12 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
           const Icon(Icons.verified_rounded, size: 52, color: AppColors.brandAccent),
           const SizedBox(height: 10),
           const Text(
-            'Fully Immunized Mother',
+            'Td Series Complete',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.brandText),
           ),
           const SizedBox(height: 6),
           const Text(
-            'All 5 Td doses are recorded. She has lifetime protection against maternal and neonatal tetanus — no further Td vaccination is needed.',
+            'All scheduled Td doses (Td1 and Td2) are recorded — no further Td vaccination is needed for this pregnancy.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12.5, color: AppColors.brandText, height: 1.4),
           ),
@@ -1540,7 +1529,6 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
     final on = _status.nextEligibleDate;
     final days = _status.daysUntilEligible;
     final def = MaternalTdService.defFor(next);
-    final protectedUntil = _status.protectionUntil;
 
     // Nothing is wrong here, so this no longer looks like something is.
     //
@@ -1612,23 +1600,6 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
               ),
             ],
           ),
-          if (protectedUntil != null) ...[
-            const SizedBox(height: 12),
-            const Divider(height: 1, color: AppColors.borderPrimary),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(Icons.shield_rounded, size: 14, color: AppColors.brandPrimary),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Current protection runs until ${_longDate.format(protectedUntil)}.',
-                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                  ),
-                ),
-              ],
-            ),
-          ],
         ],
       ),
     );
@@ -1805,12 +1776,12 @@ class _MaternalTdScreenState extends State<MaternalTdScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         const Text(
-          'DOH 5-Dose Td Timeline',
+          'DOH Td Timeline',
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
         ),
         const SizedBox(height: 4),
         Text(
-          '${_status.completedCount} of 5 doses recorded',
+          '${_status.completedCount} of 2 doses recorded',
           style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 12),

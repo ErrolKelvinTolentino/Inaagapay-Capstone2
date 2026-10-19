@@ -2402,11 +2402,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           MapEntry('Facility', facility),
           MapEntry('Source',
               record.source == 'bhc' ? 'Health Center' : 'External / Reported'),
-          MapEntry('Protection', def.protection),
           MapEntry('Recommended Timing', def.timing),
           MapEntry('Minimum Interval', def.minIntervalLabel),
-          MapEntry('Protected Until', _formatDate(record.protectionUntil)),
-          MapEntry('Next Dose Due', _formatDate(record.nextDueDate)),
+          if (record.nextDueDate != null)
+            MapEntry('Next Dose Due', _formatDate(record.nextDueDate)),
           MapEntry('Remarks', _formatValue(record.remarks)),
         ],
       ),

@@ -53,7 +53,6 @@ class TdRecordExport {
     DateTime? now,
   }) {
     final asOf = now ?? DateTime.now();
-    final until = status.protectionUntil;
 
     return ReportDocument(
       title: 'Tetanus-Diphtheria (Td) Vaccination Record',
@@ -76,15 +75,13 @@ class TdRecordExport {
           ],
         ),
         ReportBlock(
-          title: 'Protection status',
+          title: 'Vaccination status',
           columns: const ['Measure', 'Status'],
           columnFlex: const [1, 3],
           showRowCount: false,
           rows: [
-            ['Doses recorded', '${status.completedCount} of 5'],
-            ['Baby protected at birth', status.isProtectedAtBirth ? 'Yes' : 'No'],
-            ['Fully immunized (Td5)', status.isFim ? 'Yes' : 'No'],
-            if (until != null) ['Protected until', until],
+            ['Doses recorded', '${status.completedCount} of 2'],
+            ['Series complete', status.isFim ? 'Yes' : 'No'],
             ['Next dose', nextStep(status)],
           ],
         ),
@@ -92,9 +89,9 @@ class TdRecordExport {
           title: 'Doses',
           columns: const [
             'Dose', 'Date given', 'Where given', 'Source',
-            'Protected until', 'Next dose due', 'Remarks',
+            'Next dose due', 'Remarks',
           ],
-          columnFlex: const [1.3, 1.0, 1.6, 1.4, 1.0, 1.0, 2.2],
+          columnFlex: const [1.3, 1.2, 1.8, 1.5, 1.2, 2.5],
           showRowCount: false,
           rows: [
             for (final def in MaternalTdService.doseDefs)
@@ -107,7 +104,6 @@ class TdRecordExport {
                     '',
                     '',
                     null,
-                    null,
                     'When: ${def.timing}',
                   ];
                 }
@@ -116,7 +112,6 @@ class TdRecordExport {
                   r.date ?? 'Date not recorded',
                   r.facilityName,
                   sourceLabel(r.source),
-                  r.protectionUntil,
                   r.nextDueDate,
                   r.remarks,
                 ];

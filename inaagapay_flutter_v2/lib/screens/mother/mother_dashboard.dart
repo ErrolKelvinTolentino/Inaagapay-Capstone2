@@ -1910,41 +1910,21 @@ class _MotherDashboardState extends State<MotherDashboard> {
           'Hindi ma-load ang iyong Td record. I-tap para buksan.');
       statusColor = AppColors.textSecondary;
       statusIcon = Icons.cloud_off_rounded;
-    } else if (status.isFim) {
-      statusText = _t('Fully immunized — lifetime protection',
-          'Kumpleto ang bakuna — panghabambuhay na proteksyon');
+    } else if (status.completedCount >= 2) {
+      statusText = _t('Td series complete (2 of 2)',
+          'Kumpleto ang Td bakuna (2 sa 2)');
       statusColor = const Color(0xFF3A9E8B);
       statusIcon = Icons.verified_rounded;
-    } else if (status.completedCount == 0) {
+    } else if (status.completedCount == 1) {
+      statusText = _t('Td1 completed (1 of 2)',
+          'Naitala ang Td1 (1 sa 2)');
+      statusColor = AppColors.brandPrimary;
+      statusIcon = Icons.check_circle_outline_rounded;
+    } else {
       statusText =
           _t('No Td doses on record yet', 'Wala pang naitalang Td dose');
       statusColor = AppColors.textSecondary;
       statusIcon = Icons.info_outline_rounded;
-    } else if (status.isProtectedAtBirth) {
-      final until = status.protectionUntil;
-      final base = _hasPregnancy
-          ? _t(
-              'Baby protected at birth', 'Protektado ang sanggol pagkapanganak')
-          : _t('Protected against tetanus', 'Protektado laban sa tetano');
-      statusText = until == null
-          ? base
-          : '$base · ${_t('until', 'hanggang')} ${dateFormat.format(until)}';
-      statusColor = const Color(0xFF3A9E8B);
-      statusIcon = Icons.shield_rounded;
-    } else if (status.highestCompletedDose >= 2 &&
-        status.protectionUntil != null &&
-        status.protectionUntil!.isBefore(today)) {
-      statusText =
-          '${_t('Protection ended', 'Natapos ang proteksyon noong')} ${dateFormat.format(status.protectionUntil!)}';
-      statusColor = AppColors.warning;
-      statusIcon = Icons.shield_outlined;
-    } else {
-      statusText = _hasPregnancy
-          ? _t('Baby not yet protected at birth',
-              'Hindi pa protektado ang sanggol pagkapanganak')
-          : _t('Not yet protected', 'Hindi pa protektado');
-      statusColor = AppColors.warning;
-      statusIcon = Icons.shield_outlined;
     }
 
     // The next step, when there is one.
@@ -2056,8 +2036,8 @@ class _MotherDashboardState extends State<MotherDashboard> {
                     ],
                     const SizedBox(width: 4),
                     Text(
-                      _t('${status.completedCount} of 5 doses',
-                          '${status.completedCount} sa 5 na dose'),
+                      _t('${status.completedCount} of 2 doses',
+                          '${status.completedCount} sa 2 na dose'),
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,

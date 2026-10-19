@@ -3915,8 +3915,7 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
         calciumEntered > _calciumStockAvailable;
 
     final highestTd = _tdStatus.highestCompletedDose;
-    final isProtectedAtBirth = _tdStatus.isProtectedAtBirth;
-    final isFim = _tdStatus.isFim;
+    final isComplete = _tdStatus.completedCount >= 2;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -4164,8 +4163,8 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                       child: Text(
                         _tdStatus.readFailed
                             ? 'Td history unavailable'
-                            : (isFim
-                                ? 'Fully Immunized Mother (FIM ⭐)'
+                            : (isComplete
+                                ? 'Td Series Complete'
                                 : (highestTd > 0
                                     ? 'Td$highestTd Recorded'
                                     : 'No Td Recorded')),
@@ -4181,12 +4180,12 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: isFim || isProtectedAtBirth
+                        color: isComplete
                             ? const Color(0xFFDCFCE7)
                             : const Color(0xFFFEF3C7),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: isFim || isProtectedAtBirth
+                          color: isComplete
                               ? const Color(0xFF86EFAC)
                               : const Color(0xFFFDE68A),
                         ),
@@ -4194,15 +4193,15 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                       child: Text(
                         _tdStatus.readFailed
                             ? 'NOT KNOWN'
-                            : (isFim
-                                ? 'LIFETIME'
-                                : (isProtectedAtBirth
-                                    ? 'PAB PROTECTED'
-                                    : 'UNPROTECTED')),
+                            : (isComplete
+                                ? 'COMPLETE'
+                                : (_tdStatus.completedCount == 1
+                                    ? 'TD1 GIVEN'
+                                    : 'NO RECORD')),
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: isFim || isProtectedAtBirth
+                          color: isComplete
                               ? const Color(0xFF166534)
                               : const Color(0xFF92400E),
                         ),
@@ -4213,15 +4212,14 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
                 const SizedBox(height: 10),
                 Text(
                   _tdStatus.readFailed
-                      ? 'Her Td records could not be read just now, so this card '
-                          'cannot say whether she is protected. Reopen this '
+                      ? 'Her Td records could not be read just now. Reopen this '
                           'screen before deciding on a dose — an empty history '
                           'here does not mean she has had none.'
-                      : (isFim
-                          ? 'Lifetime maternal and neonatal tetanus protection achieved.'
-                          : (isProtectedAtBirth
-                              ? 'Baby is Protected at Birth (PAB). Manage or backfill remaining doses in the dedicated Td module.'
-                              : 'DOH recommends starting or updating Td doses as early as possible in pregnancy.')),
+                      : (isComplete
+                          ? 'All scheduled Td doses (Td1 and Td2) are recorded.'
+                          : (_tdStatus.completedCount == 1
+                              ? 'Td1 is recorded. Manage or record Td2 in the dedicated Td module.'
+                              : 'No Td vaccine doses recorded yet. Manage or administer in the dedicated Td module.')),
                   style: const TextStyle(
                     fontSize: 12.5,
                     color: AppColors.textSecondary,
@@ -4231,7 +4229,7 @@ IMPORTANT: Your response must be ONE Tagalog summary — the header line followe
 
                 // Next-dose timing, mirroring the Td screen so the two views
                 // never tell the midwife different things.
-                if (!isFim) ...[
+                if (!isComplete) ...[
                   const SizedBox(height: 10),
                   Container(
                     padding:

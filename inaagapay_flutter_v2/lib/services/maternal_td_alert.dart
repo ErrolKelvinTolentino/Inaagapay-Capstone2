@@ -77,13 +77,13 @@ class MaternalTdAlert {
     switch (level) {
       case TdAlertLevel.urgent:
         return _t(
-          'Your baby is not yet protected against tetanus at birth. Visit your health center for your $doseLabel shot as soon as you can.',
-          'Hindi pa protektado ang iyong sanggol laban sa tetano pagkapanganak. Pumunta sa health center para sa iyong $doseLabel sa lalong madaling panahon.',
+          'Your $doseLabel shot is due before birth. Visit your health center for your $doseLabel shot as soon as you can.',
+          'Nakatakda ang iyong $doseLabel bago manganak. Pumunta sa health center para sa iyong $doseLabel sa lalong madaling panahon.',
         );
       case TdAlertLevel.due:
         return _t(
-          'You can get your $doseLabel (tetanus-diphtheria) shot at your health center now. It protects you and your baby from tetanus.',
-          'Maaari ka nang magpaturok ng $doseLabel (tetanus-diphtheria) sa iyong health center. Pinoprotektahan ka nito at ang iyong sanggol laban sa tetano.',
+          'You can get your $doseLabel (tetanus-diphtheria) shot at your health center now.',
+          'Maaari ka nang magpaturok ng $doseLabel (tetanus-diphtheria) sa iyong health center.',
         );
       case TdAlertLevel.soon:
         final on = opensOn == null

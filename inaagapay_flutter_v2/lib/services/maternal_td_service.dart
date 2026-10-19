@@ -15,7 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class MaternalTdService {
   const MaternalTdService._();
 
-  /// DOH 5-dose maternal Td schedule.
+  /// 2-dose maternal Td schedule.
   static const List<TdDoseDef> doseDefs = [
     TdDoseDef(
       key: 'Td1',
@@ -23,44 +23,17 @@ class MaternalTdService {
       title: 'Td 1 (Initial Priming)',
       timing: 'As early as possible in pregnancy',
       minIntervalLabel: 'None (first dose)',
-      protection: 'Initial sensitisation (no neonatal protection yet)',
+      protection: 'First dose (initial priming)',
       minIntervalDays: 0,
     ),
     TdDoseDef(
       key: 'Td2',
       number: 2,
-      title: 'Td 2 (Infant Protection)',
+      title: 'Td 2 (Second Dose)',
       timing: 'At least 4 weeks (28 days) after Td1',
       minIntervalLabel: '4 weeks (28 days) after Td1',
-      protection: '3 years protection - baby is Protected at Birth (PAB)',
+      protection: 'Second dose (at least 4 weeks after Td1)',
       minIntervalDays: 28,
-    ),
-    TdDoseDef(
-      key: 'Td3',
-      number: 3,
-      title: 'Td 3 (Extended Protection)',
-      timing: 'At least 6 months after Td2',
-      minIntervalLabel: '6 months (180 days) after Td2',
-      protection: '5 years protection for mother and future infants',
-      minIntervalDays: 180,
-    ),
-    TdDoseDef(
-      key: 'Td4',
-      number: 4,
-      title: 'Td 4 (10-Year Protection)',
-      timing: 'At least 1 year after Td3',
-      minIntervalLabel: '1 year (365 days) after Td3',
-      protection: '10 years maternal and neonatal protection',
-      minIntervalDays: 365,
-    ),
-    TdDoseDef(
-      key: 'Td5',
-      number: 5,
-      title: 'Td 5 (Lifetime Protection / FIM)',
-      timing: 'At least 1 year after Td4',
-      minIntervalLabel: '1 year (365 days) after Td4',
-      protection: 'Lifetime protection (Fully Immunized Mother / FIM)',
-      minIntervalDays: 365,
     ),
   ];
 
@@ -80,7 +53,7 @@ class MaternalTdService {
     if (match == null) return null;
 
     final n = int.tryParse(match.group(0)!);
-    if (n == null || n < 1 || n > 5) return null;
+    if (n == null || n < 1 || n > 2) return null;
     return 'Td$n';
   }
 
@@ -301,9 +274,9 @@ class MaternalTdStatus {
 
   MaternalTdRecord? recordFor(String doseKey) => doses[doseKey];
 
-  /// Highest dose on file, e.g. Td1 + Td3 recorded gives 3.
+  /// Highest dose on file (up to 2).
   int get highestCompletedDose {
-    for (var n = 5; n >= 1; n--) {
+    for (var n = 2; n >= 1; n--) {
       if (doses.containsKey('Td$n')) return n;
     }
     return 0;
@@ -311,26 +284,16 @@ class MaternalTdStatus {
 
   int get completedCount => doses.length;
 
-  bool get isFim => doses.containsKey('Td5');
+  bool get isFim => highestCompletedDose >= 2;
 
-  /// Baby is Protected at Birth once Td2 is on file and its protection window
-  /// has not lapsed.
-  bool get isProtectedAtBirth {
-    final highest = highestCompletedDose;
-    if (highest < 2) return false;
-    if (isFim) return true;
+  /// Series is complete once Td2 is on file.
+  bool get isProtectedAtBirth => highestCompletedDose >= 2;
 
-    final until = doses['Td$highest']?.protectionUntil;
-    if (until == null) return true;
-    return until.isAfter(DateTime.now());
-  }
+  DateTime? get protectionUntil => null;
 
-  DateTime? get protectionUntil =>
-      doses['Td$highestCompletedDose']?.protectionUntil;
-
-  /// The next dose in the series, or null when the mother is FIM.
+  /// The next dose in the series, or null when Td2 is completed.
   String? get nextDoseKey {
-    for (var n = 1; n <= 5; n++) {
+    for (var n = 1; n <= 2; n++) {
       if (!doses.containsKey('Td$n')) return 'Td$n';
     }
     return null;
