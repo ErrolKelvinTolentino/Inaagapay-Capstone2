@@ -891,7 +891,9 @@ checks(sort_order, migration, requirement, present) AS (
     (8700, '20261007_require_open_vial_disposal.sql', 'function discard_open_vial_doses() at this version',
           (EXISTS (SELECT 1 FROM procs WHERE proname = 'discard_open_vial_doses' AND position('SELECT * INTO v_batch FROM public.inventory_batches WHERE batch_id=p_batch_id FOR UPDATE;' IN prosrc) > 0))),
     (8800, '20261007_stock_request_requester_delete_cascade.sql', 'stock requests cascade when requester account is deleted',
-          EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_stock_requests_requested_by_fkey' AND conrelid = to_regclass('public.inventory_stock_requests') AND confrelid = to_regclass('public.accounts') AND contype = 'f' AND confdeltype = 'c'))
+          EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_stock_requests_requested_by_fkey' AND conrelid = to_regclass('public.inventory_stock_requests') AND confrelid = to_regclass('public.accounts') AND contype = 'f' AND confdeltype = 'c')),
+    (8900, '20261008_td_vaccination_philippine_date.sql', 'Td future-date validation uses the Philippine calendar date',
+          (EXISTS (SELECT 1 FROM procs WHERE proname = 'administer_maternal_td_dose' AND position('p_vaccination_date > (CURRENT_TIMESTAMP AT TIME ZONE ''Asia/Manila'')::date' IN prosrc) > 0)))
 ),
 per_file AS (
   SELECT migration,

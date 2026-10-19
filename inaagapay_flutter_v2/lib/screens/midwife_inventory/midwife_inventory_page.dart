@@ -569,18 +569,26 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
       _inventory.where((item) => item.hasOpenVial).toList();
 
   List<InventoryItem> get _expiryAttentionItems {
+    final now = DateTime.now();
     final items = _inventory
         .where(
-          (item) => item.expiredQuantity > 0 || item.expiringSoonQuantity > 0,
+          (item) => item.expiredQuantity > 0 ||
+              item.expiringSoonQuantity > 0 ||
+              item.openVialExpiryBatchesOn(now).isNotEmpty,
         )
         .toList();
     items.sort((first, second) {
+      final firstExpired = first.hasExpiredExpiryAttentionOn(now);
+      final secondExpired = second.hasExpiredExpiryAttentionOn(now);
+      if (firstExpired != secondExpired) return firstExpired ? -1 : 1;
       if (first.expiredQuantity != second.expiredQuantity) {
         return second.expiredQuantity.compareTo(first.expiredQuantity);
       }
-      final firstDays = first.nearestExpiryDays ?? 999999;
-      final secondDays = second.nearestExpiryDays ?? 999999;
-      return firstDays.compareTo(secondDays);
+      final firstLeft = first.expiryAttentionTimeLeftOn(now);
+      final secondLeft = second.expiryAttentionTimeLeftOn(now);
+      if (firstLeft == null) return secondLeft == null ? 0 : 1;
+      if (secondLeft == null) return -1;
+      return firstLeft.compareTo(secondLeft);
     });
     return items;
   }
@@ -1739,7 +1747,7 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'No active batch expires within the next 90 days.',
+              'No batch or open vial reaches its expiry limit within the next 90 days.',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
@@ -1753,11 +1761,29 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
   }
 
   Widget _buildExpiryAttentionCard(InventoryItem item) {
-    final hasExpired = item.expiredQuantity > 0;
+    final now = DateTime.now();
+    final openBatches = item.openVialExpiryBatchesOn(now);
+    final hasExpired = item.hasExpiredExpiryAttentionOn(now);
     final color = hasExpired ? AppColors.error : AppColors.warning;
-    final message = hasExpired
-        ? '${item.expiredQuantity} ${item.unit} must not be dispensed'
-        : '${item.expiringSoonQuantity} ${item.unit} expire within 90 days • nearest ${item.nearestExpiryLabel.toLowerCase()}';
+    final messages = <String>[
+      if (item.expiredQuantity > 0)
+        '${item.expiredQuantity} ${item.unit} must not be dispensed'
+      else if (item.expiringSoonQuantity > 0)
+        '${item.expiringSoonQuantity} ${item.unit} expire within 90 days • nearest ${item.nearestExpiryLabel.toLowerCase()}',
+    ];
+    for (final batch in openBatches) {
+      final String timing;
+      if (batch.isExpiredOn(now) || batch.status.toLowerCase() == 'expired') {
+        timing = 'batch expired — discard now';
+      } else if (batch.isExpiredOpenVial(item.openVialShelfHours, now)) {
+        timing = 'open-vial limit reached — discard now';
+      } else {
+        timing = '${_durationLabel(batch.openVialTimeLeft(item.openVialShelfHours, now)!)} left of '
+            '${_durationLabel(Duration(hours: item.openVialShelfHours))}';
+      }
+      messages.add('${batch.batchNumber}: ${batch.dosesRemainingInOpenVial} open doses • $timing');
+    }
+    final message = messages.join('\n');
 
     return Container(
       width: double.infinity,
@@ -1806,17 +1832,19 @@ class _MidwifeInventoryPageState extends State<MidwifeInventoryPage>
             ),
           ),
           TextButton(
-            onPressed: hasExpired
+            onPressed: item.expiredQuantity > 0
                 ? _stockActivityAvailable
                     ? () => _showUnusableSheet(item)
                     : null
-                : () {
-                    setState(() {
-                      _stockFilter = 'expiring';
-                      _selectedTab = 1;
-                    });
-                  },
-            child: Text(hasExpired ? 'Report' : 'Review'),
+                : openBatches.isNotEmpty
+                    ? () => _showBatchBrowserSheet(initialSegment: 'open')
+                    : () {
+                        setState(() {
+                          _stockFilter = 'expiring';
+                          _selectedTab = 1;
+                        });
+                      },
+            child: Text(item.expiredQuantity > 0 ? 'Report' : 'Review'),
           ),
         ],
       ),
@@ -9666,6 +9694,54 @@ class InventoryItem {
       .fold(0, (total, batch) => total + batch.quantityRemaining);
 
   int? get nearestExpiryDays => nearestUsableBatch?.daysUntilExpiration();
+
+  // Overview alerts only: open doses have their own clock, independent of the
+  // printed expiry and sealed-vial quantities used elsewhere on this screen.
+  List<live.InventoryBatchRecord> openVialExpiryBatchesOn([DateTime? now]) {
+    if (!isMultiDose) return [];
+    final current = now ?? DateTime.now();
+    final horizon = current.add(const Duration(days: 90));
+    final result = batches.where((batch) {
+      if (!batch.isActive && batch.status.toLowerCase() != 'expired') {
+        return false;
+      }
+      final deadline = batch.openVialExpiresAt(openVialShelfHours);
+      return deadline != null &&
+          (!deadline.isAfter(horizon) || batch.isExpiredOn(current));
+    }).toList();
+    result.sort((first, second) => first.openVialExpiresAt(openVialShelfHours)!
+        .compareTo(second.openVialExpiresAt(openVialShelfHours)!));
+    return result;
+  }
+
+  bool hasExpiredExpiryAttentionOn([DateTime? now]) {
+    final current = now ?? DateTime.now();
+    final expiredSealedStock = batches.any((batch) =>
+        batch.quantityRemaining > 0 &&
+        batch.status.toLowerCase() != 'discarded' &&
+        (batch.isExpiredOn(current) || batch.status.toLowerCase() == 'expired'));
+    return expiredSealedStock || openVialExpiryBatchesOn(current).any(
+      (batch) => batch.isExpiredOn(current) ||
+          batch.status.toLowerCase() == 'expired' ||
+          batch.isExpiredOpenVial(openVialShelfHours, current),
+    );
+  }
+
+  Duration? expiryAttentionTimeLeftOn([DateTime? now]) {
+    final current = now ?? DateTime.now();
+    final deadlines = <Duration>[
+      for (final batch in batches)
+        if (batch.isUsableOn(current) &&
+            batch.quantityRemaining > 0 && batch.isExpiringWithin(90, current))
+          Duration(days: batch.daysUntilExpiration(current)!),
+      for (final batch in openVialExpiryBatchesOn(current)) ...[
+        batch.openVialTimeLeft(openVialShelfHours, current)!,
+        if (batch.expirationDay != null)
+          batch.expirationDay!.difference(current),
+      ],
+    ]..sort();
+    return deadlines.isEmpty ? null : deadlines.first;
+  }
 
   String get nearestExpiryLabel {
     final batch = nearestUsableBatch;

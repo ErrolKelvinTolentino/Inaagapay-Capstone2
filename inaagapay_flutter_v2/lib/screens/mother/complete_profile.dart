@@ -293,10 +293,11 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
   String? _validateLmp(DateTime lmp) {
     final now = DateTime.now();
-    final twoWeeksAgo = now.subtract(const Duration(days: 2 * 7));
-    if (lmp.isAfter(twoWeeksAgo)) {
-      return _t('LMP must be at least 2 weeks ago.',
-          'Dapat ay hindi bababa sa 2 linggo na ang nakalipas ang LMP.');
+    final today = DateTime(now.year, now.month, now.day);
+    final lmpDate = DateTime(lmp.year, lmp.month, lmp.day);
+    if (lmpDate.isAfter(today)) {
+      return _t('LMP cannot be in the future.',
+          'Hindi maaaring nasa hinaharap ang LMP.');
     }
     final daysSinceLmp = now.difference(lmp).inDays;
     if (daysSinceLmp > 42 * 7) {
@@ -426,10 +427,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       _weeksError = null;
       _daysError = null;
     });
-
-    if (DateTime.now().difference(lmp).inDays < 28 && _gestationError == null) {
-      _showEarlyPregnancyWarning();
-    }
   }
 
   void _updateFromEdd(DateTime edd) {
@@ -1138,19 +1135,17 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                       // previously allowed anything up to today, and picking
                       // last week produced "LMP must be at least 2 weeks ago"
                       // — a rule the mother had no way to know before breaking
-                      // it.
-                      final lastLmpDate =
-                          DateTime.now().subtract(const Duration(days: 5 * 7));
+                      final now = DateTime.now();
+                      final today = DateTime(now.year, now.month, now.day);
                       final initialLmpDate = (_selectedLmp != null &&
-                              !_selectedLmp!.isAfter(lastLmpDate))
+                              !_selectedLmp!.isAfter(today))
                           ? _selectedLmp!
-                          : lastLmpDate;
+                          : today;
                       final picked = await showBrandedDatePicker(
                         context: context,
                         initialDate: initialLmpDate,
-                        firstDate: DateTime.now()
-                            .subtract(const Duration(days: 42 * 7)),
-                        lastDate: lastLmpDate,
+                        firstDate: today.subtract(const Duration(days: 365)),
+                        lastDate: today,
                       );
                       if (picked != null) {
                         _updateFromLmp(picked);

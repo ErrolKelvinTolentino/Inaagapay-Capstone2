@@ -111,7 +111,22 @@ void main() {
     await tester.enterText(field('Street'), 'Mabini');
     await next(tester);
 
-    // Emergency contacts are optional.
+    // Emergency contacts are required. Tapping Next without contacts is blocked.
+    await next(tester);
+    expect(find.text('Still needed: emergency contact.'), findsOneWidget);
+
+    // Add emergency contact.
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.enterText(field('Enter first name'), 'Pedro');
+    await tester.enterText(field('Enter last name'), 'Dela Cruz');
+    await tester.enterText(field('e.g. 09171234567'), '09181234567');
+    await tester.tap(field('Select relationship'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Spouse/Partner').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add Contact'));
+    await tester.pumpAndSettle();
     await next(tester);
 
     // Pregnancy dating: LMP 43 weeks back.
@@ -120,6 +135,51 @@ void main() {
 
     expect(find.text('LMP is more than 42 weeks ago. Please verify the date.'),
         findsOneWidget);
+  });
+
+  testWidgets('TC-MW-ADDM-014 LMP selection allows on or before today and rejects future dates',
+      (tester) async {
+    FakeBackend.reset(storage: _midwife);
+    seed();
+    await openWizard(tester);
+
+    // Step 0: Personal details.
+    await tester.enterText(field('First Name'), 'Maria');
+    await tester.enterText(field('Last Name'), 'Santos');
+    await tester.enterText(field('Contact Number'), '09171234598');
+    await pickDate(tester, 'Birthdate', DateTime(1996, 5, 20));
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    await next(tester);
+
+    // Step 1: Address.
+    await tester.enterText(field('House No.'), '45');
+    await tester.enterText(field('Street'), 'Rizal');
+    await next(tester);
+
+    // Step 2: Emergency contacts (required).
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.enterText(field('Enter first name'), 'Jose');
+    await tester.enterText(field('Enter last name'), 'Santos');
+    await tester.enterText(field('e.g. 09171234567'), '09187654321');
+    await tester.tap(field('Select relationship'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Spouse/Partner').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add Contact'));
+    await tester.pumpAndSettle();
+    await next(tester);
+
+    // Step 3: Gestational Information - select LMP 7 days ago (previously blocked by >= 2 weeks / 4 weeks rule).
+    final recentLmp = DateTime.now().subtract(const Duration(days: 7));
+    await pickDate(tester, 'Last Menstrual Period', recentLmp);
+    await tester.pumpAndSettle();
+
+    // No error or early pregnancy popup blocker appears
+    expect(find.text('LMP must be at least 2 weeks ago.'), findsNothing);
+    expect(find.text('Early Pregnancy Notice'), findsNothing);
+    expect(find.text('LMP cannot be in the future.'), findsNothing);
   });
 
   testWidgets('TC-MW-ADDM-020 scanning offline gives a readable error, and typing still works',

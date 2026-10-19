@@ -315,6 +315,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
 
   // Step 2: Emergency Contacts
   final List<_EmergencyContact> _emergencyContacts = [];
+  String? _emergencyContactError;
 
   // Step 3: Vitals
   final TextEditingController _heightCtrl = TextEditingController();
@@ -968,9 +969,10 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
 
   String? _validateLmp(DateTime lmp) {
     final now = DateTime.now();
-    final twoWeeksAgo = now.subtract(const Duration(days: 2 * 7));
-    if (lmp.isAfter(twoWeeksAgo)) {
-      return 'LMP must be at least 2 weeks ago.';
+    final today = DateTime(now.year, now.month, now.day);
+    final lmpDate = DateTime(lmp.year, lmp.month, lmp.day);
+    if (lmpDate.isAfter(today)) {
+      return 'LMP cannot be in the future.';
     }
     final daysSinceLmp = now.difference(lmp).inDays;
     if (daysSinceLmp > 42 * 7) {
@@ -1012,19 +1014,15 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
   }
 
   Future<void> _pickLmp() async {
-    final lastLmpDate = DateTime.now().subtract(const Duration(days: 5 * 7));
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final initialLmpDate =
-        (_lmp != null && !_lmp!.isAfter(lastLmpDate)) ? _lmp! : lastLmpDate;
+        (_lmp != null && !_lmp!.isAfter(today)) ? _lmp! : today;
     final picked = await _showBrandedDatePicker(
         context: context,
         initialDate: initialLmpDate,
-        // A year back, not 42 weeks. The calendar used to stop at exactly the
-        // limit _validateLmp enforces, so a midwife given an older date by the
-        // mother found it simply missing, and "LMP is more than 42 weeks ago.
-        // Please verify the date." -- the prompt to recheck it with her --
-        // could never appear.
         firstDate: DateTime.now().subtract(const Duration(days: 365)),
-        lastDate: lastLmpDate);
+        lastDate: today);
     if (picked != null && mounted) {
       setState(() => _updateFromLmp(picked));
       _validateStepInline(3);
@@ -1457,12 +1455,6 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     });
 
     _calculateBMI();
-
-    // Warn if LMP is less than 4 weeks ago
-    final daysSinceLmp = DateTime.now().difference(lmp).inDays;
-    if (daysSinceLmp < 28 && _gestationError == null) {
-      _showEarlyPregnancyWarning();
-    }
   }
 
   void _updateFromEdd(DateTime edd) {
@@ -1630,6 +1622,15 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
                     _cityCtrl.text.trim().isNotEmpty &&
                     _provinceCtrl.text.trim().isNotEmpty));
 
+      case 2:
+        final hasContacts = _emergencyContacts.isNotEmpty;
+        setState(() {
+          _emergencyContactError = hasContacts
+              ? null
+              : 'At least one emergency contact is required';
+        });
+        return hasContacts;
+
       case 3:
         // Every branch here used to return false in silence — this step could
         // refuse to advance without a single word on screen.
@@ -1715,6 +1716,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
       if (_barangayError != null) 'barangay',
       if (_cityError != null) 'city or municipality',
       if (_provinceError != null) 'province',
+      if (_emergencyContactError != null) 'emergency contact',
       if (_heightError != null) 'height',
       if (_weightError != null) 'weight',
       if (_prePregnancyWeightError != null) 'pre-pregnancy weight',
@@ -1755,6 +1757,14 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
   }
 
   Future<void> _submit() async {
+    if (_emergencyContacts.isEmpty) {
+      setState(() {
+        _emergencyContactError = 'At least one emergency contact is required';
+      });
+      _jumpToStep(2);
+      _showBlockedMessage();
+      return;
+    }
     if (!_validateStepInline(8)) return;
 
     // Was two null assertions on _midwifeId and _assignedBhcId, so a failed
@@ -2258,6 +2268,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         } else {
           _emergencyContacts.add(contact);
         }
+        _emergencyContactError = null;
       });
     }
   }
@@ -2275,7 +2286,14 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
         onCancel: () => Navigator.pop(dlgCtx, false),
       ),
     );
-    if (confirm == true) setState(() => _emergencyContacts.removeAt(index));
+    if (confirm == true) {
+      setState(() {
+        _emergencyContacts.removeAt(index);
+        if (_emergencyContacts.isEmpty) {
+          _emergencyContactError = 'At least one emergency contact is required';
+        }
+      });
+    }
   }
 
   Future<void> _showAddMedicalCondition(
@@ -5166,12 +5184,52 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Emergency Contacts'),
+        Row(
+          children: [
+            _sectionLabel('Emergency Contacts'),
+            const SizedBox(width: 4),
+            const Text(
+              '*',
+              style: TextStyle(
+                color: AppColors.error,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
-        if (_emergencyContacts.isEmpty)
+        if (_emergencyContacts.isEmpty) ...[
           _emptyState(Icons.contacts_outlined,
-              'No emergency contacts added.\nClick the add button to add one.')
-        else
+              'No emergency contacts added.\nClick the add button to add one.'),
+          if (_emergencyContactError != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, size: 18, color: AppColors.error),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _emergencyContactError!,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.error,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ] else
           ..._emergencyContacts.asMap().entries.map((e) => _itemCard(
               leading: _iconAvatar(Icons.person_outline),
               title: '${e.value.firstName} ${e.value.lastName}',
@@ -6510,7 +6568,7 @@ class _MidwifeAddMotherScreenState extends State<MidwifeAddMotherScreen> {
   static const List<String> _stepSubtitles = [
     'Name, birthdate, phone, email and login credentials',
     'Current place of residence',
-    'Who to contact in an emergency',
+    'Who to contact in an emergency (required)',
     'Current pregnancy dating',
     'Height, weight and pre-pregnancy BMI',
     'Known diagnoses and health conditions',

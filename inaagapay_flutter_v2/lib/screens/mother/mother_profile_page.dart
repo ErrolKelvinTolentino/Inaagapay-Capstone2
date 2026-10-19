@@ -3094,9 +3094,10 @@ class _MotherProfilePageState extends State<MotherProfilePage>
           // Helper validations
           String? validateLmp(DateTime date) {
             final now = DateTime.now();
-            final twoWeeksAgo = now.subtract(const Duration(days: 2 * 7));
-            if (date.isAfter(twoWeeksAgo)) {
-              return 'LMP must be at least 2 weeks ago.';
+            final today = DateTime(now.year, now.month, now.day);
+            final lmpDate = DateTime(date.year, date.month, date.day);
+            if (lmpDate.isAfter(today)) {
+              return 'LMP cannot be in the future.';
             }
             final daysSinceLmp = now.difference(date).inDays;
             if (daysSinceLmp > 42 * 7) {
